@@ -95,3 +95,11 @@
 - **Context:** Phase 1 needs a first-run admin, short-lived access tokens that can be revoked immediately, and refresh rotation resistant to replay.
 - **Decision:** Setup is allowed only while `users` is empty and returns a token pair on success. Login normalizes usernames and verifies against a real dummy Argon2 hash when the user is unknown to equalize timing. Access tokens are HS256 JWTs (15 minutes) carrying `sub`, `role`, `tv` (token version), `type`, `iss`, `iat`, `exp` and `jti`; every authenticated request reloads the user so `disabled` and `token_version` take effect immediately. Refresh tokens are 48-byte URL-safe random strings stored only as SHA-256 hashes, share a `family_id` across rotations, and rotate on every use. A revoked token presented again revokes every still-live token in its family and returns 401 `refresh_token_reuse`. Rotation uses a conditional `UPDATE ... WHERE revoked_at IS NULL` so concurrent refreshes cannot both win. Logout revokes the presented token's family but leaves the access token valid until expiry (15 minutes) to avoid logging out other devices.
 - **Alternatives Considered:** Storing refresh tokens in plaintext (leak risk), refresh reuse returning a generic 401 without family revocation (does not meet the phase criterion), incrementing `token_version` on logout (logs out all devices), server-side access-token sessions (more state than a home server needs), opaque access tokens (extra lookup on every request).
+
+## ADR 013: Token Validation Details
+
+- **Date:** 2026-10-21
+- **Status:** Accepted
+- **Context:** Access tokens and refresh tokens need tightly defined validation so a token minted for one purpose cannot be replayed as another.
+- **Decision:** Access tokens are validated for signature, issuer, audience (`hearth-api`), expiry, required claims and `type=access`. Token timestamps are truncated to whole seconds so the returned `expires_at` matches the JWT `exp` exactly. Refresh tokens are never stored raw; tests assert the database contains only 64-character SHA-256 digests.
+- **Alternatives Considered:** Relying on signature alone (allows cross-purpose replay), accepting tokens without an audience (harder to separate future token types), returning microsecond-precision expiry that does not match the encoded claim.

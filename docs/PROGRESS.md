@@ -2,7 +2,7 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 1 in progress (task 1.4 complete)
+- **Current Phase**: Phase 1 in progress (task 1.5 complete)
 - **Overall Status**: Phase 0 accepted; Phase 1 underway
 
 ---
@@ -65,7 +65,7 @@
 | 1.2 | Models: `User`, `RefreshToken`, `Library`, `LibraryPath`, `LibraryAccess`, `Setting`, `Job`, `AuditLog` | Complete | `feat: add phase 1 domain models and migration` |
 | 1.3 | Argon2 password hashing and password policy | Complete | `feat: add argon2 password hashing and credential policy` |
 | 1.4 | Auth endpoints: setup, login, refresh rotation/reuse detection, logout, me | Complete | `feat: add setup, login, refresh, logout and me endpoints` |
-| 1.5 | Short-lived JWT access tokens and hashed refresh tokens | Not started | |
+| 1.5 | Short-lived JWT access tokens and hashed refresh tokens | Complete | `test: cover access-token claims and refresh-token hashing` |
 | 1.6 | Media access tokens (HMAC, scoped, for query-string consumers) | Not started | |
 | 1.7 | Roles and dependencies (`require_user`, `require_admin`, `require_library_access`) | Not started | |
 | 1.8 | Admin user management and 15-enabled-user limit | Not started | |

@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     # and persisted in data_dir with mode 0600.
     secret_key: str | None = None
     jwt_issuer: str = "hearth"
+    jwt_audience: str = "hearth-api"
     access_token_minutes: int = 15
     refresh_token_days: int = 30
     media_token_seconds: int = 6 * 60 * 60

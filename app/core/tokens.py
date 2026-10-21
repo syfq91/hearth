@@ -36,7 +36,7 @@ def create_access_token(
     now: datetime | None = None,
 ) -> tuple[str, datetime]:
     """Create a short-lived signed access token and return it with its expiry."""
-    issued_at = now or datetime.now(UTC)
+    issued_at = (now or datetime.now(UTC)).replace(microsecond=0)
     expires_at = issued_at + timedelta(minutes=settings.access_token_minutes)
     payload = {
         "sub": user_id,
@@ -44,6 +44,7 @@ def create_access_token(
         "tv": token_version,
         "type": ACCESS_TOKEN_TYPE,
         "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
         "iat": int(issued_at.timestamp()),
         "exp": int(expires_at.timestamp()),
         "jti": uuid7(),
@@ -60,7 +61,8 @@ def decode_access_token(token: str, *, settings: Settings, key: bytes) -> Access
             key,
             algorithms=[_ALGORITHM],
             issuer=settings.jwt_issuer,
-            options={"require": ["sub", "exp", "iat", "iss", "type"]},
+            audience=settings.jwt_audience,
+            options={"require": ["sub", "exp", "iat", "iss", "aud", "type"]},
         )
     except InvalidTokenError as exc:
         raise UnauthorizedError("Invalid or expired token", code="invalid_token") from exc

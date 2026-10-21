@@ -181,6 +181,8 @@ async def test_refresh_rotates_and_reuse_revokes_the_family(
         rows = (await session.scalars(select(RefreshToken))).all()
     assert rows
     assert all(row.revoked_at is not None for row in rows)
+    assert all(row.token_hash != tokens["refresh_token"] for row in rows)
+    assert all(len(row.token_hash) == 64 for row in rows)
 
 
 async def test_logout_revokes_refresh_family(api_client: httpx.AsyncClient) -> None:
