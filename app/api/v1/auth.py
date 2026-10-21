@@ -23,6 +23,7 @@ from app.core.passwords import (
 from app.core.secrets import Keys
 from app.core.tokens import (
     create_access_token,
+    create_media_token,
     generate_refresh_token,
     hash_refresh_token,
     refresh_expiry,
@@ -62,6 +63,17 @@ class UserResponse(BaseModel):
     allow_transcode: bool
     max_rating: str | None
     created_at: datetime
+
+
+class MediaTokenRequest(BaseModel):
+    item_id: str | None = Field(default=None, max_length=36)
+
+
+class MediaTokenResponse(BaseModel):
+    token: str
+    expires_at: datetime
+    expires_in: int
+    item_id: str | None
 
 
 @lru_cache(maxsize=1)
@@ -280,3 +292,31 @@ async def logout(
 async def me(user: CurrentUser) -> UserResponse:
     """Return the authenticated account."""
     return UserResponse.model_validate(user)
+
+
+@router.post("/media-tokens", status_code=status.HTTP_201_CREATED)
+async def mint_media_token(
+    payload: MediaTokenRequest,
+    user: CurrentUser,
+    settings: SettingsDep,
+    keys: KeysDep,
+) -> MediaTokenResponse:
+    """Mint a short-lived token for URL-based media elements.
+
+    These tokens are scoped to the current user, optionally to a single item,
+    and are separate from access tokens so a URL cannot be used to call the
+    management API.
+    """
+    token, expires_at = create_media_token(
+        user_id=user.id,
+        token_version=user.token_version,
+        settings=settings,
+        key=keys.media,
+        item_id=payload.item_id,
+    )
+    return MediaTokenResponse(
+        token=token,
+        expires_at=expires_at,
+        expires_in=settings.media_token_seconds,
+        item_id=payload.item_id,
+    )

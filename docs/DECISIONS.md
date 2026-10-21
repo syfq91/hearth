@@ -103,3 +103,11 @@
 - **Context:** Access tokens and refresh tokens need tightly defined validation so a token minted for one purpose cannot be replayed as another.
 - **Decision:** Access tokens are validated for signature, issuer, audience (`hearth-api`), expiry, required claims and `type=access`. Token timestamps are truncated to whole seconds so the returned `expires_at` matches the JWT `exp` exactly. Refresh tokens are never stored raw; tests assert the database contains only 64-character SHA-256 digests.
 - **Alternatives Considered:** Relying on signature alone (allows cross-purpose replay), accepting tokens without an audience (harder to separate future token types), returning microsecond-precision expiry that does not match the encoded claim.
+
+## ADR 014: Media Access Token Format
+
+- **Date:** 2026-10-21
+- **Status:** Accepted
+- **Context:** `<video>`, `<img>` and `<audio>` cannot send an Authorization header, so media URLs need a separate, narrowly scoped credential. This is needed before Phase 3 streaming exists so the contract is stable.
+- **Decision:** Tokens are `base64url(payload).base64url(HMAC-SHA256(media_key, payload))`, where the media key is derived from the installation secret with a separate domain string from the JWT key. The payload carries `sub`, optional `item`, `tv`, `scope=media`, `iat`, `exp` and `jti`. Default lifetime is 6 hours (`HEARTH_MEDIA_TOKEN_SECONDS`). Verification is constant-time, checks scope and expiry, and a dependency re-checks the user's disabled flag and token version on every media request. Minting requires a normal bearer token at `POST /api/v1/auth/media-tokens`. Media tokens cannot authenticate management endpoints because they are never accepted as bearer credentials and their scope is checked.
+- **Alternatives Considered:** Signed URLs with JWT (larger and shares the access-token validation path), cookies (not usable by every native media element/client), long-lived API keys (cannot be revoked or scoped per item), putting access tokens in query strings (leaks a management credential into logs and history).

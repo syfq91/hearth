@@ -3,12 +3,13 @@
 from datetime import UTC, datetime, timedelta
 
 import httpx
+import pytest
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.secrets import load_keys
-from app.core.tokens import create_access_token
+from app.core.tokens import create_access_token, verify_media_token
 from app.db.models import RefreshToken, User
 
 ADMIN = {"username": "admin", "password": "correct horse"}
@@ -214,3 +215,50 @@ async def test_login_of_disabled_user_is_forbidden(
 
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "account_disabled"
+
+
+async def test_media_token_endpoint_requires_login(api_client: httpx.AsyncClient) -> None:
+    response = await api_client.post("/api/v1/auth/media-tokens", json={})
+
+    assert response.status_code == 401
+
+
+async def test_media_token_is_scoped_and_verifiable(
+    api_client: httpx.AsyncClient, db_settings: Settings
+) -> None:
+    tokens = await _setup(api_client)
+
+    response = await api_client.post(
+        "/api/v1/auth/media-tokens",
+        json={"item_id": "item-123"},
+        headers=_bearer(tokens),
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["expires_in"] == 6 * 60 * 60
+    assert payload["item_id"] == "item-123"
+    claims = verify_media_token(payload["token"], key=load_keys(db_settings).media)
+    assert claims.item_id == "item-123"
+
+
+async def test_media_token_stops_working_when_user_is_disabled(
+    api_client: httpx.AsyncClient,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+    db_settings: Settings,
+) -> None:
+    from app.core.deps import get_media_user
+    from app.core.errors import UnauthorizedError
+    from app.core.tokens import verify_media_token
+
+    tokens = await _setup(api_client)
+    minted = await api_client.post("/api/v1/auth/media-tokens", json={}, headers=_bearer(tokens))
+    claims = verify_media_token(minted.json()["token"], key=load_keys(db_settings).media)
+
+    async with db_sessionmaker() as session:
+        await session.execute(update(User).values(disabled=True))
+        await session.commit()
+        with pytest.raises(UnauthorizedError) as excinfo:
+            await get_media_user(claims, session)
+
+    assert excinfo.value.code == "account_disabled"

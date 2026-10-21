@@ -2,13 +2,13 @@
 
 from typing import Annotated, cast
 
-from fastapi import Depends, Request
+from fastapi import Depends, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import Settings
 from app.core.errors import UnauthorizedError
 from app.core.secrets import Keys, load_keys
-from app.core.tokens import decode_access_token
+from app.core.tokens import MediaTokenClaims, decode_access_token, verify_media_token
 from app.db.models import User
 from app.db.session import SessionDep
 
@@ -64,3 +64,36 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_media_token_claims(
+    token: Annotated[str, Query(description="Media access token")],
+    keys: KeysDep,
+) -> MediaTokenClaims:
+    """Validate a media token supplied in the query string."""
+    return verify_media_token(token, key=keys.media)
+
+
+MediaTokenClaimsDep = Annotated[MediaTokenClaims, Depends(get_media_token_claims)]
+
+
+async def get_media_user(
+    claims: MediaTokenClaimsDep,
+    session: SessionDep,
+) -> User:
+    """Resolve a media token to a live, enabled user.
+
+    Media tokens embed a token version so a password reset or forced logout
+    invalidates URLs that are already in a player's playlist.
+    """
+    user = await session.get(User, claims.user_id)
+    if user is None:
+        raise UnauthorizedError("Invalid media token", code="invalid_media_token")
+    if user.disabled:
+        raise UnauthorizedError("Account is disabled", code="account_disabled")
+    if user.token_version != claims.token_version:
+        raise UnauthorizedError("Media token has been revoked", code="token_revoked")
+    return user
+
+
+MediaUser = Annotated[User, Depends(get_media_user)]

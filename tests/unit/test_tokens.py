@@ -9,10 +9,12 @@ from app.core.config import Settings
 from app.core.errors import UnauthorizedError
 from app.core.tokens import (
     create_access_token,
+    create_media_token,
     decode_access_token,
     generate_refresh_token,
     hash_refresh_token,
     refresh_expiry,
+    verify_media_token,
 )
 
 
@@ -101,3 +103,60 @@ def test_refresh_expiry_uses_configured_days(settings: Settings) -> None:
     now = datetime.now(UTC)
 
     assert refresh_expiry(settings, now) == now + timedelta(days=30)
+
+
+def test_media_token_round_trip_scopes_user_and_item(settings: Settings) -> None:
+    token, expires_at = create_media_token(
+        user_id="user-1",
+        token_version=2,
+        settings=settings,
+        key=b"media" * 8,
+        item_id="item-9",
+    )
+
+    claims = verify_media_token(token, key=b"media" * 8)
+
+    assert claims.user_id == "user-1"
+    assert claims.item_id == "item-9"
+    assert claims.token_version == 2
+    assert claims.expires_at == expires_at
+    assert "." in token
+
+
+def test_media_token_is_tamper_evident(settings: Settings) -> None:
+    token, _ = create_media_token(
+        user_id="user-1", token_version=0, settings=settings, key=b"media" * 8
+    )
+    encoded, signature = token.split(".")
+    forged = f"{encoded}.{'A' * len(signature)}"
+
+    with pytest.raises(UnauthorizedError):
+        verify_media_token(forged, key=b"media" * 8)
+    with pytest.raises(UnauthorizedError):
+        verify_media_token(encoded, key=b"media" * 8)
+    with pytest.raises(UnauthorizedError):
+        verify_media_token("not-a-token", key=b"media" * 8)
+
+
+def test_media_token_expires(settings: Settings) -> None:
+    token, _ = create_media_token(
+        user_id="user-1",
+        token_version=0,
+        settings=settings,
+        key=b"media" * 8,
+        now=datetime.now(UTC) - timedelta(hours=7),
+    )
+
+    with pytest.raises(UnauthorizedError) as excinfo:
+        verify_media_token(token, key=b"media" * 8)
+
+    assert excinfo.value.code == "invalid_media_token"
+
+
+def test_media_token_wrong_key_is_rejected(settings: Settings) -> None:
+    token, _ = create_media_token(
+        user_id="user-1", token_version=0, settings=settings, key=b"media" * 8
+    )
+
+    with pytest.raises(UnauthorizedError):
+        verify_media_token(token, key=b"other!" * 8)
