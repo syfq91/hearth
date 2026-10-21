@@ -573,6 +573,92 @@
         "title": "LibraryUpdate",
         "type": "object"
       },
+      "MatchRequest": {
+        "description": "A specific candidate chosen by an administrator.",
+        "properties": {
+          "provider": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Provider Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "provider_id"
+        ],
+        "title": "MatchRequest",
+        "type": "object"
+      },
+      "MatchResponse": {
+        "description": "The result of a manual match.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "state"
+        ],
+        "title": "MatchResponse",
+        "type": "object"
+      },
       "MediaTokenRequest": {
         "properties": {
           "item_id": {
@@ -655,6 +741,79 @@
           "refresh_token"
         ],
         "title": "RefreshRequest",
+        "type": "object"
+      },
+      "SearchResultResponse": {
+        "description": "One candidate returned to an administrator.",
+        "properties": {
+          "backdrop_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backdrop Url"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "popularity": {
+            "default": 0.0,
+            "title": "Popularity",
+            "type": "number"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_id": {
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "provider",
+          "provider_id",
+          "title"
+        ],
+        "title": "SearchResultResponse",
         "type": "object"
       },
       "TokenPair": {
@@ -1504,6 +1663,64 @@
         ]
       }
     },
+    "/api/v1/items/{item_id}/match": {
+      "post": {
+        "description": "Attach a specific provider candidate to an item, bypassing scoring.",
+        "operationId": "manual_match_api_v1_items__item_id__match_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Manual Match",
+        "tags": [
+          "metadata"
+        ]
+      }
+    },
     "/api/v1/jobs": {
       "get": {
         "description": "List jobs newest first with optional filters.",
@@ -1964,6 +2181,95 @@
         "summary": "Update Library",
         "tags": [
           "libraries"
+        ]
+      }
+    },
+    "/api/v1/metadata/search": {
+      "get": {
+        "description": "Search configured metadata providers for a manual match.",
+        "operationId": "search_metadata_api_v1_metadata_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2100,
+                  "minimum": 1800,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Year"
+            }
+          },
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SearchResultResponse"
+                  },
+                  "title": "Response Search Metadata Api V1 Metadata Search Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Metadata",
+        "tags": [
+          "metadata"
         ]
       }
     },

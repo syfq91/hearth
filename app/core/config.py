@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     tmdb_cache_ttl_hours: float = 168.0
     tmdb_min_interval_seconds: float = 0.05
     metadata_match_threshold: float = 0.80
+    metadata_retry_base_hours: float = 6.0
+    metadata_retry_max_hours: float = 72.0
+    metadata_unmatched_retry_hours: float = 24.0
 
     @property
     def database_url(self) -> str:

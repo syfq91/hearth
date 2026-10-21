@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -23,6 +23,9 @@ from app.services.media.titles import normalize_title
 from app.services.scanner.hashing import partial_hash
 from app.services.scanner.parsing import ParsedMovie, parse_movie_path
 from app.services.scanner.walker import ScannedFile, scope_dirs, walk_movie_files
+
+if TYPE_CHECKING:
+    from app.services.metadata.matching import MetadataMatcher
 
 logger = logging.getLogger("hearth.scanner")
 
@@ -54,6 +57,11 @@ class ScanStats:
     unchanged: int = 0
     probes: int = 0
     errors: int = 0
+    matched: int = 0
+    unmatched: int = 0
+    metadata_pending: int = 0
+    provider_calls: int = 0
+    images_stored: int = 0
     aborted: bool = False
     abort_reason: str | None = None
     duration_seconds: float = 0.0
@@ -95,12 +103,14 @@ class LibraryScanner:
         clock: Clock = utcnow,
         parser: Parser = parse_movie_path,
         hash_file: Callable[[Path], str] = partial_hash,
+        matcher: "MetadataMatcher | None" = None,
     ) -> None:
         self.settings = settings
         self.sessionmaker = sessionmaker
         self.clock = clock
         self.parser = parser
         self.hash_file = hash_file
+        self.matcher = matcher
         self.probe = probe or self._default_probe
 
     async def _default_probe(self, path: Path) -> ProbeResult:
@@ -271,6 +281,10 @@ class LibraryScanner:
                 stats=stats,
             )
             await self._check_cancel(is_cancelled)
+
+            if self.matcher is not None:
+                await self._run_matching(library_id, stats, is_cancelled)
+
             if progress:
                 await progress(1.0)
 
@@ -286,6 +300,30 @@ class LibraryScanner:
             stats.duration_seconds = round(time.monotonic() - started, 3)
             await self._set_status(library_id, "error", stats=stats, error=str(exc))
             raise
+
+    async def _run_matching(
+        self,
+        library_id: str,
+        stats: ScanStats,
+        is_cancelled: Callable[[], Awaitable[bool]] | None,
+    ) -> None:
+        """Match due items without letting a metadata bug fail the scan."""
+
+        assert self.matcher is not None
+        try:
+            match_stats = await self.matcher.match_pending(
+                library_id=library_id,
+                is_cancelled=is_cancelled,
+            )
+        except Exception:
+            stats.errors += 1
+            logger.exception("metadata matching failed", extra={"library_id": library_id})
+            return
+        stats.matched += match_stats.matched
+        stats.unmatched += match_stats.unmatched
+        stats.metadata_pending += match_stats.pending
+        stats.provider_calls += match_stats.provider_calls
+        stats.images_stored += match_stats.images_stored
 
     async def _load_library(
         self, library_id: str

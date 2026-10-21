@@ -146,6 +146,23 @@ class InternalError(AppError):
         )
 
 
+class BadGatewayError(AppError):
+    """An upstream provider failed (502)."""
+
+    def __init__(
+        self,
+        message: str = "Upstream service failed",
+        code: str = "bad_gateway",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            message=message,
+            code=code,
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            details=details,
+        )
+
+
 class RateLimitError(AppError):
     """Too many requests (429) with a machine-readable retry delay."""
 
