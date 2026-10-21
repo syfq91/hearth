@@ -127,3 +127,11 @@
 - **Context:** Admin user management can lock a household out or silently leave old credentials valid.
 - **Decision:** Admin-only `/api/v1/users` supports create, list, read, patch (username, role, enabled, bitrate cap, transcode permission, max rating, library grants) and password reset. Grants are replaced atomically on update and unknown library ids return 404. Creating or re-enabling an account checks `HEARTH_MAX_ENABLED_USERS` (default 15). Disabling bumps `token_version` and revokes all live refresh tokens, so re-enabling cannot resurrect a previously issued access token. Password reset bumps `token_version` and revokes refresh tokens. Admins cannot disable or demote themselves, and an update that would remove the final enabled admin is rejected. Audit entries record actions and changed field names but never passwords or hashes.
 - **Alternatives Considered:** Soft deleting accounts (unnecessary now), letting admins disable themselves (easy lockout), leaving refresh tokens alive after reset/disable (violates immediate-revocation intent), deleting grants through separate endpoints (chatty and hard to keep atomic).
+
+## ADR 017: Library Path Containment and Visibility
+
+- **Date:** 2026-10-21
+- **Status:** Accepted
+- **Context:** Library roots come from administrators but must never allow a scan or stream to escape the read-only media mount. Normal users also do not need host filesystem layout.
+- **Decision:** `validate_library_paths` requires absolute paths, resolves them with `strict=True`, requires a directory, checks it is inside `HEARTH_MEDIA_DIR` using `Path.is_relative_to` after resolution, and checks `R_OK|X_OK`. This blocks `..` segments and symlinks that point outside the mount. Duplicate paths are collapsed; an empty list is invalid. Admin CRUD lives on `/api/v1/libraries`; root paths are returned only to admins, while normal users receive id, name and type. Deleting a library cascades its path and access rows but never touches media files.
+- **Alternatives Considered:** `os.path.commonpath` on unresolved strings (symlink bypass), trusting admin input (a typo could expose `/` to the scanner), exposing paths to every user (unnecessary information disclosure), rejecting the mount root itself (legitimate single-root setups).
