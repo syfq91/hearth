@@ -2,8 +2,8 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 1 complete
-- **Overall Status**: Phase 0 and Phase 1 accepted
+- **Current Phase**: Phase 2: Media probing, scanner and movie metadata
+- **Overall Status**: In progress
 
 ---
 
@@ -137,6 +137,32 @@
   library-access dependency they will use is already tested.
 - Media access tokens are minted and verifiable but not yet consumed by a stream
   endpoint.
+
+---
+
+## Phase 2: Media probing, scanner and movie metadata
+
+**Goal:** Movie libraries are discovered, probed, matched to TMDB and browsable through the API.
+
+| Task | Description | Status | Commit |
+| --- | --- | --- | --- |
+| 2.1 | Typed ffprobe wrapper with timeout and stored stream metadata | Complete | `feat: add typed ffprobe wrapper` |
+| 2.2 | Catalog models (`MediaItem`, `Movie`, `MediaFile`, images, people, genres, provider cache, FTS5) | Pending | Pending |
+| 2.3 | Scanner with change detection, soft deletes and mass-deletion safeguard | Pending | Pending |
+| 2.4 | Movie filename parsing with `guessit` and folder hints | Pending | Pending |
+| 2.5 | Metadata provider interface, TMDB provider with cache, local NFO provider | Pending | Pending |
+| 2.6 | Matching, manual match/search endpoints, scan integration | Pending | Pending |
+| 2.7 | Image download, resizing variants and BlurHash | Pending | Pending |
+| 2.8 | Scheduled scans, scan job handler and filesystem watcher | Pending | Pending |
+| 2.9 | Movie browse/read API with cursor pagination and item detail | Pending | Pending |
+
+### Phase 2 Acceptance Checklist
+
+- [ ] Re-scanning an unchanged library performs zero ffprobe calls and zero provider calls.
+- [ ] Renaming a file is detected as a move (partial hash) and preserves watch state.
+- [ ] Provider failures never fail a scan (item stays pending and is retried later).
+- [ ] A fixture library of 50 generated files scans in under 30 seconds on CI.
+- [ ] Unit tests cover filename parsing edge cases.
 
 ---
 

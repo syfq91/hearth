@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     job_retry_base_seconds: float = 2.0
     job_retry_max_seconds: float = 300.0
 
+    # Media probing
+    ffprobe_binary: str = "ffprobe"
+    ffprobe_timeout_seconds: float = 30.0
+    ffprobe_concurrency: int = 4
+
     @property
     def database_url(self) -> str:
         """SQLAlchemy async URL for the configured SQLite database."""

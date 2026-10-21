@@ -159,3 +159,11 @@
 - **Context:** The phase requires the OpenAPI schema to be generated and committed by a script, and a stale snapshot silently misleads client authors.
 - **Decision:** `scripts/export_openapi.py` builds the app with isolated settings and writes `docs/openapi.json` with sorted keys and stable indentation. `--check` compares the committed file with a fresh render. CI runs `--check` before tests, and a unit test asserts both freshness and the presence of every Phase 1 route. The script never opens the database.
 - **Alternatives Considered:** Writing the schema from a running server (requires Docker and a live process), committing the schema without a verification step (drifts immediately), generating at request time (adds latency and non-determinism).
+
+## ADR 021: Typed ffprobe Boundary
+
+- **Date:** 2026-10-21
+- **Status:** Accepted
+- **Context:** Playback and scanning need stable, typed stream information, and a corrupt or slow file must not fail a library scan or block the event loop.
+- **Decision:** `services/media/probe.py` invokes `ffprobe` with an argument list and a configurable timeout, parses a deliberately small subset of `-show_format/-show_streams/-show_chapters` into Pydantic models, and raises `ProbeError` for missing binaries, timeouts, non-zero exits and malformed JSON. HDR is classified only from concrete tags/side data (`smpte2084` → HDR10, `arib-std-b67` → HLG, Dolby Vision tags/side data), never inferred from bit depth or resolution. The full model is stored as JSON on the media file so playback decisions do not re-probe unchanged files; scanner-level concurrency and error isolation are the scanner's responsibility.
+- **Alternatives Considered:** Keeping raw ffprobe dicts (untyped and unstable across ffmpeg versions), using ffmpeg-python/ffprobe-python wrappers (extra dependency over a simple argument list), raising application errors from the media layer (would turn one bad file into a failed scan).
