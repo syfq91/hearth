@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path("/config")
     transcode_dir: Path = Path("/transcode")
     media_dir: Path = Path("/media")
+    db_path: Path = Path("/config/hearth.db")
 
     # Hardware devices
     render_device: Path = Path("/dev/dri/renderD128")

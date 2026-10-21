@@ -1,12 +1,14 @@
 """Unified application error types and FastAPI exception handlers."""
 
 import logging
+from http import HTTPStatus
 from typing import Any
 
 from fastapi import Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger("hearth.errors")
 
@@ -150,6 +152,21 @@ async def validation_error_handler(_request: Request, exc: RequestValidationErro
     details = {"errors": jsonable_encoder(exc.errors())}
     error = ValidationError(message="Invalid request parameters", details=details)
     return JSONResponse(status_code=error.status_code, content=error.to_dict())
+
+
+async def http_exception_handler(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """Handle framework HTTP errors (404, 405, ...) in unified shape."""
+    try:
+        code = HTTPStatus(exc.status_code).phrase.lower().replace(" ", "_")
+    except ValueError:
+        code = "http_error"
+
+    message = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+    error = AppError(message=message, code=code, status_code=exc.status_code)
+    response = JSONResponse(status_code=error.status_code, content=error.to_dict())
+    if exc.headers:
+        response.headers.update(exc.headers)
+    return response
 
 
 async def unhandled_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
