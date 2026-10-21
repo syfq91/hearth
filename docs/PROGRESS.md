@@ -2,8 +2,8 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 0: Bootstrap and tooling
-- **Overall Status**: In Progress
+- **Current Phase**: Phase 0 complete; Phase 1 not started
+- **Overall Status**: Phase 0 accepted
 
 ---
 
@@ -13,20 +13,45 @@
 
 | Task | Description | Status | Commit |
 | --- | --- | --- | --- |
-| 0.1 | Initialize repo with `uv`, `pyproject.toml`, Ruff, Mypy, Pytest, `.gitignore`, `.editorconfig` | Complete | `chore: initialize repo, uv tooling, and project configurations` |
+| 0.1 | Initialize repo with `uv`, `pyproject.toml`, Ruff, Mypy, Pytest, `.gitignore`, `.editorconfig`, pre-commit hooks | Complete | `chore: initialize repo, uv tooling, and project configurations`; hooks added in `ci: add lint, type, test, and container smoke workflow` |
 | 0.2 | Create package layout with placeholder modules | Complete | `chore: create package layout and placeholder modules` |
 | 0.3 | Implement `core/config.py`, `core/logging.py`, and unified error handler | Complete | `feat: add settings, JSON logging, and unified error handling` |
 | 0.4 | Implement `app/main.py` with app factory, `/api/v1/health` and `/api/v1/version` | Complete | `feat: add app factory, health/version endpoints, and request IDs` |
 | 0.5 | Implement Typer CLI (`api`, `worker`, `migrate`, `create-admin`) | Complete | `feat: add Typer CLI entrypoints` |
 | 0.6 | Dockerfile (multi-stage, non-root, tini, VAAPI) and `compose.yaml` | Complete | `feat: add multi-stage Docker image and compose stack` |
 | 0.7 | GitHub Actions CI workflow | Complete | `ci: add lint, type, test, and container smoke workflow` |
-| 0.8 | Write `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, and finalize Phase 0 | Pending | Pending |
+| 0.8 | Write `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, and finalize Phase 0 | Complete | `docs: add architecture overview and Phase 0 acceptance results` |
 
 ### Phase 0 Acceptance Checklist
 
-- [ ] `uv run pytest`, `ruff check`, `mypy app` all pass.
-- [ ] Container runs as non-root user and health endpoint reports ffmpeg version.
-- [ ] Inside the container, `vainfo` runs (or reports `vaapi: unavailable` on non-GPU host).
+- [x] `uv run pytest`, `ruff check`, `mypy app` all pass.
+  - `pytest`: 38 passed.
+  - `ruff check`: clean; `ruff format --check`: clean.
+  - `mypy app`: no issues in 24 source files.
+- [x] Container runs as non-root user and health endpoint reports ffmpeg version.
+  - `id` inside the container: `uid=1000(hearth) gid=1000(hearth) groups=1000(hearth),105`.
+  - Root filesystem read-only, all capabilities dropped, `no-new-privileges` set.
+  - `/api/v1/health` reports `ffmpeg.version = 5.1.9-0+deb12u1`.
+- [x] Inside the container, `vainfo` runs (or reports `vaapi: unavailable` on a non-GPU host).
+  - On this GPU host, `vainfo` lists profiles (Intel iHD driver 23.1.1) and health reports `vaapi.status = ok`.
+  - With `docker/compose.cpu.yaml` (no `/dev/dri`), health reports `vaapi.status = unavailable`
+    with detail `render device not present`, and overall health stays `ok`.
+
+### Deliverables
+
+- Green local quality gates and CI workflow (`.github/workflows/ci.yml`) covering lint,
+  formatting, strict typing, tests, wheel build and a container health smoke test.
+- `docker compose up` serves `/api/v1/health` from the built image.
+- Architecture and decision records live in `docs/ARCHITECTURE.md` and `docs/DECISIONS.md`.
+
+### Known Phase 0 Limitations (intentional)
+
+- Database health is file-level only; SQLAlchemy, migrations and real DB status arrive in Phase 1.
+- `hearth worker` idles and `hearth migrate` / `hearth create-admin` are stubs
+  (`create-admin` exits non-zero so it cannot be mistaken for success).
+- Only `/api/v1/health` and `/api/v1/version` are exposed; authentication, media
+  libraries and all media features start in Phase 1.
+- Media access tokens, HLS, and the deeper VAAPI capability probe are Phase 3/4 work.
 
 ---
 
@@ -37,4 +62,15 @@ None currently.
 ## Hardware Verification Notes
 
 - Host has `/dev/dri/renderD128` (video GID 44, render GID 105).
-- Hardware verification will test `vainfo` and VAAPI capability inside container with `--group-add 105`.
+- Verified on 2026-10-21 with Docker 26.1.5 and Compose 2.26.1:
+  - Container image built from `docker/Dockerfile` (`python:3.12-slim-bookworm`, uv 0.10.7).
+  - `vainfo` inside the container with `--device /dev/dri/renderD128` and
+    `--group-add 105` reports `VA-API version 1.17 (libva 2.12.0)` and
+    `Intel iHD driver for Intel(R) Gen Graphics - 23.1.1`, listing H.264, HEVC,
+    VP9, AV1 and other profiles.
+  - `vainfo` also prints harmless `XDG_RUNTIME_DIR`/X server warnings on stderr;
+    the probe succeeds because VA profiles are present.
+  - CPU-only path (`docker/compose.cpu.yaml`) reports `vaapi: unavailable` and
+    remains healthy.
+- Deeper capability probing and real test encodes are deferred to Phase 4 and
+  must be verified on this hardware then; no encode performance is claimed yet.
