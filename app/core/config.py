@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     scan_mass_delete_threshold: float = 0.30
     scan_mass_delete_min_files: int = 10
     scan_missing_grace_hours: float = 24.0
+    scan_interval_hours: float = 6.0
+    scan_scheduler_enabled: bool = True
+    scan_watch_enabled: bool = True
+    scan_watch_debounce_seconds: float = 10.0
+    scan_watch_refresh_seconds: float = 60.0
+    scan_scheduler_wake_seconds: float = 30.0
 
     # Metadata providers
     tmdb_api_key: str | None = None

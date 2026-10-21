@@ -12,6 +12,7 @@ from app.db.models import Library, LibraryAccess, LibraryPath
 from app.db.session import SessionDep
 from app.services.audit import record_audit
 from app.services.libraries import validate_library_paths
+from app.services.scanner.jobs import enqueue_scan
 
 router = APIRouter(prefix="/libraries", tags=["libraries"])
 
@@ -40,6 +41,14 @@ class LibraryUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     type: LibraryType | None = None
     paths: list[str] | None = None
+
+
+class ScanJobResponse(BaseModel):
+    """The scan job queued for a library (or already active)."""
+
+    job_id: str
+    status: str
+    created: bool
 
 
 def _name(value: str) -> str:
@@ -97,6 +106,33 @@ async def get_library(
     if user.role == "admin":
         return _detail(library)
     return LibrarySummary.model_validate(library)
+
+
+@router.post("/{library_id}/scan", status_code=status.HTTP_202_ACCEPTED)
+async def scan_library(
+    library_id: str, actor: RequireAdmin, session: SessionDep
+) -> ScanJobResponse:
+    """Queue a scan for one library, reusing an active scan job if present."""
+    library = await session.get(Library, library_id)
+    if library is None:
+        raise NotFoundError("Library not found", code="library_not_found")
+    if library.type != "movie":
+        raise ValidationError(
+            "Only movie libraries can be scanned in this phase",
+            code="unsupported_library_type",
+        )
+
+    job, created = await enqueue_scan(session, library.id)
+    record_audit(
+        session,
+        actor_id=actor.id,
+        action="library.scan",
+        target_type="library",
+        target_id=library.id,
+        details={"job_id": job.id, "created": created},
+    )
+    await session.commit()
+    return ScanJobResponse(job_id=job.id, status=job.status, created=created)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

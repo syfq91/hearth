@@ -17,6 +17,8 @@ from app.core.logging import setup_logging
 from app.db.migrate import run_migrations, run_migrations_async
 from app.db.session import build_engine, build_sessionmaker
 from app.services.jobs.worker import JobWorker
+from app.services.scanner.scheduler import ScanScheduler
+from app.services.scanner.watcher import LibraryWatcher
 
 logger = logging.getLogger("hearth.cli")
 
@@ -69,18 +71,46 @@ def api(
 
 
 async def _run_worker(settings: Settings) -> None:
-    """Run the durable job worker until SIGINT/SIGTERM."""
+    """Run the durable job worker, scan scheduler and filesystem watcher."""
     await run_migrations_async(settings)
     engine = build_engine(settings)
     try:
-        worker = JobWorker(settings, build_sessionmaker(engine))
+        sessionmaker = build_sessionmaker(engine)
+        worker = JobWorker(settings, sessionmaker)
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, stop.set)
 
-        logger.info("worker started", extra={"env": settings.env})
-        await worker.run(stop)
+        tasks = [asyncio.create_task(worker.run(stop), name="job-worker")]
+        if settings.scan_scheduler_enabled:
+            tasks.append(
+                asyncio.create_task(
+                    ScanScheduler(settings, sessionmaker).run(stop), name="scan-scheduler"
+                )
+            )
+        if settings.scan_watch_enabled:
+            tasks.append(
+                asyncio.create_task(
+                    LibraryWatcher(settings, sessionmaker).run(stop), name="library-watcher"
+                )
+            )
+
+        logger.info(
+            "worker started",
+            extra={
+                "env": settings.env,
+                "scheduler": settings.scan_scheduler_enabled,
+                "watcher": settings.scan_watch_enabled,
+            },
+        )
+        try:
+            await asyncio.gather(*tasks)
+        finally:
+            stop.set()
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
     finally:
         await engine.dispose()
     logger.info("worker stopped")

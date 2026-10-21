@@ -743,6 +743,30 @@
         "title": "RefreshRequest",
         "type": "object"
       },
+      "ScanJobResponse": {
+        "description": "The scan job queued for a library (or already active).",
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "status",
+          "created"
+        ],
+        "title": "ScanJobResponse",
+        "type": "object"
+      },
       "SearchResultResponse": {
         "description": "One candidate returned to an administrator.",
         "properties": {
@@ -2179,6 +2203,54 @@
           }
         ],
         "summary": "Update Library",
+        "tags": [
+          "libraries"
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/scan": {
+      "post": {
+        "description": "Queue a scan for one library, reusing an active scan job if present.",
+        "operationId": "scan_library_api_v1_libraries__library_id__scan_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "library_id",
+            "required": true,
+            "schema": {
+              "title": "Library Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Scan Library",
         "tags": [
           "libraries"
         ]

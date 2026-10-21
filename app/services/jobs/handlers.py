@@ -1,34 +1,21 @@
-"""Job handler registry and the built-in no-op test job."""
+"""Job handler registry and the built-in handlers."""
 
 import asyncio
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from typing import Any
 
+from app.services.jobs.types import JobCancelled, JobContext, JobHandler, JobSpec
+from app.services.scanner.jobs import SCAN_JOB_TYPE, scan_library_job
 
-class JobCancelled(Exception):
-    """Raised by a handler when it observes a cancellation request."""
-
-
-@dataclass
-class JobContext:
-    """Everything a handler needs without exposing the worker internals."""
-
-    job_id: str
-    payload: dict[str, Any]
-    report_progress: Callable[[float], Awaitable[None]]
-    is_cancelled: Callable[[], Awaitable[bool]]
-
-
-JobHandler = Callable[[JobContext], Awaitable[dict[str, Any] | None]]
-
-
-@dataclass(frozen=True)
-class JobSpec:
-    """Handler plus its per-type concurrency limit."""
-
-    handler: JobHandler
-    concurrency: int = 1
+__all__ = [
+    "REGISTRY",
+    "SCAN_JOB_TYPE",
+    "JobCancelled",
+    "JobContext",
+    "JobHandler",
+    "JobSpec",
+    "get_spec",
+    "noop",
+]
 
 
 async def noop(context: JobContext) -> dict[str, Any]:
@@ -48,6 +35,7 @@ async def noop(context: JobContext) -> dict[str, Any]:
 
 REGISTRY: dict[str, JobSpec] = {
     "noop": JobSpec(handler=noop, concurrency=2),
+    SCAN_JOB_TYPE: JobSpec(handler=scan_library_job, concurrency=1),
 }
 
 

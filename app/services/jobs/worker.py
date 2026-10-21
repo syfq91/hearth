@@ -205,6 +205,8 @@ class JobWorker:
             payload=job.payload or {},
             report_progress=lambda value: self._report_progress(job.id, value),
             is_cancelled=lambda: self._is_cancelled(job.id),
+            settings=self.settings,
+            sessionmaker=self.sessionmaker,
         )
         try:
             result = await spec.handler(context)
