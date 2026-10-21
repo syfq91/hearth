@@ -55,7 +55,7 @@ async def test_migrations_apply_and_are_idempotent(settings: Settings) -> None:
     finally:
         await engine.dispose()
 
-    assert version == "0001_initial"
+    assert version == "0002_phase1_models"
     assert settings.db_path.exists()
 
 

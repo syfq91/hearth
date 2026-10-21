@@ -2,7 +2,7 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 1 in progress (task 1.1 complete)
+- **Current Phase**: Phase 1 in progress (task 1.2 complete)
 - **Overall Status**: Phase 0 accepted; Phase 1 underway
 
 ---
@@ -62,7 +62,7 @@
 | Task | Description | Status | Commit |
 | --- | --- | --- | --- |
 | 1.1 | Async SQLAlchemy base/session, SQLite pragmas, Alembic baseline, locked startup migrations | Complete | `feat: add async database foundation and locked migrations` |
-| 1.2 | Models: `User`, `RefreshToken`, `Library`, `LibraryPath`, `LibraryAccess`, `Setting`, `Job`, `AuditLog` | Not started | |
+| 1.2 | Models: `User`, `RefreshToken`, `Library`, `LibraryPath`, `LibraryAccess`, `Setting`, `Job`, `AuditLog` | Complete | `feat: add phase 1 domain models and migration` |
 | 1.3 | Argon2 password hashing and password policy | Not started | |
 | 1.4 | Auth endpoints: setup, login, refresh rotation/reuse detection, logout, me | Not started | |
 | 1.5 | Short-lived JWT access tokens and hashed refresh tokens | Not started | |
