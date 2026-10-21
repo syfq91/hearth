@@ -14,7 +14,9 @@ import uvicorn
 
 from app.core.config import Settings, get_settings
 from app.core.logging import setup_logging
-from app.db.migrate import run_migrations
+from app.db.migrate import run_migrations, run_migrations_async
+from app.db.session import build_engine, build_sessionmaker
+from app.services.jobs.worker import JobWorker
 
 logger = logging.getLogger("hearth.cli")
 
@@ -67,15 +69,20 @@ def api(
 
 
 async def _run_worker(settings: Settings) -> None:
-    """Wait for shutdown until the Phase 1 job runner exists."""
-    stop = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop.set)
+    """Run the durable job worker until SIGINT/SIGTERM."""
+    await run_migrations_async(settings)
+    engine = build_engine(settings)
+    try:
+        worker = JobWorker(settings, build_sessionmaker(engine))
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, stop.set)
 
-    logger.info("worker started", extra={"env": settings.env})
-    logger.warning("job runner is not implemented until Phase 1; idling")
-    await stop.wait()
+        logger.info("worker started", extra={"env": settings.env})
+        await worker.run(stop)
+    finally:
+        await engine.dispose()
     logger.info("worker stopped")
 
 

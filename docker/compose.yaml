@@ -1,43 +1,54 @@
 name: hearth
 
+x-hearth-common: &hearth-common
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  image: ${HEARTH_IMAGE:-hearth:dev}
+  environment:
+    HEARTH_ENV: ${HEARTH_ENV:-production}
+    HEARTH_LOG_LEVEL: ${HEARTH_LOG_LEVEL:-INFO}
+    HEARTH_HOST: 0.0.0.0
+    HEARTH_PORT: "8000"
+    HEARTH_DATA_DIR: /config
+    HEARTH_DB_PATH: /config/hearth.db
+    HEARTH_TRANSCODE_DIR: /transcode
+    HEARTH_MEDIA_DIR: /media
+    HEARTH_RENDER_DEVICE: /dev/dri/renderD128
+    TZ: ${TZ:-UTC}
+  volumes:
+    - hearth-config:/config
+    - ${MEDIA_DIR:-../media}:/media:ro
+  tmpfs:
+    - /transcode:size=4g,mode=1777
+    - /tmp:size=64m
+  devices:
+    # Host render node; override RENDER_DEVICE for a different GPU.
+    - ${RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
+  group_add:
+    # Host render GID: `getent group render`. Varies per distribution.
+    - ${RENDER_GID:-105}
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  read_only: true
+  stop_grace_period: 30s
+
 services:
   hearth:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    image: ${HEARTH_IMAGE:-hearth:dev}
+    <<: *hearth-common
     restart: unless-stopped
-    environment:
-      HEARTH_ENV: ${HEARTH_ENV:-production}
-      HEARTH_LOG_LEVEL: ${HEARTH_LOG_LEVEL:-INFO}
-      HEARTH_HOST: 0.0.0.0
-      HEARTH_PORT: "8000"
-      HEARTH_DATA_DIR: /config
-      HEARTH_DB_PATH: /config/hearth.db
-      HEARTH_TRANSCODE_DIR: /transcode
-      HEARTH_MEDIA_DIR: /media
-      HEARTH_RENDER_DEVICE: /dev/dri/renderD128
-      TZ: ${TZ:-UTC}
     ports:
       - "${HEARTH_HTTP_PORT:-8000}:8000"
-    volumes:
-      - hearth-config:/config
-      - ${MEDIA_DIR:-../media}:/media:ro
-    tmpfs:
-      - /transcode:size=4g,mode=1777
-      - /tmp:size=64m
-    devices:
-      # Host render node; override RENDER_DEVICE for a different GPU.
-      - ${RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
-    group_add:
-      # Host render GID: `getent group render`. Varies per distribution.
-      - ${RENDER_GID:-105}
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    read_only: true
-    stop_grace_period: 30s
+
+  worker:
+    <<: *hearth-common
+    restart: unless-stopped
+    command: ["hearth", "worker"]
+    healthcheck:
+      # The image healthcheck probes the API, which this process does not serve.
+      disable: true
 
 volumes:
   hearth-config:

@@ -5,6 +5,7 @@ from typing import Annotated, cast
 from fastapi import Depends, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.errors import ForbiddenError, NotFoundError, UnauthorizedError
@@ -31,6 +32,14 @@ def get_login_limiter(request: Request) -> SlidingWindowLimiter:
 
 
 LoginLimiterDep = Annotated[SlidingWindowLimiter, Depends(get_login_limiter)]
+
+
+def get_sessionmaker(request: Request) -> async_sessionmaker[AsyncSession]:
+    """Return the application's session factory for streaming endpoints."""
+    return cast(async_sessionmaker[AsyncSession], request.app.state.sessionmaker)
+
+
+SessionmakerDep = Annotated[async_sessionmaker[AsyncSession], Depends(get_sessionmaker)]
 
 
 def client_ip(request: Request, settings: Settings) -> str:

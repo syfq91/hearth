@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     # Jobs
     job_poll_interval: float = 1.0
     job_worker_concurrency: int = 4
+    job_retry_base_seconds: float = 2.0
+    job_retry_max_seconds: float = 300.0
 
     @property
     def database_url(self) -> str:

@@ -7,3 +7,6 @@ services:
   hearth:
     devices: !override []
     group_add: !override []
+  worker:
+    devices: !override []
+    group_add: !override []
