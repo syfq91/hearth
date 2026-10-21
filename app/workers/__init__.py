@@ -1,0 +1,1 @@
+"""Async background worker entrypoint."""

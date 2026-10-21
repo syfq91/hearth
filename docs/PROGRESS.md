@@ -14,7 +14,7 @@
 | Task | Description | Status | Commit |
 | --- | --- | --- | --- |
 | 0.1 | Initialize repo with `uv`, `pyproject.toml`, Ruff, Mypy, Pytest, `.gitignore`, `.editorconfig` | Complete | `chore: initialize repo, uv tooling, and project configurations` |
-| 0.2 | Create package layout with placeholder modules | Pending | Pending |
+| 0.2 | Create package layout with placeholder modules | Complete | `chore: create package layout and placeholder modules` |
 | 0.3 | Implement `core/config.py`, `core/logging.py`, and unified error handler | Pending | Pending |
 | 0.4 | Implement `app/main.py` with app factory, `/api/v1/health` and `/api/v1/version` | Pending | Pending |
 | 0.5 | Implement Typer CLI (`api`, `worker`, `migrate`, `create-admin`) | Pending | Pending |
