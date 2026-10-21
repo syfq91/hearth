@@ -152,7 +152,7 @@
 | 2.4 | Movie filename parsing with `guessit` and folder hints | Complete | `feat: parse movie filenames with guessit` |
 | 2.5 | Metadata provider interface, TMDB provider with cache, local NFO provider | Complete | `feat: add TMDB and local metadata providers` |
 | 2.6 | Matching, manual match/search endpoints, scan integration | Complete | `feat: add metadata matching and manual match API` |
-| 2.7 | Image download, resizing variants and BlurHash | Pending | Pending |
+| 2.7 | Image download, resizing variants and BlurHash | Complete | `feat: add artwork image pipeline` |
 | 2.8 | Scheduled scans, scan job handler and filesystem watcher | Pending | Pending |
 | 2.9 | Movie browse/read API with cursor pagination and item detail | Pending | Pending |
 

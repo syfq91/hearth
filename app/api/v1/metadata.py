@@ -13,6 +13,7 @@ from app.db.models import MediaItem
 from app.db.session import SessionDep
 from app.services.audit import record_audit
 from app.services.metadata.base import ProviderError, SearchResult
+from app.services.metadata.factory import build_metadata_matcher
 from app.services.metadata.matching import MetadataMatcher
 
 router = APIRouter(tags=["metadata"])
@@ -22,7 +23,7 @@ def build_matcher(
     settings: Settings, sessionmaker: async_sessionmaker[AsyncSession]
 ) -> MetadataMatcher:
     """Construct the matcher for a request; overridable in tests."""
-    return MetadataMatcher(settings, sessionmaker)
+    return build_metadata_matcher(settings, sessionmaker)
 
 
 class SearchResultResponse(BaseModel):

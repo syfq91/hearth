@@ -248,7 +248,12 @@ class MetadataMatcher:
                 details = None
             if details is not None:
                 return await self._apply(
-                    snapshot, details.provider, details.provider_id, details, [], None
+                    snapshot,
+                    details.provider,
+                    details.provider_id,
+                    details,
+                    list(details.images),
+                    None,
                 )
 
         remote = self._tmdb or (self.remote_providers[0] if self.remote_providers else None)
@@ -315,7 +320,7 @@ class MetadataMatcher:
         return await self._apply(snapshot, provider_name, provider_id, details, images, None)
 
     async def close(self) -> None:
-        """Release remote clients owned by this matcher."""
+        """Release clients owned by the providers and the artwork handler."""
 
         for provider in self.providers:
             try:
@@ -324,6 +329,13 @@ class MetadataMatcher:
                 logger.warning(
                     "failed to close metadata provider", extra={"provider": provider.name}
                 )
+
+        close = getattr(self.artwork, "close", None)
+        if close is not None:
+            try:
+                await close()
+            except Exception:  # pragma: no cover - close must never mask a scan
+                logger.warning("failed to close artwork handler")
 
     # --------------------------------------------------------------- internals
 

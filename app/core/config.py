@@ -77,10 +77,24 @@ class Settings(BaseSettings):
     metadata_retry_max_hours: float = 72.0
     metadata_unmatched_retry_hours: float = 24.0
 
+    # Images
+    image_cache_dir: Path | None = None
+    image_download_timeout_seconds: float = 20.0
+    image_max_download_bytes: int = 20 * 1024 * 1024
+    image_variant_quality: int = 82
+    image_blurhash_components: int = 4
+    image_process_workers: int = 2
+    image_allowed_hosts: list[str] = ["image.tmdb.org"]
+
     @property
     def database_url(self) -> str:
         """SQLAlchemy async URL for the configured SQLite database."""
         return f"sqlite+aiosqlite:///{self.db_path}"
+
+    @property
+    def images_dir(self) -> Path:
+        """Root directory for cached artwork originals and variants."""
+        return self.image_cache_dir or (self.data_dir / "cache" / "images")
 
 
 @lru_cache
