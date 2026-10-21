@@ -146,6 +146,25 @@ class InternalError(AppError):
         )
 
 
+class RateLimitError(AppError):
+    """Too many requests (429) with a machine-readable retry delay."""
+
+    def __init__(
+        self,
+        retry_after: float,
+        message: str = "Too many attempts; try again later",
+        code: str = "rate_limited",
+    ) -> None:
+        seconds = max(1, int(retry_after + 0.999))
+        super().__init__(
+            message=message,
+            code=code,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            details={"retry_after": seconds},
+            headers={"Retry-After": str(seconds)},
+        )
+
+
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
     """Handle custom application exceptions."""
     return JSONResponse(status_code=exc.status_code, content=exc.to_dict(), headers=exc.headers)

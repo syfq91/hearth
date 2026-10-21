@@ -135,3 +135,11 @@
 - **Context:** Library roots come from administrators but must never allow a scan or stream to escape the read-only media mount. Normal users also do not need host filesystem layout.
 - **Decision:** `validate_library_paths` requires absolute paths, resolves them with `strict=True`, requires a directory, checks it is inside `HEARTH_MEDIA_DIR` using `Path.is_relative_to` after resolution, and checks `R_OK|X_OK`. This blocks `..` segments and symlinks that point outside the mount. Duplicate paths are collapsed; an empty list is invalid. Admin CRUD lives on `/api/v1/libraries`; root paths are returned only to admins, while normal users receive id, name and type. Deleting a library cascades its path and access rows but never touches media files.
 - **Alternatives Considered:** `os.path.commonpath` on unresolved strings (symlink bypass), trusting admin input (a typo could expose `/` to the scanner), exposing paths to every user (unnecessary information disclosure), rejecting the mount root itself (legitimate single-root setups).
+
+## ADR 018: Login Throttling and Audit Visibility
+
+- **Date:** 2026-10-21
+- **Status:** Accepted
+- **Context:** Login is the only unauthenticated credential endpoint, and the audit table needs an operator-facing read path.
+- **Decision:** Failed logins are counted in a process-local sliding window for both `ip:<addr>` and `user:<lowercased username>`, with defaults of 5 failures per 60 seconds. Checks happen before password verification and raise 429 with a `Retry-After` header; a successful login clears the username counter (the IP counter ages out naturally). Client IPs come from the socket unless `HEARTH_TRUST_PROXY_HEADERS=true`, because `X-Forwarded-For` is spoofable. `GET /api/v1/admin/audit` exposes newest-first entries with a limit (1-200) and optional action filter to admins only. Audit details never contain passwords or hashes.
+- **Alternatives Considered:** Persistent throttle counters (extra writes on every failed login), only per-IP limiting (allows distributed guessing of one account), only per-username limiting (allows spraying many accounts), trusting proxy headers by default (trivial bypass), a separate audit UI (frontend is out of scope until Phase 9).

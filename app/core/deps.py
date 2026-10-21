@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.core.config import Settings
 from app.core.errors import ForbiddenError, NotFoundError, UnauthorizedError
+from app.core.ratelimit import SlidingWindowLimiter
 from app.core.secrets import Keys, load_keys
 from app.core.tokens import MediaTokenClaims, decode_access_token, verify_media_token
 from app.db.models import Library, LibraryAccess, User
@@ -22,6 +23,28 @@ def get_app_settings(request: Request) -> Settings:
 
 
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
+
+
+def get_login_limiter(request: Request) -> SlidingWindowLimiter:
+    """Return the process-wide login attempt limiter."""
+    return cast(SlidingWindowLimiter, request.app.state.login_limiter)
+
+
+LoginLimiterDep = Annotated[SlidingWindowLimiter, Depends(get_login_limiter)]
+
+
+def client_ip(request: Request, settings: Settings) -> str:
+    """Return the caller IP, honoring proxy headers only when configured.
+
+    ``X-Forwarded-For`` is trivially spoofable, so it is ignored by default.
+    Deployments behind a reverse proxy can set ``HEARTH_TRUST_PROXY_HEADERS``.
+    """
+    if settings.trust_proxy_headers:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        first = forwarded.split(",", 1)[0].strip()
+        if first:
+            return first[:64]
+    return request.client.host if request.client else "unknown"
 
 
 def get_keys(request: Request, settings: SettingsDep) -> Keys:

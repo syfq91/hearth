@@ -22,6 +22,7 @@ from app.core.errors import (
 )
 from app.core.logging import setup_logging
 from app.core.middleware import RequestIDMiddleware
+from app.core.ratelimit import SlidingWindowLimiter
 from app.db.migrate import run_migrations_async
 from app.db.session import build_engine, build_sessionmaker
 
@@ -62,6 +63,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.settings = resolved
     application.state.engine = engine
     application.state.sessionmaker = sessionmaker
+    application.state.login_limiter = SlidingWindowLimiter(
+        limit=resolved.login_rate_limit_attempts,
+        window_seconds=resolved.login_rate_limit_window_seconds,
+    )
 
     application.add_middleware(RequestIDMiddleware)
 

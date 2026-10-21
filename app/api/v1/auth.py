@@ -11,8 +11,19 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.deps import CurrentUser, KeysDep, SettingsDep
-from app.core.errors import ConflictError, ForbiddenError, UnauthorizedError
+from app.core.deps import (
+    CurrentUser,
+    KeysDep,
+    LoginLimiterDep,
+    SettingsDep,
+    client_ip,
+)
+from app.core.errors import (
+    ConflictError,
+    ForbiddenError,
+    RateLimitError,
+    UnauthorizedError,
+)
 from app.core.ids import uuid7
 from app.core.passwords import (
     hash_password,
@@ -179,19 +190,33 @@ async def login(
     session: SessionDep,
     settings: SettingsDep,
     keys: KeysDep,
+    limiter: LoginLimiterDep,
 ) -> TokenPair:
     """Authenticate with username and password and issue a token pair."""
     username = payload.username.strip().lower()
+    ip_key = f"ip:{client_ip(request, settings)}"
+    user_key = f"user:{username}"
+    retry_after = max(limiter.retry_after(ip_key), limiter.retry_after(user_key))
+    if retry_after > 0:
+        raise RateLimitError(retry_after)
+
     user = await session.scalar(select(User).where(User.username == username))
     if user is None:
         # Verify against a real hash so unknown usernames are not cheaper.
         verify_password(_dummy_hash(), payload.password)
+        limiter.hit(ip_key)
+        limiter.hit(user_key)
         raise UnauthorizedError("Invalid username or password", code="invalid_credentials")
     if not verify_password(user.password_hash, payload.password):
+        limiter.hit(ip_key)
+        limiter.hit(user_key)
         raise UnauthorizedError("Invalid username or password", code="invalid_credentials")
     if user.disabled:
+        limiter.hit(ip_key)
+        limiter.hit(user_key)
         raise ForbiddenError("Account is disabled", code="account_disabled")
 
+    limiter.reset(user_key)
     user.last_login_at = datetime.now(UTC)
     pair, _row = _issue_pair(
         session,

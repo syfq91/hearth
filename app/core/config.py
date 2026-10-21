@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     max_enabled_users: int = 15
     password_min_length: int = 8
 
+    # Login throttling
+    login_rate_limit_attempts: int = 5
+    login_rate_limit_window_seconds: int = 60
+    trust_proxy_headers: bool = False
+
     # Jobs
     job_poll_interval: float = 1.0
     job_worker_concurrency: int = 4
