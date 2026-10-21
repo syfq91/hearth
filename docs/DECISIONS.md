@@ -111,3 +111,11 @@
 - **Context:** `<video>`, `<img>` and `<audio>` cannot send an Authorization header, so media URLs need a separate, narrowly scoped credential. This is needed before Phase 3 streaming exists so the contract is stable.
 - **Decision:** Tokens are `base64url(payload).base64url(HMAC-SHA256(media_key, payload))`, where the media key is derived from the installation secret with a separate domain string from the JWT key. The payload carries `sub`, optional `item`, `tv`, `scope=media`, `iat`, `exp` and `jti`. Default lifetime is 6 hours (`HEARTH_MEDIA_TOKEN_SECONDS`). Verification is constant-time, checks scope and expiry, and a dependency re-checks the user's disabled flag and token version on every media request. Minting requires a normal bearer token at `POST /api/v1/auth/media-tokens`. Media tokens cannot authenticate management endpoints because they are never accepted as bearer credentials and their scope is checked.
 - **Alternatives Considered:** Signed URLs with JWT (larger and shares the access-token validation path), cookies (not usable by every native media element/client), long-lived API keys (cannot be revoked or scoped per item), putting access tokens in query strings (leaks a management credential into logs and history).
+
+## ADR 015: Library Authorization Returns 404 and Admins Bypass Grants
+
+- **Date:** 2026-10-21
+- **Status:** Accepted
+- **Context:** The phase requires a user without library access to receive 404 rather than 403, and every later item/stream route must apply the same rule.
+- **Decision:** `require_library_access(library_id)` loads the library, returns 404 `library_not_found` for both missing libraries and libraries the user has no grant for, and returns the ORM object otherwise. Administrators implicitly access every library; normal users require a `library_access` row. `GET /api/v1/libraries` filters rather than 404s because it is a collection. Later item and stream endpoints must depend on this helper (or an item-level equivalent) instead of checking access inline.
+- **Alternatives Considered:** 403 for ungranted libraries (reveals existence and violates the criterion), admin-only implicit access disabled (makes administration require self-grants), per-route inline checks (easy to forget and hard to audit).

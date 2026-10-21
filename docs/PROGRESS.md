@@ -2,7 +2,7 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 1 in progress (task 1.6 complete)
+- **Current Phase**: Phase 1 in progress (task 1.7 complete)
 - **Overall Status**: Phase 0 accepted; Phase 1 underway
 
 ---
@@ -67,7 +67,7 @@
 | 1.4 | Auth endpoints: setup, login, refresh rotation/reuse detection, logout, me | Complete | `feat: add setup, login, refresh, logout and me endpoints` |
 | 1.5 | Short-lived JWT access tokens and hashed refresh tokens | Complete | `test: cover access-token claims and refresh-token hashing` |
 | 1.6 | Media access tokens (HMAC, scoped, for query-string consumers) | Complete | `feat: add scoped HMAC media access tokens` |
-| 1.7 | Roles and dependencies (`require_user`, `require_admin`, `require_library_access`) | Not started | |
+| 1.7 | Roles and dependencies (`require_user`, `require_admin`, `require_library_access`) | Complete | `feat: add role and library-access dependencies` |
 | 1.8 | Admin user management and 15-enabled-user limit | Not started | |
 | 1.9 | Admin library CRUD with media-root path validation | Not started | |
 | 1.10 | Login rate limiting and admin audit log | Not started | |

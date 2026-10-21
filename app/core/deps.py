@@ -4,12 +4,13 @@ from typing import Annotated, cast
 
 from fastapi import Depends, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 
 from app.core.config import Settings
-from app.core.errors import UnauthorizedError
+from app.core.errors import ForbiddenError, NotFoundError, UnauthorizedError
 from app.core.secrets import Keys, load_keys
 from app.core.tokens import MediaTokenClaims, decode_access_token, verify_media_token
-from app.db.models import User
+from app.db.models import Library, LibraryAccess, User
 from app.db.session import SessionDep
 
 _bearer = HTTPBearer(auto_error=False, description="Hearth access token")
@@ -97,3 +98,53 @@ async def get_media_user(
 
 
 MediaUser = Annotated[User, Depends(get_media_user)]
+
+
+async def require_user(user: CurrentUser) -> User:
+    """Require any authenticated, enabled account."""
+    return user
+
+
+RequireUser = Annotated[User, Depends(require_user)]
+
+
+async def require_admin(user: CurrentUser) -> User:
+    """Require an administrator account."""
+    if user.role != "admin":
+        raise ForbiddenError("Administrator access required", code="admin_required")
+    return user
+
+
+RequireAdmin = Annotated[User, Depends(require_admin)]
+
+
+async def require_library_access(
+    library_id: str,
+    user: CurrentUser,
+    session: SessionDep,
+) -> Library:
+    """Resolve a library the current user is allowed to see.
+
+    Missing libraries and libraries the user cannot access both raise 404 so
+    the API does not reveal the existence of other users' libraries. Admins
+    may access every library.
+    """
+    library = await session.get(Library, library_id)
+    if library is None:
+        raise NotFoundError("Library not found", code="library_not_found")
+
+    if user.role == "admin":
+        return library
+
+    granted = await session.scalar(
+        select(LibraryAccess.id).where(
+            LibraryAccess.library_id == library.id,
+            LibraryAccess.user_id == user.id,
+        )
+    )
+    if granted is None:
+        raise NotFoundError("Library not found", code="library_not_found")
+    return library
+
+
+LibraryAccessDep = Annotated[Library, Depends(require_library_access)]
