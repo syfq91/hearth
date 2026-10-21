@@ -79,3 +79,11 @@
 - **Context:** Auth, per-user library grants and durable jobs need a schema that stays correct under SQLite while remaining Postgres-compatible.
 - **Decision:** Usernames are normalized to lowercase and constrained by application validation, so the unique index is portable and login is case-insensitive. Access tokens carry a `token_version` claim; disabling a user is checked against the database on every request (immediate revocation) and password resets increment the version to invalidate outstanding access tokens. Refresh tokens store only a SHA-256 hash plus a `family_id`; rotation revokes the presented row and reuse of a revoked row revokes the family. Libraries own `library_paths` and `library_access` with cascade deletes and uniqueness per pair. `settings` is a JSON-encoded key/value table. Jobs carry claim, retry, cancellation and progress fields with a composite `(status, run_after)` index for the polling claim query. Audit rows are append-only and keep a nullable actor so deleting a user does not erase history.
 - **Alternatives Considered:** Case-sensitive usernames with a lower() expression index (less portable), JWT-only revocation (cannot satisfy immediate disable), plaintext refresh tokens (credential leak), separate audit database (overkill for a single node), one table per job type (does not support a generic worker).
+
+## ADR 011: Argon2id Parameters and Credential Input Bounds
+
+- **Date:** 2026-10-21
+- **Status:** Accepted
+- **Context:** Password storage and login input need safe defaults without a tuning exercise.
+- **Decision:** Use Argon2id at 19 MiB memory, 2 iterations and 1 lane (OWASP baseline), with per-hash random salts and `check_needs_rehash` support. Verification treats malformed hashes as a failed login. Passwords have a documented minimum (8, configurable) and a hard maximum of 1024 characters to bound hashing cost. Usernames are trimmed, lowercased and restricted to `[a-z0-9][a-z0-9_.-]{2,63}`.
+- **Alternatives Considered:** bcrypt (memory-hardness and 72-byte truncation), PBKDF2 (weaker GPU resistance), unbounded password length (cheap denial of service against the hasher).
