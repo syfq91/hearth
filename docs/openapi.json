@@ -1,6 +1,73 @@
 {
   "components": {
     "schemas": {
+      "AboutResponse": {
+        "description": "Application identity and third-party notices.",
+        "properties": {
+          "attributions": {
+            "items": {
+              "$ref": "#/components/schemas/Attribution"
+            },
+            "title": "Attributions",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "description",
+          "attributions"
+        ],
+        "title": "AboutResponse",
+        "type": "object"
+      },
+      "Attribution": {
+        "description": "Required attribution for a metadata source.",
+        "properties": {
+          "logo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo Url"
+          },
+          "notice": {
+            "title": "Notice",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "notice",
+          "url"
+        ],
+        "title": "Attribution",
+        "type": "object"
+      },
       "AuditEntry": {
         "properties": {
           "action": {
@@ -1056,6 +1123,28 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/about": {
+      "get": {
+        "description": "Report application identity and required third-party notices.",
+        "operationId": "about_api_v1_about_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AboutResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "About",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/api/v1/admin/audit": {
       "get": {
         "description": "Return the most recent administrative actions, newest first.",

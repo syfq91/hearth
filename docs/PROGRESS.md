@@ -150,7 +150,7 @@
 | 2.2 | Catalog models (`MediaItem`, `Movie`, `MediaFile`, images, people, genres, provider cache, FTS5) | Complete | `feat: add media catalog models and FTS5 search` |
 | 2.3 | Scanner with change detection, soft deletes and mass-deletion safeguard | Complete | `feat: add media scanner with change detection` |
 | 2.4 | Movie filename parsing with `guessit` and folder hints | Complete | `feat: parse movie filenames with guessit` |
-| 2.5 | Metadata provider interface, TMDB provider with cache, local NFO provider | Pending | Pending |
+| 2.5 | Metadata provider interface, TMDB provider with cache, local NFO provider | Complete | `feat: add TMDB and local metadata providers` |
 | 2.6 | Matching, manual match/search endpoints, scan integration | Pending | Pending |
 | 2.7 | Image download, resizing variants and BlurHash | Pending | Pending |
 | 2.8 | Scheduled scans, scan job handler and filesystem watcher | Pending | Pending |

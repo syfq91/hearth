@@ -217,3 +217,17 @@ def test_app_factory_returns_fresh_application(settings: Settings) -> None:
 
     assert isinstance(first, FastAPI)
     assert first is not second
+
+
+def test_about_reports_tmdb_attribution(client: TestClient) -> None:
+    """The about endpoint exposes the required TMDB notice and logo."""
+    response = client.get("/api/v1/about")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["name"] == "Hearth"
+    assert payload["version"] == "0.1.0"
+    attribution = payload["attributions"][0]
+    assert attribution["provider"] == "TMDB"
+    assert "not endorsed or certified by TMDB" in attribution["notice"]
+    assert attribution["logo_url"].endswith(".svg")

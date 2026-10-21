@@ -65,6 +65,15 @@ class Settings(BaseSettings):
     scan_mass_delete_min_files: int = 10
     scan_missing_grace_hours: float = 24.0
 
+    # Metadata providers
+    tmdb_api_key: str | None = None
+    tmdb_base_url: str = "https://api.themoviedb.org/3"
+    tmdb_image_base_url: str = "https://image.tmdb.org/t/p"
+    tmdb_timeout_seconds: float = 10.0
+    tmdb_cache_ttl_hours: float = 168.0
+    tmdb_min_interval_seconds: float = 0.05
+    metadata_match_threshold: float = 0.80
+
     @property
     def database_url(self) -> str:
         """SQLAlchemy async URL for the configured SQLite database."""

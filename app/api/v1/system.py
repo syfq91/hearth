@@ -46,6 +46,31 @@ class VersionResponse(BaseModel):
     python_version: str
 
 
+class Attribution(BaseModel):
+    """Required attribution for a metadata source."""
+
+    provider: str
+    notice: str
+    url: str
+    logo_url: str | None = None
+
+
+class AboutResponse(BaseModel):
+    """Application identity and third-party notices."""
+
+    name: str
+    version: str
+    description: str
+    attributions: list[Attribution]
+
+
+TMDB_NOTICE = "This product uses the TMDB API but is not endorsed or certified by TMDB."
+TMDB_LOGO_URL = (
+    "https://www.themoviedb.org/assets/2/v4/logos/v2/"
+    "blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg"
+)
+
+
 @router.get("/health")
 async def health(settings: SettingsDep) -> HealthResponse:
     """Report application, database, ffmpeg and VAAPI status."""
@@ -73,4 +98,22 @@ async def version() -> VersionResponse:
         version=__version__,
         api_version="v1",
         python_version=platform.python_version(),
+    )
+
+
+@router.get("/about")
+async def about() -> AboutResponse:
+    """Report application identity and required third-party notices."""
+    return AboutResponse(
+        name="Hearth",
+        version=__version__,
+        description="A self-hosted personal media server.",
+        attributions=[
+            Attribution(
+                provider="TMDB",
+                notice=TMDB_NOTICE,
+                url="https://www.themoviedb.org/",
+                logo_url=TMDB_LOGO_URL,
+            )
+        ],
     )

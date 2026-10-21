@@ -1,5 +1,6 @@
 """Filesystem walking with Hearth's ignore rules."""
 
+import glob
 import os
 import re
 from collections.abc import Sequence
@@ -148,11 +149,19 @@ def walk_movie_files(
 
 
 def find_sidecar_subtitles(path: Path | str) -> list[str]:
-    """Return subtitle sidecars sharing a video's stem."""
+    """Return subtitle sidecars sharing a video's stem.
+
+    Both ``Movie.srt`` and language-tagged files such as ``Movie.en.srt`` are
+    supported; unrelated files in the folder are ignored.
+    """
     target = Path(path)
-    found: list[str] = []
-    for extension in (".srt", ".ass", ".ssa", ".vtt", ".sub"):
-        candidate = target.with_suffix(extension)
-        if candidate.is_file():
-            found.append(str(candidate))
-    return found
+    extensions = {".srt", ".ass", ".ssa", ".vtt", ".sub"}
+    found = {
+        str(candidate)
+        for extension in extensions
+        if (candidate := target.with_suffix(extension)).is_file()
+    }
+    for candidate in target.parent.glob(f"{glob.escape(target.stem)}.*"):
+        if candidate.is_file() and candidate.suffix.casefold() in extensions:
+            found.add(str(candidate))
+    return sorted(found)

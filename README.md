@@ -69,6 +69,7 @@ All settings use the `HEARTH_` prefix (see `app/core/config.py`).
 | `HEARTH_MEDIA_TOKEN_SECONDS` | `21600` | Media URL token lifetime (6 hours) |
 | `HEARTH_MAX_ENABLED_USERS` | `15` | Enabled-account cap |
 | `HEARTH_TRUST_PROXY_HEADERS` | `false` | Honor `X-Forwarded-For` (only behind a trusted proxy) |
+| `HEARTH_TMDB_API_KEY` | unset | TMDB v3 API key or v4 read token; metadata stays pending without it |
 
 If `HEARTH_SECRET_KEY` is not set, a random secret is generated once and stored
 in `HEARTH_DATA_DIR/secret_key` with mode 0600. Back it up with the database, or
@@ -93,3 +94,4 @@ uv run mypy app
 - [docs/PROGRESS.md](docs/PROGRESS.md) — phase and task status
 - [docs/DECISIONS.md](docs/DECISIONS.md) — architecture decision records
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — module layout and runtime diagram
+- [docs/ATTRIBUTION.md](docs/ATTRIBUTION.md) — TMDB and third-party notices
