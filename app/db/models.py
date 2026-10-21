@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
     Float,
@@ -78,6 +79,13 @@ class Library(TimestampMixin, Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(128), unique=True)
     type: Mapped[str] = mapped_column(String(16))
+
+    # Scan bookkeeping. Statistics are JSON so the shape can grow without a
+    # migration; the status is a short machine-readable state.
+    last_scan_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), default=None)
+    last_scan_status: Mapped[str | None] = mapped_column(String(16), default=None)
+    last_scan_error: Mapped[str | None] = mapped_column(Text, default=None)
+    last_scan_stats: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
     paths: Mapped[list["LibraryPath"]] = relationship(
         back_populates="library", cascade="all, delete-orphan", lazy="selectin"
@@ -172,3 +180,219 @@ class AuditLog(Base):
     target_id: Mapped[str | None] = mapped_column(String(36), default=None)
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class MediaItem(TimestampMixin, Base):
+    """A catalog entry shared by every media type.
+
+    Type-specific tables (``movies`` first) hold only the extra columns. Files,
+    images and user state hang off this row, so replacing a file (or matching a
+    provider) never loses watch progress that is keyed by item id.
+    """
+
+    __tablename__ = "media_items"
+    __table_args__ = (
+        CheckConstraint(
+            "type IN ('movie', 'series', 'season', 'episode', 'artist', 'album', 'track', 'book')",
+            name="type",
+        ),
+        CheckConstraint(
+            "match_state IN ('pending', 'matched', 'unmatched')",
+            name="match_state",
+        ),
+        Index("ix_media_items_library_title", "library_id", "sort_title"),
+        Index("ix_media_items_library_added", "library_id", "added_at"),
+        Index("ix_media_items_match_due", "match_state", "next_match_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    library_id: Mapped[str] = mapped_column(
+        ForeignKey("libraries.id", ondelete="CASCADE"), index=True
+    )
+    type: Mapped[str] = mapped_column(String(16), default="movie", index=True)
+    title: Mapped[str] = mapped_column(String(512))
+    sort_title: Mapped[str] = mapped_column(String(512), index=True)
+    year: Mapped[int | None] = mapped_column(Integer, default=None, index=True)
+    overview: Mapped[str | None] = mapped_column(Text, default=None)
+    rating: Mapped[float | None] = mapped_column(Float, default=None)
+    runtime_seconds: Mapped[int | None] = mapped_column(Integer, default=None)
+    added_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    match_state: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    match_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    match_error: Mapped[str | None] = mapped_column(Text, default=None)
+    next_match_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), default=None)
+    matched_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), default=None)
+    provider_ids: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+    movie: Mapped["Movie | None"] = relationship(
+        back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+    )
+    files: Mapped[list["MediaFile"]] = relationship(
+        back_populates="item", cascade="all, delete-orphan", lazy="selectin"
+    )
+    images: Mapped[list["Image"]] = relationship(
+        back_populates="item", cascade="all, delete-orphan", lazy="selectin"
+    )
+    genres: Mapped[list["Genre"]] = relationship(
+        secondary="item_genres", lazy="selectin", viewonly=True
+    )
+    user_states: Mapped[list["UserItemState"]] = relationship(
+        back_populates="item", cascade="all, delete-orphan"
+    )
+
+
+class Movie(Base):
+    """Movie-specific metadata attached to one item."""
+
+    __tablename__ = "movies"
+
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    original_title: Mapped[str | None] = mapped_column(String(512), default=None)
+    edition: Mapped[str | None] = mapped_column(String(64), default=None)
+    part: Mapped[int | None] = mapped_column(Integer, default=None)
+    tagline: Mapped[str | None] = mapped_column(String(512), default=None)
+    release_date: Mapped[str | None] = mapped_column(String(10), default=None)
+
+    item: Mapped["MediaItem"] = relationship(back_populates="movie")
+
+
+class MediaFile(TimestampMixin, Base):
+    """One file on disk for a catalog item; multiple files are versions."""
+
+    __tablename__ = "media_files"
+    __table_args__ = (
+        Index("ix_media_files_identity", "size_bytes", "partial_hash"),
+        Index("ix_media_files_item_missing", "item_id", "missing_since"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), index=True
+    )
+    path: Mapped[str] = mapped_column(Text, unique=True)
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    mtime: Mapped[float] = mapped_column(Float)
+    # SHA-256 over size plus the first and last 64 KiB; stable across renames.
+    partial_hash: Mapped[str] = mapped_column(String(64), index=True)
+    container: Mapped[str | None] = mapped_column(String(64), default=None)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, default=None)
+    bit_rate: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    streams_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    sidecar_subtitles: Mapped[list[str]] = mapped_column(JSON, default=list)
+    probe_error: Mapped[str | None] = mapped_column(Text, default=None)
+    version_label: Mapped[str | None] = mapped_column(String(64), default=None)
+    missing_since: Mapped[datetime | None] = mapped_column(UTCDateTime(), default=None)
+
+    item: Mapped["MediaItem"] = relationship(back_populates="files")
+
+
+class Image(Base):
+    """A cached artwork original associated with an item."""
+
+    __tablename__ = "images"
+    __table_args__ = (Index("ix_images_item_kind", "item_id", "kind"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16))
+    provider: Mapped[str | None] = mapped_column(String(32), default=None)
+    source_url: Mapped[str | None] = mapped_column(Text, default=None)
+    local_path: Mapped[str] = mapped_column(Text)
+    width: Mapped[int] = mapped_column(Integer)
+    height: Mapped[int] = mapped_column(Integer)
+    blurhash: Mapped[str | None] = mapped_column(String(128), default=None)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+    item: Mapped["MediaItem"] = relationship(back_populates="images")
+
+
+class Genre(Base):
+    """A reusable genre name."""
+
+    __tablename__ = "genres"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+
+
+class ItemGenre(Base):
+    """Association between an item and a genre."""
+
+    __tablename__ = "item_genres"
+
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    genre_id: Mapped[str] = mapped_column(
+        ForeignKey("genres.id", ondelete="CASCADE"), primary_key=True
+    )
+
+
+class Person(Base):
+    """A cast or crew member."""
+
+    __tablename__ = "people"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(255), index=True)
+    tmdb_id: Mapped[str | None] = mapped_column(String(32), unique=True, default=None)
+
+
+class ItemPerson(Base):
+    """Credit of a person on an item, with role and billing order."""
+
+    __tablename__ = "item_people"
+
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    person_id: Mapped[str] = mapped_column(
+        ForeignKey("people.id", ondelete="CASCADE"), primary_key=True
+    )
+    role: Mapped[str] = mapped_column(String(16), primary_key=True, default="cast")
+    character: Mapped[str | None] = mapped_column(String(255), default=None)
+    ordering: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class ProviderCache(Base):
+    """Cached provider response, keyed by provider and request key."""
+
+    __tablename__ = "provider_cache"
+
+    provider: Mapped[str] = mapped_column(String(32), primary_key=True)
+    key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    payload: Mapped[Any] = mapped_column(JSON)
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)
+
+
+class UserItemState(Base):
+    """Per-user watch state, favorite, rating and play count for an item.
+
+    Pulled forward from Phase 3 so move detection can prove that renaming a file
+    preserves progress rather than recreating the item.
+    """
+
+    __tablename__ = "user_item_state"
+    __table_args__ = (CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 10", name="rating"),)
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    played: Mapped[bool] = mapped_column(Boolean, default=False)
+    position_ms: Mapped[int] = mapped_column(Integer, default=0)
+    favorite: Mapped[bool] = mapped_column(Boolean, default=False)
+    rating: Mapped[int | None] = mapped_column(Integer, default=None)
+    play_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_played_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), default=None)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+    item: Mapped["MediaItem"] = relationship(back_populates="user_states")
