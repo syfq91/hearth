@@ -148,7 +148,7 @@
 | --- | --- | --- | --- |
 | 2.1 | Typed ffprobe wrapper with timeout and stored stream metadata | Complete | `feat: add typed ffprobe wrapper` |
 | 2.2 | Catalog models (`MediaItem`, `Movie`, `MediaFile`, images, people, genres, provider cache, FTS5) | Complete | `feat: add media catalog models and FTS5 search` |
-| 2.3 | Scanner with change detection, soft deletes and mass-deletion safeguard | Pending | Pending |
+| 2.3 | Scanner with change detection, soft deletes and mass-deletion safeguard | Complete | `feat: add media scanner with change detection` |
 | 2.4 | Movie filename parsing with `guessit` and folder hints | Pending | Pending |
 | 2.5 | Metadata provider interface, TMDB provider with cache, local NFO provider | Pending | Pending |
 | 2.6 | Matching, manual match/search endpoints, scan integration | Pending | Pending |

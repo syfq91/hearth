@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     ffprobe_timeout_seconds: float = 30.0
     ffprobe_concurrency: int = 4
 
+    # Scanning
+    scan_mass_delete_threshold: float = 0.30
+    scan_mass_delete_min_files: int = 10
+    scan_missing_grace_hours: float = 24.0
+
     @property
     def database_url(self) -> str:
         """SQLAlchemy async URL for the configured SQLite database."""
