@@ -1,5 +1,6 @@
 """Tests for the Typer command-line interface."""
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -66,12 +67,24 @@ def test_worker_enters_idle_loop(monkeypatch: pytest.MonkeyPatch) -> None:
     assert executed == ["ran"]
 
 
-def test_migrate_is_a_successful_stub() -> None:
-    """Phase 0's migrate command exits cleanly and says it is a stub."""
+def test_migrate_applies_migrations(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """migrate applies the schema to the configured database."""
+    from app.core.config import Settings
+
+    settings = Settings(
+        env="testing",
+        log_level="WARNING",
+        data_dir=tmp_path,
+        db_path=tmp_path / "hearth.db",
+        media_dir=tmp_path / "media",
+        secret_key="test-secret-key",
+    )
+    monkeypatch.setattr(cli, "get_settings", lambda: settings)
+
     result = runner.invoke(cli_app, ["migrate"])
 
     assert result.exit_code == 0
-    assert "not implemented until Phase 1" in result.stdout
+    assert settings.db_path.exists()
 
 
 def test_create_admin_fails_until_phase_one() -> None:

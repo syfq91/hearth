@@ -31,6 +31,27 @@ class Settings(BaseSettings):
     # Hardware devices
     render_device: Path = Path("/dev/dri/renderD128")
 
+    # Authentication. When secret_key is unset a random key is generated once
+    # and persisted in data_dir with mode 0600.
+    secret_key: str | None = None
+    jwt_issuer: str = "hearth"
+    access_token_minutes: int = 15
+    refresh_token_days: int = 30
+    media_token_seconds: int = 6 * 60 * 60
+
+    # Accounts
+    max_enabled_users: int = 15
+    password_min_length: int = 8
+
+    # Jobs
+    job_poll_interval: float = 1.0
+    job_worker_concurrency: int = 4
+
+    @property
+    def database_url(self) -> str:
+        """SQLAlchemy async URL for the configured SQLite database."""
+        return f"sqlite+aiosqlite:///{self.db_path}"
+
 
 @lru_cache
 def get_settings() -> Settings:

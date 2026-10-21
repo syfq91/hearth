@@ -14,6 +14,7 @@ import uvicorn
 
 from app.core.config import Settings, get_settings
 from app.core.logging import setup_logging
+from app.db.migrate import run_migrations
 
 logger = logging.getLogger("hearth.cli")
 
@@ -88,13 +89,11 @@ def worker() -> None:
 
 @app.command()
 def migrate() -> None:
-    """Apply database migrations (implemented in Phase 1)."""
+    """Apply database migrations and exit."""
     settings = get_settings()
     setup_logging(settings.log_level)
-    logger.info(
-        "migrations are not implemented until Phase 1",
-        extra={"db_path": str(settings.db_path)},
-    )
+    run_migrations(settings)
+    logger.info("migrations applied", extra={"db_path": str(settings.db_path)})
 
 
 @app.command()

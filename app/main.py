@@ -22,6 +22,8 @@ from app.core.errors import (
 )
 from app.core.logging import setup_logging
 from app.core.middleware import RequestIDMiddleware
+from app.db.migrate import run_migrations_async
+from app.db.session import build_engine, build_sessionmaker
 
 logger = logging.getLogger("hearth.main")
 
@@ -34,15 +36,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """
     resolved = settings or get_settings()
     setup_logging(resolved.log_level)
+    engine = build_engine(resolved)
+    sessionmaker = build_sessionmaker(engine)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        # Migrations run behind a file lock so concurrent API/worker starts do
+        # not race. They are executed in a worker thread because Alembic's env
+        # owns its own event loop.
+        await run_migrations_async(resolved)
         logger.info(
             "hearth starting",
             extra={"env": resolved.env, "version": __version__},
         )
         yield
         logger.info("hearth stopping")
+        await engine.dispose()
 
     application = FastAPI(
         title="Hearth",
@@ -51,6 +60,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.state.settings = resolved
+    application.state.engine = engine
+    application.state.sessionmaker = sessionmaker
 
     application.add_middleware(RequestIDMiddleware)
 

@@ -2,8 +2,8 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 0 complete; Phase 1 not started
-- **Overall Status**: Phase 0 accepted
+- **Current Phase**: Phase 1 in progress (task 1.1 complete)
+- **Overall Status**: Phase 0 accepted; Phase 1 underway
 
 ---
 
@@ -52,6 +52,36 @@
 - Only `/api/v1/health` and `/api/v1/version` are exposed; authentication, media
   libraries and all media features start in Phase 1.
 - Media access tokens, HLS, and the deeper VAAPI capability probe are Phase 3/4 work.
+
+---
+
+## Phase 1: Foundation: database, users and auth
+
+**Goal:** A secure multi-user API skeleton that later phases build on.
+
+| Task | Description | Status | Commit |
+| --- | --- | --- | --- |
+| 1.1 | Async SQLAlchemy base/session, SQLite pragmas, Alembic baseline, locked startup migrations | Complete | `feat: add async database foundation and locked migrations` |
+| 1.2 | Models: `User`, `RefreshToken`, `Library`, `LibraryPath`, `LibraryAccess`, `Setting`, `Job`, `AuditLog` | Not started | |
+| 1.3 | Argon2 password hashing and password policy | Not started | |
+| 1.4 | Auth endpoints: setup, login, refresh rotation/reuse detection, logout, me | Not started | |
+| 1.5 | Short-lived JWT access tokens and hashed refresh tokens | Not started | |
+| 1.6 | Media access tokens (HMAC, scoped, for query-string consumers) | Not started | |
+| 1.7 | Roles and dependencies (`require_user`, `require_admin`, `require_library_access`) | Not started | |
+| 1.8 | Admin user management and 15-enabled-user limit | Not started | |
+| 1.9 | Admin library CRUD with media-root path validation | Not started | |
+| 1.10 | Login rate limiting and admin audit log | Not started | |
+| 1.11 | Jobs table, asyncio worker, retries, cancellation and SSE events | Not started | |
+| 1.12 | Generate and commit `docs/openapi.json` | Not started | |
+
+### Phase 1 Acceptance Checklist
+
+- [ ] Setup endpoint returns 409 once an admin exists.
+- [ ] A disabled user's tokens stop working immediately.
+- [ ] A user without library access receives 404 (not 403) for that library's items.
+- [ ] Reusing an already-rotated refresh token revokes the whole token family.
+- [ ] Job survives a worker restart (re-queued if it was running).
+- [ ] OpenAPI schema is generated and committed to `docs/openapi.json` by a script.
 
 ---
 
