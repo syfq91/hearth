@@ -17,8 +17,8 @@
 | 0.2 | Create package layout with placeholder modules | Complete | `chore: create package layout and placeholder modules` |
 | 0.3 | Implement `core/config.py`, `core/logging.py`, and unified error handler | Complete | `feat: add settings, JSON logging, and unified error handling` |
 | 0.4 | Implement `app/main.py` with app factory, `/api/v1/health` and `/api/v1/version` | Complete | `feat: add app factory, health/version endpoints, and request IDs` |
-| 0.5 | Implement Typer CLI (`api`, `worker`, `migrate`, `create-admin`) | Pending | Pending |
-| 0.6 | Dockerfile (multi-stage, non-root, tini, VAAPI) and `compose.yaml` | Pending | Pending |
+| 0.5 | Implement Typer CLI (`api`, `worker`, `migrate`, `create-admin`) | Complete | `feat: add Typer CLI entrypoints` |
+| 0.6 | Dockerfile (multi-stage, non-root, tini, VAAPI) and `compose.yaml` | Complete | `feat: add multi-stage Docker image and compose stack` |
 | 0.7 | GitHub Actions CI workflow | Pending | Pending |
 | 0.8 | Write `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, and finalize Phase 0 | Pending | Pending |
 

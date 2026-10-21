@@ -1,0 +1,24 @@
+# Keep the build context small and free of secrets and host artifacts.
+.git
+.gitignore
+.agents
+.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+.pytest_cache
+.mypy_cache
+.ruff_cache
+tests
+docs
+scripts
+docker
+.env
+.env.*
+config
+transcode
+media
+*.log
+ongoing.txt

@@ -47,3 +47,11 @@
 - **Context:** Phase 0 delivers the CLI contract before the database and job runner exist.
 - **Decision:** `hearth api` runs uvicorn with our JSON logging and disables uvicorn's duplicate access log. `hearth worker` idles on a signal-driven asyncio loop so compose orchestration and shutdown handling can be verified now. `hearth migrate` logs its pending status and exits 0 (safe, idempotent stub), while `hearth create-admin` exits 1 because reporting success for an uncreated admin would be misleading.
 - **Alternatives Considered:** Failing every stub (breaks compose startup before Phase 1), silently exiting 0 for `create-admin` (hides an unimplemented security-critical path).
+
+## ADR 007: Container Image and Runtime Hardening
+
+- **Date:** 2026-10-21
+- **Status:** Accepted
+- **Context:** The image must carry ffmpeg, the Intel non-free VAAPI driver and the AMD/Mesa driver on a Debian base, while running unprivileged. The plan fixes Debian 12, non-root, tini and a parameterized render GID.
+- **Decision:** Use a two-stage build on `python:3.12-slim-bookworm`: uv 0.10.7 installs the locked environment into `/app/.venv` (non-editable), then the runtime stage copies only the venv and adds ffmpeg, `vainfo`, `libva-drm2`, `mesa-va-drivers`, `intel-media-va-driver-non-free` and tini. Enable Debian's `non-free`/`non-free-firmware` components explicitly. Run as UID/GID 1000 `hearth` with a read-only root filesystem, all capabilities dropped, `no-new-privileges`, a writable `/config` volume, and tmpfs for `/transcode` (4 GB) and `/tmp`. Media is a read-only bind mount. The image healthcheck calls `/api/v1/health` with the stdlib so curl is not installed. GPU passthrough lives in the base compose file; `docker/compose.cpu.yaml` removes `devices` and `group_add` with Compose `!override` for hosts without a render node.
+- **Alternatives Considered:** Alpine (musl driver gaps called out in the plan), running as root or privileged (rejected by the security rule), installing `curl` just for the healthcheck, hard-coding the render GID (varies by host), making GPU passthrough mandatory (breaks CPU-only hosts and the graceful-degradation criterion).

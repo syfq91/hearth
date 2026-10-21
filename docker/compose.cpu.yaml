@@ -1,0 +1,9 @@
+# CPU-only override for hosts without /dev/dri.
+#
+#   docker compose -f docker/compose.yaml -f docker/compose.cpu.yaml up --build
+#
+# VAAPI is reported as unavailable and transcoding falls back to software.
+services:
+  hearth:
+    devices: !override []
+    group_add: !override []
