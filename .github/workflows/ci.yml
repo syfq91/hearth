@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, types, tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python 3.12
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.7"
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check
+
+      - name: Check formatting
+        run: uv run ruff format --check
+
+      - name: Type check
+        run: uv run mypy app
+
+      - name: Test
+        run: uv run pytest -q
+
+      - name: Build wheel
+        run: uv build
+
+  container:
+    name: Docker build and smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: quality
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -f docker/Dockerfile -t hearth:ci .
+
+      - name: Start container without a GPU
+        run: |
+          docker run -d --name hearth-ci \
+            --read-only \
+            --tmpfs /transcode:size=1g,mode=1777 \
+            --tmpfs /tmp:size=64m \
+            -p 8000:8000 \
+            hearth:ci
+
+      - name: Verify health contract
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          import urllib.request
+
+          url = "http://127.0.0.1:8000/api/v1/health"
+          for attempt in range(30):
+              try:
+                  with urllib.request.urlopen(url, timeout=3) as response:
+                      health = json.load(response)
+                  break
+              except Exception:
+                  if attempt == 29:
+                      raise
+                  time.sleep(2)
+
+          print(json.dumps(health, indent=2))
+          assert health["status"] == "ok", health
+          assert health["ffmpeg"]["status"] == "ok", health
+          assert health["ffmpeg"]["version"], health
+          assert health["vaapi"]["status"] == "unavailable", health
+          assert health["database"]["status"] in {"ok", "not_initialized"}, health
+          PY
+
+      - name: Verify container runs unprivileged
+        run: |
+          test "$(docker exec hearth-ci id -u)" = "1000"
+          test "$(docker exec hearth-ci id -g)" = "1000"
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker logs hearth-ci
+
+      - name: Stop container
+        if: always()
+        run: docker rm -f hearth-ci || true

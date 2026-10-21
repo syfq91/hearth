@@ -19,7 +19,7 @@
 | 0.4 | Implement `app/main.py` with app factory, `/api/v1/health` and `/api/v1/version` | Complete | `feat: add app factory, health/version endpoints, and request IDs` |
 | 0.5 | Implement Typer CLI (`api`, `worker`, `migrate`, `create-admin`) | Complete | `feat: add Typer CLI entrypoints` |
 | 0.6 | Dockerfile (multi-stage, non-root, tini, VAAPI) and `compose.yaml` | Complete | `feat: add multi-stage Docker image and compose stack` |
-| 0.7 | GitHub Actions CI workflow | Pending | Pending |
+| 0.7 | GitHub Actions CI workflow | Complete | `ci: add lint, type, test, and container smoke workflow` |
 | 0.8 | Write `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, and finalize Phase 0 | Pending | Pending |
 
 ### Phase 0 Acceptance Checklist
