@@ -119,3 +119,11 @@
 - **Context:** The phase requires a user without library access to receive 404 rather than 403, and every later item/stream route must apply the same rule.
 - **Decision:** `require_library_access(library_id)` loads the library, returns 404 `library_not_found` for both missing libraries and libraries the user has no grant for, and returns the ORM object otherwise. Administrators implicitly access every library; normal users require a `library_access` row. `GET /api/v1/libraries` filters rather than 404s because it is a collection. Later item and stream endpoints must depend on this helper (or an item-level equivalent) instead of checking access inline.
 - **Alternatives Considered:** 403 for ungranted libraries (reveals existence and violates the criterion), admin-only implicit access disabled (makes administration require self-grants), per-route inline checks (easy to forget and hard to audit).
+
+## ADR 016: User Management Safeguards
+
+- **Date:** 2026-10-21
+- **Status:** Accepted
+- **Context:** Admin user management can lock a household out or silently leave old credentials valid.
+- **Decision:** Admin-only `/api/v1/users` supports create, list, read, patch (username, role, enabled, bitrate cap, transcode permission, max rating, library grants) and password reset. Grants are replaced atomically on update and unknown library ids return 404. Creating or re-enabling an account checks `HEARTH_MAX_ENABLED_USERS` (default 15). Disabling bumps `token_version` and revokes all live refresh tokens, so re-enabling cannot resurrect a previously issued access token. Password reset bumps `token_version` and revokes refresh tokens. Admins cannot disable or demote themselves, and an update that would remove the final enabled admin is rejected. Audit entries record actions and changed field names but never passwords or hashes.
+- **Alternatives Considered:** Soft deleting accounts (unnecessary now), letting admins disable themselves (easy lockout), leaving refresh tokens alive after reset/disable (violates immediate-revocation intent), deleting grants through separate endpoints (chatty and hard to keep atomic).
