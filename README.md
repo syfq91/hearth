@@ -30,6 +30,25 @@ docker compose --env-file .env -f docker/compose.yaml -f docker/compose.cpu.yaml
 The `vaapi` section of `/api/v1/health` reports `unavailable` in that case and
 the server stays healthy.
 
+The compose stack starts two processes from the same image: `hearth` (API) and
+`worker` (background jobs). Both share the `/config` volume and database.
+
+### First run
+
+Hearth has no default account. Create the first administrator once; the endpoint
+returns 409 afterwards:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/setup \
+  -H 'Content-Type: application/json' \
+  -d '{"username": "admin", "password": "a long passphrase"}'
+```
+
+The response contains a 15-minute access token and a rotating refresh token. Use
+`Authorization: Bearer <access_token>` for API calls and
+`POST /api/v1/auth/login` for later sessions. Interactive API documentation is at
+`http://localhost:8000/docs`.
+
 ### Configuration
 
 All settings use the `HEARTH_` prefix (see `app/core/config.py`).
@@ -44,6 +63,16 @@ All settings use the `HEARTH_` prefix (see `app/core/config.py`).
 | `HEARTH_TRANSCODE_DIR` | `/transcode` | Transcode scratch space (tmpfs in compose) |
 | `HEARTH_MEDIA_DIR` | `/media` | Validated media mount root |
 | `HEARTH_RENDER_DEVICE` | `/dev/dri/renderD128` | VAAPI render node |
+| `HEARTH_SECRET_KEY` | generated in `/config` | Signing secret; set it to share sessions across nodes |
+| `HEARTH_ACCESS_TOKEN_MINUTES` | `15` | Access-token lifetime |
+| `HEARTH_REFRESH_TOKEN_DAYS` | `30` | Refresh-token lifetime |
+| `HEARTH_MEDIA_TOKEN_SECONDS` | `21600` | Media URL token lifetime (6 hours) |
+| `HEARTH_MAX_ENABLED_USERS` | `15` | Enabled-account cap |
+| `HEARTH_TRUST_PROXY_HEADERS` | `false` | Honor `X-Forwarded-For` (only behind a trusted proxy) |
+
+If `HEARTH_SECRET_KEY` is not set, a random secret is generated once and stored
+in `HEARTH_DATA_DIR/secret_key` with mode 0600. Back it up with the database, or
+all sessions and media URLs become invalid.
 
 Media is mounted read-only. The container runs as UID/GID 1000 with a read-only
 root filesystem, all capabilities dropped, and `no-new-privileges`.

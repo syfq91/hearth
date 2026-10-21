@@ -28,7 +28,7 @@ OPDS (books).
 
                      ┌─────────────────────────┐
                      │ hearth worker           │  same image, asyncio
-                     │ jobs table + handlers   │  (Phase 1)
+                     │ jobs table + handlers   │  polls SQLite
                      └─────────────────────────┘
 ```
 
@@ -47,30 +47,39 @@ app/
     logging.py         JSON logs, request-ID ContextVar
     middleware.py      request ID + access log
     errors.py          AppError hierarchy and unified handlers
-    deps.py            shared FastAPI dependencies
+    deps.py            auth, roles, library access, settings/session dependencies
+    passwords.py       Argon2id hashing and credential policy
+    secrets.py         persistent secret and purpose-derived keys
+    tokens.py          access JWT, media HMAC token, refresh helpers
+    ratelimit.py       login sliding-window limiter
+    ids.py             UUIDv7 generator
     system.py          ffmpeg/VAAPI/database health probes
   api/
-    v1/                /api/v1 (health, version; feature routers later)
+    v1/                health, auth, libraries, users, jobs, events, admin
     subsonic/          /rest/* OpenSubsonic compatibility (Phase 6)
     opds/              /opds/* OPDS 1.2 compatibility (Phase 7)
-  db/                  SQLAlchemy base, models, session, Alembic (Phase 1)
+  db/
+    base.py            declarative base, UTC datetime type, naming conventions
+    models.py          users, refresh tokens, libraries, settings, jobs, audit
+    session.py         async engine, SQLite pragmas, request sessions
+    migrate.py         locked Alembic upgrade runner
+    migrations/        Alembic environment and revisions
   services/
+    audit.py           append-only admin audit entries
+    libraries.py       media-root path validation
     scanner/           walkers, watchers, matchers (Phase 2)
     metadata/          TMDB, MusicBrainz, Open Library, NFO (Phase 2+)
     media/             ffprobe wrapper, tags, book readers (Phase 2+)
     transcode/         capabilities, decision engine, builder, sessions (Phase 4)
     images/            fetch, resize, cache, BlurHash (Phase 2)
-    jobs/              queue, worker, handlers (Phase 1)
-  workers/             worker entrypoint (Phase 1)
+    jobs/              handler registry, no-op job, durable worker
+  workers/             reserved for future worker-only modules
 tests/
   unit/ integration/ e2e/ fixtures/
 docker/                Dockerfile, compose.yaml, compose.cpu.yaml
-docs/                  PROGRESS.md, DECISIONS.md, ARCHITECTURE.md
-scripts/               dev helpers and fixture generators (Phase 2+)
+docs/                  PROGRESS.md, DECISIONS.md, ARCHITECTURE.md, openapi.json
+scripts/               dev helpers, OpenAPI export
 ```
-
-Only files needed by Phase 0 exist so far. Placeholder packages are retained so
-later phases do not need to invent layout.
 
 ## Request lifecycle
 
@@ -87,6 +96,36 @@ later phases do not need to invent layout.
    status, duration) and returns the request ID in the response header.
 
 All logs go to stdout as single-line JSON; the container runtime collects them.
+
+## Authentication and authorization
+
+1. `POST /api/v1/auth/setup` creates the first administrator only while the
+   `users` table is empty. Subsequent calls return 409.
+2. `POST /api/v1/auth/login` verifies an Argon2id hash and returns a 15-minute
+   HS256 access JWT plus an opaque refresh token. Refresh tokens are stored as
+   SHA-256 hashes and rotate on every use; replaying a revoked token revokes the
+   entire family.
+3. Every authenticated request decodes the JWT and reloads the user, so
+   `disabled` and `token_version` changes take effect immediately.
+4. `POST /api/v1/auth/media-tokens` mints a separate HMAC token for `<video>`,
+   `<img>` and `<audio>` URLs. It is scoped to a user (optionally an item), lasts
+   six hours by default, and cannot authenticate management endpoints.
+5. `require_user`, `require_admin` and `require_library_access` centralise role
+   and library grants. Missing and ungranted libraries both return 404.
+6. Login failures are throttled per IP and per username with a process-local
+   sliding window (5 per 60 seconds by default).
+7. Administrative actions append to `audit_log`; `GET /api/v1/admin/audit`
+   exposes them to admins.
+
+## Jobs and events
+
+The `jobs` table is the queue. The worker claims one row with a conditional
+`UPDATE ... RETURNING`, respecting per-type and global concurrency limits. On
+startup any `running` row is returned to `pending`, which recovers work after a
+crash. Handler failures retry with capped exponential backoff; cancellation is
+cooperative through a callback. `GET /api/v1/events` streams job snapshots and
+updates as SSE by polling the table, so it works across the API/worker process
+boundary. Only administrators may enqueue, inspect, cancel or stream jobs.
 
 ## Configuration
 
@@ -107,9 +146,9 @@ temporary paths. Defaults assume the container filesystem contract:
 - Errors return stable codes without internal details; health checks are
   read-only and never create the database.
 - Secrets belong in environment variables or `/config`, never the repository.
-- Authentication, roles, media access tokens and rate limiting arrive in
-  Phase 1. Until then the API exposes only `/api/v1/health` and
-  `/api/v1/version`.
+- Authentication, roles, media access tokens, login throttling and the durable
+  job queue are implemented; library browsing, scanning and playback arrive in
+  later phases.
 
 ## Health contract
 
@@ -119,7 +158,7 @@ temporary paths. Defaults assume the container filesystem contract:
 {
   "status": "ok",
   "version": "0.1.0",
-  "database": {"status": "not_initialized", "detail": "..."},
+  "database": {"status": "ok", "detail": null},
   "ffmpeg": {"status": "ok", "detail": null, "version": "5.1.9-0+deb12u1"},
   "vaapi": {"status": "ok", "detail": null, "device": "/dev/dri/renderD128",
             "driver": "Intel iHD driver for Intel(R) Gen Graphics - 23.1.1 ()"}
@@ -127,8 +166,10 @@ temporary paths. Defaults assume the container filesystem contract:
 ```
 
 `status` is `degraded` only when ffmpeg is unusable or an existing database is
-unreadable. VAAPI is optional because software transcoding is supported. A
-missing database is expected until Phase 1 and does not degrade health.
+unreadable. VAAPI is optional because software transcoding is supported. Startup
+runs migrations, so a healthy server normally reports `database.status = ok`; a
+missing database is still accepted as `not_initialized` because health checks
+themselves never create or migrate it.
 
 ## Testing and CI
 
