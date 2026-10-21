@@ -39,3 +39,11 @@
 - **Context:** Logs need one correlation ID per request, and clients/proxies often supply `X-Request-ID`.
 - **Decision:** Accept an incoming `X-Request-ID` only when it matches `[A-Za-z0-9._-]{1,64}`; otherwise generate a UUID4 hex value. Store it in a `ContextVar` for the lifetime of the request and echo it in the response header. This bounds untrusted header content before it reaches logs.
 - **Alternatives Considered:** Always generating server-side IDs (loses proxy correlation), trusting arbitrary headers (log injection and unbounded values), storing the ID on `request.state` only (does not reach log records emitted by libraries).
+
+## ADR 006: CLI Stub Behavior
+
+- **Date:** 2026-10-21
+- **Status:** Accepted
+- **Context:** Phase 0 delivers the CLI contract before the database and job runner exist.
+- **Decision:** `hearth api` runs uvicorn with our JSON logging and disables uvicorn's duplicate access log. `hearth worker` idles on a signal-driven asyncio loop so compose orchestration and shutdown handling can be verified now. `hearth migrate` logs its pending status and exits 0 (safe, idempotent stub), while `hearth create-admin` exits 1 because reporting success for an uncreated admin would be misleading.
+- **Alternatives Considered:** Failing every stub (breaks compose startup before Phase 1), silently exiting 0 for `create-admin` (hides an unimplemented security-critical path).
