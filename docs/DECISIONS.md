@@ -87,3 +87,11 @@
 - **Context:** Password storage and login input need safe defaults without a tuning exercise.
 - **Decision:** Use Argon2id at 19 MiB memory, 2 iterations and 1 lane (OWASP baseline), with per-hash random salts and `check_needs_rehash` support. Verification treats malformed hashes as a failed login. Passwords have a documented minimum (8, configurable) and a hard maximum of 1024 characters to bound hashing cost. Usernames are trimmed, lowercased and restricted to `[a-z0-9][a-z0-9_.-]{2,63}`.
 - **Alternatives Considered:** bcrypt (memory-hardness and 72-byte truncation), PBKDF2 (weaker GPU resistance), unbounded password length (cheap denial of service against the hasher).
+
+## ADR 012: Authentication Flow and Token Semantics
+
+- **Date:** 2026-10-21
+- **Status:** Accepted
+- **Context:** Phase 1 needs a first-run admin, short-lived access tokens that can be revoked immediately, and refresh rotation resistant to replay.
+- **Decision:** Setup is allowed only while `users` is empty and returns a token pair on success. Login normalizes usernames and verifies against a real dummy Argon2 hash when the user is unknown to equalize timing. Access tokens are HS256 JWTs (15 minutes) carrying `sub`, `role`, `tv` (token version), `type`, `iss`, `iat`, `exp` and `jti`; every authenticated request reloads the user so `disabled` and `token_version` take effect immediately. Refresh tokens are 48-byte URL-safe random strings stored only as SHA-256 hashes, share a `family_id` across rotations, and rotate on every use. A revoked token presented again revokes every still-live token in its family and returns 401 `refresh_token_reuse`. Rotation uses a conditional `UPDATE ... WHERE revoked_at IS NULL` so concurrent refreshes cannot both win. Logout revokes the presented token's family but leaves the access token valid until expiry (15 minutes) to avoid logging out other devices.
+- **Alternatives Considered:** Storing refresh tokens in plaintext (leak risk), refresh reuse returning a generic 401 without family revocation (does not meet the phase criterion), incrementing `token_version` on logout (logs out all devices), server-side access-token sessions (more state than a home server needs), opaque access tokens (extra lookup on every request).

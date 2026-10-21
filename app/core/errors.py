@@ -22,12 +22,14 @@ class AppError(Exception):
         code: str = "app_error",
         status_code: int = status.HTTP_400_BAD_REQUEST,
         details: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
         self.code = code
         self.status_code = status_code
         self.details = details or {}
+        self.headers = headers or {}
 
     def to_dict(self) -> dict[str, Any]:
         """Convert error to standard JSON API error representation."""
@@ -99,12 +101,14 @@ class UnauthorizedError(AppError):
         message: str = "Authentication required",
         code: str = "unauthorized",
         details: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(
             message=message,
             code=code,
             status_code=status.HTTP_401_UNAUTHORIZED,
             details=details,
+            headers=headers or {"WWW-Authenticate": "Bearer"},
         )
 
 
@@ -144,7 +148,7 @@ class InternalError(AppError):
 
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
     """Handle custom application exceptions."""
-    return JSONResponse(status_code=exc.status_code, content=exc.to_dict())
+    return JSONResponse(status_code=exc.status_code, content=exc.to_dict(), headers=exc.headers)
 
 
 async def validation_error_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
