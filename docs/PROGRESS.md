@@ -256,14 +256,27 @@
 | 3.3 | Home shelves: continue watching, recently added, favorites | Complete | `feat: add home shelves for continue watching and favorites` |
 | 3.4 | External subtitle discovery and WebVTT serving | Complete | `feat: serve sidecar subtitles as WebVTT` |
 | 3.5 | Throwaway developer test player | Complete | `feat: add developer test player` |
-| 3.6 | Playback-info contract and direct-play decision | Pending | Pending |
+| 3.6 | Playback-info contract and direct-play decision | Complete | `feat: add playback-info contract` |
 
 ### Phase 3 Acceptance Checklist
 
-- [ ] Seeking in the test player works (range requests verified with automated
+- [x] Seeking in the test player works (range requests verified with automated
       tests, including open-ended and suffix ranges).
-- [ ] Progress is per user and isolated between users.
-- [ ] Streaming 5 concurrent files does not block API responses.
+  - `tests/integration/test_stream.py::test_stream_supports_full_and_range_requests`
+    covers closed, open-ended, suffix, single-byte and unsatisfiable ranges,
+    multipart fallback, HEAD, `304`, and `If-Range`. The test player points the
+    native `<video>` element at the same URL, so seeking is the browser's range
+    request path. There is no headless browser in the test stack, so the player
+    click-path itself is a manual check and is not claimed as CI-verified.
+- [x] Progress is per user and isolated between users.
+  - `test_playback.py::test_progress_is_per_user_and_isolated` stores different
+    positions, favorites and flags for two users on one item and reads each
+    user's own state back. `test_home.py` repeats the isolation check for all
+    three shelves.
+- [x] Streaming 5 concurrent files does not block API responses.
+  - `test_stream.py::test_five_concurrent_streams_do_not_block_api_responses`
+    holds five 1 MiB streams open, then asserts twenty `/health` calls each
+    complete in under 0.5 seconds before releasing them.
 
 ---
 

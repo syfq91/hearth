@@ -73,6 +73,21 @@ returns the active job if one is already queued. Without `HEARTH_TMDB_API_KEY`,
 items stay `pending` and are retried with backoff; local `.nfo` files and
 sidecar artwork are always used first.
 
+### Playback
+
+Ask the server how to play an item and use the returned URL directly:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/items/$ITEM_ID/playback-info   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'   -d '{"capabilities": {"preset": "chrome", "hls_fmp4": true}}'
+```
+
+The response contains `mode: "direct_play"`, a stream `url` with an item-scoped
+media token, tokenized sidecar subtitle URLs and `expires_at`. Report progress
+with `POST /api/v1/items/$ITEM_ID/progress`; the server auto-marks an item
+watched at 90% or at a credits chapter. Home shelves are at
+`/api/v1/home/continue-watching`, `/api/v1/home/recently-added` and
+`/api/v1/home/favorites`.
+
 ### Developer test player
 
 `tools/testplayer/index.html` is a throwaway single-file page for exercising

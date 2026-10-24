@@ -134,6 +134,106 @@
         "title": "AuditEntry",
         "type": "object"
       },
+      "ClientCapabilities": {
+        "description": "What a client says it can play.\n\nPhase 3 accepts the full profile but always chooses direct play; Phase 4\nresolves presets and uses these fields in the decision engine.",
+        "properties": {
+          "audio_codecs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Audio Codecs",
+            "type": "array"
+          },
+          "containers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Containers",
+            "type": "array"
+          },
+          "hdr": {
+            "default": false,
+            "title": "Hdr",
+            "type": "boolean"
+          },
+          "hls_fmp4": {
+            "default": false,
+            "title": "Hls Fmp4",
+            "type": "boolean"
+          },
+          "max_bitrate": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Bitrate"
+          },
+          "max_height": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Height"
+          },
+          "max_width": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Width"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
+          },
+          "subtitle_formats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Subtitle Formats",
+            "type": "array"
+          },
+          "video_codecs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Video Codecs",
+            "type": "array"
+          },
+          "video_profiles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Video Profiles",
+            "type": "array"
+          }
+        },
+        "title": "ClientCapabilities",
+        "type": "object"
+      },
       "ComponentHealth": {
         "description": "Health of a single runtime dependency.",
         "properties": {
@@ -1274,6 +1374,151 @@
           "role"
         ],
         "title": "PersonCreditResponse",
+        "type": "object"
+      },
+      "PlaybackFileResponse": {
+        "description": "The selected playable file.",
+        "properties": {
+          "container": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "size_bytes"
+        ],
+        "title": "PlaybackFileResponse",
+        "type": "object"
+      },
+      "PlaybackInfoRequest": {
+        "description": "A playback-info request; omitting it asks for defaults.",
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/ClientCapabilities"
+          },
+          "file_id": {
+            "anyOf": [
+              {
+                "maxLength": 36,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Id"
+          }
+        },
+        "title": "PlaybackInfoRequest",
+        "type": "object"
+      },
+      "PlaybackInfoResponse": {
+        "description": "A playback decision plus URLs the client can use directly.\n\n``url`` is set for direct play. ``hls_url`` and ``session_id`` are reserved\nfor the Phase 4 HLS modes so adding them does not reshape the payload.",
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "file": {
+            "$ref": "#/components/schemas/PlaybackFileResponse"
+          },
+          "hls_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hls Url"
+          },
+          "mode": {
+            "enum": [
+              "direct_play",
+              "remux_hls",
+              "transcode_hls"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "subtitles": {
+            "items": {
+              "$ref": "#/components/schemas/SubtitleResponse"
+            },
+            "title": "Subtitles",
+            "type": "array"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "mode",
+          "file"
+        ],
+        "title": "PlaybackInfoResponse",
         "type": "object"
       },
       "ProgressRequest": {
@@ -2888,6 +3133,71 @@
         "summary": "Manual Match",
         "tags": [
           "metadata"
+        ]
+      }
+    },
+    "/api/v1/items/{item_id}/playback-info": {
+      "post": {
+        "description": "Return how the client should play an item.\n\nPhase 3 always answers ``direct_play`` with an item-scoped media token in\nthe stream and subtitle URLs. Capabilities are accepted now so clients and\nthe schema stay stable when the Phase 4 decision engine starts using them.",
+        "operationId": "playback_info_api_v1_items__item_id__playback_info_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PlaybackInfoRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackInfoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Playback Info",
+        "tags": [
+          "playback"
         ]
       }
     },

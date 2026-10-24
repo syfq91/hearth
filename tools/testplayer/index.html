@@ -217,7 +217,6 @@
     libraryId: null,
     item: null,
     watchState: null,
-    mediaToken: null,
     progressTimer: null,
     reporting: false,
     resuming: false,
@@ -407,7 +406,7 @@
     element.kind = "subtitles";
     element.label = track.language || track.name;
     element.srclang = track.language || "und";
-    element.src = `${state.base}${track.url}?token=${encodeURIComponent(state.mediaToken)}`;
+    element.src = `${state.base}${track.url}`;
     player.append(element);
     if (element.track) element.track.mode = "showing";
   }
@@ -420,27 +419,26 @@
     clearSubtitle();
     state.item = null;
     state.watchState = null;
-    state.mediaToken = null;
     updateWatchControls(null);
 
     const item = await api(`/api/v1/items/${itemId}`);
-    const file = item.files.find((candidate) => !candidate.missing);
-    if (!file) {
-      setStatus("This item has no playable file (missing or still scanning).", "bad");
+    const info = await api(`/api/v1/items/${item.id}/playback-info`, {
+      method: "POST",
+      body: JSON.stringify({
+        capabilities: { preset: "chrome", hls_fmp4: false },
+      }),
+    });
+    if (info.mode !== "direct_play" || !info.url) {
+      setStatus(`This build only supports direct play (server chose ${info.mode}).`, "bad");
       return;
     }
 
-    const media = await api("/api/v1/auth/media-tokens", {
-      method: "POST",
-      body: JSON.stringify({ item_id: item.id }),
-    });
     state.item = item;
-    state.mediaToken = media.token;
     state.watchState = item.watch_state;
     state.resuming = true;
 
     $("#now-playing").textContent = item.year ? `${item.title} (${item.year})` : item.title;
-    player.src = `${state.base}/api/v1/stream/${file.id}?token=${encodeURIComponent(media.token)}`;
+    player.src = `${state.base}${info.url}`;
 
     const subtitleSelect = $("#subtitle-select");
     subtitleSelect.replaceChildren();
@@ -448,21 +446,22 @@
     off.value = "";
     off.textContent = "Off";
     subtitleSelect.append(off);
-    for (const subtitle of file.subtitles || []) {
+    for (const subtitle of info.subtitles || []) {
       const option = document.createElement("option");
       option.value = subtitle.id;
       option.textContent = `${subtitle.language || "external"} · ${subtitle.name}`;
       subtitleSelect.append(option);
     }
-    subtitleSelect.disabled = (file.subtitles || []).length === 0;
+    subtitleSelect.disabled = (info.subtitles || []).length === 0;
 
+    state.item.subtitles = info.subtitles || [];
     updateWatchControls(item.watch_state);
     setStatus(item.watch_state.position_ms > 0 && !item.watch_state.watched
       ? `Ready. Will resume at ${formatTime(item.watch_state.position_ms / 1000)}.`
       : "Ready. Press play.");
     renderItems((await api(`/api/v1/libraries/${item.library_id}/items?sort=title&limit=100`)).items);
     $("#now-playing").scrollIntoView({ block: "nearest" });
-    log(`selected ${item.title}`);
+    log(`selected ${item.title} (${info.mode}, ${info.reasons.join("; ")})`);
 
   }
 
@@ -510,7 +509,6 @@
     state.username = null;
     state.item = null;
     state.watchState = null;
-    state.mediaToken = null;
     state.libraryId = null;
     $("#app-panel").hidden = true;
     $("#login-panel").hidden = false;
@@ -534,8 +532,7 @@
 
   $("#subtitle-select").addEventListener("change", () => {
     const selected = $("#subtitle-select").value;
-    const file = state.item && state.item.files.find((candidate) => !candidate.missing);
-    const track = file && (file.subtitles || []).find((candidate) => candidate.id === selected);
+    const track = state.item && (state.item.subtitles || []).find((candidate) => candidate.id === selected);
     applySubtitle(track || null);
   });
 

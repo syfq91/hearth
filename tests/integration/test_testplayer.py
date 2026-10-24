@@ -13,5 +13,5 @@ async def test_testplayer_is_served_and_labelled(api_client: httpx.AsyncClient) 
     assert "not the Hearth frontend" in body
     assert "<video" in body
     assert "/api/v1/auth/login" in body
-    assert "/api/v1/auth/media-tokens" in body
+    assert "/api/v1/items/${item.id}/playback-info" in body
     assert "/api/v1/items/" in body

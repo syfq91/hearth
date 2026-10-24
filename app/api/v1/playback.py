@@ -5,19 +5,34 @@ routes only load the item, enforce library access and persist the result.
 """
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.items import WatchStateResponse, watch_state_response
+from app.api.v1.items import (
+    SubtitleResponse,
+    WatchStateResponse,
+    subtitle_responses,
+    watch_state_response,
+)
 from app.core.config import Settings
-from app.core.deps import RequireUser, SettingsDep, user_can_access_library
+from app.core.deps import (
+    KeysDep,
+    RequireUser,
+    SettingsDep,
+    user_can_access_library,
+)
 from app.core.errors import NotFoundError
+from app.core.tokens import create_media_token
 from app.db.base import utcnow
-from app.db.models import MediaItem, User, UserItemState
+from app.db.models import LibraryPath, MediaFile, MediaItem, User, UserItemState
 from app.db.session import SessionDep
+from app.services.libraries import path_is_within_roots
 from app.services.playback_state import chapters_from_streams, resolve_watch_state
 
 router = APIRouter(tags=["playback"])
@@ -56,6 +71,62 @@ class RatingRequest(BaseModel):
     """Set a personal rating from 1 to 10, or ``null`` to clear it."""
 
     rating: int | None = Field(default=None, ge=1, le=10)
+
+
+PlaybackMode = Literal["direct_play", "remux_hls", "transcode_hls"]
+
+
+class ClientCapabilities(BaseModel):
+    """What a client says it can play.
+
+    Phase 3 accepts the full profile but always chooses direct play; Phase 4
+    resolves presets and uses these fields in the decision engine.
+    """
+
+    preset: str | None = Field(default=None, max_length=64)
+    containers: list[str] = Field(default_factory=list)
+    video_codecs: list[str] = Field(default_factory=list)
+    video_profiles: list[str] = Field(default_factory=list)
+    audio_codecs: list[str] = Field(default_factory=list)
+    max_width: int | None = Field(default=None, gt=0)
+    max_height: int | None = Field(default=None, gt=0)
+    max_bitrate: int | None = Field(default=None, gt=0)
+    subtitle_formats: list[str] = Field(default_factory=list)
+    hdr: bool = False
+    hls_fmp4: bool = False
+
+
+class PlaybackInfoRequest(BaseModel):
+    """A playback-info request; omitting it asks for defaults."""
+
+    file_id: str | None = Field(default=None, max_length=36)
+    capabilities: ClientCapabilities = Field(default_factory=ClientCapabilities)
+
+
+class PlaybackFileResponse(BaseModel):
+    """The selected playable file."""
+
+    id: str
+    container: str | None = None
+    duration_seconds: float | None = None
+    size_bytes: int
+
+
+class PlaybackInfoResponse(BaseModel):
+    """A playback decision plus URLs the client can use directly.
+
+    ``url`` is set for direct play. ``hls_url`` and ``session_id`` are reserved
+    for the Phase 4 HLS modes so adding them does not reshape the payload.
+    """
+
+    mode: PlaybackMode
+    url: str | None = None
+    hls_url: str | None = None
+    session_id: str | None = None
+    file: PlaybackFileResponse
+    subtitles: list[SubtitleResponse] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    expires_at: datetime | None = None
 
 
 @router.post("/items/{item_id}/progress")
@@ -99,6 +170,52 @@ async def report_progress(
         **watch_state_response(state).model_dump(),
         auto_watched=decision.watched and not was_played,
         watched_reason=decision.reason,
+    )
+
+
+@router.post("/items/{item_id}/playback-info")
+async def playback_info(
+    item_id: str,
+    user: RequireUser,
+    settings: SettingsDep,
+    keys: KeysDep,
+    session: SessionDep,
+    body: PlaybackInfoRequest | None = None,
+) -> PlaybackInfoResponse:
+    """Return how the client should play an item.
+
+    Phase 3 always answers ``direct_play`` with an item-scoped media token in
+    the stream and subtitle URLs. Capabilities are accepted now so clients and
+    the schema stay stable when the Phase 4 decision engine starts using them.
+    """
+    request = body or PlaybackInfoRequest()
+    item = await _load_item(session, user, item_id)
+    media_file = _select_file(item, request.file_id)
+    await _require_inside_library(session, item, media_file)
+
+    token, expires_at = create_media_token(
+        user_id=user.id,
+        token_version=user.token_version,
+        settings=settings,
+        key=keys.media,
+        item_id=item.id,
+    )
+    encoded_token = quote(token, safe="")
+    return PlaybackInfoResponse(
+        mode="direct_play",
+        url=f"/api/v1/stream/{media_file.id}?token={encoded_token}",
+        file=PlaybackFileResponse(
+            id=media_file.id,
+            container=media_file.container,
+            duration_seconds=media_file.duration_seconds,
+            size_bytes=media_file.size_bytes,
+        ),
+        subtitles=subtitle_responses(media_file.id, media_file.path, token=token),
+        reasons=[
+            "Direct play: Phase 3 serves the original file unchanged; "
+            "client capabilities are accepted but not acted on until transcoding exists."
+        ],
+        expires_at=expires_at,
     )
 
 
@@ -178,6 +295,29 @@ async def _load_state(session: AsyncSession, user_id: str, item_id: str) -> User
         )
         session.add(state)
     return state
+
+
+def _select_file(item: MediaItem, file_id: str | None) -> MediaFile:
+    """Pick the requested file, or the first playable version."""
+    candidates = [file for file in item.files if file.missing_since is None]
+    if file_id is not None:
+        candidates = [file for file in candidates if file.id == file_id]
+    if not candidates:
+        raise NotFoundError("Media file not found", code="file_not_found")
+    return sorted(candidates, key=lambda file: file.path)[0]
+
+
+async def _require_inside_library(
+    session: AsyncSession, item: MediaItem, media_file: MediaFile
+) -> None:
+    """Reject a file row that no longer resolves inside the library roots."""
+    roots = list(
+        await session.scalars(
+            select(LibraryPath.path).where(LibraryPath.library_id == item.library_id)
+        )
+    )
+    if not path_is_within_roots(Path(media_file.path), roots):
+        raise NotFoundError("Media file not found", code="file_not_found")
 
 
 async def _persist(session: AsyncSession, state: UserItemState) -> None:

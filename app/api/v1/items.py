@@ -5,6 +5,7 @@ import binascii
 import json
 from datetime import datetime
 from typing import Annotated, Any, Literal, cast
+from urllib.parse import quote
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
@@ -260,7 +261,7 @@ async def get_item(item_id: str, user: RequireUser, session: SessionDep) -> Item
                 version_label=media_file.version_label,
                 probe_error=media_file.probe_error,
                 missing=media_file.missing_since is not None,
-                subtitles=_subtitle_responses(media_file.id, media_file.path),
+                subtitles=subtitle_responses(media_file.id, media_file.path),
             )
             for media_file in sorted(item.files, key=lambda file: file.path)
         ],
@@ -361,7 +362,11 @@ def watch_state_response(state: UserItemState | None) -> WatchStateResponse:
     )
 
 
-def _subtitle_responses(file_id: str, video_path: str) -> list[SubtitleResponse]:
+def subtitle_responses(
+    file_id: str, video_path: str, *, token: str | None = None
+) -> list[SubtitleResponse]:
+    """Describe the sidecars next to a file, optionally with a media token."""
+    query = f"?token={quote(token, safe='')}" if token else ""
     responses: list[SubtitleResponse] = []
     for path in discover_subtitles(video_path):
         subtitle_id = encode_subtitle_id(file_id, path.name)
@@ -371,7 +376,7 @@ def _subtitle_responses(file_id: str, video_path: str) -> list[SubtitleResponse]
                 name=path.name,
                 format=path.suffix.casefold().lstrip("."),
                 language=subtitle_language(video_path, path),
-                url=f"/api/v1/subtitles/{subtitle_id}.vtt",
+                url=f"/api/v1/subtitles/{subtitle_id}.vtt{query}",
             )
         )
     return responses
