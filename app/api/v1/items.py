@@ -191,7 +191,7 @@ async def list_library_items(
 
     has_more = len(rows) > limit
     page_items = rows[:limit]
-    states = await _watch_states(session, user.id, [item.id for item in page_items])
+    states = await watch_states(session, user.id, [item.id for item in page_items])
 
     next_cursor = None
     if has_more and page_items:
@@ -317,7 +317,7 @@ def _decode_cursor(cursor: str, *, sort: str, direction: SortOrder) -> tuple[Any
     return value, item_id
 
 
-async def _watch_states(
+async def watch_states(
     session: AsyncSession, user_id: str, item_ids: list[str]
 ) -> dict[str, UserItemState]:
     if not item_ids:
