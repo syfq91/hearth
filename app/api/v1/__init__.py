@@ -2,7 +2,18 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import admin, auth, events, jobs, libraries, metadata, system, users
+from app.api.v1 import (
+    admin,
+    auth,
+    events,
+    images,
+    items,
+    jobs,
+    libraries,
+    metadata,
+    system,
+    users,
+)
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(system.router)
@@ -13,5 +24,7 @@ router.include_router(admin.router)
 router.include_router(jobs.router)
 router.include_router(events.router)
 router.include_router(metadata.router)
+router.include_router(items.router)
+router.include_router(images.router)
 
 __all__ = ["router"]

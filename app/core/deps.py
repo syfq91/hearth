@@ -1,5 +1,6 @@
 """Shared FastAPI dependencies."""
 
+from dataclasses import dataclass
 from typing import Annotated, cast
 
 from fastapi import Depends, Query, Request
@@ -119,6 +120,10 @@ async def get_media_user(
     Media tokens embed a token version so a password reset or forced logout
     invalidates URLs that are already in a player's playlist.
     """
+    return await _load_media_user(claims, session)
+
+
+async def _load_media_user(claims: MediaTokenClaims, session: AsyncSession) -> User:
     user = await session.get(User, claims.user_id)
     if user is None:
         raise UnauthorizedError("Invalid media token", code="invalid_media_token")
@@ -130,6 +135,36 @@ async def get_media_user(
 
 
 MediaUser = Annotated[User, Depends(get_media_user)]
+
+
+@dataclass(frozen=True)
+class Viewer:
+    """A request identity resolved from an access token or a media token."""
+
+    user: User
+    item_id: str | None = None
+
+
+async def get_viewer(
+    credentials: BearerCredentials,
+    settings: SettingsDep,
+    keys: KeysDep,
+    session: SessionDep,
+    token: Annotated[str | None, Query(description="Media access token")] = None,
+) -> Viewer:
+    """Resolve a normal bearer token, or a media token from the query string.
+
+    Media elements (``<img>``, later ``<video>``) cannot attach an
+    ``Authorization`` header, so this dependency lets the same read endpoints
+    accept either. A media token may be scoped to one item.
+    """
+    if token is not None:
+        claims = verify_media_token(token, key=keys.media)
+        return Viewer(user=await _load_media_user(claims, session), item_id=claims.item_id)
+    return Viewer(user=await get_current_user(credentials, settings, keys, session))
+
+
+ViewerDep = Annotated[Viewer, Depends(get_viewer)]
 
 
 async def require_user(user: CurrentUser) -> User:
@@ -150,6 +185,19 @@ async def require_admin(user: CurrentUser) -> User:
 RequireAdmin = Annotated[User, Depends(require_admin)]
 
 
+async def user_can_access_library(session: AsyncSession, user: User, library_id: str) -> bool:
+    """Return whether ``user`` may see the given library."""
+    if user.role == "admin":
+        return True
+    granted = await session.scalar(
+        select(LibraryAccess.id).where(
+            LibraryAccess.library_id == library_id,
+            LibraryAccess.user_id == user.id,
+        )
+    )
+    return granted is not None
+
+
 async def require_library_access(
     library_id: str,
     user: CurrentUser,
@@ -165,16 +213,7 @@ async def require_library_access(
     if library is None:
         raise NotFoundError("Library not found", code="library_not_found")
 
-    if user.role == "admin":
-        return library
-
-    granted = await session.scalar(
-        select(LibraryAccess.id).where(
-            LibraryAccess.library_id == library.id,
-            LibraryAccess.user_id == user.id,
-        )
-    )
-    if granted is None:
+    if not await user_can_access_library(session, user, library.id):
         raise NotFoundError("Library not found", code="library_not_found")
     return library
 
