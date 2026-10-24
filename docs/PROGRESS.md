@@ -245,6 +245,28 @@
 
 ---
 
+## Phase 3: Direct play, progress tracking and a test player
+
+**Goal:** A user can play a movie as-is, and the server remembers where they stopped.
+
+| Task | Description | Status | Commit |
+| --- | --- | --- | --- |
+| 3.1 | Direct stream endpoint with range support, ETag/Last-Modified and media-token auth | Complete | `feat: stream media files with HTTP range support` |
+| 3.2 | Progress, watched, favorite and rating endpoints with auto-watch | Pending | Pending |
+| 3.3 | Home shelves: continue watching, recently added, favorites | Pending | Pending |
+| 3.4 | External subtitle discovery and WebVTT serving | Pending | Pending |
+| 3.5 | Throwaway developer test player | Pending | Pending |
+| 3.6 | Playback-info contract and direct-play decision | Pending | Pending |
+
+### Phase 3 Acceptance Checklist
+
+- [ ] Seeking in the test player works (range requests verified with automated
+      tests, including open-ended and suffix ranges).
+- [ ] Progress is per user and isolated between users.
+- [ ] Streaming 5 concurrent files does not block API responses.
+
+---
+
 ## Open Questions
 
 None currently.

@@ -1,6 +1,7 @@
 """Library path validation against the configured media mount."""
 
 import os
+from collections.abc import Sequence
 from pathlib import Path
 
 from app.core.config import Settings
@@ -62,3 +63,24 @@ def validate_library_paths(settings: Settings, raw_paths: list[str]) -> list[str
         normalized.append(str(resolved))
 
     return normalized
+
+
+def path_is_within_roots(path: Path | str, roots: Sequence[str]) -> bool:
+    """Return whether ``path`` resolves inside one of the library roots.
+
+    Both sides are resolved, so a symlink inside a library cannot be used to
+    serve a file outside the media mount. Missing paths return ``False``.
+    """
+    try:
+        resolved = Path(path).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
+
+    for root in roots:
+        try:
+            resolved_root = Path(root).resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue
+        if resolved.is_relative_to(resolved_root):
+            return True
+    return False

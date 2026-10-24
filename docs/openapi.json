@@ -3204,6 +3204,70 @@
         ]
       }
     },
+    "/api/v1/stream/{file_id}": {
+      "get": {
+        "description": "Stream a registered media file, honoring a single byte range.\n\nAccepts a bearer token or a media token in ``?token=``. The path must be a\nregistered ``media_file`` inside one of its library's roots, so a tampered\ndatabase row cannot turn this endpoint into arbitrary file access.",
+        "operationId": "stream_file_api_v1_stream__file_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "title": "File Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stream File",
+        "tags": [
+          "stream"
+        ]
+      }
+    },
     "/api/v1/users": {
       "get": {
         "description": "List all accounts.",

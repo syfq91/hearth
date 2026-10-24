@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     ffprobe_timeout_seconds: float = 30.0
     ffprobe_concurrency: int = 4
 
+    # Direct-play streaming
+    stream_chunk_bytes: int = 512 * 1024
+
     # Scanning
     scan_mass_delete_threshold: float = 0.30
     scan_mass_delete_min_files: int = 10
