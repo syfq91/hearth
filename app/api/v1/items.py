@@ -204,7 +204,7 @@ async def list_library_items(
         )
 
     return ItemPage(
-        items=[_summary(item, states.get(item.id)) for item in page_items],
+        items=[item_summary(item, states.get(item.id)) for item in page_items],
         next_cursor=next_cursor,
         has_more=has_more,
     )
@@ -224,7 +224,7 @@ async def get_item(item_id: str, user: RequireUser, session: SessionDep) -> Item
         )
     )
     people = await _people(session, item.id)
-    summary = _summary(item, state)
+    summary = item_summary(item, state)
     movie = item.movie
     return ItemDetail(
         **summary.model_dump(),
@@ -331,7 +331,7 @@ async def _watch_states(
     return {state.item_id: state for state in rows}
 
 
-def _watch_state(state: UserItemState | None) -> WatchStateResponse:
+def watch_state_response(state: UserItemState | None) -> WatchStateResponse:
     if state is None:
         return WatchStateResponse()
     return WatchStateResponse(
@@ -368,7 +368,7 @@ def _primary_image(item: MediaItem, kind: str) -> ImageResponse | None:
     return _image_response(primary)
 
 
-def _summary(item: MediaItem, state: UserItemState | None) -> ItemSummary:
+def item_summary(item: MediaItem, state: UserItemState | None) -> ItemSummary:
     return ItemSummary(
         id=item.id,
         title=item.title,
@@ -382,7 +382,7 @@ def _summary(item: MediaItem, state: UserItemState | None) -> ItemSummary:
         genres=sorted(genre.name for genre in item.genres),
         poster=_primary_image(item, "poster"),
         backdrop=_primary_image(item, "backdrop"),
-        watch_state=_watch_state(state),
+        watch_state=watch_state_response(state),
     )
 
 

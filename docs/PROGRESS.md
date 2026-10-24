@@ -252,7 +252,7 @@
 | Task | Description | Status | Commit |
 | --- | --- | --- | --- |
 | 3.1 | Direct stream endpoint with range support, ETag/Last-Modified and media-token auth | Complete | `feat: stream media files with HTTP range support` |
-| 3.2 | Progress, watched, favorite and rating endpoints with auto-watch | Pending | Pending |
+| 3.2 | Progress, watched, favorite and rating endpoints with auto-watch | Complete | `feat: add playback progress and watch-state endpoints` |
 | 3.3 | Home shelves: continue watching, recently added, favorites | Pending | Pending |
 | 3.4 | External subtitle discovery and WebVTT serving | Pending | Pending |
 | 3.5 | Throwaway developer test player | Pending | Pending |

@@ -11,6 +11,7 @@ from app.api.v1 import (
     jobs,
     libraries,
     metadata,
+    playback,
     stream,
     system,
     users,
@@ -26,6 +27,7 @@ router.include_router(jobs.router)
 router.include_router(events.router)
 router.include_router(metadata.router)
 router.include_router(items.router)
+router.include_router(playback.router)
 router.include_router(images.router)
 router.include_router(stream.router)
 

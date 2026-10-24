@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     # Direct-play streaming
     stream_chunk_bytes: int = 512 * 1024
 
+    # Playback state
+    watched_threshold: float = 0.90
+    playback_session_gap_seconds: int = 300
+
     # Scanning
     scan_mass_delete_threshold: float = 0.30
     scan_mass_delete_min_files: int = 10

@@ -229,6 +229,18 @@
         "title": "FFmpegHealth",
         "type": "object"
       },
+      "FavoriteRequest": {
+        "description": "Set or clear the favorite flag.",
+        "properties": {
+          "favorite": {
+            "default": true,
+            "title": "Favorite",
+            "type": "boolean"
+          }
+        },
+        "title": "FavoriteRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1234,6 +1246,135 @@
         "title": "PersonCreditResponse",
         "type": "object"
       },
+      "ProgressRequest": {
+        "description": "A playback checkpoint from the client.",
+        "properties": {
+          "duration_ms": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "position_ms": {
+            "minimum": 0.0,
+            "title": "Position Ms",
+            "type": "integer"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "playing",
+                  "paused",
+                  "stopped"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "required": [
+          "position_ms"
+        ],
+        "title": "ProgressRequest",
+        "type": "object"
+      },
+      "ProgressResponse": {
+        "description": "The stored watch state plus whether this report finished the item.",
+        "properties": {
+          "auto_watched": {
+            "default": false,
+            "title": "Auto Watched",
+            "type": "boolean"
+          },
+          "favorite": {
+            "default": false,
+            "title": "Favorite",
+            "type": "boolean"
+          },
+          "last_played_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Played At"
+          },
+          "play_count": {
+            "default": 0,
+            "title": "Play Count",
+            "type": "integer"
+          },
+          "position_ms": {
+            "default": 0,
+            "title": "Position Ms",
+            "type": "integer"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "watched": {
+            "default": false,
+            "title": "Watched",
+            "type": "boolean"
+          },
+          "watched_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watched Reason"
+          }
+        },
+        "title": "ProgressResponse",
+        "type": "object"
+      },
+      "RatingRequest": {
+        "description": "Set a personal rating from 1 to 10, or ``null`` to clear it.",
+        "properties": {
+          "rating": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          }
+        },
+        "title": "RatingRequest",
+        "type": "object"
+      },
       "RefreshRequest": {
         "properties": {
           "refresh_token": {
@@ -1845,6 +1986,18 @@
         },
         "title": "WatchStateResponse",
         "type": "object"
+      },
+      "WatchedRequest": {
+        "description": "Mark an item watched or unwatched.",
+        "properties": {
+          "watched": {
+            "default": true,
+            "title": "Watched",
+            "type": "boolean"
+          }
+        },
+        "title": "WatchedRequest",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -2382,6 +2535,64 @@
         ]
       }
     },
+    "/api/v1/items/{item_id}/favorite": {
+      "post": {
+        "description": "Add or remove an item from the current user's favorites.",
+        "operationId": "set_favorite_api_v1_items__item_id__favorite_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FavoriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Favorite",
+        "tags": [
+          "playback"
+        ]
+      }
+    },
     "/api/v1/items/{item_id}/match": {
       "post": {
         "description": "Attach a specific provider candidate to an item, bypassing scoring.",
@@ -2437,6 +2648,180 @@
         "summary": "Manual Match",
         "tags": [
           "metadata"
+        ]
+      }
+    },
+    "/api/v1/items/{item_id}/progress": {
+      "post": {
+        "description": "Store a playback position and auto-mark the item watched when finished.\n\nWatched when the position reaches a labelled credits chapter or\n``settings.watched_threshold`` of the known duration. A new playback session\n(and therefore one more ``play_count``) starts when the client reports\n``playing`` after at least ``settings.playback_session_gap_seconds`` without\nany progress report.",
+        "operationId": "report_progress_api_v1_items__item_id__progress_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProgressRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProgressResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Report Progress",
+        "tags": [
+          "playback"
+        ]
+      }
+    },
+    "/api/v1/items/{item_id}/rating": {
+      "put": {
+        "description": "Set or clear the current user's personal rating for an item.",
+        "operationId": "set_rating_api_v1_items__item_id__rating_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RatingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Rating",
+        "tags": [
+          "playback"
+        ]
+      }
+    },
+    "/api/v1/items/{item_id}/watched": {
+      "post": {
+        "description": "Mark an item watched or unwatched.\n\nMarking unwatched also clears the stored position so the item starts from\nthe beginning next time.",
+        "operationId": "set_watched_api_v1_items__item_id__watched_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Watched",
+        "tags": [
+          "playback"
         ]
       }
     },
