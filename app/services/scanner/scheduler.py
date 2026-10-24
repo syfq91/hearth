@@ -53,10 +53,7 @@ class ScanScheduler:
                 )
             )
             for library in libraries:
-                if (
-                    library.last_scan_at is not None
-                    and now - library.last_scan_at < interval
-                ):
+                if library.last_scan_at is not None and now - library.last_scan_at < interval:
                     continue
                 job, is_new = await enqueue_scan(session, library.id)
                 if is_new:
