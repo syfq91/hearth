@@ -14,6 +14,7 @@ from app.api.v1 import (
     metadata,
     playback,
     stream,
+    subtitles,
     system,
     users,
 )
@@ -32,5 +33,6 @@ router.include_router(home.router)
 router.include_router(playback.router)
 router.include_router(images.router)
 router.include_router(stream.router)
+router.include_router(subtitles.router)
 
 __all__ = ["router"]

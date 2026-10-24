@@ -29,6 +29,11 @@ from app.db.models import (
     Image as ImageModel,
 )
 from app.db.session import SessionDep
+from app.services.subtitles import (
+    discover_subtitles,
+    encode_subtitle_id,
+    subtitle_language,
+)
 
 router = APIRouter(tags=["items"])
 
@@ -77,6 +82,16 @@ class PersonCreditResponse(BaseModel):
     ordering: int = 0
 
 
+class SubtitleResponse(BaseModel):
+    """A playable external subtitle track."""
+
+    id: str
+    name: str
+    format: str
+    language: str | None = None
+    url: str
+
+
 class MediaFileResponse(BaseModel):
     """A file version without exposing its host path."""
 
@@ -88,6 +103,7 @@ class MediaFileResponse(BaseModel):
     version_label: str | None = None
     probe_error: str | None = None
     missing: bool = False
+    subtitles: list[SubtitleResponse] = []
 
 
 class ItemSummary(BaseModel):
@@ -244,6 +260,7 @@ async def get_item(item_id: str, user: RequireUser, session: SessionDep) -> Item
                 version_label=media_file.version_label,
                 probe_error=media_file.probe_error,
                 missing=media_file.missing_since is not None,
+                subtitles=_subtitle_responses(media_file.id, media_file.path),
             )
             for media_file in sorted(item.files, key=lambda file: file.path)
         ],
@@ -342,6 +359,22 @@ def watch_state_response(state: UserItemState | None) -> WatchStateResponse:
         play_count=state.play_count,
         last_played_at=state.last_played_at,
     )
+
+
+def _subtitle_responses(file_id: str, video_path: str) -> list[SubtitleResponse]:
+    responses: list[SubtitleResponse] = []
+    for path in discover_subtitles(video_path):
+        subtitle_id = encode_subtitle_id(file_id, path.name)
+        responses.append(
+            SubtitleResponse(
+                id=subtitle_id,
+                name=path.name,
+                format=path.suffix.casefold().lstrip("."),
+                language=subtitle_language(video_path, path),
+                url=f"/api/v1/subtitles/{subtitle_id}.vtt",
+            )
+        )
+    return responses
 
 
 def _ordered_images(item: MediaItem) -> list[ImageModel]:

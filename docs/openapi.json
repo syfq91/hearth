@@ -1145,6 +1145,14 @@
             "title": "Size Bytes",
             "type": "integer"
           },
+          "subtitles": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SubtitleResponse"
+            },
+            "title": "Subtitles",
+            "type": "array"
+          },
           "version_label": {
             "anyOf": [
               {
@@ -1507,6 +1515,46 @@
           "title"
         ],
         "title": "SearchResultResponse",
+        "type": "object"
+      },
+      "SubtitleResponse": {
+        "description": "A playable external subtitle track.",
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "format",
+          "url"
+        ],
+        "title": "SubtitleResponse",
         "type": "object"
       },
       "TokenPair": {
@@ -3842,6 +3890,70 @@
         "summary": "Stream File",
         "tags": [
           "stream"
+        ]
+      }
+    },
+    "/api/v1/subtitles/{subtitle_id}.vtt": {
+      "get": {
+        "description": "Return a sidecar subtitle as WebVTT.\n\nThe id is opaque and only names a basename; the file itself is resolved\nagainst the live sidecar list next to the registered video, so a stale or\nforged id cannot escape the library.",
+        "operationId": "get_subtitle_api_v1_subtitles__subtitle_id__vtt_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "subtitle_id",
+            "required": true,
+            "schema": {
+              "title": "Subtitle Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Subtitle",
+        "tags": [
+          "subtitles"
         ]
       }
     },

@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     # Direct-play streaming
     stream_chunk_bytes: int = 512 * 1024
 
+    # Subtitles
+    subtitle_max_bytes: int = 4 * 1024 * 1024
+
     # Playback state
     watched_threshold: float = 0.90
     playback_session_gap_seconds: int = 300
