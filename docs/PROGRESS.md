@@ -2,8 +2,8 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 2: Media probing, scanner and movie metadata
-- **Overall Status**: In progress
+- **Current Phase**: Phase 2 complete; Phase 3 (direct play) not started
+- **Overall Status**: Phase 2 accepted
 
 ---
 
@@ -153,16 +153,95 @@
 | 2.5 | Metadata provider interface, TMDB provider with cache, local NFO provider | Complete | `feat: add TMDB and local metadata providers` |
 | 2.6 | Matching, manual match/search endpoints, scan integration | Complete | `feat: add metadata matching and manual match API` |
 | 2.7 | Image download, resizing variants and BlurHash | Complete | `feat: add artwork image pipeline` |
-| 2.8 | Scheduled scans, scan job handler and filesystem watcher | Pending | Pending |
-| 2.9 | Movie browse/read API with cursor pagination and item detail | Pending | Pending |
+| 2.8 | Scheduled scans, scan job handler and filesystem watcher | Complete | `feat: add scan scheduling and filesystem watcher` |
+| 2.9 | Movie browse/read API with cursor pagination and item detail | Complete | `feat: add movie browse, item detail and artwork read API` |
 
 ### Phase 2 Acceptance Checklist
 
-- [ ] Re-scanning an unchanged library performs zero ffprobe calls and zero provider calls.
-- [ ] Renaming a file is detected as a move (partial hash) and preserves watch state.
-- [ ] Provider failures never fail a scan (item stays pending and is retried later).
-- [ ] A fixture library of 50 generated files scans in under 30 seconds on CI.
-- [ ] Unit tests cover filename parsing edge cases.
+- [x] Re-scanning an unchanged library performs zero ffprobe calls and zero provider calls.
+  - With real ffprobe (`CountingProbe`):
+    `tests/integration/test_phase2_acceptance.py::test_fifty_file_library_scans_within_budget_and_rescan_is_noop`
+    asserts 50 probes on the first scan and 0 on the second, with
+    `provider_calls == 0`. With scripted I/O:
+    `test_scanner.py::test_scan_adds_files_and_rescan_does_no_work` and
+    `test_scan_matching.py::test_scan_matches_new_item_and_rescan_is_quiet`.
+- [x] Renaming a file is detected as a move (partial hash match on size plus first and last 64 KB)
+      and preserves watch state.
+  - `tests/integration/test_scanner.py::test_rename_is_a_move_and_preserves_watch_state`:
+    `moved=1`, `added=0`, `probes=0`, the `MediaFile` keeps its item id and the
+    `UserItemState` row (`played`, `position_ms=9000`) survives.
+    `app/services/scanner/hashing.py` hashes size plus the first and last 64 KiB,
+    as the criterion specifies.
+- [x] Provider failures never fail a scan (item stays pending and is retried later).
+  - Not failing: `test_scan_matching.py::test_provider_failure_leaves_scan_healthy_and_item_pending`
+    (`last_scan_status="ok"`, item `pending`, error recorded).
+  - Retried later:
+    `test_phase2_acceptance.py::test_provider_failure_is_retried_once_the_backoff_expires`
+    proves no attempt while the backoff is active and a successful match once
+    `next_match_at` is due.
+- [x] A fixture library of 50 generated files scans in under 30 seconds on CI.
+  - `test_phase2_acceptance.py::test_fifty_file_library_scans_within_budget_and_rescan_is_noop`
+    encodes one real H.264 fixture, copies it into 50 uniquely named library
+    files, probes all 50 with real ffprobe and asserts `< 30s` (budget asserted,
+    not just observed). Measured locally: **6.66 s** scan, **0.025 s** no-op
+    rescan, probe concurrency 4. Test call time including fixture generation is
+    ~7.6 s.
+- [x] Unit tests cover filename parsing edge cases.
+  - `tests/unit/test_parsing.py`: years inside titles (`2001 A Space Odyssey`,
+    `1917`), numeric titles that are not years (`1984`), editions
+    (`Director's Cut`, `Extended`), parts (`Dune Part Two`,
+    `Dead Reckoning Part One`), folder hints, generic filenames, hyphenated and
+    accented titles, and the guessit-failure fallback.
+
+### Phase 2 Quality Gates
+
+- `uv run ruff check`: clean; `uv run ruff format --check`: clean (116 files).
+  `app/services/scanner/scheduler.py` had been committed unformatted in task 2.8;
+  formatting it was the only change needed.
+- `uv run mypy app`: no issues in 66 source files.
+- `uv run pytest -q`: **260 passed**.
+- `uv run python scripts/export_openapi.py --check`: up to date; 25 API paths,
+  including the three new read routes.
+- `tests/integration/test_read_api.py`: 15 passed (browse, sorts, filters,
+  cursor round-trips for every sort, detail, artwork, access control, token
+  surface).
+- Phase 2 acceptance tests:
+  `uv run pytest tests/integration/test_scanner.py tests/integration/test_scan_matching.py tests/unit/test_parsing.py tests/unit/test_matching.py tests/integration/test_phase2_acceptance.py`
+  → 41 passed.
+
+### Deliverables
+
+- A movie library pointed at a folder scans, probes, parses, matches to TMDB or
+  local NFO, and stores the catalog. Scheduled (6h), watcher-driven and manual
+  scans all produce durable `scan.library` jobs.
+- Browsable API: `GET /api/v1/libraries/{id}/items` with keyset pagination,
+  sort by title, added date, year or rating, and genre/year/watched filters;
+  `GET /api/v1/items/{id}` with metadata, credits, versions, artwork and the
+  caller's watch state; `GET /api/v1/images/{id}` serving cached WebP/JPEG/PNG
+  variants, authenticated by bearer token or scoped media token.
+- Artwork pipeline with allow-listed downloads, BlurHash placeholders and
+  on-demand variants.
+- Manual match and metadata-search endpoints for fixing bad matches.
+
+### Known Phase 2 Limitations (intentional)
+
+- Only movie libraries scan (`ScanError` for other types); TV, music and books
+  arrive in Phases 5–7.
+- The read API is movie-shaped: `GET /items/{id}` returns movie-only fields and
+  no series/episode/album/book routes exist yet.
+- Search is not exposed as an endpoint; the FTS5 table is populated for the
+  Phase 8 unified search.
+- `GET /items/{id}` loads the row and lazily-ish resolves relations per request;
+  the detail endpoint has no ETag or field selection until the Phase 8
+  hardening pass.
+- Artwork variants are rendered per requested width with no upper bound on
+  stored variants; garbage collection is deferred to Phase 8/10.
+- `scripts/make_fixtures.py` (section 3 of the plan) still does not exist.
+  Fixtures are generated inline by the acceptance test; the shared generator is
+  needed before Phase 3/4 playback and transcode fixtures.
+- The 50-file scan budget is asserted on every run but was measured on the
+  development host (6.66 s against a 30 s budget). Record the CI number once the
+  workflow reports it.
 
 ---
 

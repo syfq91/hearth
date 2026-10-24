@@ -49,6 +49,30 @@ The response contains a 15-minute access token and a rotating refresh token. Use
 `POST /api/v1/auth/login` for later sessions. Interactive API documentation is at
 `http://localhost:8000/docs`.
 
+### Library and catalog
+
+Create a movie library over the read-only media mount, scan it, then browse it:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/libraries \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name": "Movies", "type": "movie", "paths": ["/media/movies"]}'
+
+curl -X POST http://localhost:8000/api/v1/libraries/$LIBRARY_ID/scan \
+  -H "Authorization: Bearer $TOKEN"
+
+curl "http://localhost:8000/api/v1/libraries/$LIBRARY_ID/items?sort=title&limit=20" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+`GET /api/v1/items/{id}` returns metadata, credits, versions and artwork for one
+item; `GET /api/v1/images/{id}` serves resized artwork and accepts a media token
+in `?token=` so it can be used directly in `<img>` tags. Scans also run every six
+hours and shortly after files change, and `POST /api/v1/libraries/{id}/scan`
+returns the active job if one is already queued. Without `HEARTH_TMDB_API_KEY`,
+items stay `pending` and are retried with backoff; local `.nfo` files and
+sidecar artwork are always used first.
+
 ### Configuration
 
 All settings use the `HEARTH_` prefix (see `app/core/config.py`).

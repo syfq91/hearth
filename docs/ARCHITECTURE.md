@@ -55,7 +55,8 @@ app/
     ids.py             UUIDv7 generator
     system.py          ffmpeg/VAAPI/database health probes
   api/
-    v1/                health, auth, libraries, users, jobs, events, admin
+    v1/                health, auth, libraries, users, jobs, events, admin,
+                       items, images, metadata
     subsonic/          /rest/* OpenSubsonic compatibility (Phase 6)
     opds/              /opds/* OPDS 1.2 compatibility (Phase 7)
   db/
@@ -127,6 +128,26 @@ cooperative through a callback. `GET /api/v1/events` streams job snapshots and
 updates as SSE by polling the table, so it works across the API/worker process
 boundary. Only administrators may enqueue, inspect, cancel or stream jobs.
 
+## Catalog read API
+
+`GET /api/v1/libraries/{id}/items` lists a library's movies with keyset
+(cursor) pagination. The cursor is the base64url-encoded sort key plus item id;
+it is validated against the requested `sort`/`order`, so a cursor cannot be
+replayed under a different ordering. Sort keys are title, added date, year and
+rating; null years and ratings are coalesced to a sentinel so `NULL`s order last
+in both directions. Filters are genre (case-insensitive), year and watched
+state, the last resolved per user through `user_item_state`.
+
+`GET /api/v1/items/{id}` returns the detail shape (movie fields, credits,
+versions, artwork and the caller's watch state). `GET /api/v1/images/{id}`
+serves a resized WebP/JPEG/PNG variant of a cached original. Both enforce
+library access and return 404 rather than 403 for items the caller may not see.
+
+Image URLs cannot send an `Authorization` header, so the image route accepts
+either a bearer token or a media token in the query string (`ViewerDep`). Media
+tokens may be scoped to one item and are never accepted as bearer credentials,
+so they cannot reach the JSON read or management endpoints.
+
 ## Configuration
 
 `Settings` is loaded once per process from `HEARTH_*` variables (optionally a
@@ -139,16 +160,17 @@ temporary paths. Defaults assume the container filesystem contract:
 
 - The container runs as UID/GID 1000 with a read-only root filesystem, all
   Linux capabilities dropped, `no-new-privileges`, and only `/config` writable.
-- Media is mounted read-only and will be validated against registered library
-  roots before any file is served (Phase 3).
+- Media is mounted read-only and every served path is a registered
+  `media_file` inside a library root; item and artwork routes return 404 unless
+  the caller has a grant (or is an administrator).
 - No shell string interpolation: subprocesses always receive argument lists
   (`asyncio.create_subprocess_exec`).
 - Errors return stable codes without internal details; health checks are
   read-only and never create the database.
 - Secrets belong in environment variables or `/config`, never the repository.
-- Authentication, roles, media access tokens, login throttling and the durable
-  job queue are implemented; library browsing, scanning and playback arrive in
-  later phases.
+- Authentication, roles, media access tokens, login throttling, the durable job
+  queue, scanning, metadata matching and the movie read API are implemented;
+  streaming and transcoding arrive in Phases 3–4.
 
 ## Health contract
 
@@ -175,8 +197,10 @@ themselves never create or migrate it.
 
 - Unit tests cover pure logic and the health/error contracts with temporary
   paths and stubbed probes.
-- Integration tests (temp SQLite + fixture library) and e2e tests (compose up)
-  arrive with the features they exercise.
+- Integration tests use a temp SQLite database, generated fixture media and the
+  real ffprobe where the claim under test is about probing (scanner, matching,
+  read API). Acceptance tests for scan cost and duration live in
+  `tests/integration/test_phase2_acceptance.py`.
 - Hardware-dependent tests will be marked `@pytest.mark.vaapi`.
 - CI runs ruff (lint and format), strict mypy, pytest and a wheel build on
   Python 3.12, then builds the image and asserts the CPU-only health contract
