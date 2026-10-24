@@ -2,8 +2,8 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 2 complete; Phase 3 (direct play) not started
-- **Overall Status**: Phase 2 accepted
+- **Current Phase**: Phase 3 complete; Phase 4 (transcoding) not started
+- **Overall Status**: Phase 3 accepted
 
 ---
 
