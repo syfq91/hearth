@@ -54,6 +54,8 @@ RUN groupadd --gid 1000 hearth \
 
 WORKDIR /app
 COPY --from=builder --chown=root:root /app/.venv /app/.venv
+# Developer-only static player, served at /testplayer when present.
+COPY --chown=root:root tools ./tools
 
 USER hearth
 

@@ -255,7 +255,7 @@
 | 3.2 | Progress, watched, favorite and rating endpoints with auto-watch | Complete | `feat: add playback progress and watch-state endpoints` |
 | 3.3 | Home shelves: continue watching, recently added, favorites | Complete | `feat: add home shelves for continue watching and favorites` |
 | 3.4 | External subtitle discovery and WebVTT serving | Complete | `feat: serve sidecar subtitles as WebVTT` |
-| 3.5 | Throwaway developer test player | Pending | Pending |
+| 3.5 | Throwaway developer test player | Complete | `feat: add developer test player` |
 | 3.6 | Playback-info contract and direct-play decision | Pending | Pending |
 
 ### Phase 3 Acceptance Checklist

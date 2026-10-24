@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hearth developer test player</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #101216;
+    --panel: #171a20;
+    --panel-raised: #1f242c;
+    --line: #2c333d;
+    --text: #e8ecf1;
+    --muted: #9aa5b4;
+    --accent: #f0a03c;
+    --accent-strong: #ffb657;
+    --danger: #ff7a7a;
+    --ok: #77d39a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: radial-gradient(circle at 80% -10%, #2a2115 0, transparent 45%), var(--bg);
+    color: var(--text);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    border-bottom: 1px solid var(--line);
+    padding: 18px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    align-items: baseline;
+  }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: 0.01em; }
+  header h1 span { color: var(--accent); }
+  .banner {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0;
+  }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 24px 48px; }
+  h2 { font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .login {
+    max-width: 420px;
+    margin: 40px auto;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px;
+  }
+  .login p { margin: 0 0 18px; color: var(--muted); }
+  label { display: block; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+  input, select, button {
+    font: inherit;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel-raised);
+    color: var(--text);
+    padding: 9px 11px;
+  }
+  input, select { width: 100%; margin-top: 4px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .primary {
+    width: 100%;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #1b1305;
+    font-weight: 650;
+    padding: 10px;
+  }
+  .error { color: var(--danger); min-height: 1.5em; margin: 12px 0 0; font-size: 13px; }
+  .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
+  .sidebar, .stage {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .sidebar { display: grid; gap: 20px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .toolbar .who { color: var(--muted); font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { padding: 6px 10px; font-size: 13px; }
+  .chips button.active { border-color: var(--accent); color: var(--accent-strong); }
+  .item-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 46vh; overflow: auto; }
+  .item-list button { width: 100%; text-align: left; display: grid; gap: 2px; padding: 9px 11px; }
+  .item-list .meta { color: var(--muted); font-size: 12px; }
+  .item-list button.active { border-color: var(--accent); background: #2a2115; }
+  video {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #05070a;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+  }
+  .status { color: var(--muted); font-size: 13px; min-height: 1.5em; margin: 10px 0 0; }
+  .status.ok { color: var(--ok); }
+  .status.bad { color: var(--danger); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 14px; }
+  .actions label { margin: 0; }
+  .actions select { width: auto; min-width: 130px; }
+  .subtitles { margin-top: 14px; max-width: 320px; }
+  details { margin-top: 18px; color: var(--muted); }
+  details pre {
+    max-height: 220px;
+    overflow: auto;
+    background: #0a0c10;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 12px;
+    white-space: pre-wrap;
+  }
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+    main { padding: 14px 14px 40px; }
+    header { padding: 14px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Hearth <span>developer test player</span></h1>
+  <p class="banner">Throwaway developer tool, not the Hearth frontend. Logs in, lists items and plays one with the browser's native &lt;video&gt; element.</p>
+</header>
+
+<main>
+  <section class="login" id="login-panel">
+    <p>Sign in to the API. The token is kept in memory only.</p>
+    <form id="login-form">
+      <label>API base URL
+        <input id="base-url" name="base" autocomplete="url" spellcheck="false">
+      </label>
+      <label>Username
+        <input id="username" name="username" autocomplete="username" required>
+      </label>
+      <label>Password
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <button class="primary" type="submit" id="login-button">Log in</button>
+      <p class="error" id="login-error" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="app-panel" hidden>
+    <div class="toolbar">
+      <span class="who" id="who"></span>
+      <span>
+        <button type="button" id="refresh-button">Refresh</button>
+        <button type="button" id="logout-button">Log out</button>
+      </span>
+    </div>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <div>
+          <h2>Libraries</h2>
+          <div class="chips" id="libraries"></div>
+        </div>
+        <div>
+          <h2>Items</h2>
+          <ul class="item-list" id="items"></ul>
+        </div>
+      </aside>
+
+      <div class="stage">
+        <h2 id="now-playing">Nothing selected</h2>
+        <video id="player" controls playsinline preload="metadata"></video>
+        <p class="status" id="playback-status" role="status"></p>
+
+        <div class="actions">
+          <button type="button" id="watched-button" disabled>Mark watched</button>
+          <button type="button" id="favorite-button" disabled>Favorite</button>
+          <label>Rating
+            <select id="rating-select" disabled>
+              <option value="">No rating</option>
+              <option value="1">1</option><option value="2">2</option>
+              <option value="3">3</option><option value="4">4</option>
+              <option value="5">5</option><option value="6">6</option>
+              <option value="7">7</option><option value="8">8</option>
+              <option value="9">9</option><option value="10">10</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="subtitles">
+          <label>Subtitle track
+            <select id="subtitle-select" disabled>
+              <option value="">Off</option>
+            </select>
+          </label>
+        </div>
+
+        <details>
+          <summary>Request log</summary>
+          <pre id="debug-log"></pre>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (selector) => document.querySelector(selector);
+  const state = {
+    base: window.location.origin,
+    token: null,
+    username: null,
+    libraryId: null,
+    item: null,
+    watchState: null,
+    mediaToken: null,
+    progressTimer: null,
+    reporting: false,
+    resuming: false,
+  };
+
+  const player = $("#player");
+  $("#base-url").value = state.base;
+
+  function log(message) {
+    const line = `[${new Date().toLocaleTimeString()}] ${message}`;
+    const output = $("#debug-log");
+    output.textContent = `${line}\n${output.textContent}`.split("\n").slice(0, 120).join("\n");
+  }
+
+  function setStatus(message, kind = "") {
+    const element = $("#playback-status");
+    element.textContent = message;
+    element.className = `status ${kind}`.trim();
+  }
+
+  function formatTime(totalSeconds) {
+    if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "0:00";
+    const seconds = Math.floor(totalSeconds % 60);
+    const minutes = Math.floor((totalSeconds / 60) % 60);
+    const hours = Math.floor(totalSeconds / 3600);
+    const padded = `${String(seconds).padStart(2, "0")}`;
+    return hours > 0
+      ? `${hours}:${String(minutes).padStart(2, "0")}:${padded}`
+      : `${minutes}:${padded}`;
+  }
+
+  async function api(path, options = {}) {
+    const headers = { ...(options.headers || {}) };
+    if (state.token) headers.Authorization = `Bearer ${state.token}`;
+    if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+    const response = await fetch(`${state.base}${path}`, { ...options, headers });
+    const text = await response.text();
+    let body = null;
+    if (text) {
+      try { body = JSON.parse(text); } catch { body = text; }
+    }
+    if (!response.ok) {
+      const detail = body && body.error ? body.error.message : body && body.detail ? body.detail : response.statusText;
+      const error = new Error(`${response.status} ${detail || "request failed"}`);
+      error.status = response.status;
+      throw error;
+    }
+    return body;
+  }
+
+  function stopProgressTimer() {
+    if (state.progressTimer !== null) {
+      clearInterval(state.progressTimer);
+      state.progressTimer = null;
+    }
+  }
+
+  function startProgressTimer() {
+    stopProgressTimer();
+    state.progressTimer = setInterval(() => {
+      if (!player.paused && !player.ended) reportProgress("playing");
+    }, 5000);
+  }
+
+  async function reportProgress(playbackState) {
+    if (!state.item || !player.src || state.reporting) return;
+    const duration = Number.isFinite(player.duration) && player.duration > 0
+      ? Math.round(player.duration * 1000)
+      : null;
+    state.reporting = true;
+    try {
+      const response = await api(`/api/v1/items/${state.item.id}/progress`, {
+        method: "POST",
+        body: JSON.stringify({
+          position_ms: Math.round(player.currentTime * 1000),
+          duration_ms: duration,
+          state: playbackState,
+        }),
+      });
+      state.watchState = response;
+      updateWatchControls(response);
+      if (response.auto_watched) {
+        setStatus(`Finished — auto-marked watched (${response.watched_reason}).`, "ok");
+      }
+      log(`progress ${playbackState}: ${response.position_ms} ms, watched=${response.watched}, plays=${response.play_count}`);
+    } catch (error) {
+      setStatus(`Could not report progress: ${error.message}`, "bad");
+      if (error.status === 401) logout();
+    } finally {
+      state.reporting = false;
+    }
+  }
+
+  function updateWatchControls(watchState) {
+    state.watchState = watchState;
+    const watched = Boolean(watchState && watchState.watched);
+    const favorite = Boolean(watchState && watchState.favorite);
+    $("#watched-button").textContent = watched ? "Mark unwatched" : "Mark watched";
+    $("#watched-button").disabled = !state.item;
+    $("#favorite-button").textContent = favorite ? "Unfavorite" : "Favorite";
+    $("#favorite-button").disabled = !state.item;
+    $("#rating-select").value = watchState && watchState.rating ? String(watchState.rating) : "";
+    $("#rating-select").disabled = !state.item;
+  }
+
+  function renderLibraries(libraries) {
+    const container = $("#libraries");
+    container.replaceChildren();
+    if (libraries.length === 0) {
+      container.textContent = "No libraries available.";
+      return;
+    }
+    for (const library of libraries) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = `${library.name} (${library.type})`;
+      button.className = library.id === state.libraryId ? "active" : "";
+      button.addEventListener("click", () => loadItems(library.id));
+      container.append(button);
+    }
+  }
+
+  function renderItems(items) {
+    const container = $("#items");
+    container.replaceChildren();
+    if (items.length === 0) {
+      const empty = document.createElement("li");
+      empty.className = "meta";
+      empty.textContent = "No items in this library yet. Scan it first.";
+      container.append(empty);
+      return;
+    }
+    for (const item of items) {
+      const row = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = state.item && state.item.id === item.id ? "active" : "";
+
+      const title = document.createElement("span");
+      title.textContent = item.year ? `${item.title} (${item.year})` : item.title;
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      const watch = item.watch_state || {};
+      const progress = watch.watched
+        ? "watched"
+        : watch.position_ms > 0 ? `resume at ${formatTime(watch.position_ms / 1000)}` : "unwatched";
+      const runtime = item.runtime_seconds ? ` · ${formatTime(item.runtime_seconds)}` : "";
+      meta.textContent = `${progress}${runtime}`;
+      button.append(title, meta);
+      button.addEventListener("click", () => loadItem(item.id));
+      row.append(button);
+      container.append(row);
+    }
+  }
+
+  async function loadLibraries() {
+    const libraries = await api("/api/v1/libraries");
+    renderLibraries(libraries);
+    if (libraries.length > 0) {
+      const current = libraries.some((library) => library.id === state.libraryId)
+        ? state.libraryId
+        : libraries[0].id;
+      await loadItems(current);
+    } else {
+      state.libraryId = null;
+      renderItems([]);
+    }
+  }
+
+  async function loadItems(libraryId) {
+    state.libraryId = libraryId;
+    const response = await api(`/api/v1/libraries/${libraryId}/items?sort=title&limit=100`);
+    renderLibraries(await api("/api/v1/libraries"));
+    renderItems(response.items);
+    log(`loaded ${response.items.length} item(s) from ${libraryId}`);
+  }
+
+  function clearSubtitle() {
+    for (const track of player.querySelectorAll("track")) track.remove();
+    $("#subtitle-select").value = "";
+  }
+
+  function applySubtitle(track) {
+    for (const existing of player.querySelectorAll("track")) existing.remove();
+    if (!track) return;
+    const element = document.createElement("track");
+    element.kind = "subtitles";
+    element.label = track.language || track.name;
+    element.srclang = track.language || "und";
+    element.src = `${state.base}${track.url}?token=${encodeURIComponent(state.mediaToken)}`;
+    player.append(element);
+    if (element.track) element.track.mode = "showing";
+  }
+
+  async function loadItem(itemId) {
+    stopProgressTimer();
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
+    clearSubtitle();
+    state.item = null;
+    state.watchState = null;
+    state.mediaToken = null;
+    updateWatchControls(null);
+
+    const item = await api(`/api/v1/items/${itemId}`);
+    const file = item.files.find((candidate) => !candidate.missing);
+    if (!file) {
+      setStatus("This item has no playable file (missing or still scanning).", "bad");
+      return;
+    }
+
+    const media = await api("/api/v1/auth/media-tokens", {
+      method: "POST",
+      body: JSON.stringify({ item_id: item.id }),
+    });
+    state.item = item;
+    state.mediaToken = media.token;
+    state.watchState = item.watch_state;
+    state.resuming = true;
+
+    $("#now-playing").textContent = item.year ? `${item.title} (${item.year})` : item.title;
+    player.src = `${state.base}/api/v1/stream/${file.id}?token=${encodeURIComponent(media.token)}`;
+
+    const subtitleSelect = $("#subtitle-select");
+    subtitleSelect.replaceChildren();
+    const off = document.createElement("option");
+    off.value = "";
+    off.textContent = "Off";
+    subtitleSelect.append(off);
+    for (const subtitle of file.subtitles || []) {
+      const option = document.createElement("option");
+      option.value = subtitle.id;
+      option.textContent = `${subtitle.language || "external"} · ${subtitle.name}`;
+      subtitleSelect.append(option);
+    }
+    subtitleSelect.disabled = (file.subtitles || []).length === 0;
+
+    updateWatchControls(item.watch_state);
+    setStatus(item.watch_state.position_ms > 0 && !item.watch_state.watched
+      ? `Ready. Will resume at ${formatTime(item.watch_state.position_ms / 1000)}.`
+      : "Ready. Press play.");
+    renderItems((await api(`/api/v1/libraries/${item.library_id}/items?sort=title&limit=100`)).items);
+    $("#now-playing").scrollIntoView({ block: "nearest" });
+    log(`selected ${item.title}`);
+
+  }
+
+  async function login(event) {
+    event.preventDefault();
+    const button = $("#login-button");
+    const errorElement = $("#login-error");
+    errorElement.textContent = "";
+    button.disabled = true;
+    state.base = ($("#base-url").value.trim() || window.location.origin).replace(/\/+$/, "");
+    try {
+      const tokens = await api("/api/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: $("#username").value.trim(),
+          password: $("#password").value,
+        }),
+      });
+      state.token = tokens.access_token;
+      const me = await api("/api/v1/auth/me");
+      state.username = me.username;
+      $("#who").textContent = `Signed in as ${me.username} (${me.role})`;
+      $("#password").value = "";
+      $("#login-panel").hidden = true;
+      $("#app-panel").hidden = false;
+      log(`logged in as ${me.username}`);
+      await loadLibraries();
+    } catch (error) {
+      state.token = null;
+      $("#login-panel").hidden = false;
+      $("#app-panel").hidden = true;
+      errorElement.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function logout() {
+    stopProgressTimer();
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
+    clearSubtitle();
+    state.token = null;
+    state.username = null;
+    state.item = null;
+    state.watchState = null;
+    state.mediaToken = null;
+    state.libraryId = null;
+    $("#app-panel").hidden = true;
+    $("#login-panel").hidden = false;
+    $("#items").replaceChildren();
+    $("#libraries").replaceChildren();
+    setStatus("");
+    updateWatchControls(null);
+    log("logged out");
+  }
+
+  $("#login-form").addEventListener("submit", login);
+  $("#logout-button").addEventListener("click", logout);
+  $("#refresh-button").addEventListener("click", async () => {
+    try {
+      await loadLibraries();
+      log("refreshed");
+    } catch (error) {
+      setStatus(`Refresh failed: ${error.message}`, "bad");
+    }
+  });
+
+  $("#subtitle-select").addEventListener("change", () => {
+    const selected = $("#subtitle-select").value;
+    const file = state.item && state.item.files.find((candidate) => !candidate.missing);
+    const track = file && (file.subtitles || []).find((candidate) => candidate.id === selected);
+    applySubtitle(track || null);
+  });
+
+  $("#watched-button").addEventListener("click", async () => {
+    if (!state.item) return;
+    try {
+      const watched = !(state.watchState && state.watchState.watched);
+      const response = await api(`/api/v1/items/${state.item.id}/watched`, {
+        method: "POST",
+        body: JSON.stringify({ watched }),
+      });
+      updateWatchControls(response);
+      setStatus(watched ? "Marked watched." : "Marked unwatched, position cleared.", "ok");
+      await loadItems(state.libraryId);
+    } catch (error) {
+      setStatus(`Update failed: ${error.message}`, "bad");
+    }
+  });
+
+  $("#favorite-button").addEventListener("click", async () => {
+    if (!state.item) return;
+    try {
+      const favorite = !(state.watchState && state.watchState.favorite);
+      const response = await api(`/api/v1/items/${state.item.id}/favorite`, {
+        method: "POST",
+        body: JSON.stringify({ favorite }),
+      });
+      updateWatchControls(response);
+      setStatus(favorite ? "Added to favorites." : "Removed from favorites.", "ok");
+    } catch (error) {
+      setStatus(`Update failed: ${error.message}`, "bad");
+    }
+  });
+
+  $("#rating-select").addEventListener("change", async () => {
+    if (!state.item) return;
+    try {
+      const value = $("#rating-select").value;
+      const response = await api(`/api/v1/items/${state.item.id}/rating`, {
+        method: "PUT",
+        body: JSON.stringify({ rating: value ? Number(value) : null }),
+      });
+      updateWatchControls(response);
+      setStatus(value ? `Rated ${value}/10.` : "Rating cleared.", "ok");
+    } catch (error) {
+      setStatus(`Update failed: ${error.message}`, "bad");
+    }
+  });
+
+  player.addEventListener("loadedmetadata", () => {
+    if (!state.resuming) return;
+    state.resuming = false;
+    const resumeMs = state.watchState && !state.watchState.watched ? state.watchState.position_ms : 0;
+    const durationMs = Number.isFinite(player.duration) ? player.duration * 1000 : Infinity;
+    if (resumeMs > 0 && resumeMs < durationMs - 1000) {
+      player.currentTime = resumeMs / 1000;
+      setStatus(`Resumed at ${formatTime(resumeMs / 1000)}.`);
+    }
+  });
+  player.addEventListener("play", startProgressTimer);
+  player.addEventListener("pause", () => {
+    if (!player.ended) {
+      stopProgressTimer();
+      reportProgress("paused");
+    }
+  });
+  player.addEventListener("ended", () => {
+    stopProgressTimer();
+    reportProgress("stopped");
+  });
+  player.addEventListener("error", () => {
+    setStatus("Playback failed. Check the request log and that the file still exists.", "bad");
+  });
+  window.addEventListener("beforeunload", () => {
+    stopProgressTimer();
+  });
+})();
+</script>
+</body>
+</html>

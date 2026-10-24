@@ -73,6 +73,15 @@ returns the active job if one is already queued. Without `HEARTH_TMDB_API_KEY`,
 items stay `pending` and are retried with backoff; local `.nfo` files and
 sidecar artwork are always used first.
 
+### Developer test player
+
+`tools/testplayer/index.html` is a throwaway single-file page for exercising
+login, direct streaming, seeking, subtitles and progress reporting without the
+real frontend. It is served at `http://localhost:8000/testplayer/` whenever the
+`tools/testplayer` directory is present (the source checkout and the Docker
+image), and keeps the access token in memory only. See
+[ADR 035](docs/DECISIONS.md) for its scope.
+
 ### Configuration
 
 All settings use the `HEARTH_` prefix (see `app/core/config.py`).

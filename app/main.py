@@ -3,11 +3,13 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import cast
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.staticfiles import StaticFiles
 from starlette.types import ExceptionHandler
 
 from app import __version__
@@ -82,7 +84,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     application.include_router(api_v1_router)
+
+    testplayer = _testplayer_directory()
+    if testplayer is not None:
+        application.mount(
+            "/testplayer",
+            StaticFiles(directory=testplayer, html=True),
+            name="testplayer",
+        )
     return application
+
+
+def _testplayer_directory() -> Path | None:
+    """Return the developer test player when running from a source checkout."""
+    candidates = (
+        Path.cwd() / "tools" / "testplayer",
+        Path(__file__).resolve().parents[1] / "tools" / "testplayer",
+    )
+    for candidate in candidates:
+        if (candidate / "index.html").is_file():
+            return candidate
+    return None
 
 
 app = create_app()
