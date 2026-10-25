@@ -2,7 +2,7 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 3 complete; Phase 4 (transcoding) not started
+- **Current Phase**: Phase 3 complete; Phase 4 (TV shows) not started
 - **Overall Status**: Phase 3 accepted
 
 ---
@@ -297,5 +297,5 @@ None currently.
     the probe succeeds because VA profiles are present.
   - CPU-only path (`docker/compose.cpu.yaml`) reports `vaapi: unavailable` and
     remains healthy.
-- Deeper capability probing and real test encodes are deferred to Phase 4 and
+- Deeper capability probing and real test encodes are deferred to Phase 7 and
   must be verified on this hardware then; no encode performance is claimed yet.

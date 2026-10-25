@@ -135,7 +135,7 @@
         "type": "object"
       },
       "ClientCapabilities": {
-        "description": "What a client says it can play.\n\nPhase 3 accepts the full profile but always chooses direct play; Phase 4\nresolves presets and uses these fields in the decision engine.",
+        "description": "What a client says it can play.\n\nPhase 3 accepts the full profile but always chooses direct play; Phase 7\nresolves presets and uses these fields in the decision engine.",
         "properties": {
           "audio_codecs": {
             "items": {
@@ -1440,7 +1440,7 @@
         "type": "object"
       },
       "PlaybackInfoResponse": {
-        "description": "A playback decision plus URLs the client can use directly.\n\n``url`` is set for direct play. ``hls_url`` and ``session_id`` are reserved\nfor the Phase 4 HLS modes so adding them does not reshape the payload.",
+        "description": "A playback decision plus URLs the client can use directly.\n\n``url`` is set for direct play. ``hls_url`` and ``session_id`` are reserved\nfor the Phase 7 HLS modes so adding them does not reshape the payload.",
         "properties": {
           "expires_at": {
             "anyOf": [
@@ -3138,7 +3138,7 @@
     },
     "/api/v1/items/{item_id}/playback-info": {
       "post": {
-        "description": "Return how the client should play an item.\n\nPhase 3 always answers ``direct_play`` with an item-scoped media token in\nthe stream and subtitle URLs. Capabilities are accepted now so clients and\nthe schema stay stable when the Phase 4 decision engine starts using them.",
+        "description": "Return how the client should play an item.\n\nPhase 3 always answers ``direct_play`` with an item-scoped media token in\nthe stream and subtitle URLs. Capabilities are accepted now so clients and\nthe schema stay stable when the Phase 7 decision engine starts using them.",
         "operationId": "playback_info_api_v1_items__item_id__playback_info_post",
         "parameters": [
           {

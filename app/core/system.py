@@ -2,7 +2,7 @@
 
 Phase 0 needs to prove that the container has a working ffmpeg and reports
 VAAPI availability honestly. The deeper capability probe (profiles, entrypoints
-and test encodes) belongs to Phase 4; this module only answers "is the tool
+and test encodes) belongs to Phase 7; this module only answers "is the tool
 present and does it run".
 """
 

@@ -79,7 +79,7 @@ PlaybackMode = Literal["direct_play", "remux_hls", "transcode_hls"]
 class ClientCapabilities(BaseModel):
     """What a client says it can play.
 
-    Phase 3 accepts the full profile but always chooses direct play; Phase 4
+    Phase 3 accepts the full profile but always chooses direct play; Phase 7
     resolves presets and uses these fields in the decision engine.
     """
 
@@ -116,7 +116,7 @@ class PlaybackInfoResponse(BaseModel):
     """A playback decision plus URLs the client can use directly.
 
     ``url`` is set for direct play. ``hls_url`` and ``session_id`` are reserved
-    for the Phase 4 HLS modes so adding them does not reshape the payload.
+    for the Phase 7 HLS modes so adding them does not reshape the payload.
     """
 
     mode: PlaybackMode
@@ -186,7 +186,7 @@ async def playback_info(
 
     Phase 3 always answers ``direct_play`` with an item-scoped media token in
     the stream and subtitle URLs. Capabilities are accepted now so clients and
-    the schema stay stable when the Phase 4 decision engine starts using them.
+    the schema stay stable when the Phase 7 decision engine starts using them.
     """
     request = body or PlaybackInfoRequest()
     item = await _load_item(session, user, item_id)

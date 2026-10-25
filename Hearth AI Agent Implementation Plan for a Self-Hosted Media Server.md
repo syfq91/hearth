@@ -187,7 +187,7 @@ hearth/
 - [ ] Home endpoints: `continue-watching`, `recently-added` per library, `favorites`.
 - [ ] External subtitle discovery (`.srt`, `.ass`, `.vtt` next to the video) and `GET /api/v1/subtitles/{id}.vtt` converting to WebVTT.
 - [ ] Minimal throwaway test page (`tools/testplayer/index.html`, a single static file, not the real frontend) that logs in, lists items and plays one with the native `<video>` element. Clearly labeled as a developer tool.
-- [ ] Playback info endpoint `POST /api/v1/items/{id}/playback-info`. In this phase it only returns `direct_play` with a stream URL, but define the final request and response schema now (client capability profile in, a decision plus URLs and reasons out), so Phase 4 does not break clients.
+- [ ] Playback info endpoint `POST /api/v1/items/{id}/playback-info`. In this phase it only returns `direct_play` with a stream URL, but define the final request and response schema now (client capability profile in, a decision plus URLs and reasons out), so Phase 7 (transcoding) does not break clients.
 
 ### Acceptance criteria
 
@@ -197,7 +197,73 @@ hearth/
 
 ---
 
-## Phase 4: Transcoding with VAAPI
+## Phase 4: TV shows
+
+**Goal:** series, seasons and episodes with correct matching and "next up".
+
+### Tasks
+
+- [ ] Models: `Series`, `Season`, `Episode` (with season and episode numbers, air date, absolute number optional), linked to `MediaFile`.
+- [ ] Parsing with `guessit`, including multi-episode files (`S01E01E02`), daily shows (date-based), specials (season 0), and anime-style absolute numbering as best-effort.
+- [ ] `TMDBProvider` TV support: series, season and episode details, episode stills, cast. Handle TMDB episode groups only if time allows (record as a decision if skipped).
+- [ ] Scanner changes: group files by series folder, match the series first, then episodes by number. Unmatched episodes are listed under the series as "unknown".
+- [ ] API: series detail, seasons list, episodes list, next-up (first unwatched episode after the last watched), continue watching merged with movies, mark season or series watched.
+- [ ] Playback uses the Phase 3 direct play path unchanged. Verify no regressions.
+- [ ] Local NFO support for `tvshow.nfo` and `episode.nfo`.
+
+### Acceptance criteria
+
+- [ ] A fixture tree with 3 series covering normal, multi-episode, date-based and specials files matches 100% correctly.
+- [ ] Next-up behaves correctly across season boundaries and with out-of-order watching.
+- [ ] Manual re-match of a series moves all episodes and preserves watch states where episode numbers still exist.
+
+---
+
+## Phase 5: Music
+
+**Goal:** music libraries can be scanned, enriched, browsed, and played via the native API with play tracking.
+
+### Tasks
+
+- [ ] Models: `Artist`, `Album`, `Track`, plus `Playlist` and `PlaylistItem`. Track fields include disc and track number, duration, bitrate, sample rate, ReplayGain, MusicBrainz IDs.
+- [ ] Tag reading with `mutagen` (ID3, Vorbis, MP4, APE). Embedded cover art extraction. Tags take priority over folder structure, with folder fallback. Handle compilations ("Various Artists"), multi-disc albums and multiple artists (album artist vs track artist).
+- [ ] Metadata enrichment (optional and rate-limited): MusicBrainz lookups by MBID or tags, Cover Art Archive for missing covers, artist images from local `artist.jpg` first. Respect the 1 request per second limit and set a proper User-Agent.
+- [ ] Native API: artists, albums, tracks, album detail, artist detail, search (FTS5), random, recently added, most played, playlists CRUD.
+- [ ] Audio streaming and playback: direct audio streaming endpoints with gapless-friendly behavior: accurate durations, correct content-length, and HTTP range support.
+- [ ] Play tracking: play counts, last played, favorites, ratings, and optional ListenBrainz scrobbling (per-user token, queue with retry).
+
+### Acceptance criteria
+
+- [ ] Native music API endpoints (browsing, search, playlist management, audio streaming, play tracking) pass automated tests against a fixture library.
+- [ ] Audio streaming supports range requests and returns accurate durations and content lengths.
+- [ ] A 5,000-track generated library scans in under 2 minutes and album list queries return in under 200 ms.
+
+---
+
+## Phase 6: Books and OPDS
+
+**Goal:** ebooks and comics are catalogued, downloadable, and readable with progress sync.
+
+### Tasks
+
+- [ ] Models: `Author`, `Book`, `BookSeries`, with `MediaFile` per format. Formats: EPUB, PDF, CBZ, CBR (via `rarfile` or `unrar`, optional), and MOBI/AZW3 as download-only (optional conversion via Calibre CLI is out of scope for the initial build).
+- [ ] Readers: EPUB metadata from OPF using `ebooklib` or direct zip and XML parsing, cover extraction, series metadata (`calibre:series`), PDF metadata via `pypdf` with first-page cover rendering (`pdfium` or `pymupdf`, record licensing choice in `DECISIONS.md`), and comic metadata from `ComicInfo.xml` plus the first image as cover.
+- [ ] Provider: Open Library (search by ISBN or title and author) with Google Books as a fallback. Local OPF and `cover.jpg` always win.
+- [ ] Native API: books, authors, series, search, download (`/api/v1/books/{id}/file/{format}`), and per-book reading progress (`locator` string, percentage, device name, timestamp, last write wins).
+- [ ] OPDS 1.2 catalog under `/opds/`: root navigation, new, by author, by series, by genre, search (OpenSearch descriptor), acquisition links and cover links, with HTTP Basic auth against an app password. Support pagination.
+- [ ] Comic page serving: `GET /api/v1/books/{id}/pages/{n}` extracting the nth image from CBZ/CBR with caching and resizing, so web readers do not download whole archives.
+- [ ] KOReader progress sync (`kosync` protocol) as an optional endpoint if time permits (record decision).
+- [ ] Reader integration notes for Phase 9 (epub.js or foliate-js for EPUB, pdf.js for PDF).
+
+### Acceptance criteria
+
+- [ ] Fixture EPUB, PDF and CBZ files produce correct title, author, series and cover.
+- [ ] OPDS feed validates against an OPDS validator or a schema check in tests, and a real reader (KOReader or Moon+ Reader) can browse and download. Record the result.
+- [ ] Progress written from one client is returned to another.
+
+---
+
+## Phase 7: Transcoding with VAAPI
 
 **Goal:** any file plays on any reasonable client, using the GPU when available.
 
@@ -230,72 +296,6 @@ hearth/
 - [ ] Exceeding the concurrency cap returns a clean error, not a hang.
 
 > **Pitfalls:** never pass user-controlled strings to a shell. Hardware filter chains differ by GPU generation, so every pipeline needs the software fallback. Keep `/transcode` on tmpfs sized for peak sessions (4 GB default). Some clients choke on `-ss` accuracy, so test seeking on keyframes and with `-copyts` handling.
-
----
-
-## Phase 5: TV shows
-
-**Goal:** series, seasons and episodes with correct matching and "next up".
-
-### Tasks
-
-- [ ] Models: `Series`, `Season`, `Episode` (with season and episode numbers, air date, absolute number optional), linked to `MediaFile`.
-- [ ] Parsing with `guessit`, including multi-episode files (`S01E01E02`), daily shows (date-based), specials (season 0), and anime-style absolute numbering as best-effort.
-- [ ] `TMDBProvider` TV support: series, season and episode details, episode stills, cast. Handle TMDB episode groups only if time allows (record as a decision if skipped).
-- [ ] Scanner changes: group files by series folder, match the series first, then episodes by number. Unmatched episodes are listed under the series as "unknown".
-- [ ] API: series detail, seasons list, episodes list, next-up (first unwatched episode after the last watched), continue watching merged with movies, mark season or series watched.
-- [ ] Playback uses the Phase 3 and 4 paths unchanged. Verify no regressions.
-- [ ] Local NFO support for `tvshow.nfo` and `episode.nfo`.
-
-### Acceptance criteria
-
-- [ ] A fixture tree with 3 series covering normal, multi-episode, date-based and specials files matches 100% correctly.
-- [ ] Next-up behaves correctly across season boundaries and with out-of-order watching.
-- [ ] Manual re-match of a series moves all episodes and preserves watch states where episode numbers still exist.
-
----
-
-## Phase 6: Music
-
-**Goal:** music libraries can be scanned, enriched, browsed, and played via the native API with play tracking.
-
-### Tasks
-
-- [ ] Models: `Artist`, `Album`, `Track`, plus `Playlist` and `PlaylistItem`. Track fields include disc and track number, duration, bitrate, sample rate, ReplayGain, MusicBrainz IDs.
-- [ ] Tag reading with `mutagen` (ID3, Vorbis, MP4, APE). Embedded cover art extraction. Tags take priority over folder structure, with folder fallback. Handle compilations ("Various Artists"), multi-disc albums and multiple artists (album artist vs track artist).
-- [ ] Metadata enrichment (optional and rate-limited): MusicBrainz lookups by MBID or tags, Cover Art Archive for missing covers, artist images from local `artist.jpg` first. Respect the 1 request per second limit and set a proper User-Agent.
-- [ ] Native API: artists, albums, tracks, album detail, artist detail, search (FTS5), random, recently added, most played, playlists CRUD.
-- [ ] Audio streaming and playback: direct and transcoded audio streaming endpoints (using the Phase 4 audio path) with gapless-friendly behavior: accurate durations, correct content-length, and HTTP range support.
-- [ ] Play tracking: play counts, last played, favorites, ratings, and optional ListenBrainz scrobbling (per-user token, queue with retry).
-
-### Acceptance criteria
-
-- [ ] Native music API endpoints (browsing, search, playlist management, audio streaming, play tracking) pass automated tests against a fixture library.
-- [ ] Audio streaming supports range requests and returns accurate durations and content lengths.
-- [ ] A 5,000-track generated library scans in under 2 minutes and album list queries return in under 200 ms.
-
----
-
-## Phase 7: Books and OPDS
-
-**Goal:** ebooks and comics are catalogued, downloadable, and readable with progress sync.
-
-### Tasks
-
-- [ ] Models: `Author`, `Book`, `BookSeries`, with `MediaFile` per format. Formats: EPUB, PDF, CBZ, CBR (via `rarfile` or `unrar`, optional), and MOBI/AZW3 as download-only (optional conversion via Calibre CLI is out of scope for the initial build).
-- [ ] Readers: EPUB metadata from OPF using `ebooklib` or direct zip and XML parsing, cover extraction, series metadata (`calibre:series`), PDF metadata via `pypdf` with first-page cover rendering (`pdfium` or `pymupdf`, record licensing choice in `DECISIONS.md`), and comic metadata from `ComicInfo.xml` plus the first image as cover.
-- [ ] Provider: Open Library (search by ISBN or title and author) with Google Books as a fallback. Local OPF and `cover.jpg` always win.
-- [ ] Native API: books, authors, series, search, download (`/api/v1/books/{id}/file/{format}`), and per-book reading progress (`locator` string, percentage, device name, timestamp, last write wins).
-- [ ] OPDS 1.2 catalog under `/opds/`: root navigation, new, by author, by series, by genre, search (OpenSearch descriptor), acquisition links and cover links, with HTTP Basic auth against an app password. Support pagination.
-- [ ] Comic page serving: `GET /api/v1/books/{id}/pages/{n}` extracting the nth image from CBZ/CBR with caching and resizing, so web readers do not download whole archives.
-- [ ] KOReader progress sync (`kosync` protocol) as an optional endpoint if time permits (record decision).
-- [ ] Reader integration notes for Phase 9 (epub.js or foliate-js for EPUB, pdf.js for PDF).
-
-### Acceptance criteria
-
-- [ ] Fixture EPUB, PDF and CBZ files produce correct title, author, series and cover.
-- [ ] OPDS feed validates against an OPDS validator or a schema check in tests, and a real reader (KOReader or Moon+ Reader) can browse and download. Record the result.
-- [ ] Progress written from one client is returned to another.
 
 ---
 

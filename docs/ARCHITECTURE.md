@@ -56,7 +56,7 @@ app/
   api/
     v1/                health, auth, libraries, users, jobs, events, admin,
                        items, images, metadata
-    opds/              /opds/* OPDS 1.2 compatibility (Phase 7)
+    opds/              /opds/* OPDS 1.2 compatibility (Phase 6)
   db/
     base.py            declarative base, UTC datetime type, naming conventions
     models.py          users, refresh tokens, libraries, settings, jobs, audit
@@ -69,7 +69,7 @@ app/
     scanner/           walkers, watchers, matchers (Phase 2)
     metadata/          TMDB, MusicBrainz, Open Library, NFO (Phase 2+)
     media/             ffprobe wrapper, tags, book readers (Phase 2+)
-    transcode/         capabilities, decision engine, builder, sessions (Phase 4)
+    transcode/         capabilities, decision engine, builder, sessions (Phase 7)
     images/            fetch, resize, cache, BlurHash (Phase 2)
     jobs/              handler registry, no-op job, durable worker
   workers/             reserved for future worker-only modules
