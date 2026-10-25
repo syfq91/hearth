@@ -2,7 +2,7 @@
 
 Hearth is a single-node, self-hosted media server for movies, TV, music, and
 books. It is API-first: the backend is independent of any frontend choice until
-Phase 9, and third-party clients are supported through OPDS (books).
+Phase 9.
 
 ## Runtime topology
 
@@ -56,7 +56,6 @@ app/
   api/
     v1/                health, auth, libraries, users, jobs, events, admin,
                        items, images, metadata
-    opds/              /opds/* OPDS 1.2 compatibility (Phase 6)
   db/
     base.py            declarative base, UTC datetime type, naming conventions
     models.py          users, refresh tokens, libraries, settings, jobs, audit

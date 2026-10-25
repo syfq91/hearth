@@ -37,7 +37,7 @@ Target: home server, maximum 15 users, a handful of concurrent streams. Single n
 | Frontend | Undecided. Backend is API-first and must not depend on a frontend choice until Phase 9 |
 
 - Media types: movies, TV, music, books.
-- Compatibility surfaces: OPDS 1.2 for book readers.
+- Compatibility surfaces: none (native API-first).
 - Non-goals: live TV/DVR, DLNA/UPnP, plugins, federation, native apps, NVENC/QSV-specific paths, cloud deployment, user-uploaded media.
 
 ## 2. Repository layout and conventions
@@ -47,7 +47,6 @@ hearth/
   app/
     main.py                 # FastAPI app factory
     api/v1/                 # routers: auth, users, libraries, items, playback, stream, images, search, admin
-    api/opds/               # /opds/* compatibility
     core/                   # config, security, logging, errors, deps
     db/                     # base, models, session, migrations (alembic)
     services/
@@ -240,7 +239,7 @@ hearth/
 
 ---
 
-## Phase 6: Books and OPDS
+## Phase 6: Books
 
 **Goal:** ebooks and comics are catalogued, downloadable, and readable with progress sync.
 
@@ -250,15 +249,13 @@ hearth/
 - [ ] Readers: EPUB metadata from OPF using `ebooklib` or direct zip and XML parsing, cover extraction, series metadata (`calibre:series`), PDF metadata via `pypdf` with first-page cover rendering (`pdfium` or `pymupdf`, record licensing choice in `DECISIONS.md`), and comic metadata from `ComicInfo.xml` plus the first image as cover.
 - [ ] Provider: Open Library (search by ISBN or title and author) with Google Books as a fallback. Local OPF and `cover.jpg` always win.
 - [ ] Native API: books, authors, series, search, download (`/api/v1/books/{id}/file/{format}`), and per-book reading progress (`locator` string, percentage, device name, timestamp, last write wins).
-- [ ] OPDS 1.2 catalog under `/opds/`: root navigation, new, by author, by series, by genre, search (OpenSearch descriptor), acquisition links and cover links, with HTTP Basic auth against an app password. Support pagination.
 - [ ] Comic page serving: `GET /api/v1/books/{id}/pages/{n}` extracting the nth image from CBZ/CBR with caching and resizing, so web readers do not download whole archives.
-- [ ] KOReader progress sync (`kosync` protocol) as an optional endpoint if time permits (record decision).
 - [ ] Reader integration notes for Phase 9 (epub.js or foliate-js for EPUB, pdf.js for PDF).
 
 ### Acceptance criteria
 
 - [ ] Fixture EPUB, PDF and CBZ files produce correct title, author, series and cover.
-- [ ] OPDS feed validates against an OPDS validator or a schema check in tests, and a real reader (KOReader or Moon+ Reader) can browse and download. Record the result.
+- [ ] Native book API endpoints (browsing, search, download, comic page extraction, reading progress) pass automated tests against fixture files.
 - [ ] Progress written from one client is returned to another.
 
 ---
@@ -421,5 +418,5 @@ ffmpeg -init_hw_device vaapi=va:/dev/dri/renderD128 -f lavfi -i testsrc=d=1:s=12
 | Client codec diversity | Table-driven decision engine, conservative default profile, debug panel in the test player |
 | SQLite write contention | Short transactions, WAL, single-writer pattern for scans |
 | Network mounts are slow or flaky | Timeouts, concurrency caps, mass-deletion safeguard, scheduled rescans in addition to inotify |
-| Scope creep across four media types | Strict phase gates; OPDS compatibility layer keeps books small; native API handles music |
+| Scope creep across four media types | Strict phase gates; native API keeps all media types focused and consistent |
 | Licensing (PDF rendering libraries, provider terms) | Record each dependency choice in `DECISIONS.md` and include attribution in the About endpoint |
