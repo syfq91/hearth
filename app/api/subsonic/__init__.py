@@ -1,1 +1,0 @@
-"""OpenSubsonic API compatibility package."""

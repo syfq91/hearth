@@ -37,7 +37,7 @@ Target: home server, maximum 15 users, a handful of concurrent streams. Single n
 | Frontend | Undecided. Backend is API-first and must not depend on a frontend choice until Phase 9 |
 
 - Media types: movies, TV, music, books.
-- Compatibility surfaces: OpenSubsonic API for music clients, OPDS 1.2 for book readers.
+- Compatibility surfaces: OPDS 1.2 for book readers.
 - Non-goals: live TV/DVR, DLNA/UPnP, plugins, federation, native apps, NVENC/QSV-specific paths, cloud deployment, user-uploaded media.
 
 ## 2. Repository layout and conventions
@@ -47,7 +47,6 @@ hearth/
   app/
     main.py                 # FastAPI app factory
     api/v1/                 # routers: auth, users, libraries, items, playback, stream, images, search, admin
-    api/subsonic/           # /rest/* compatibility
     api/opds/               # /opds/* compatibility
     core/                   # config, security, logging, errors, deps
     db/                     # base, models, session, migrations (alembic)
@@ -256,24 +255,23 @@ hearth/
 
 ---
 
-## Phase 6: Music and the OpenSubsonic API
+## Phase 6: Music
 
-**Goal:** music libraries work with existing third-party Subsonic apps.
+**Goal:** music libraries can be scanned, enriched, browsed, and played via the native API with play tracking.
 
 ### Tasks
 
 - [ ] Models: `Artist`, `Album`, `Track`, plus `Playlist` and `PlaylistItem`. Track fields include disc and track number, duration, bitrate, sample rate, ReplayGain, MusicBrainz IDs.
 - [ ] Tag reading with `mutagen` (ID3, Vorbis, MP4, APE). Embedded cover art extraction. Tags take priority over folder structure, with folder fallback. Handle compilations ("Various Artists"), multi-disc albums and multiple artists (album artist vs track artist).
 - [ ] Metadata enrichment (optional and rate-limited): MusicBrainz lookups by MBID or tags, Cover Art Archive for missing covers, artist images from local `artist.jpg` first. Respect the 1 request per second limit and set a proper User-Agent.
-- [ ] Native API: artists, albums, tracks, album detail, artist detail, search (FTS5), random, recently added, most played.
+- [ ] Native API: artists, albums, tracks, album detail, artist detail, search (FTS5), random, recently added, most played, playlists CRUD.
+- [ ] Audio streaming and playback: direct and transcoded audio streaming endpoints (using the Phase 4 audio path) with gapless-friendly behavior: accurate durations, correct content-length, and HTTP range support.
 - [ ] Play tracking: play counts, last played, favorites, ratings, and optional ListenBrainz scrobbling (per-user token, queue with retry).
-- [ ] OpenSubsonic implementation under `/rest/*`: authentication (token plus salt and the legacy password style, requiring a per-user Subsonic password or API key because the standard scheme cannot use argon2 hashes), JSON and XML responses, and at least `ping`, `getLicense`, `getMusicFolders`, `getArtists`, `getArtist`, `getAlbum`, `getAlbumList2`, `getSong`, `getRandomSongs`, `search3`, `stream`, `download`, `getCoverArt`, `getPlaylists`, `getPlaylist`, `createPlaylist`, `updatePlaylist`, `deletePlaylist`, `star`, `unstar`, `scrobble`, `getStarred2`, `getOpenSubsonicExtensions`. Support `maxBitRate` and `format` for transcoding through the Phase 4 audio path.
-- [ ] Gapless-friendly behavior: accurate durations, correct content-length, range support on `stream`.
 
 ### Acceptance criteria
 
-- [ ] A scripted client passes the endpoints above against a fixture library, and XML and JSON outputs validate against the documented shapes.
-- [ ] Manual verification note: at least two real Subsonic clients (for example Symfonium or Feishin and DSub or Substreamer) can browse, play, seek and scrobble. Record results in `PROGRESS.md`.
+- [ ] Native music API endpoints (browsing, search, playlist management, audio streaming, play tracking) pass automated tests against a fixture library.
+- [ ] Audio streaming supports range requests and returns accurate durations and content lengths.
 - [ ] A 5,000-track generated library scans in under 2 minutes and album list queries return in under 200 ms.
 
 ---
@@ -423,5 +421,5 @@ ffmpeg -init_hw_device vaapi=va:/dev/dri/renderD128 -f lavfi -i testsrc=d=1:s=12
 | Client codec diversity | Table-driven decision engine, conservative default profile, debug panel in the test player |
 | SQLite write contention | Short transactions, WAL, single-writer pattern for scans |
 | Network mounts are slow or flaky | Timeouts, concurrency caps, mass-deletion safeguard, scheduled rescans in addition to inotify |
-| Scope creep across four media types | Strict phase gates; compatibility layers (Subsonic, OPDS) keep music and books small |
+| Scope creep across four media types | Strict phase gates; OPDS compatibility layer keeps books small; native API handles music |
 | Licensing (PDF rendering libraries, provider terms) | Record each dependency choice in `DECISIONS.md` and include attribution in the About endpoint |
