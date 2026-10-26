@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request
 from fastapi.responses import Response, StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import Headers
 
@@ -16,7 +16,7 @@ from app.core.deps import (
     user_can_access_library,
 )
 from app.core.errors import NotFoundError
-from app.db.models import LibraryPath, MediaFile, MediaItem
+from app.db.models import Episode, LibraryPath, MediaFile, MediaItem
 from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
 from app.services.streaming import (
@@ -85,7 +85,14 @@ async def _stream_response(
     if media_file is None or media_file.missing_since is not None:
         raise NotFoundError("Media file not found", code="file_not_found")
     if viewer.item_id is not None and viewer.item_id != media_file.item_id:
-        raise NotFoundError("Media file not found", code="file_not_found")
+        is_episode_file = await session.scalar(
+            select(func.count(Episode.item_id)).where(
+                Episode.item_id == viewer.item_id,
+                Episode.file_id == media_file.id,
+            )
+        )
+        if not is_episode_file:
+            raise NotFoundError("Media file not found", code="file_not_found")
 
     item = await session.get(MediaItem, media_file.item_id)
     if item is None or not await user_can_access_library(session, viewer.user, item.library_id):

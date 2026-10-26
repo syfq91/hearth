@@ -5,11 +5,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, status
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.deps import SettingsDep, ViewerDep, user_can_access_library
 from app.core.errors import AppError, NotFoundError
-from app.db.models import LibraryPath, MediaFile, MediaItem
+from app.db.models import Episode, LibraryPath, MediaFile, MediaItem
 from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
 from app.services.subtitles import (
@@ -45,7 +45,14 @@ async def get_subtitle(
     if media_file is None or media_file.missing_since is not None:
         raise NotFoundError(_NOT_FOUND, code="subtitle_not_found")
     if viewer.item_id is not None and viewer.item_id != media_file.item_id:
-        raise NotFoundError(_NOT_FOUND, code="subtitle_not_found")
+        is_episode_file = await session.scalar(
+            select(func.count(Episode.item_id)).where(
+                Episode.item_id == viewer.item_id,
+                Episode.file_id == media_file.id,
+            )
+        )
+        if not is_episode_file:
+            raise NotFoundError(_NOT_FOUND, code="subtitle_not_found")
 
     item = await session.get(MediaItem, media_file.item_id)
     if item is None or not await user_can_access_library(session, viewer.user, item.library_id):

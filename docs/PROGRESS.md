@@ -291,7 +291,7 @@
 | 4.3 | `TMDBProvider` TV support (series, seasons, episodes, stills, cast) | Complete | `feat: add tmdb tv metadata support` |
 | 4.4 | Scanner changes (group files by series, match series, then episodes) | Complete | `feat: scanner and matcher support for tv series and episodes` |
 | 4.5 | API (series detail, seasons list, episodes list, next-up, mark watched) | Complete | `feat: add tv series, seasons, episodes and next-up api` |
-| 4.6 | Playback direct play verification for TV shows | Not Started | |
+| 4.6 | Playback direct play verification for TV shows | Complete | `test: verify direct play and progress reporting for tv episodes` |
 | 4.7 | Local NFO support for `tvshow.nfo` and `episode.nfo` | Not Started | |
 
 ### Phase 4 Acceptance Checklist
