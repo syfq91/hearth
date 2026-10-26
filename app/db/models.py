@@ -46,6 +46,9 @@ class User(TimestampMixin, Base):
     library_access: Mapped[list["LibraryAccess"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    playlists: Mapped[list["Playlist"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class RefreshToken(Base):
@@ -236,6 +239,15 @@ class MediaItem(TimestampMixin, Base):
     episode: Mapped["Episode | None"] = relationship(
         back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
     )
+    artist: Mapped["Artist | None"] = relationship(
+        back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+    )
+    album: Mapped["Album | None"] = relationship(
+        back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+    )
+    track: Mapped["Track | None"] = relationship(
+        back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+    )
     files: Mapped[list["MediaFile"]] = relationship(
         back_populates="item", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -346,6 +358,96 @@ class Episode(Base):
     )
 
 
+class Artist(Base):
+    """Artist-specific metadata attached to one item."""
+
+    __tablename__ = "artists"
+
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    musicbrainz_id: Mapped[str | None] = mapped_column(String(36), default=None, index=True)
+    sort_name: Mapped[str | None] = mapped_column(String(512), default=None)
+    country: Mapped[str | None] = mapped_column(String(64), default=None)
+    disambiguation: Mapped[str | None] = mapped_column(String(255), default=None)
+
+    item: Mapped["MediaItem"] = relationship(back_populates="artist", lazy="joined")
+    albums: Mapped[list["Album"]] = relationship(
+        back_populates="artist", cascade="all, delete-orphan", lazy="selectin"
+    )
+    tracks: Mapped[list["Track"]] = relationship(back_populates="artist", lazy="selectin")
+
+
+class Album(Base):
+    """Album-specific metadata attached to one item."""
+
+    __tablename__ = "albums"
+
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    artist_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artists.item_id", ondelete="CASCADE"), index=True, default=None
+    )
+    album_artist: Mapped[str | None] = mapped_column(String(512), default=None)
+    musicbrainz_id: Mapped[str | None] = mapped_column(String(36), default=None, index=True)
+    musicbrainz_release_group_id: Mapped[str | None] = mapped_column(
+        String(36), default=None, index=True
+    )
+    release_date: Mapped[str | None] = mapped_column(String(10), default=None)
+    total_discs: Mapped[int | None] = mapped_column(Integer, default=1)
+    total_tracks: Mapped[int | None] = mapped_column(Integer, default=None)
+
+    item: Mapped["MediaItem"] = relationship(back_populates="album", lazy="joined")
+    artist: Mapped["Artist | None"] = relationship(back_populates="albums", lazy="joined")
+    tracks: Mapped[list["Track"]] = relationship(
+        back_populates="album", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class Track(Base):
+    """Track-specific metadata attached to one item."""
+
+    __tablename__ = "tracks"
+    __table_args__ = (
+        Index("ix_tracks_album_disc_track", "album_id", "disc_number", "track_number"),
+    )
+
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    album_id: Mapped[str | None] = mapped_column(
+        ForeignKey("albums.item_id", ondelete="CASCADE"), index=True, default=None
+    )
+    artist_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artists.item_id", ondelete="SET NULL"), index=True, default=None
+    )
+    file_id: Mapped[str | None] = mapped_column(
+        ForeignKey("media_files.id", ondelete="SET NULL"), index=True, default=None
+    )
+    disc_number: Mapped[int] = mapped_column(Integer, default=1)
+    track_number: Mapped[int | None] = mapped_column(Integer, default=None)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, default=None)
+    bitrate: Mapped[int | None] = mapped_column(Integer, default=None)
+    sample_rate: Mapped[int | None] = mapped_column(Integer, default=None)
+    channels: Mapped[int | None] = mapped_column(Integer, default=2)
+    replaygain_track_gain: Mapped[float | None] = mapped_column(Float, default=None)
+    replaygain_track_peak: Mapped[float | None] = mapped_column(Float, default=None)
+    replaygain_album_gain: Mapped[float | None] = mapped_column(Float, default=None)
+    replaygain_album_peak: Mapped[float | None] = mapped_column(Float, default=None)
+    musicbrainz_track_id: Mapped[str | None] = mapped_column(String(36), default=None, index=True)
+    musicbrainz_release_track_id: Mapped[str | None] = mapped_column(String(36), default=None)
+    musicbrainz_artist_id: Mapped[str | None] = mapped_column(String(36), default=None)
+    musicbrainz_album_id: Mapped[str | None] = mapped_column(String(36), default=None)
+
+    item: Mapped["MediaItem"] = relationship(back_populates="track", lazy="joined")
+    album: Mapped["Album | None"] = relationship(back_populates="tracks", lazy="joined")
+    artist: Mapped["Artist | None"] = relationship(back_populates="tracks", lazy="joined")
+    file: Mapped["MediaFile | None"] = relationship(
+        foreign_keys=[file_id], back_populates="tracks", lazy="joined"
+    )
+
+
 class MediaFile(TimestampMixin, Base):
     """One file on disk for a catalog item; multiple files are versions."""
 
@@ -375,6 +477,7 @@ class MediaFile(TimestampMixin, Base):
 
     item: Mapped["MediaItem"] = relationship(back_populates="files")
     episodes: Mapped[list["Episode"]] = relationship(back_populates="file", lazy="selectin")
+    tracks: Mapped[list["Track"]] = relationship(back_populates="file", lazy="selectin")
 
 
 class Image(Base):
@@ -485,3 +588,45 @@ class UserItemState(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
     item: Mapped["MediaItem"] = relationship(back_populates="user_states")
+
+
+class Playlist(TimestampMixin, Base):
+    """User-created playlist of media items (e.g. tracks)."""
+
+    __tablename__ = "playlists"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, default=None)
+
+    user: Mapped["User"] = relationship(back_populates="playlists", lazy="joined")
+    items: Mapped[list["PlaylistItem"]] = relationship(
+        back_populates="playlist",
+        cascade="all, delete-orphan",
+        order_by="PlaylistItem.position",
+        lazy="selectin",
+    )
+
+
+class PlaylistItem(Base):
+    """An item in a playlist at a specific ordering position."""
+
+    __tablename__ = "playlist_items"
+    __table_args__ = (
+        UniqueConstraint("playlist_id", "position", name="uq_playlist_items_playlist_id_position"),
+        Index("ix_playlist_items_position", "playlist_id", "position"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    playlist_id: Mapped[str] = mapped_column(
+        ForeignKey("playlists.id", ondelete="CASCADE"), index=True
+    )
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), index=True
+    )
+    position: Mapped[int] = mapped_column(Integer)
+    added_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+    playlist: Mapped["Playlist"] = relationship(back_populates="items", lazy="joined")
+    item: Mapped["MediaItem"] = relationship(lazy="joined")

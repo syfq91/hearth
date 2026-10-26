@@ -4,6 +4,8 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
+    Album,
+    Artist,
     AuditLog,
     Episode,
     Genre,
@@ -16,11 +18,14 @@ from app.db.models import (
     MediaFile,
     MediaItem,
     Movie,
+    Playlist,
+    PlaylistItem,
     ProviderCache,
     RefreshToken,
     Season,
     Series,
     Setting,
+    Track,
     User,
     UserItemState,
 )
@@ -397,3 +402,155 @@ async def test_tv_models_relationships_and_cascades(db_session: AsyncSession) ->
     assert await db_session.scalar(select(func.count()).select_from(Series)) == 0
     assert await db_session.scalar(select(func.count()).select_from(Season)) == 0
     assert await db_session.scalar(select(func.count()).select_from(Episode)) == 0
+
+
+async def test_music_and_playlist_models(db_session: AsyncSession) -> None:
+    user = User(username="musicfan", password_hash="hash")
+    library = Library(name="Music Library", type="music")
+    library.paths.append(LibraryPath(path="/media/music"))
+    db_session.add_all([user, library])
+    await db_session.flush()
+
+    # Create Artist
+    artist_item = MediaItem(
+        library_id=library.id,
+        type="artist",
+        title="Daft Punk",
+        sort_title="daft punk",
+    )
+    artist_item.artist = Artist(
+        musicbrainz_id="056e4f3e-d505-4dad-8ec1-d04f521cbb56",
+        country="FR",
+        sort_name="Daft Punk",
+        disambiguation="French electronic duo",
+    )
+    db_session.add(artist_item)
+    await db_session.flush()
+
+    # Create Album
+    album_item = MediaItem(
+        library_id=library.id,
+        type="album",
+        title="Discovery",
+        sort_title="discovery",
+        year=2001,
+    )
+    album_item.album = Album(
+        artist_id=artist_item.id,
+        album_artist="Daft Punk",
+        musicbrainz_id="b714b648-936d-3e6f-808b-ec513c1c9ff5",
+        musicbrainz_release_group_id="4b245e12-c74d-3759-b1d5-bc44a86f9984",
+        release_date="2001-03-12",
+        total_discs=1,
+        total_tracks=14,
+    )
+    db_session.add(album_item)
+    await db_session.flush()
+
+    # Create MediaFile and Track
+    media_file = MediaFile(
+        item_id=album_item.id,  # Points to album or track
+        path="/media/music/Daft Punk/Discovery/01 - One More Time.flac",
+        size_bytes=35000000,
+        mtime=1700000000.0,
+        partial_hash="f" * 64,
+        container="flac",
+        duration_seconds=320.5,
+        bit_rate=880000,
+        streams_json={"streams": [{"codec_type": "audio", "sample_rate": 44100, "channels": 2}]},
+    )
+    db_session.add(media_file)
+    await db_session.flush()
+
+    track_item = MediaItem(
+        library_id=library.id,
+        type="track",
+        title="One More Time",
+        sort_title="one more time",
+        year=2001,
+        runtime_seconds=321,
+    )
+    track_item.track = Track(
+        album_id=album_item.id,
+        artist_id=artist_item.id,
+        file_id=media_file.id,
+        disc_number=1,
+        track_number=1,
+        duration_seconds=320.5,
+        bitrate=880000,
+        sample_rate=44100,
+        channels=2,
+        replaygain_track_gain=-6.5,
+        replaygain_track_peak=0.98,
+        replaygain_album_gain=-7.1,
+        replaygain_album_peak=0.99,
+        musicbrainz_track_id="00000000-0000-0000-0000-000000000001",
+    )
+    db_session.add(track_item)
+    await db_session.flush()
+
+    # User Playlist with Track
+    playlist = Playlist(
+        user_id=user.id,
+        name="Electronic Hits",
+        description="Best electronic dance tracks",
+    )
+    playlist.items.append(
+        PlaylistItem(
+            item_id=track_item.id,
+            position=1,
+        )
+    )
+    db_session.add(playlist)
+    await db_session.commit()
+    db_session.expunge_all()
+
+    # Assert relations
+    loaded_artist = await db_session.scalar(select(MediaItem).where(MediaItem.id == artist_item.id))
+    assert loaded_artist is not None
+    assert loaded_artist.artist is not None
+    assert loaded_artist.artist.country == "FR"
+    assert len(loaded_artist.artist.albums) == 1
+    assert loaded_artist.artist.albums[0].item.title == "Discovery"
+
+    loaded_album = await db_session.scalar(select(MediaItem).where(MediaItem.id == album_item.id))
+    assert loaded_album is not None
+    assert loaded_album.album is not None
+    assert loaded_album.album.artist is not None
+    assert loaded_album.album.artist.item.title == "Daft Punk"
+    assert len(loaded_album.album.tracks) == 1
+    assert loaded_album.album.tracks[0].track_number == 1
+    assert loaded_album.album.tracks[0].replaygain_track_gain == -6.5
+    assert loaded_album.album.tracks[0].file is not None
+    assert loaded_album.album.tracks[0].file.container == "flac"
+
+    loaded_playlist = await db_session.scalar(select(Playlist).where(Playlist.id == playlist.id))
+    assert loaded_playlist is not None
+    assert loaded_playlist.name == "Electronic Hits"
+    assert loaded_playlist.user.username == "musicfan"
+    assert len(loaded_playlist.items) == 1
+    assert loaded_playlist.items[0].item.title == "One More Time"
+
+    # Deleting MediaFile sets file_id to NULL on track
+    loaded_file = await db_session.get(MediaFile, media_file.id)
+    assert loaded_file is not None
+    await db_session.delete(loaded_file)
+    await db_session.commit()
+    db_session.expunge_all()
+
+    reloaded_track = await db_session.scalar(select(Track).where(Track.item_id == track_item.id))
+    assert reloaded_track is not None
+    assert reloaded_track.file_id is None
+    assert reloaded_track.file is None
+
+    # Deleting album cascades to track
+    album_to_delete = await db_session.scalar(
+        select(MediaItem).where(MediaItem.id == album_item.id)
+    )
+    assert album_to_delete is not None
+    await db_session.delete(album_to_delete)
+    await db_session.commit()
+
+    assert await db_session.scalar(select(func.count()).select_from(Album)) == 0
+    assert await db_session.scalar(select(func.count()).select_from(Track)) == 0
+    assert await db_session.scalar(select(func.count()).select_from(Artist)) == 1

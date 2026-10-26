@@ -2,8 +2,8 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 4 (TV shows) in progress
-- **Overall Status**: Phase 4 in progress
+- **Current Phase**: Phase 5 (Music) in progress
+- **Overall Status**: Phase 5 in progress
 
 ---
 
@@ -322,6 +322,28 @@
 - `uv run pytest`: **383 passed, 9 skipped** (ffprobe-dependent tests skipped when system ffprobe binary is absent on host).
 - `uv run python scripts/export_openapi.py --check`: up to date (34 API paths).
 - Acceptance tests: `uv run pytest tests/integration/test_phase4_acceptance.py` -> 3 passed.
+
+---
+
+## Phase 5: Music
+
+**Goal:** Music libraries can be scanned, enriched, browsed, and played via the native API with play tracking.
+
+| Task | Description | Status | Commit |
+| --- | --- | --- | --- |
+| 5.1 | Models: `Artist`, `Album`, `Track`, plus `Playlist` and `PlaylistItem` | Complete | `feat: add music and playlist models with migration` |
+| 5.2 | Tag reading with `mutagen` (ID3, Vorbis, MP4, APE) and embedded art | Pending | |
+| 5.3 | Metadata enrichment (MusicBrainz, Cover Art Archive, local `artist.jpg`) | Pending | |
+| 5.4 | Native API: artists, albums, tracks, search, random, playlists CRUD | Pending | |
+| 5.5 | Audio streaming and playback: range requests, durations, content-length | Pending | |
+| 5.6 | Play tracking: play counts, last played, favorites, ratings, ListenBrainz | Pending | |
+
+### Phase 5 Acceptance Checklist
+
+- [ ] Native music API endpoints (browsing, search, playlist management, audio streaming, play tracking) pass automated tests against a fixture library.
+- [ ] Audio streaming supports range requests and returns accurate durations and content lengths.
+- [ ] A 5,000-track generated library scans in under 2 minutes and album list queries return in under 200 ms.
+
 
 ---
 

@@ -364,3 +364,21 @@
   - Always requiring online TMDB lookups even when NFO exists (fails for offline environments, home movies, and airings not cataloged on TMDB).
   - Separate NFO parser classes for series vs episodes (keeping them on `LocalProvider` unifies local file-based metadata handling alongside existing movie NFO support).
 
+## ADR 043: Music Catalog and Playlist Models
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Phase 5 introduces music support: artists, albums, tracks, and user playlists. We need a normalized schema that integrates with the generic `MediaItem` catalog, supports multi-disc albums, compilations ("Various Artists"), track vs album artists, ReplayGain tags, MusicBrainz identifiers, file streaming links, and ordered playlists.
+- **Decision:**
+  - Model `Artist`, `Album`, and `Track` as type-specific extension tables 1-to-1 attached to `MediaItem` (`type in ('artist', 'album', 'track')`).
+  - `Artist` stores optional `musicbrainz_id`, `sort_name`, `country`, and `disambiguation`.
+  - `Album` references `artists.item_id` (cascading on delete), with optional `album_artist` text (supporting Various Artists and compilations), `musicbrainz_id` (release MBID), `musicbrainz_release_group_id`, `release_date`, `total_discs`, and `total_tracks`.
+  - `Track` references `albums.item_id` (cascading on delete), `artists.item_id` (`ondelete="SET NULL"` for guest/track artists), and `media_files.id` (`ondelete="SET NULL"`). It stores `disc_number` (default 1), `track_number`, `duration_seconds`, `bitrate`, `sample_rate`, `channels`, ReplayGain fields (`replaygain_track_gain`, `replaygain_track_peak`, `replaygain_album_gain`, `replaygain_album_peak`), and MusicBrainz recording/track/artist/album IDs.
+  - Model `Playlist` owned by `User` (`ondelete="CASCADE"`) with name, description, and timestamps.
+  - Model `PlaylistItem` linking `Playlist` to `MediaItem` with a unique ordering position constraint `(playlist_id, position)` and cascade on deletion of playlist or item.
+  - Set `lazy="joined"` on 1-to-1 extension relations (`Artist.item`, `Album.item`, `Track.item`, `PlaylistItem.item`, `Playlist.user`) to ensure async attribute accesses resolve eagerly without MissingGreenlet exceptions.
+- **Alternatives Considered:**
+  - Standalone tables detached from `MediaItem` (would prevent reusing `UserItemState` for music track watch/play progress, favorites, and FTS5 search).
+  - Storing playlists as a JSON array of item IDs on `User` (unsuitable for large playlists, ordering queries, and relational integrity with cascade deletes).
+
+
