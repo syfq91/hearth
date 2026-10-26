@@ -18,6 +18,8 @@ from app.core.config import Settings
 from app.core.ids import new_id
 from app.db.base import utcnow
 from app.db.models import (
+    Album,
+    Artist,
     Episode,
     Library,
     LibraryPath,
@@ -26,12 +28,21 @@ from app.db.models import (
     Movie,
     Season,
     Series,
+    Track,
 )
 from app.services.media.probe import ProbeResult, probe_media
+from app.services.media.tags import read_audio_tags
 from app.services.media.titles import normalize_title, sort_title
+from app.services.metadata.base import ProviderImage
 from app.services.scanner.hashing import partial_hash
 from app.services.scanner.parsing import ParsedMovie, parse_episode_path, parse_movie_path
-from app.services.scanner.walker import ScannedFile, scope_dirs, walk_movie_files
+from app.services.scanner.walker import (
+    ScannedFile,
+    find_album_artwork,
+    scope_dirs,
+    walk_movie_files,
+    walk_music_files,
+)
 
 if TYPE_CHECKING:
     from app.services.metadata.matching import MetadataMatcher
@@ -147,9 +158,14 @@ class LibraryScanner:
         stats = ScanStats(library_id=library_id)
         await self._set_status(library_id, "running")
         try:
-            roots, existing, item_index, tv_indices, library_type = await self._load_library(
-                library_id
-            )
+            (
+                roots,
+                existing,
+                item_index,
+                tv_indices,
+                music_indices,
+                library_type,
+            ) = await self._load_library(library_id)
             await self._check_cancel(is_cancelled)
 
             scopes = scope_dirs(roots, targets) if targets is not None else None
@@ -160,7 +176,10 @@ class LibraryScanner:
 
             if progress:
                 await progress(0.05)
-            candidates = await asyncio.to_thread(walk_movie_files, roots, start_dirs=scopes)
+            if library_type == "music":
+                candidates = await asyncio.to_thread(walk_music_files, roots, start_dirs=scopes)
+            else:
+                candidates = await asyncio.to_thread(walk_movie_files, roots, start_dirs=scopes)
             await self._check_cancel(is_cancelled)
             if progress:
                 await progress(0.15)
@@ -219,12 +238,15 @@ class LibraryScanner:
                         moved_ids.add(row.id)
                         break
 
-            probe_queue = [
-                candidate
-                for candidate in new_files
-                if candidate.path not in moves and candidate.path in hashes
-            ] + [candidate for candidate in changed_files if candidate.path in hashes]
-            outcomes = await self._probe_files(probe_queue, stats, is_cancelled)
+            if library_type == "music":
+                outcomes = {}
+            else:
+                probe_queue = [
+                    candidate
+                    for candidate in new_files
+                    if candidate.path not in moves and candidate.path in hashes
+                ] + [candidate for candidate in changed_files if candidate.path in hashes]
+                outcomes = await self._probe_files(probe_queue, stats, is_cancelled)
             await self._check_cancel(is_cancelled)
             if progress:
                 await progress(0.70)
@@ -279,9 +301,11 @@ class LibraryScanner:
             await self._write_changes(
                 library_id=library_id,
                 library_type=library_type,
+                roots=roots,
                 existing=existing,
                 item_index=item_index,
                 tv_indices=tv_indices,
+                music_indices=music_indices,
                 new_files=[c for c in new_files if c.path not in moved_paths],
                 changed_files=changed_files,
                 restored_files=restored_files,
@@ -350,14 +374,20 @@ class LibraryScanner:
             dict[tuple[str, int, int], str],
         ]
         | None,
+        tuple[
+            dict[str, str],
+            dict[tuple[str | None, str], str],
+            dict[tuple[str | None, int, int], str],
+        ]
+        | None,
         str,
     ]:
         async with self.sessionmaker() as session:
             library = await session.get(Library, library_id)
             if library is None:
                 raise ScanError(f"Library {library_id} does not exist")
-            if library.type not in ("movie", "tv"):
-                raise ScanError("Only movie and tv libraries can be scanned in this phase")
+            if library.type not in ("movie", "tv", "music"):
+                raise ScanError("Only movie, tv and music libraries can be scanned in this phase")
 
             roots = list(
                 await session.scalars(
@@ -406,7 +436,8 @@ class LibraryScanner:
                 ).all()
                 item_index = {(normalize_title(row.title), row.year or 0): row.id for row in items}
                 tv_indices = None
-            else:
+                music_indices = None
+            elif library.type == "tv":
                 item_index = {}
                 series_rows = (
                     await session.execute(
@@ -446,8 +477,47 @@ class LibraryScanner:
                     if row.season_number is not None and row.episode_number is not None
                 }
                 tv_indices = (series_index, season_index, episode_index)
+                music_indices = None
+            else:
+                item_index = {}
+                tv_indices = None
+                artist_rows = (
+                    await session.execute(
+                        select(MediaItem.id, MediaItem.title).where(
+                            MediaItem.library_id == library_id, MediaItem.type == "artist"
+                        )
+                    )
+                ).all()
+                artist_index = {normalize_title(row.title): row.id for row in artist_rows}
 
-        return roots, existing, item_index, tv_indices, library.type
+                album_rows = (
+                    await session.execute(
+                        select(Album.item_id, Album.artist_id, MediaItem.title)
+                        .join(MediaItem, MediaItem.id == Album.item_id)
+                        .where(MediaItem.library_id == library_id)
+                    )
+                ).all()
+                album_index = {
+                    (row.artist_id, normalize_title(row.title)): row.item_id for row in album_rows
+                }
+
+                track_rows = (
+                    await session.execute(
+                        select(Track.item_id, Track.album_id, Track.disc_number, Track.track_number)
+                        .join(MediaItem, MediaItem.id == Track.item_id)
+                        .where(MediaItem.library_id == library_id)
+                    )
+                ).all()
+                track_index = {
+                    (row.album_id, row.disc_number, row.track_number): row.item_id
+                    for row in track_rows
+                    if row.album_id is not None
+                    and row.disc_number is not None
+                    and row.track_number is not None
+                }
+                music_indices = (artist_index, album_index, track_index)
+
+        return roots, existing, item_index, tv_indices, music_indices, library.type
 
     async def _hash_files(
         self,
@@ -507,6 +577,7 @@ class LibraryScanner:
         *,
         library_id: str,
         library_type: str,
+        roots: Sequence[str] | None = None,
         existing: dict[str, _ExistingFile],
         item_index: dict[tuple[str, int], str],
         tv_indices: (
@@ -517,6 +588,14 @@ class LibraryScanner:
             ]
             | None
         ),
+        music_indices: (
+            tuple[
+                dict[str, str],
+                dict[tuple[str | None, str], str],
+                dict[tuple[str | None, int, int], str],
+            ]
+            | None
+        ) = None,
         new_files: Sequence[ScannedFile],
         changed_files: Sequence[ScannedFile],
         restored_files: Sequence[_ExistingFile],
@@ -545,12 +624,45 @@ class LibraryScanner:
                 row = await session.get(MediaFile, current.id)
                 if row is None:
                     continue
-                self._apply_probe(row, outcomes.get(candidate.path))
-                row.size_bytes = candidate.size_bytes
-                row.mtime = candidate.mtime
-                row.partial_hash = hashes.get(candidate.path, current.partial_hash)
-                row.missing_since = None
-                stats.updated += 1
+                if library_type == "music":
+                    root_path = roots[0] if roots else None
+                    tags = read_audio_tags(candidate.path, library_root=root_path)
+                    row.size_bytes = candidate.size_bytes
+                    row.mtime = candidate.mtime
+                    row.partial_hash = hashes.get(candidate.path, current.partial_hash)
+                    row.missing_since = None
+                    row.duration_seconds = tags.duration_seconds
+                    row.bit_rate = tags.bitrate
+                    row.streams_json = {
+                        "sample_rate": tags.sample_rate,
+                        "channels": tags.channels,
+                        "codec_name": tags.container,
+                    }
+                    stats.updated += 1
+                    track = await session.scalar(select(Track).where(Track.file_id == row.id))
+                    if track is not None:
+                        track.disc_number = tags.disc_number
+                        track.track_number = tags.track_number
+                        track.duration_seconds = tags.duration_seconds
+                        track.bitrate = tags.bitrate
+                        track.sample_rate = tags.sample_rate
+                        track.channels = tags.channels
+                        track.replaygain_track_gain = tags.replaygain_track_gain
+                        track.replaygain_track_peak = tags.replaygain_track_peak
+                        track.replaygain_album_gain = tags.replaygain_album_gain
+                        track.replaygain_album_peak = tags.replaygain_album_peak
+                        if tags.title:
+                            track_item = await session.get(MediaItem, track.item_id)
+                            if track_item is not None:
+                                track_item.title = tags.title
+                                track_item.sort_title = sort_title(tags.title)
+                else:
+                    self._apply_probe(row, outcomes.get(candidate.path))
+                    row.size_bytes = candidate.size_bytes
+                    row.mtime = candidate.mtime
+                    row.partial_hash = hashes.get(candidate.path, current.partial_hash)
+                    row.missing_since = None
+                    stats.updated += 1
 
             for current in restored_files:
                 row = await session.get(MediaFile, current.id)
@@ -592,7 +704,7 @@ class LibraryScanner:
                     self._apply_probe(file_row, outcome)
                     session.add(file_row)
                     stats.added += 1
-            else:
+            elif library_type == "tv":
                 assert tv_indices is not None
                 series_index, season_index, episode_index = tv_indices
                 for candidate in new_files:
@@ -726,6 +838,202 @@ class LibraryScanner:
 
                     session.add(file_row)
                     stats.added += 1
+            elif library_type == "music":
+                assert music_indices is not None
+                artist_index, album_index, track_index = music_indices
+                root_path = roots[0] if roots else None
+
+                for candidate in new_files:
+                    tags = read_audio_tags(candidate.path, library_root=root_path)
+
+                    # 1. Album Artist
+                    album_artist_name = tags.album_artist or "Unknown Artist"
+                    a_key = normalize_title(album_artist_name)
+                    artist_id = artist_index.get(a_key)
+                    if artist_id is None:
+                        artist_id = new_id()
+                        artist_item = MediaItem(
+                            id=artist_id,
+                            library_id=library_id,
+                            type="artist",
+                            title=album_artist_name,
+                            sort_title=sort_title(album_artist_name),
+                            added_at=now,
+                            match_state="matched",
+                        )
+                        artist_item.artist = Artist(
+                            item_id=artist_id,
+                            musicbrainz_id=tags.musicbrainz_album_artist_id
+                            or tags.musicbrainz_artist_id,
+                            sort_name=tags.album_artist,
+                        )
+                        session.add(artist_item)
+                        artist_index[a_key] = artist_id
+                        stats.added_items += 1
+
+                    # 2. Album
+                    album_title = tags.album or "Unknown Album"
+                    alb_key = (artist_id, normalize_title(album_title))
+                    album_id = album_index.get(alb_key)
+                    if album_id is None:
+                        album_id = new_id()
+                        album_item = MediaItem(
+                            id=album_id,
+                            library_id=library_id,
+                            type="album",
+                            title=album_title,
+                            sort_title=sort_title(album_title),
+                            year=tags.year,
+                            added_at=now,
+                            match_state="matched",
+                        )
+                        album_item.album = Album(
+                            item_id=album_id,
+                            artist_id=artist_id,
+                            album_artist=tags.album_artist,
+                            musicbrainz_id=tags.musicbrainz_album_id,
+                            musicbrainz_release_group_id=tags.musicbrainz_release_group_id,
+                            release_date=tags.release_date,
+                            total_discs=tags.total_discs,
+                            total_tracks=tags.total_tracks,
+                        )
+                        session.add(album_item)
+                        album_index[alb_key] = album_id
+                        stats.added_items += 1
+
+                        # Artwork handling: embedded cover or local sidecar
+                        if self.matcher is not None and self.matcher.artwork is not None:
+                            if tags.embedded_cover is not None:
+                                try:
+                                    await self.matcher.artwork(
+                                        album_id,
+                                        "embedded",
+                                        [
+                                            ProviderImage(
+                                                kind="poster",
+                                                data=tags.embedded_cover.data,
+                                                mime_type=tags.embedded_cover.mime_type,
+                                                is_primary=True,
+                                            )
+                                        ],
+                                    )
+                                    stats.images_stored += 1
+                                except Exception as exc:
+                                    logger.debug(
+                                        "failed to store embedded cover for %s: %s", album_id, exc
+                                    )
+                            else:
+                                local_art = find_album_artwork(Path(candidate.path).parent)
+                                if not local_art:
+                                    local_art = find_album_artwork(
+                                        Path(candidate.path).parent.parent
+                                    )
+                                if local_art:
+                                    try:
+                                        await self.matcher.artwork(
+                                            album_id,
+                                            "local",
+                                            [
+                                                ProviderImage(
+                                                    kind="poster",
+                                                    file_path=local_art,
+                                                    is_primary=True,
+                                                )
+                                            ],
+                                        )
+                                        stats.images_stored += 1
+                                    except Exception as exc:
+                                        logger.debug(
+                                            "failed to store local cover for %s: %s", album_id, exc
+                                        )
+
+                    # 3. Track Artist (if distinct)
+                    if tags.artist and tags.artist != tags.album_artist:
+                        t_artist_name = tags.artist
+                        t_key = normalize_title(t_artist_name)
+                        track_artist_id = artist_index.get(t_key)
+                        if track_artist_id is None:
+                            track_artist_id = new_id()
+                            t_artist_item = MediaItem(
+                                id=track_artist_id,
+                                library_id=library_id,
+                                type="artist",
+                                title=t_artist_name,
+                                sort_title=sort_title(t_artist_name),
+                                added_at=now,
+                                match_state="matched",
+                            )
+                            t_artist_item.artist = Artist(
+                                item_id=track_artist_id,
+                                musicbrainz_id=tags.musicbrainz_artist_id,
+                                sort_name=tags.artist,
+                            )
+                            session.add(t_artist_item)
+                            artist_index[t_key] = track_artist_id
+                            stats.added_items += 1
+                    else:
+                        track_artist_id = artist_id
+
+                    # 4. Create Track and MediaFile
+                    track_title = tags.title or Path(candidate.path).stem
+                    track_item_id = new_id()
+                    file_id = new_id()
+
+                    file_row = MediaFile(
+                        id=file_id,
+                        item_id=track_item_id,
+                        path=candidate.path,
+                        size_bytes=candidate.size_bytes,
+                        mtime=candidate.mtime,
+                        partial_hash=hashes.get(candidate.path, ""),
+                        container=tags.container,
+                        duration_seconds=tags.duration_seconds,
+                        bit_rate=tags.bitrate,
+                        streams_json={
+                            "sample_rate": tags.sample_rate,
+                            "channels": tags.channels,
+                            "codec_name": tags.container,
+                        },
+                    )
+                    track_item = MediaItem(
+                        id=track_item_id,
+                        library_id=library_id,
+                        type="track",
+                        title=track_title,
+                        sort_title=sort_title(track_title),
+                        year=tags.year,
+                        runtime_seconds=int(tags.duration_seconds)
+                        if tags.duration_seconds
+                        else None,
+                        added_at=now,
+                        match_state="matched",
+                    )
+                    track_item.track = Track(
+                        item_id=track_item_id,
+                        album_id=album_id,
+                        artist_id=track_artist_id,
+                        file_id=file_id,
+                        disc_number=tags.disc_number,
+                        track_number=tags.track_number,
+                        duration_seconds=tags.duration_seconds,
+                        bitrate=tags.bitrate,
+                        sample_rate=tags.sample_rate,
+                        channels=tags.channels,
+                        replaygain_track_gain=tags.replaygain_track_gain,
+                        replaygain_track_peak=tags.replaygain_track_peak,
+                        replaygain_album_gain=tags.replaygain_album_gain,
+                        replaygain_album_peak=tags.replaygain_album_peak,
+                        musicbrainz_track_id=tags.musicbrainz_track_id,
+                        musicbrainz_release_track_id=tags.musicbrainz_release_track_id,
+                        musicbrainz_artist_id=tags.musicbrainz_artist_id,
+                        musicbrainz_album_id=tags.musicbrainz_album_id,
+                    )
+                    session.add(file_row)
+                    session.add(track_item)
+                    if tags.track_number is not None:
+                        track_index[(album_id, tags.disc_number, tags.track_number)] = track_item_id
+                    stats.added += 1
+                    stats.added_items += 1
 
             for current in mark_missing:
                 row = await session.get(MediaFile, current.id)
@@ -750,7 +1058,7 @@ class LibraryScanner:
                 )
                 for item in orphan_items:
                     await session.delete(item)
-            else:
+            elif library_type == "tv":
                 orphan_eps = list(
                     await session.scalars(
                         select(Episode)
@@ -798,6 +1106,55 @@ class LibraryScanner:
                     orphan_series_item = await session.get(MediaItem, s.item_id)
                     if orphan_series_item is not None:
                         await session.delete(orphan_series_item)
+            elif library_type == "music":
+                orphan_tracks = list(
+                    await session.scalars(
+                        select(Track)
+                        .join(MediaItem, MediaItem.id == Track.item_id)
+                        .where(
+                            MediaItem.library_id == library_id,
+                            Track.file_id.is_(None),
+                            ~MediaItem.files.any(),
+                        )
+                    )
+                )
+                for tr in orphan_tracks:
+                    orphan_tr_item = await session.get(MediaItem, tr.item_id)
+                    if orphan_tr_item is not None:
+                        await session.delete(orphan_tr_item)
+                await session.flush()
+
+                orphan_albums = list(
+                    await session.scalars(
+                        select(Album)
+                        .join(MediaItem, MediaItem.id == Album.item_id)
+                        .where(
+                            MediaItem.library_id == library_id,
+                            ~Album.tracks.any(),
+                        )
+                    )
+                )
+                for alb in orphan_albums:
+                    orphan_alb_item = await session.get(MediaItem, alb.item_id)
+                    if orphan_alb_item is not None:
+                        await session.delete(orphan_alb_item)
+                await session.flush()
+
+                orphan_artists = list(
+                    await session.scalars(
+                        select(Artist)
+                        .join(MediaItem, MediaItem.id == Artist.item_id)
+                        .where(
+                            MediaItem.library_id == library_id,
+                            ~Artist.albums.any(),
+                            ~Artist.tracks.any(),
+                        )
+                    )
+                )
+                for art in orphan_artists:
+                    orphan_art_item = await session.get(MediaItem, art.item_id)
+                    if orphan_art_item is not None:
+                        await session.delete(orphan_art_item)
 
             await session.commit()
 

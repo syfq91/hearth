@@ -20,6 +20,7 @@ dependencies = [
     "pillow>=13.0.0",
     "blurhash>=1.1.5",
     "watchfiles>=1.3.0",
+    "mutagen>=1.47.0",
 ]
 
 [project.scripts]
@@ -66,8 +67,12 @@ warn_return_any = true
 warn_unused_configs = true
 
 [[tool.mypy.overrides]]
-module = ["blurhash.*"]
+module = ["blurhash.*", "mutagen.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["app.services.media.tags"]
+disallow_untyped_calls = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

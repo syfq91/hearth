@@ -240,13 +240,25 @@ class MediaItem(TimestampMixin, Base):
         back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
     )
     artist: Mapped["Artist | None"] = relationship(
-        back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+        back_populates="item",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+        lazy="selectin",
     )
     album: Mapped["Album | None"] = relationship(
-        back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+        back_populates="item",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+        lazy="selectin",
     )
     track: Mapped["Track | None"] = relationship(
-        back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+        back_populates="item",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+        lazy="selectin",
     )
     files: Mapped[list["MediaFile"]] = relationship(
         back_populates="item", cascade="all, delete-orphan", lazy="selectin"
@@ -373,7 +385,10 @@ class Artist(Base):
 
     item: Mapped["MediaItem"] = relationship(back_populates="artist", lazy="joined")
     albums: Mapped[list["Album"]] = relationship(
-        back_populates="artist", cascade="all, delete-orphan", lazy="selectin"
+        back_populates="artist",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
     )
     tracks: Mapped[list["Track"]] = relationship(back_populates="artist", lazy="selectin")
 
@@ -401,7 +416,10 @@ class Album(Base):
     item: Mapped["MediaItem"] = relationship(back_populates="album", lazy="joined")
     artist: Mapped["Artist | None"] = relationship(back_populates="albums", lazy="joined")
     tracks: Mapped[list["Track"]] = relationship(
-        back_populates="album", cascade="all, delete-orphan", lazy="selectin"
+        back_populates="album",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
     )
 
 

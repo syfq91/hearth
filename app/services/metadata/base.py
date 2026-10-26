@@ -45,6 +45,8 @@ class ProviderImage:
     kind: str
     source_url: str | None = None
     file_path: str | None = None
+    data: bytes | None = None
+    mime_type: str | None = None
     width: int | None = None
     height: int | None = None
     is_primary: bool = False

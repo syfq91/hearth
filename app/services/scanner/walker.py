@@ -25,6 +25,24 @@ VIDEO_EXTENSIONS = frozenset(
     }
 )
 
+AUDIO_EXTENSIONS = frozenset(
+    {
+        ".mp3",
+        ".flac",
+        ".m4a",
+        ".aac",
+        ".ogg",
+        ".oga",
+        ".opus",
+        ".wma",
+        ".wav",
+        ".wv",
+        ".ape",
+        ".aif",
+        ".aiff",
+    }
+)
+
 IGNORED_DIRECTORIES = frozenset(
     {
         "extras",
@@ -165,3 +183,75 @@ def find_sidecar_subtitles(path: Path | str) -> list[str]:
         if candidate.is_file() and candidate.suffix.casefold() in extensions:
             found.add(str(candidate))
     return sorted(found)
+
+
+def walk_music_files(
+    roots: Sequence[str],
+    *,
+    start_dirs: Sequence[str] | None = None,
+) -> list[ScannedFile]:
+    """Walk music roots and return supported, non-ignored audio files."""
+    search_dirs = (
+        scope_dirs(roots, start_dirs)
+        if start_dirs is not None
+        else [_normalize_root(root) for root in roots]
+    )
+    files: list[ScannedFile] = []
+
+    for start in search_dirs:
+        if not os.path.isdir(start):
+            continue
+        for dirpath, dirnames, filenames in os.walk(start, topdown=True, followlinks=False):
+            dirnames[:] = [
+                name
+                for name in dirnames
+                if name.casefold() not in IGNORED_DIRECTORIES
+                and not name.startswith(".")
+                and not os.path.islink(os.path.join(dirpath, name))
+            ]
+            if ".nomedia" in filenames:
+                dirnames.clear()
+                continue
+
+            for filename in filenames:
+                if filename.startswith("."):
+                    continue
+                extension = os.path.splitext(filename)[1].casefold()
+                if extension not in AUDIO_EXTENSIONS:
+                    continue
+                if _SAMPLE.search(os.path.splitext(filename)[0]):
+                    continue
+                path = os.path.join(dirpath, filename)
+                try:
+                    stat = os.stat(path, follow_symlinks=False)
+                except OSError:
+                    continue
+                if not os.path.isfile(path) or os.path.islink(path):
+                    continue
+                files.append(ScannedFile(path=path, size_bytes=stat.st_size, mtime=stat.st_mtime))
+
+    files.sort(key=lambda item: item.path)
+    return files
+
+
+def find_album_artwork(album_dir: Path | str) -> str | None:
+    """Find local sidecar artwork file for an album folder."""
+    p = Path(album_dir)
+    candidates = (
+        "cover.jpg",
+        "cover.png",
+        "cover.webp",
+        "cover.jpeg",
+        "folder.jpg",
+        "folder.png",
+        "folder.jpeg",
+        "front.jpg",
+        "front.png",
+        "album.jpg",
+        "album.png",
+    )
+    for name in candidates:
+        candidate = p / name
+        if candidate.is_file():
+            return str(candidate)
+    return None

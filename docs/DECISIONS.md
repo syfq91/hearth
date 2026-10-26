@@ -381,4 +381,20 @@
   - Standalone tables detached from `MediaItem` (would prevent reusing `UserItemState` for music track watch/play progress, favorites, and FTS5 search).
   - Storing playlists as a JSON array of item IDs on `User` (unsuitable for large playlists, ordering queries, and relational integrity with cascade deletes).
 
+## ADR 044: Mutagen Tag Reading and Music Scanner Integration
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Music catalog scanning requires reading technical stream properties (duration, bitrate, sample rate, channels, container), metadata tags (title, artist, album, album artist, track/disc numbers, year, genre, ReplayGain, MusicBrainz identifiers), and embedded artwork without spawning external processes (like ffprobe) on every file, ensuring it easily achieves the performance budget (< 2 minutes for 5,000 tracks).
+- **Decision:**
+  - Use `mutagen` for in-process audio metadata extraction supporting MP3 (ID3v2/ID3v1), FLAC/Ogg (Vorbis comment), MP4/M4A (`covr`, iTunes tags), and APEv2.
+  - Bypass external `ffprobe` in `LibraryScanner` when `library.type == "music"`, taking technical properties directly from mutagen in microseconds.
+  - Implement robust path and directory structure fallback heuristics in `apply_path_fallbacks`: parsing filenames matching track patterns (`{track} - {title}`, `{track} - {artist} - {title}`, `{disc}-{track} - {title}`), multi-disc directories (`CD 1`, `Disc 2`), compilation directories (`Various Artists`, `Compilations`), and album folders with optional release years (`Album Title (YYYY)`).
+  - Extract embedded front cover art (ID3 APIC type 3, Vorbis PICTURE, MP4 covr) directly into the image pipeline using a new `ProviderImage.data: bytes` attribute, supplemented by local sidecar artwork discovery (`cover.jpg`, `folder.png`, etc.).
+  - Implement cascade orphan cleanup in `LibraryScanner` for music libraries: when tracks are removed or expired, empty albums and artists are automatically cleaned up.
+- **Alternatives Considered:**
+  - Using `ffprobe` for audio metadata (too slow: spawns 5,000 subprocesses, which would fail the 2-minute scan budget).
+  - Discarding embedded cover art in favor of online metadata lookups only (fails for unreleased, private, offline, or compilation albums).
+
+
 

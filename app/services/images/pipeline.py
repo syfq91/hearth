@@ -237,7 +237,11 @@ class ImagePipeline:
         self, item_id: str, provider_name: str, provider_image: ProviderImage
     ) -> StoredImage | None:
         """Download or copy one image and write its catalog row."""
-        if provider_image.source_url:
+        payload: tuple[bytes, str] | None
+        if provider_image.data:
+            ext = _CONTENT_TYPE_EXT.get(provider_image.mime_type or "image/jpeg", "jpg")
+            payload = (provider_image.data, ext)
+        elif provider_image.source_url:
             payload = await self._download(provider_image.source_url)
         elif provider_image.file_path:
             payload = await self._read_local(Path(provider_image.file_path))
@@ -262,7 +266,7 @@ class ImagePipeline:
             raise
 
         kind = _sanitize_kind(provider_image.kind)
-        origin = provider_image.source_url or provider_image.file_path
+        origin = provider_image.source_url or provider_image.file_path or f"embedded:{item_id}"
         async with self.sessionmaker() as session:
             if provider_image.is_primary:
                 await session.execute(
