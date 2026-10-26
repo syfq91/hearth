@@ -287,6 +287,292 @@
         "title": "Credentials",
         "type": "object"
       },
+      "EpisodeDetail": {
+        "description": "Complete detail response for an episode.",
+        "properties": {
+          "air_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Date"
+          },
+          "episode_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Number"
+          },
+          "files": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MediaFileResponse"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "images": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ImageResponse"
+            },
+            "title": "Images",
+            "type": "array"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "people": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PersonCreditResponse"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "provider_ids": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "title": "Provider Ids",
+            "type": "object"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "runtime_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Seconds"
+          },
+          "season_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Id"
+          },
+          "season_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Number"
+          },
+          "season_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Title"
+          },
+          "series_id": {
+            "title": "Series Id",
+            "type": "string"
+          },
+          "series_title": {
+            "title": "Series Title",
+            "type": "string"
+          },
+          "still": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "watch_state": {
+            "$ref": "#/components/schemas/WatchStateResponse"
+          }
+        },
+        "required": [
+          "id",
+          "series_id",
+          "title",
+          "watch_state",
+          "series_title"
+        ],
+        "title": "EpisodeDetail",
+        "type": "object"
+      },
+      "EpisodeSummary": {
+        "description": "Catalog card for an episode.",
+        "properties": {
+          "air_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Date"
+          },
+          "episode_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Number"
+          },
+          "files": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MediaFileResponse"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "runtime_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Seconds"
+          },
+          "season_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Id"
+          },
+          "season_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Number"
+          },
+          "series_id": {
+            "title": "Series Id",
+            "type": "string"
+          },
+          "still": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "watch_state": {
+            "$ref": "#/components/schemas/WatchStateResponse"
+          }
+        },
+        "required": [
+          "id",
+          "series_id",
+          "title",
+          "watch_state"
+        ],
+        "title": "EpisodeSummary",
+        "type": "object"
+      },
       "FFmpegHealth": {
         "description": "Health and version of the ffmpeg binary.",
         "properties": {
@@ -633,6 +919,11 @@
             "title": "Title",
             "type": "string"
           },
+          "type": {
+            "default": "movie",
+            "title": "Type",
+            "type": "string"
+          },
           "watch_state": {
             "$ref": "#/components/schemas/WatchStateResponse"
           },
@@ -775,6 +1066,11 @@
           },
           "title": {
             "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "default": "movie",
+            "title": "Type",
             "type": "string"
           },
           "watch_state": {
@@ -1326,6 +1622,172 @@
         "title": "MediaTokenResponse",
         "type": "object"
       },
+      "NextUpEpisode": {
+        "description": "An episode queued in Next Up with its parent series information.",
+        "properties": {
+          "air_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Date"
+          },
+          "episode_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Number"
+          },
+          "files": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MediaFileResponse"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "runtime_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Seconds"
+          },
+          "season_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Id"
+          },
+          "season_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Number"
+          },
+          "season_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Title"
+          },
+          "series_id": {
+            "title": "Series Id",
+            "type": "string"
+          },
+          "series_poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "series_title": {
+            "title": "Series Title",
+            "type": "string"
+          },
+          "still": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "watch_state": {
+            "$ref": "#/components/schemas/WatchStateResponse"
+          }
+        },
+        "required": [
+          "id",
+          "series_id",
+          "title",
+          "watch_state",
+          "series_title"
+        ],
+        "title": "NextUpEpisode",
+        "type": "object"
+      },
+      "NextUpShelf": {
+        "description": "A shelf of next-up episodes.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NextUpEpisode"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "NextUpShelf",
+        "type": "object"
+      },
       "PasswordReset": {
         "properties": {
           "password": {
@@ -1760,6 +2222,345 @@
           "title"
         ],
         "title": "SearchResultResponse",
+        "type": "object"
+      },
+      "SeasonDetail": {
+        "description": "Complete detail response for a season including its episodes.",
+        "properties": {
+          "air_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Date"
+          },
+          "episode_count": {
+            "default": 0,
+            "title": "Episode Count",
+            "type": "integer"
+          },
+          "episodes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EpisodeSummary"
+            },
+            "title": "Episodes",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "season_number": {
+            "title": "Season Number",
+            "type": "integer"
+          },
+          "series_id": {
+            "title": "Series Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "watch_state": {
+            "$ref": "#/components/schemas/WatchStateResponse"
+          }
+        },
+        "required": [
+          "id",
+          "series_id",
+          "season_number",
+          "title",
+          "watch_state"
+        ],
+        "title": "SeasonDetail",
+        "type": "object"
+      },
+      "SeasonSummary": {
+        "description": "Catalog card for a season.",
+        "properties": {
+          "air_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Date"
+          },
+          "episode_count": {
+            "default": 0,
+            "title": "Episode Count",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "season_number": {
+            "title": "Season Number",
+            "type": "integer"
+          },
+          "series_id": {
+            "title": "Series Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "watch_state": {
+            "$ref": "#/components/schemas/WatchStateResponse"
+          }
+        },
+        "required": [
+          "id",
+          "series_id",
+          "season_number",
+          "title",
+          "watch_state"
+        ],
+        "title": "SeasonSummary",
+        "type": "object"
+      },
+      "SeriesDetail": {
+        "description": "Complete detail response for a TV show.",
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "backdrop": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "genres": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Genres",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "images": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ImageResponse"
+            },
+            "title": "Images",
+            "type": "array"
+          },
+          "match_state": {
+            "title": "Match State",
+            "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network"
+          },
+          "original_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Title"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "people": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PersonCreditResponse"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "provider_ids": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "title": "Provider Ids",
+            "type": "object"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "runtime_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Seconds"
+          },
+          "seasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SeasonSummary"
+            },
+            "title": "Seasons",
+            "type": "array"
+          },
+          "sort_title": {
+            "title": "Sort Title",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total_episodes": {
+            "default": 0,
+            "title": "Total Episodes",
+            "type": "integer"
+          },
+          "total_seasons": {
+            "default": 0,
+            "title": "Total Seasons",
+            "type": "integer"
+          },
+          "type": {
+            "default": "movie",
+            "title": "Type",
+            "type": "string"
+          },
+          "watch_state": {
+            "$ref": "#/components/schemas/WatchStateResponse"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "sort_title",
+          "added_at",
+          "match_state",
+          "watch_state"
+        ],
+        "title": "SeriesDetail",
         "type": "object"
       },
       "SubtitleResponse": {
@@ -2661,6 +3462,54 @@
         "summary": "Setup",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/episodes/{episode_id}": {
+      "get": {
+        "description": "Return complete details for a single episode.",
+        "operationId": "get_episode_detail_api_v1_episodes__episode_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "episode_id",
+            "required": true,
+            "schema": {
+              "title": "Episode Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EpisodeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Episode Detail",
+        "tags": [
+          "shows"
         ]
       }
     },
@@ -4136,6 +4985,438 @@
         "summary": "Search Metadata",
         "tags": [
           "metadata"
+        ]
+      }
+    },
+    "/api/v1/seasons/{season_id}": {
+      "get": {
+        "description": "Return season details along with its constituent episodes.",
+        "operationId": "get_season_detail_api_v1_seasons__season_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "season_id",
+            "required": true,
+            "schema": {
+              "title": "Season Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeasonDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Season Detail",
+        "tags": [
+          "shows"
+        ]
+      }
+    },
+    "/api/v1/seasons/{season_id}/episodes": {
+      "get": {
+        "description": "Return all episodes belonging to a season.",
+        "operationId": "list_season_episodes_api_v1_seasons__season_id__episodes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "season_id",
+            "required": true,
+            "schema": {
+              "title": "Season Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EpisodeSummary"
+                  },
+                  "title": "Response List Season Episodes Api V1 Seasons  Season Id  Episodes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Season Episodes",
+        "tags": [
+          "shows"
+        ]
+      }
+    },
+    "/api/v1/seasons/{season_id}/watched": {
+      "post": {
+        "description": "Mark all episodes in a season as watched or unwatched.",
+        "operationId": "mark_season_watched_api_v1_seasons__season_id__watched_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "season_id",
+            "required": true,
+            "schema": {
+              "title": "Season Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mark Season Watched",
+        "tags": [
+          "shows"
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}": {
+      "get": {
+        "description": "Return complete details for a TV series.",
+        "operationId": "get_series_detail_api_v1_series__series_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "series_id",
+            "required": true,
+            "schema": {
+              "title": "Series Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Series Detail",
+        "tags": [
+          "shows"
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/next-up": {
+      "get": {
+        "description": "Return the next-up episode for a specific series.",
+        "operationId": "get_series_next_up_api_v1_series__series_id__next_up_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "series_id",
+            "required": true,
+            "schema": {
+              "title": "Series Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextUpEpisode"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Series Next Up",
+        "tags": [
+          "shows"
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/seasons": {
+      "get": {
+        "description": "Return all seasons belonging to a series.",
+        "operationId": "list_series_seasons_api_v1_series__series_id__seasons_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "series_id",
+            "required": true,
+            "schema": {
+              "title": "Series Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SeasonSummary"
+                  },
+                  "title": "Response List Series Seasons Api V1 Series  Series Id  Seasons Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Series Seasons",
+        "tags": [
+          "shows"
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/watched": {
+      "post": {
+        "description": "Mark all seasons and episodes in a series as watched or unwatched.",
+        "operationId": "mark_series_watched_api_v1_series__series_id__watched_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "series_id",
+            "required": true,
+            "schema": {
+              "title": "Series Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mark Series Watched",
+        "tags": [
+          "shows"
+        ]
+      }
+    },
+    "/api/v1/shows/next-up": {
+      "get": {
+        "description": "Return next-up episodes across active series for the current user.",
+        "operationId": "list_next_up_api_v1_shows_next_up_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "library_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 36,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Library Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextUpShelf"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Next Up",
+        "tags": [
+          "shows"
         ]
       }
     },

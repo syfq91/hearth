@@ -111,6 +111,7 @@ class ItemSummary(BaseModel):
     """A catalog card."""
 
     id: str
+    type: str = "movie"
     title: str
     sort_title: str
     year: int | None = None
@@ -164,9 +165,10 @@ async def list_library_items(
     direction: SortOrder = order or _DEFAULT_ORDER[sort]
     key_expression = _sort_expression(sort, direction)
 
+    item_type = "series" if library.type == "tv" else "movie"
     query = select(MediaItem).where(
         MediaItem.library_id == library.id,
-        MediaItem.type == "movie",
+        MediaItem.type == item_type,
     )
     if genre is not None:
         wanted = genre.strip().casefold()
@@ -243,11 +245,23 @@ async def get_item(item_id: str, user: RequireUser, session: SessionDep) -> Item
     people = await _people(session, item.id)
     summary = item_summary(item, state)
     movie = item.movie
+    series = item.series
+    episode = item.episode
+
+    original_title = movie.original_title if movie else (series.original_title if series else None)
+    release_date = movie.release_date if movie else (episode.air_date if episode else None)
+
+    files_list = (
+        sorted(item.files, key=lambda file: file.path)
+        if item.files
+        else ([episode.file] if episode and episode.file else [])
+    )
+
     return ItemDetail(
         **summary.model_dump(),
-        original_title=movie.original_title if movie else None,
+        original_title=original_title,
         tagline=movie.tagline if movie else None,
-        release_date=movie.release_date if movie else None,
+        release_date=release_date,
         edition=movie.edition if movie else None,
         part=movie.part if movie else None,
         provider_ids={str(key): str(value) for key, value in (item.provider_ids or {}).items()},
@@ -263,7 +277,7 @@ async def get_item(item_id: str, user: RequireUser, session: SessionDep) -> Item
                 missing=media_file.missing_since is not None,
                 subtitles=subtitle_responses(media_file.id, media_file.path),
             )
-            for media_file in sorted(item.files, key=lambda file: file.path)
+            for media_file in files_list
         ],
         people=people,
         images=[_image_response(image) for image in _ordered_images(item)],
@@ -400,15 +414,20 @@ def _image_response(image: ImageModel) -> ImageResponse:
 
 def _primary_image(item: MediaItem, kind: str) -> ImageResponse | None:
     candidates = [image for image in item.images if image.kind == kind]
-    if not candidates:
-        return None
-    primary = next((image for image in candidates if image.is_primary), candidates[0])
-    return _image_response(primary)
+    if candidates:
+        primary = next((image for image in candidates if image.is_primary), candidates[0])
+        return _image_response(primary)
+    if item.type == "episode" and kind == "poster":
+        stills = [image for image in item.images if image.kind in ("still", "thumbnail")]
+        if stills:
+            return _image_response(stills[0])
+    return None
 
 
 def item_summary(item: MediaItem, state: UserItemState | None) -> ItemSummary:
     return ItemSummary(
         id=item.id,
+        type=item.type,
         title=item.title,
         sort_title=item.sort_title,
         year=item.year,

@@ -333,3 +333,19 @@
 - **Alternatives Considered:**
   - Deleting all episodes and re-creating them on series re-match (destroys watch state and progress for users).
   - Leaving empty seasons or empty series when all files are deleted (leaves ghost entries in the library).
+
+## ADR 041: TV Shows API Endpoints, Next-Up Progression, and Shelf Integration
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** TV show browsing requires hierarchy navigation (Series -> Seasons -> Episodes), a deterministic "Next Up" algorithm capable of handling season boundaries, skips, out-of-order watching, and re-watches, merged continue watching with movies, and batch watch-state marking (seasons and series).
+- **Decision:**
+  - Expose `GET /series/{id}`, `GET /series/{id}/seasons`, `GET /seasons/{id}`, `GET /seasons/{id}/episodes`, and `GET /episodes/{id}`. Top-level `GET /libraries/{id}/items` returns series when `library.type == "tv"`.
+  - Next-Up calculation (`select_next_up_episode`): prioritizes regular seasons (season 1+) over specials (season 0) unless only specials exist. For unplayed series, returns S01E01. For active series, finds the last watched episode by most recent `last_played_at` (or `updated_at`), then selects the first unwatched episode after it in canonical `(season_number, episode_number)` order. If later episodes were watched ahead leaving earlier episodes skipped, it falls back to the earliest unwatched episode in the series once trailing episodes are watched.
+  - Surface `GET /shows/next-up` for active series on home feeds and `GET /series/{id}/next-up` for show detail pages.
+  - Merge movies and in-progress episodes in `GET /home/continue-watching` by `last_played_at.desc()`.
+  - `POST /seasons/{id}/watched` and `POST /series/{id}/watched` cascade watched status to all constituent episodes and update parent season/series records.
+- **Alternatives Considered:**
+  - Using simple highest episode number for next up (fails when users re-watch earlier episodes or skip ahead).
+  - Separate next-up shelves for movies vs TV (unifies the home feed experience and matches standard media server client expectations).
+

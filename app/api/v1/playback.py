@@ -30,7 +30,7 @@ from app.core.deps import (
 from app.core.errors import NotFoundError
 from app.core.tokens import create_media_token
 from app.db.base import utcnow
-from app.db.models import LibraryPath, MediaFile, MediaItem, User, UserItemState
+from app.db.models import Episode, LibraryPath, MediaFile, MediaItem, Season, User, UserItemState
 from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
 from app.services.playback_state import chapters_from_streams, resolve_watch_state
@@ -232,10 +232,47 @@ async def set_watched(
     the beginning next time.
     """
     item = await _load_item(session, user, item_id)
+    now = utcnow()
+    if item.type == "season":
+        episodes = list(await session.scalars(select(Episode).where(Episode.season_id == item.id)))
+        for ep in episodes:
+            ep_state = await _load_state(session, user.id, ep.item_id)
+            ep_state.played = body.watched
+            if body.watched:
+                ep_state.position_ms = 0
+                ep_state.last_played_at = now
+                ep_state.play_count = max(ep_state.play_count, 1)
+            else:
+                ep_state.position_ms = 0
+    elif item.type == "series":
+        episodes = list(await session.scalars(select(Episode).where(Episode.series_id == item.id)))
+        for ep in episodes:
+            ep_state = await _load_state(session, user.id, ep.item_id)
+            ep_state.played = body.watched
+            if body.watched:
+                ep_state.position_ms = 0
+                ep_state.last_played_at = now
+                ep_state.play_count = max(ep_state.play_count, 1)
+            else:
+                ep_state.position_ms = 0
+        seasons = list(await session.scalars(select(Season).where(Season.series_id == item.id)))
+        for s in seasons:
+            s_state = await _load_state(session, user.id, s.item_id)
+            s_state.played = body.watched
+            if body.watched:
+                s_state.position_ms = 0
+                s_state.last_played_at = now
+                s_state.play_count = max(s_state.play_count, 1)
+            else:
+                s_state.position_ms = 0
+
     state = await _load_state(session, user.id, item.id)
     state.played = body.watched
     if not body.watched:
         state.position_ms = 0
+    elif body.watched:
+        state.last_played_at = now
+        state.play_count = max(state.play_count, 1)
     await _persist(session, state)
     return watch_state_response(state)
 
@@ -300,6 +337,13 @@ async def _load_state(session: AsyncSession, user_id: str, item_id: str) -> User
 def _select_file(item: MediaItem, file_id: str | None) -> MediaFile:
     """Pick the requested file, or the first playable version."""
     candidates = [file for file in item.files if file.missing_since is None]
+    if (
+        not candidates
+        and item.episode
+        and item.episode.file
+        and item.episode.file.missing_since is None
+    ):
+        candidates = [item.episode.file]
     if file_id is not None:
         candidates = [file for file in candidates if file.id == file_id]
     if not candidates:
@@ -337,12 +381,16 @@ def _duration_ms(item: MediaItem) -> int | None:
     if item.runtime_seconds:
         return int(item.runtime_seconds * 1000)
     durations = [file.duration_seconds for file in item.files if file.duration_seconds]
+    if not durations and item.episode and item.episode.file and item.episode.file.duration_seconds:
+        durations = [item.episode.file.duration_seconds]
     return int(max(durations) * 1000) if durations else None
 
 
 def _chapters(item: MediaItem) -> list[dict[str, Any]]:
     """Return chapters from the longest probed file that has any."""
     files = sorted(item.files, key=lambda file: file.duration_seconds or 0, reverse=True)
+    if not files and item.episode and item.episode.file:
+        files = [item.episode.file]
     for media_file in files:
         chapters = chapters_from_streams(media_file.streams_json)
         if chapters:

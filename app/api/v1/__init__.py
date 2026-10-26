@@ -13,6 +13,7 @@ from app.api.v1 import (
     libraries,
     metadata,
     playback,
+    shows,
     stream,
     subtitles,
     system,
@@ -29,6 +30,7 @@ router.include_router(jobs.router)
 router.include_router(events.router)
 router.include_router(metadata.router)
 router.include_router(items.router)
+router.include_router(shows.router)
 router.include_router(home.router)
 router.include_router(playback.router)
 router.include_router(images.router)
