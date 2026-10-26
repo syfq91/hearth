@@ -529,6 +529,28 @@ class MetadataMatcher:
         )
 
     async def _match_series(self, snapshot: _ItemSnapshot) -> MatchResult:
+        if self.local_provider is not None:
+            for file_path in snapshot.file_paths:
+                p = Path(file_path).parent
+                for candidate_dir in (p, p.parent):
+                    nfo = candidate_dir / "tvshow.nfo"
+                    if nfo.is_file():
+                        try:
+                            local_meta = (
+                                self.local_provider.find_series(nfo)
+                                if hasattr(self.local_provider, "find_series")
+                                else None
+                            )
+                        except ProviderError:
+                            local_meta = None
+                        if local_meta is not None:
+                            return await self._apply_series_match(
+                                snapshot,
+                                self.local_provider.name,
+                                str(nfo),
+                                score=1.0,
+                            )
+
         provider = self._tmdb or next(
             (p for p in self.remote_providers if hasattr(p, "search_tv")), None
         )
@@ -655,6 +677,15 @@ class MetadataMatcher:
                         elif ep.air_date and ep.air_date in tmdb_by_date:
                             ep_meta = tmdb_by_date[ep.air_date]
                             ep.episode_number = ep_meta.episode_number
+                        elif self.local_provider is not None and ep.file:
+                            try:
+                                ep_meta = (
+                                    self.local_provider.find_episode(ep.file.path)
+                                    if hasattr(self.local_provider, "find_episode")
+                                    else None
+                                )
+                            except ProviderError:
+                                ep_meta = None
 
                         ep_item = await session.get(MediaItem, ep.item_id)
                         if ep_item is not None:

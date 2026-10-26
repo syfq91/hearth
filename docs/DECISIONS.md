@@ -349,3 +349,18 @@
   - Using simple highest episode number for next up (fails when users re-watch earlier episodes or skip ahead).
   - Separate next-up shelves for movies vs TV (unifies the home feed experience and matches standard media server client expectations).
 
+## ADR 042: Local TV Metadata Discovery via tvshow.nfo and episode.nfo
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Kodi and Emby/Jellyfin libraries frequently supply local metadata via `tvshow.nfo` in the series directory, `<episodename>.nfo` alongside video files, and sidecar images (`poster.jpg`, `fanart.jpg`, `seasonXX.jpg`, `<episodename>-thumb.jpg`). When local metadata is present, scanners should be capable of 100% offline matching without external TMDB API requests.
+- **Decision:**
+  - Extend `LocalProvider` with `find_series(series_dir)` and `find_episode(episode_file_path)`.
+  - Parse `<tvshow>` Kodi XML: title, year, premiered, plot, status, studio, rating, genres, external IDs (`tmdb`, `tvdb`, `imdb`), actors, and series-level posters/backdrops.
+  - Discover season-level posters (`season01.jpg`, `season-specials.jpg`, etc.) via `find_season_poster`.
+  - Parse `<episodedetails>` Kodi XML: title, season, episode, aired date, plot, runtime, rating, actors, directors, writers, and episode stills (`<base>-thumb.jpg`, `<base>-still.jpg`, `<base>.jpg`).
+  - Integrate `LocalProvider` into `SeriesMatcher`: check for local series NFO before online TMDB lookups. If found, yield a match candidate with confidence 1.0. During episode metadata application, check for episode NFOs to populate episode plots, titles, ratings, and credits.
+- **Alternatives Considered:**
+  - Always requiring online TMDB lookups even when NFO exists (fails for offline environments, home movies, and airings not cataloged on TMDB).
+  - Separate NFO parser classes for series vs episodes (keeping them on `LocalProvider` unifies local file-based metadata handling alongside existing movie NFO support).
+

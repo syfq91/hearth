@@ -127,3 +127,135 @@ def test_nfo_only_unique_id_uses_fallback_title(tmp_path: Path) -> None:
     assert details is not None
     assert details.title == "The Matrix (1999)"
     assert details.provider_ids == {"tmdb": "603"}
+
+
+TVSHOW_NFO = """<?xml version="1.0" encoding="UTF-8"?>
+<tvshow>
+  <title>Chernobyl</title>
+  <originaltitle>Chernobyl</originaltitle>
+  <year>2019</year>
+  <premiered>2019-05-06</premiered>
+  <plot>An explosion at the Chernobyl plant becomes a catastrophe.</plot>
+  <status>Ended</status>
+  <studio>HBO</studio>
+  <rating>9.4</rating>
+  <genre>Drama</genre>
+  <genre>History</genre>
+  <uniqueid type="tmdb">87108</uniqueid>
+  <uniqueid type="imdb">tt8772298</uniqueid>
+  <actor><name>Jared Harris</name><role>Valery Legasov</role><order>0</order></actor>
+  <actor><name>Stellan Skarsgård</name><role>Boris Shcherbina</role><order>1</order></actor>
+</tvshow>
+"""
+
+EPISODE_NFO = """<?xml version="1.0" encoding="UTF-8"?>
+<episodedetails>
+  <title>1:23:45</title>
+  <season>1</season>
+  <episode>1</episode>
+  <aired>2019-05-06</aired>
+  <plot>Plant workers risk their lives to control a catastrophic explosion.</plot>
+  <runtime>59</runtime>
+  <rating>9.0</rating>
+  <uniqueid type="tmdb">1748281</uniqueid>
+  <director>Johan Renck</director>
+  <writer>Craig Mazin</writer>
+  <actor><name>Adam Nagaitis</name><role>Vasily Ignatenko</role><order>0</order></actor>
+</episodedetails>
+"""
+
+
+def _tv_fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+    series_dir = tmp_path / "tv" / "Chernobyl"
+    season_dir = series_dir / "Season 1"
+    season_dir.mkdir(parents=True)
+
+    tv_nfo = series_dir / "tvshow.nfo"
+    tv_nfo.write_text(TVSHOW_NFO, encoding="utf-8")
+    (series_dir / "poster.jpg").write_bytes(b"poster")
+    (series_dir / "fanart.jpg").write_bytes(b"fanart")
+    (series_dir / "season01.jpg").write_bytes(b"season01_poster")
+
+    ep_video = season_dir / "Chernobyl.S01E01.mkv"
+    ep_video.write_bytes(b"ep_video")
+    (season_dir / "Chernobyl.S01E01-thumb.jpg").write_bytes(b"ep_thumb")
+
+    ep_nfo = season_dir / "Chernobyl.S01E01.nfo"
+    ep_nfo.write_text(EPISODE_NFO, encoding="utf-8")
+
+    return series_dir, tv_nfo, ep_video, ep_nfo
+
+
+def test_parse_tvshow_nfo(tmp_path: Path) -> None:
+    series_dir, tv_nfo, ep_video, ep_nfo = _tv_fixture(tmp_path)
+    provider = LocalProvider()
+
+    series_meta = provider.find_series(series_dir)
+    assert series_meta is not None
+    assert series_meta.title == "Chernobyl"
+    assert series_meta.original_title == "Chernobyl"
+    assert series_meta.year == 2019
+    assert series_meta.first_air_date == "2019-05-06"
+    assert "Chernobyl plant" in (series_meta.overview or "")
+    assert series_meta.status == "Ended"
+    assert series_meta.network == "HBO"
+    assert series_meta.rating == 9.4
+    assert series_meta.genres == ("Drama", "History")
+    assert series_meta.provider_ids == {"tmdb": "87108", "imdb": "tt8772298"}
+    assert len(series_meta.credits) == 2
+    assert series_meta.credits[0].name == "Jared Harris"
+    assert series_meta.credits[0].character == "Valery Legasov"
+    assert {image.kind for image in series_meta.images} == {"poster", "backdrop"}
+
+
+def test_parse_episode_nfo(tmp_path: Path) -> None:
+    series_dir, tv_nfo, ep_video, ep_nfo = _tv_fixture(tmp_path)
+    provider = LocalProvider()
+
+    ep_meta = provider.find_episode(ep_video)
+    assert ep_meta is not None
+    assert ep_meta.title == "1:23:45"
+    assert ep_meta.season_number == 1
+    assert ep_meta.episode_number == 1
+    assert ep_meta.air_date == "2019-05-06"
+    assert "Plant workers" in (ep_meta.overview or "")
+    assert ep_meta.runtime_seconds == 59 * 60
+    assert ep_meta.rating == 9.0
+    assert ep_meta.provider_ids == {"tmdb": "1748281"}
+    credits = {(c.name, c.role) for c in ep_meta.credits}
+    assert ("Johan Renck", "director") in credits
+    assert ("Craig Mazin", "writer") in credits
+    assert ("Adam Nagaitis", "cast") in credits
+    assert len(ep_meta.images) >= 1
+    assert ep_meta.images[0].kind in ("still", "thumbnail")
+
+
+async def test_local_provider_tv_interfaces(tmp_path: Path) -> None:
+    series_dir, tv_nfo, ep_video, ep_nfo = _tv_fixture(tmp_path)
+    provider = LocalProvider()
+
+    # Search TV
+    results = await provider.search_tv(str(series_dir))
+    assert len(results) == 1
+    assert results[0].title == "Chernobyl"
+    assert results[0].provider_id == str(tv_nfo)
+
+    # Fetch TV details
+    details = await provider.fetch_tv_details(str(tv_nfo))
+    assert details is not None
+    assert details.title == "Chernobyl"
+
+    # Fetch Season
+    season = await provider.fetch_tv_season(str(tv_nfo), 1)
+    assert season is not None
+    assert season.season_number == 1
+    assert len(season.images) >= 1
+    assert season.images[0].kind == "poster"
+    assert len(season.episodes) == 1
+    assert season.episodes[0].episode_number == 1
+    assert season.episodes[0].title == "1:23:45"
+
+    # Fetch Episode
+    ep = await provider.fetch_tv_episode(str(tv_nfo), 1, 1)
+    assert ep is not None
+    assert ep.title == "1:23:45"
