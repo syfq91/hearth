@@ -438,6 +438,23 @@
   - Flat un-grouped tracklists on album detail (inferior UX for multi-disc boxsets and soundtracks).
   - Deferring unique position constraint checks via SQLite pragmas (not supported in SQLite standard tables without schema rebuilds; two-phase negative updates are safe and idiomatic).
 
+## ADR 047: Direct Audio Streaming and Gapless-Friendly Range Support
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Music streaming clients demand gapless audio playback, quick track scrubbing, byte-accurate resume, low-latency streaming without re-encoding, and flexible authorization (HTTP Bearer headers as well as query string `?token=` for standard HTML5 `<audio>` elements).
+- **Decision:**
+  - Route audio streaming through `/api/v1/stream/audio/{track_id}` (and underlying `/api/v1/stream/{file_id}`) with:
+    - Accurate `Content-Length`, `Accept-Ranges: bytes`, and media content types (`audio/flac`, `audio/mpeg`, `audio/mp4`, `audio/ogg`, `audio/wav`).
+    - Standard HTTP 206 Partial Content range requests (`start-end`, `start-`, `-suffix`), and HTTP 416 for unsatisfiable ranges (`Range: bytes=X-` where `X >= size`).
+    - HTTP 304 Not Modified responses for conditional GETs with matching `If-None-Match` ETags.
+    - HEAD requests returning exact technical headers without opening the file reader stream.
+    - Authentication support via both `Authorization: Bearer <jwt>` and item-scoped media tokens in `?token=<media_token>`, validating track ownership and user library access permissions.
+- **Alternatives Considered:**
+  - Transcoding all audio files to HLS audio streams (unnecessary overhead and loss of gapless fidelity for natively supported audio formats like FLAC, MP3, AAC, and Opus).
+  - Serving audio files with standard monolithic static file handlers (lacks library root boundary validation, token revocation, and item-scoped permission enforcement).
+
+
 
 
 

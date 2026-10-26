@@ -344,6 +344,8 @@ def _select_file(item: MediaItem, file_id: str | None) -> MediaFile:
         and item.episode.file.missing_since is None
     ):
         candidates = [item.episode.file]
+    if not candidates and item.track and item.track.file and item.track.file.missing_since is None:
+        candidates = [item.track.file]
     if file_id is not None:
         candidates = [file for file in candidates if file.id == file_id]
     if not candidates:
@@ -383,6 +385,8 @@ def _duration_ms(item: MediaItem) -> int | None:
     durations = [file.duration_seconds for file in item.files if file.duration_seconds]
     if not durations and item.episode and item.episode.file and item.episode.file.duration_seconds:
         durations = [item.episode.file.duration_seconds]
+    if not durations and item.track and item.track.duration_seconds:
+        durations = [item.track.duration_seconds]
     return int(max(durations) * 1000) if durations else None
 
 

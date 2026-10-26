@@ -135,7 +135,13 @@ async def _stream_response(
                 Episode.file_id == media_file.id,
             )
         )
-        if not is_episode_file:
+        is_track_file = await session.scalar(
+            select(func.count(Track.item_id)).where(
+                Track.item_id == viewer.item_id,
+                Track.file_id == media_file.id,
+            )
+        )
+        if not is_episode_file and not is_track_file:
             raise NotFoundError("Media file not found", code="file_not_found")
 
     item = await session.get(MediaItem, media_file.item_id)
