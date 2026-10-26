@@ -316,3 +316,20 @@
 - **Decision:** Extend `MetadataProvider` with `search_tv`, `fetch_tv_details`, `fetch_tv_season`, `fetch_tv_episode`, and `fetch_tv_images`, returning typed `SeriesMetadata`, `SeasonMetadata`, and `EpisodeMetadata`. In `TMDBProvider`, query TMDB endpoints (`/search/tv`, `/tv/{id}`, `/tv/{id}/season/{s}`, `/tv/{id}/season/{s}/episode/{e}`, `/tv/{id}/images`) with caching in `provider_cache` using structured keys (`tv:{id}`, `tv:{id}:season:{s}`, etc.). Season 0 is preserved for specials. Season calls eagerly parse constituent episode lists including stills, runtime, and credits, reducing subsequent network lookups.
   Per the implementation plan instructions, TMDB episode groups are skipped for the initial build. Standard aired order (season + episode number) aligns with the vast majority of media server libraries (Kodi, Jellyfin, Plex conventions). Supporting episode groups requires complex user selection UI and disambiguation, which can be evaluated in future iterations if user demand arises.
 - **Alternatives Considered:** Supporting episode group selection in the initial build (adds substantial complexity and configuration surface before the core TV scanner/library experience is stable), making separate network calls for every single episode detail (excessive TMDB API rate-limiting; fetching full seasons eagerly is significantly more efficient).
+
+## ADR 040: TV Series Scanner, Cascade Reconciliation and Manual Rematch
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** When scanning a TV library, media files represent episodes belonging to seasons of a series. Reconciliations must handle new episodes, multi-episode files, deleted episodes, removed seasons, removed series, specials, date-based episodes, and series manual re-matches without orphaning rows or breaking user watch states.
+- **Decision:**
+  - Group files in TV libraries by series directory. Create or update `Series` items under the library.
+  - Parse episode paths using `parse_episode_path` and probe media files with `ffprobe`.
+  - For each parsed episode, create or update `Season` and `Episode` items. For multi-episode files (e.g. `S01E01E02`), create an `Episode` item for each episode number in the file, both pointing `Episode.file_id` to the single `MediaFile.id`, and pointing `MediaFile.item_id` to the primary (first) episode item to preserve library containment and direct streaming.
+  - Unknown/unmatched episodes (e.g. unrecognizable filenames) create an episode item with `match_state="unmatched"`, `season_id=None`, `season_number=None`, `episode_number=None`.
+  - Cascade orphan cleanup: when episode files are removed, delete their `Episode` and `MediaItem` records. If a `Season` has no remaining active episodes, delete the season. If a `Series` has no remaining active seasons or episodes, delete the series.
+  - Series matching (`match_pending`): match series to TMDB TV entries, fetch series details and all season details eagerly, and map episodes by `(season_number, episode_number)` or `air_date`.
+  - Manual series re-match (`manual_match`): update the series metadata, then match and update existing constituent episode items in-place where episode numbers still exist, preserving all `user_item_states` (playback position, watched flag, favorites) tied to those episode items.
+- **Alternatives Considered:**
+  - Deleting all episodes and re-creating them on series re-match (destroys watch state and progress for users).
+  - Leaving empty seasons or empty series when all files are deleted (leaves ghost entries in the library).

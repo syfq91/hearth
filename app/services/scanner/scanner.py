@@ -17,11 +17,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings
 from app.core.ids import new_id
 from app.db.base import utcnow
-from app.db.models import Library, LibraryPath, MediaFile, MediaItem, Movie
+from app.db.models import (
+    Episode,
+    Library,
+    LibraryPath,
+    MediaFile,
+    MediaItem,
+    Movie,
+    Season,
+    Series,
+)
 from app.services.media.probe import ProbeResult, probe_media
-from app.services.media.titles import normalize_title
+from app.services.media.titles import normalize_title, sort_title
 from app.services.scanner.hashing import partial_hash
-from app.services.scanner.parsing import ParsedMovie, parse_movie_path
+from app.services.scanner.parsing import ParsedMovie, parse_episode_path, parse_movie_path
 from app.services.scanner.walker import ScannedFile, scope_dirs, walk_movie_files
 
 if TYPE_CHECKING:
@@ -138,7 +147,9 @@ class LibraryScanner:
         stats = ScanStats(library_id=library_id)
         await self._set_status(library_id, "running")
         try:
-            roots, existing, item_index = await self._load_library(library_id)
+            roots, existing, item_index, tv_indices, library_type = await self._load_library(
+                library_id
+            )
             await self._check_cancel(is_cancelled)
 
             scopes = scope_dirs(roots, targets) if targets is not None else None
@@ -267,8 +278,10 @@ class LibraryScanner:
 
             await self._write_changes(
                 library_id=library_id,
+                library_type=library_type,
                 existing=existing,
                 item_index=item_index,
+                tv_indices=tv_indices,
                 new_files=[c for c in new_files if c.path not in moved_paths],
                 changed_files=changed_files,
                 restored_files=restored_files,
@@ -327,13 +340,24 @@ class LibraryScanner:
 
     async def _load_library(
         self, library_id: str
-    ) -> tuple[list[str], dict[str, _ExistingFile], dict[tuple[str, int], str]]:
+    ) -> tuple[
+        list[str],
+        dict[str, _ExistingFile],
+        dict[tuple[str, int], str],
+        tuple[
+            dict[tuple[str, int], str],
+            dict[tuple[str, int], str],
+            dict[tuple[str, int, int], str],
+        ]
+        | None,
+        str,
+    ]:
         async with self.sessionmaker() as session:
             library = await session.get(Library, library_id)
             if library is None:
                 raise ScanError(f"Library {library_id} does not exist")
-            if library.type != "movie":
-                raise ScanError("Only movie libraries can be scanned in this phase")
+            if library.type not in ("movie", "tv"):
+                raise ScanError("Only movie and tv libraries can be scanned in this phase")
 
             roots = list(
                 await session.scalars(
@@ -358,28 +382,72 @@ class LibraryScanner:
                     .where(MediaItem.library_id == library_id)
                 )
             ).all()
-            items = (
-                await session.execute(
-                    select(MediaItem.id, MediaItem.title, MediaItem.year).where(
-                        MediaItem.library_id == library_id, MediaItem.type == "movie"
-                    )
-                )
-            ).all()
 
-        existing = {
-            row.path: _ExistingFile(
-                id=row.id,
-                item_id=row.item_id,
-                path=row.path,
-                size_bytes=row.size_bytes,
-                mtime=row.mtime,
-                partial_hash=row.partial_hash,
-                missing_since=row.missing_since,
-            )
-            for row in rows
-        }
-        item_index = {(normalize_title(row.title), row.year or 0): row.id for row in items}
-        return roots, existing, item_index
+            existing = {
+                row.path: _ExistingFile(
+                    id=row.id,
+                    item_id=row.item_id,
+                    path=row.path,
+                    size_bytes=row.size_bytes,
+                    mtime=row.mtime,
+                    partial_hash=row.partial_hash,
+                    missing_since=row.missing_since,
+                )
+                for row in rows
+            }
+
+            if library.type == "movie":
+                items = (
+                    await session.execute(
+                        select(MediaItem.id, MediaItem.title, MediaItem.year).where(
+                            MediaItem.library_id == library_id, MediaItem.type == "movie"
+                        )
+                    )
+                ).all()
+                item_index = {(normalize_title(row.title), row.year or 0): row.id for row in items}
+                tv_indices = None
+            else:
+                item_index = {}
+                series_rows = (
+                    await session.execute(
+                        select(MediaItem.id, MediaItem.title, MediaItem.year).where(
+                            MediaItem.library_id == library_id, MediaItem.type == "series"
+                        )
+                    )
+                ).all()
+                series_index = {
+                    (normalize_title(row.title), row.year or 0): row.id for row in series_rows
+                }
+                season_rows = (
+                    await session.execute(
+                        select(Season.item_id, Season.series_id, Season.season_number)
+                        .join(MediaItem, MediaItem.id == Season.item_id)
+                        .where(MediaItem.library_id == library_id)
+                    )
+                ).all()
+                season_index = {
+                    (row.series_id, row.season_number): row.item_id for row in season_rows
+                }
+                ep_rows = (
+                    await session.execute(
+                        select(
+                            Episode.item_id,
+                            Episode.series_id,
+                            Episode.season_number,
+                            Episode.episode_number,
+                        )
+                        .join(MediaItem, MediaItem.id == Episode.item_id)
+                        .where(MediaItem.library_id == library_id)
+                    )
+                ).all()
+                episode_index = {
+                    (row.series_id, row.season_number, row.episode_number): row.item_id
+                    for row in ep_rows
+                    if row.season_number is not None and row.episode_number is not None
+                }
+                tv_indices = (series_index, season_index, episode_index)
+
+        return roots, existing, item_index, tv_indices, library.type
 
     async def _hash_files(
         self,
@@ -438,8 +506,17 @@ class LibraryScanner:
         self,
         *,
         library_id: str,
+        library_type: str,
         existing: dict[str, _ExistingFile],
         item_index: dict[tuple[str, int], str],
+        tv_indices: (
+            tuple[
+                dict[tuple[str, int], str],
+                dict[tuple[str, int], str],
+                dict[tuple[str, int, int], str],
+            ]
+            | None
+        ),
         new_files: Sequence[ScannedFile],
         changed_files: Sequence[ScannedFile],
         restored_files: Sequence[_ExistingFile],
@@ -480,40 +557,173 @@ class LibraryScanner:
                 if row is not None:
                     row.missing_since = None
 
-            for candidate in new_files:
-                parsed = self.parser(Path(candidate.path))
-                key = (normalize_title(parsed.title), parsed.year or 0)
-                item_id = item_index.get(key)
-                if item_id is None:
-                    item_id = new_id()
-                    item = MediaItem(
-                        id=item_id,
-                        library_id=library_id,
-                        type="movie",
-                        title=parsed.title,
-                        sort_title=parsed.sort_title,
-                        year=parsed.year,
-                        added_at=now,
-                        match_state="pending",
-                        next_match_at=now,
-                    )
-                    item.movie = Movie(edition=parsed.edition, part=parsed.part)
-                    session.add(item)
-                    item_index[key] = item_id
-                    stats.added_items += 1
+            if library_type == "movie":
+                for candidate in new_files:
+                    parsed = self.parser(Path(candidate.path))
+                    key = (normalize_title(parsed.title), parsed.year or 0)
+                    item_id = item_index.get(key)
+                    if item_id is None:
+                        item_id = new_id()
+                        item = MediaItem(
+                            id=item_id,
+                            library_id=library_id,
+                            type="movie",
+                            title=parsed.title,
+                            sort_title=parsed.sort_title,
+                            year=parsed.year,
+                            added_at=now,
+                            match_state="pending",
+                            next_match_at=now,
+                        )
+                        item.movie = Movie(edition=parsed.edition, part=parsed.part)
+                        session.add(item)
+                        item_index[key] = item_id
+                        stats.added_items += 1
 
-                outcome = outcomes.get(candidate.path)
-                file_row = MediaFile(
-                    item_id=item_id,
-                    path=candidate.path,
-                    size_bytes=candidate.size_bytes,
-                    mtime=candidate.mtime,
-                    partial_hash=hashes.get(candidate.path, ""),
-                    version_label=parsed.edition,
-                )
-                self._apply_probe(file_row, outcome)
-                session.add(file_row)
-                stats.added += 1
+                    outcome = outcomes.get(candidate.path)
+                    file_row = MediaFile(
+                        item_id=item_id,
+                        path=candidate.path,
+                        size_bytes=candidate.size_bytes,
+                        mtime=candidate.mtime,
+                        partial_hash=hashes.get(candidate.path, ""),
+                        version_label=parsed.edition,
+                    )
+                    self._apply_probe(file_row, outcome)
+                    session.add(file_row)
+                    stats.added += 1
+            else:
+                assert tv_indices is not None
+                series_index, season_index, episode_index = tv_indices
+                for candidate in new_files:
+                    parsed_ep = parse_episode_path(Path(candidate.path))
+                    s_key = parsed_ep.series_key
+                    series_id = series_index.get(s_key)
+                    if series_id is None:
+                        series_id = new_id()
+                        series_item = MediaItem(
+                            id=series_id,
+                            library_id=library_id,
+                            type="series",
+                            title=parsed_ep.series_title,
+                            sort_title=parsed_ep.series_sort_title,
+                            year=parsed_ep.series_year,
+                            added_at=now,
+                            match_state="pending",
+                            next_match_at=now,
+                        )
+                        series_item.series = Series()
+                        session.add(series_item)
+                        series_index[s_key] = series_id
+                        stats.added_items += 1
+
+                    season_id: str | None = None
+                    if parsed_ep.season_number is not None:
+                        sea_key = (series_id, parsed_ep.season_number)
+                        season_id = season_index.get(sea_key)
+                        if season_id is None:
+                            season_id = new_id()
+                            season_title = (
+                                "Specials"
+                                if parsed_ep.season_number == 0
+                                else f"Season {parsed_ep.season_number}"
+                            )
+                            season_item = MediaItem(
+                                id=season_id,
+                                library_id=library_id,
+                                type="season",
+                                title=season_title,
+                                sort_title=sort_title(season_title),
+                                added_at=now,
+                                match_state="pending",
+                                next_match_at=now,
+                            )
+                            season_item.season = Season(
+                                series_id=series_id,
+                                season_number=parsed_ep.season_number,
+                            )
+                            session.add(season_item)
+                            season_index[sea_key] = season_id
+                            stats.added_items += 1
+
+                    outcome = outcomes.get(candidate.path)
+                    file_id = new_id()
+                    file_row = MediaFile(
+                        id=file_id,
+                        item_id="",
+                        path=candidate.path,
+                        size_bytes=candidate.size_bytes,
+                        mtime=candidate.mtime,
+                        partial_hash=hashes.get(candidate.path, ""),
+                        version_label=parsed_ep.edition,
+                    )
+                    self._apply_probe(file_row, outcome)
+
+                    if parsed_ep.episode_numbers:
+                        first_item_id: str | None = None
+                        for ep_num in parsed_ep.episode_numbers:
+                            ep_key = (series_id, parsed_ep.season_number or 0, ep_num)
+                            ep_item_id = episode_index.get(ep_key)
+                            if ep_item_id is None:
+                                ep_item_id = new_id()
+                                ep_title = parsed_ep.episode_title or f"Episode {ep_num}"
+                                ep_item = MediaItem(
+                                    id=ep_item_id,
+                                    library_id=library_id,
+                                    type="episode",
+                                    title=ep_title,
+                                    sort_title=sort_title(ep_title),
+                                    added_at=now,
+                                    match_state="pending",
+                                    next_match_at=now,
+                                )
+                                ep_item.episode = Episode(
+                                    series_id=series_id,
+                                    season_id=season_id,
+                                    season_number=parsed_ep.season_number,
+                                    episode_number=ep_num,
+                                    air_date=parsed_ep.air_date,
+                                    absolute_number=parsed_ep.absolute_number,
+                                    file_id=file_id,
+                                )
+                                session.add(ep_item)
+                                episode_index[ep_key] = ep_item_id
+                                stats.added_items += 1
+                            else:
+                                ep_row = await session.get(Episode, ep_item_id)
+                                if ep_row is not None and ep_row.file_id is None:
+                                    ep_row.file_id = file_id
+
+                            if first_item_id is None:
+                                first_item_id = ep_item_id
+
+                        file_row.item_id = first_item_id or series_id
+                    else:
+                        ep_item_id = new_id()
+                        ep_title = parsed_ep.episode_title or Path(candidate.path).stem
+                        ep_item = MediaItem(
+                            id=ep_item_id,
+                            library_id=library_id,
+                            type="episode",
+                            title=ep_title,
+                            sort_title=sort_title(ep_title),
+                            added_at=now,
+                            match_state="unmatched",
+                        )
+                        ep_item.episode = Episode(
+                            series_id=series_id,
+                            season_id=None,
+                            season_number=None,
+                            episode_number=None,
+                            air_date=parsed_ep.air_date,
+                            file_id=file_id,
+                        )
+                        session.add(ep_item)
+                        file_row.item_id = ep_item_id
+                        stats.added_items += 1
+
+                    session.add(file_row)
+                    stats.added += 1
 
             for current in mark_missing:
                 row = await session.get(MediaFile, current.id)
@@ -529,14 +739,63 @@ class LibraryScanner:
 
             await session.flush()
 
-            orphan_items = await session.scalars(
-                select(MediaItem).where(
-                    MediaItem.library_id == library_id,
-                    ~MediaItem.files.any(),
+            if library_type == "movie":
+                orphan_items = await session.scalars(
+                    select(MediaItem).where(
+                        MediaItem.library_id == library_id,
+                        ~MediaItem.files.any(),
+                    )
                 )
-            )
-            for item in orphan_items:
-                await session.delete(item)
+                for item in orphan_items:
+                    await session.delete(item)
+            else:
+                orphan_eps = list(
+                    await session.scalars(
+                        select(Episode)
+                        .join(MediaItem, MediaItem.id == Episode.item_id)
+                        .where(
+                            MediaItem.library_id == library_id,
+                            Episode.file_id.is_(None),
+                            ~MediaItem.files.any(),
+                        )
+                    )
+                )
+                for ep in orphan_eps:
+                    orphan_ep_item = await session.get(MediaItem, ep.item_id)
+                    if orphan_ep_item is not None:
+                        await session.delete(orphan_ep_item)
+                await session.flush()
+
+                orphan_seasons = list(
+                    await session.scalars(
+                        select(Season)
+                        .join(MediaItem, MediaItem.id == Season.item_id)
+                        .where(
+                            MediaItem.library_id == library_id,
+                            ~Season.episodes.any(),
+                        )
+                    )
+                )
+                for season in orphan_seasons:
+                    orphan_season_item = await session.get(MediaItem, season.item_id)
+                    if orphan_season_item is not None:
+                        await session.delete(orphan_season_item)
+                await session.flush()
+
+                orphan_series = list(
+                    await session.scalars(
+                        select(Series)
+                        .join(MediaItem, MediaItem.id == Series.item_id)
+                        .where(
+                            MediaItem.library_id == library_id,
+                            ~Series.episodes.any(),
+                        )
+                    )
+                )
+                for s in orphan_series:
+                    orphan_series_item = await session.get(MediaItem, s.item_id)
+                    if orphan_series_item is not None:
+                        await session.delete(orphan_series_item)
 
             await session.commit()
 

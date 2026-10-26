@@ -280,7 +280,7 @@ class Series(Base):
     first_air_date: Mapped[str | None] = mapped_column(String(10), default=None)
     network: Mapped[str | None] = mapped_column(String(128), default=None)
 
-    item: Mapped["MediaItem"] = relationship(back_populates="series")
+    item: Mapped["MediaItem"] = relationship(back_populates="series", lazy="selectin")
     seasons: Mapped[list["Season"]] = relationship(
         back_populates="series", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -306,8 +306,8 @@ class Season(Base):
     season_number: Mapped[int] = mapped_column(Integer, index=True)
     air_date: Mapped[str | None] = mapped_column(String(10), default=None)
 
-    item: Mapped["MediaItem"] = relationship(back_populates="season")
-    series: Mapped["Series"] = relationship(back_populates="seasons")
+    item: Mapped["MediaItem"] = relationship(back_populates="season", lazy="selectin")
+    series: Mapped["Series"] = relationship(back_populates="seasons", lazy="selectin")
     episodes: Mapped[list["Episode"]] = relationship(
         back_populates="season", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -338,9 +338,9 @@ class Episode(Base):
         ForeignKey("media_files.id", ondelete="SET NULL"), index=True, default=None
     )
 
-    item: Mapped["MediaItem"] = relationship(back_populates="episode")
-    series: Mapped["Series"] = relationship(back_populates="episodes")
-    season: Mapped["Season | None"] = relationship(back_populates="episodes")
+    item: Mapped["MediaItem"] = relationship(back_populates="episode", lazy="selectin")
+    series: Mapped["Series"] = relationship(back_populates="episodes", lazy="selectin")
+    season: Mapped["Season | None"] = relationship(back_populates="episodes", lazy="selectin")
     file: Mapped["MediaFile | None"] = relationship(
         foreign_keys=[file_id], back_populates="episodes", lazy="selectin"
     )

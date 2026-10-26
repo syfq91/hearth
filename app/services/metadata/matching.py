@@ -23,6 +23,7 @@ from app.core.config import Settings
 from app.core.ids import new_id
 from app.db.base import utcnow
 from app.db.models import (
+    Episode,
     Genre,
     ItemGenre,
     ItemPerson,
@@ -30,9 +31,11 @@ from app.db.models import (
     MediaItem,
     Movie,
     Person,
+    Season,
 )
 from app.services.media.titles import normalize_title, sort_title
 from app.services.metadata.base import (
+    EpisodeMetadata,
     MetadataProvider,
     MovieMetadata,
     PersonCredit,
@@ -89,6 +92,7 @@ class _ItemSnapshot:
     match_state: str
     file_paths: tuple[str, ...]
     duration_seconds: float | None
+    type: str = "movie"
 
 
 def _year_score(left: int | None, right: int | None) -> float:
@@ -192,10 +196,13 @@ class MetadataMatcher:
         query = (
             select(MediaItem.id)
             .where(
-                MediaItem.type == "movie",
+                MediaItem.type.in_(("movie", "series")),
                 MediaItem.match_state.in_(("pending", "unmatched")),
                 or_(MediaItem.next_match_at.is_(None), MediaItem.next_match_at <= now),
-                MediaItem.files.any(MediaFile.missing_since.is_(None)),
+                or_(
+                    MediaItem.type == "series",
+                    MediaItem.files.any(MediaFile.missing_since.is_(None)),
+                ),
             )
             .order_by(MediaItem.added_at, MediaItem.id)
             .limit(limit)
@@ -234,6 +241,9 @@ class MetadataMatcher:
             return MatchResult(item_id=item_id, state="pending", error="Item not found")
         if snapshot.match_state == "matched" and not force:
             return MatchResult(item_id=item_id, state="matched")
+
+        if snapshot.type == "series":
+            return await self._match_series(snapshot)
 
         local_error: str | None = None
         if self.local_provider is not None:
@@ -293,6 +303,9 @@ class MetadataMatcher:
         snapshot = await self._load_snapshot(item_id)
         if snapshot is None:
             return MatchResult(item_id=item_id, state="pending", error="Item not found")
+
+        if snapshot.type == "series":
+            return await self._apply_series_match(snapshot, provider_name, provider_id, score=1.0)
 
         provider = next(
             (candidate for candidate in self.providers if candidate.name == provider_name),
@@ -357,6 +370,7 @@ class MetadataMatcher:
                 match_state=item.match_state,
                 file_paths=tuple(file.path for file in active),
                 duration_seconds=max(durations) if durations else None,
+                type=item.type,
             )
 
     async def _local_details(self, snapshot: _ItemSnapshot) -> MovieMetadata | None:
@@ -505,6 +519,180 @@ class MetadataMatcher:
                 "score": score,
             },
         )
+        return MatchResult(
+            item_id=snapshot.id,
+            state="matched",
+            provider=provider_name,
+            provider_id=provider_id,
+            score=score,
+            images=images_stored,
+        )
+
+    async def _match_series(self, snapshot: _ItemSnapshot) -> MatchResult:
+        provider = self._tmdb or next(
+            (p for p in self.remote_providers if hasattr(p, "search_tv")), None
+        )
+        if provider is None:
+            return await self._save_failure(snapshot.id, "No TV provider available")
+
+        self._provider_calls += 1
+        try:
+            candidates = await provider.search_tv(snapshot.title, year=snapshot.year)
+        except (ProviderUnavailable, ProviderError) as exc:
+            return await self._save_failure(snapshot.id, str(exc))
+
+        if not candidates:
+            return await self._save_unmatched(snapshot.id, "No candidates returned by provider")
+
+        scored: list[tuple[float, SearchResult]] = []
+        for candidate in candidates:
+            score = score_candidate(snapshot.title, snapshot.year, candidate.title, candidate.year)
+            scored.append((score, candidate))
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+
+        best_score, best_candidate = scored[0]
+        if best_score < self.settings.metadata_match_threshold:
+            threshold = self.settings.metadata_match_threshold
+            return await self._save_unmatched(
+                snapshot.id,
+                f"Best candidate {best_candidate.title!r} scored {best_score:.2f} "
+                f"(threshold {threshold:.2f})",
+            )
+
+        return await self._apply_series_match(
+            snapshot, provider.name, best_candidate.provider_id, score=best_score
+        )
+
+    async def _apply_series_match(
+        self,
+        snapshot: _ItemSnapshot,
+        provider_name: str,
+        provider_id: str,
+        score: float,
+    ) -> MatchResult:
+        provider = next(
+            (candidate for candidate in self.providers if candidate.name == provider_name),
+            None,
+        )
+        if provider is None:
+            raise ProviderUnavailable(f"Provider {provider_name!r} is not configured")
+
+        self._provider_calls += 1
+        series_meta = await provider.fetch_tv_details(provider_id)
+        if series_meta is None:
+            raise ProviderError(f"Provider {provider_name!r} has no series {provider_id!r}")
+
+        images = list(series_meta.images)
+        if not images:
+            self._provider_calls += 1
+            try:
+                images = await provider.fetch_tv_images(provider_id)
+            except ProviderError:
+                images = []
+
+        now = self.clock()
+        async with self.sessionmaker() as session:
+            item = await session.get(MediaItem, snapshot.id)
+            if item is None:
+                return MatchResult(item_id=snapshot.id, state="pending", error="Item not found")
+
+            item.title = series_meta.title
+            item.sort_title = sort_title(series_meta.title)
+            item.year = series_meta.year
+            item.overview = series_meta.overview
+            item.rating = series_meta.rating
+            item.provider_ids = dict(series_meta.provider_ids)
+            item.match_state = "matched"
+            item.matched_at = now
+            item.next_match_at = None
+            item.match_error = None
+            if item.series is not None:
+                item.series.original_title = series_meta.original_title
+                item.series.first_air_date = series_meta.first_air_date
+                item.series.status = series_meta.status
+                item.series.network = series_meta.network
+
+            await self._apply_genres(session, item.id, series_meta.genres)
+            await self._apply_credits(session, item.id, series_meta.credits)
+
+            # Match seasons and episodes
+            seasons = list(
+                await session.scalars(select(Season).where(Season.series_id == snapshot.id))
+            )
+            for season in seasons:
+                self._provider_calls += 1
+                try:
+                    season_meta = await provider.fetch_tv_season(provider_id, season.season_number)
+                except ProviderError:
+                    season_meta = None
+
+                sea_item = await session.get(MediaItem, season.item_id)
+                if season_meta is not None:
+                    if sea_item:
+                        sea_item.title = season_meta.title or f"Season {season.season_number}"
+                        sea_item.overview = season_meta.overview
+                        sea_item.match_state = "matched"
+                        sea_item.matched_at = now
+                        if season_meta.images:
+                            await self._store_images(sea_item.id, provider_name, season_meta.images)
+
+                    tmdb_by_num = {
+                        ep.episode_number: ep
+                        for ep in season_meta.episodes
+                        if ep.episode_number is not None
+                    }
+                    tmdb_by_date = {ep.air_date: ep for ep in season_meta.episodes if ep.air_date}
+
+                    episodes = list(
+                        await session.scalars(
+                            select(Episode).where(Episode.season_id == season.item_id)
+                        )
+                    )
+                    for ep in episodes:
+                        ep_meta: EpisodeMetadata | None = None
+                        if ep.episode_number is not None and ep.episode_number in tmdb_by_num:
+                            ep_meta = tmdb_by_num[ep.episode_number]
+                        elif ep.air_date and ep.air_date in tmdb_by_date:
+                            ep_meta = tmdb_by_date[ep.air_date]
+                            ep.episode_number = ep_meta.episode_number
+
+                        ep_item = await session.get(MediaItem, ep.item_id)
+                        if ep_item is not None:
+                            if ep_meta is not None:
+                                ep_item.title = ep_meta.title
+                                ep_item.sort_title = sort_title(ep_meta.title)
+                                ep_item.overview = ep_meta.overview
+                                ep_item.runtime_seconds = ep_meta.runtime_seconds
+                                ep_item.rating = ep_meta.rating
+                                ep_item.provider_ids = dict(ep_meta.provider_ids)
+                                ep_item.match_state = "matched"
+                                ep_item.matched_at = now
+                                ep_item.match_error = None
+                                ep.air_date = ep_meta.air_date
+                                if ep_meta.credits:
+                                    await self._apply_credits(session, ep_item.id, ep_meta.credits)
+                                if ep_meta.images:
+                                    await self._store_images(
+                                        ep_item.id, provider_name, ep_meta.images
+                                    )
+                            else:
+                                ep_item.match_state = "unmatched"
+                else:
+                    if sea_item:
+                        sea_item.match_state = "unmatched"
+                    episodes = list(
+                        await session.scalars(
+                            select(Episode).where(Episode.season_id == season.item_id)
+                        )
+                    )
+                    for ep in episodes:
+                        ep_item = await session.get(MediaItem, ep.item_id)
+                        if ep_item:
+                            ep_item.match_state = "unmatched"
+
+            await session.commit()
+
+        images_stored = await self._store_images(snapshot.id, provider_name, images)
         return MatchResult(
             item_id=snapshot.id,
             state="matched",
