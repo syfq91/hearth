@@ -8,6 +8,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.api.v1.items import (
     ImageResponse,
@@ -22,6 +23,7 @@ from app.core.ids import new_id
 from app.db.base import utcnow
 from app.db.models import (
     Album,
+    Artist,
     Genre,
     LibraryAccess,
     MediaFile,
@@ -310,6 +312,11 @@ async def list_artists(
     else:
         col = MediaItem.added_at.asc() if order == "asc" else MediaItem.added_at.desc()
 
+    base = base.options(
+        joinedload(MediaItem.artist).lazyload(Artist.albums),
+        joinedload(MediaItem.artist).lazyload(Artist.tracks),
+        selectinload(MediaItem.images),
+    )
     artist_items = list(
         await session.scalars(base.order_by(col, MediaItem.id).offset(offset).limit(limit))
     )
@@ -499,6 +506,13 @@ async def list_albums(
     else:
         col = MediaItem.added_at.asc() if order == "asc" else MediaItem.added_at.desc()
 
+    base = base.options(
+        joinedload(MediaItem.album).joinedload(Album.artist).lazyload(Artist.albums),
+        joinedload(MediaItem.album).joinedload(Album.artist).lazyload(Artist.tracks),
+        joinedload(MediaItem.album).lazyload(Album.tracks),
+        selectinload(MediaItem.genres),
+        selectinload(MediaItem.images),
+    )
     alb_items = list(
         await session.scalars(base.order_by(col, MediaItem.id).offset(offset).limit(limit))
     )
@@ -644,6 +658,10 @@ async def list_tracks(
             base = base.where(MediaItem.title.ilike(f"%{clean_q}%"))
 
     total = await session.scalar(select(func.count()).select_from(base.subquery())) or 0
+    base = base.options(
+        joinedload(MediaItem.track).joinedload(Track.album).joinedload(Album.item),
+        joinedload(MediaItem.track).joinedload(Track.artist).joinedload(Artist.item),
+    )
     track_items = list(
         await session.scalars(
             base.order_by(Track.album_id, Track.disc_number, Track.track_number, MediaItem.id)

@@ -333,16 +333,58 @@
 | --- | --- | --- | --- |
 | 5.1 | Models: `Artist`, `Album`, `Track`, plus `Playlist` and `PlaylistItem` | Complete | `aec68af` |
 | 5.2 | Tag reading with `mutagen` (ID3, Vorbis, MP4, APE) and embedded art | Complete | `17c94c2` |
-| 5.3 | Metadata enrichment (MusicBrainz, Cover Art Archive, local `artist.jpg`) | Complete | `feat: add musicbrainz and cover art archive metadata enrichment` |
-| 5.4 | Native API: artists, albums, tracks, search, random, playlists CRUD | Complete | `feat: add native music and playlist api endpoints` |
-| 5.5 | Audio streaming and playback: range requests, durations, content-length | Complete | `feat: direct audio streaming with gapless-friendly range support` |
-| 5.6 | Play tracking: play counts, last played, favorites, ratings, ListenBrainz | Complete | `feat: music play tracking and listenbrainz scrobbling` |
+| 5.3 | Metadata enrichment (MusicBrainz, Cover Art Archive, local `artist.jpg`) | Complete | `7dc9fef` |
+| 5.4 | Native API: artists, albums, tracks, search, random, playlists CRUD | Complete | `ba827a5` |
+| 5.5 | Audio streaming and playback: range requests, durations, content-length | Complete | `0318f46` |
+| 5.6 | Play tracking: play counts, last played, favorites, ratings, ListenBrainz | Complete | `703649d` |
 
 ### Phase 5 Acceptance Checklist
 
-- [ ] Native music API endpoints (browsing, search, playlist management, audio streaming, play tracking) pass automated tests against a fixture library.
-- [ ] Audio streaming supports range requests and returns accurate durations and content lengths.
-- [ ] A 5,000-track generated library scans in under 2 minutes and album list queries return in under 200 ms.
+- [x] Native music API endpoints (browsing, search, playlist management, audio streaming, play tracking) pass automated tests against a fixture library.
+  - `tests/integration/test_phase5_acceptance.py::test_criterion1_native_music_api_against_fixture_library`
+    scans a realistic fixture library (FLAC, MP3, Ogg, M4A), verifies artist, album, track listings,
+    full text and field search, random track selection, recently added/most played queries, playlist CRUD
+    with position reordering, and play tracking (scrobbles, play counts, favorites, 1–5 star ratings).
+- [x] Audio streaming supports range requests and returns accurate durations and content lengths.
+  - `tests/integration/test_phase5_acceptance.py::test_criterion2_audio_streaming_range_requests_durations_content_length`
+    verifies standard 200 GET, single byte ranges (e.g. `bytes=0-1023` returning 206 Partial Content
+    with exact Content-Range, Content-Length, and Accept-Ranges: bytes), open-ended ranges (`bytes=1000-`),
+    tail ranges (`bytes=-500`), out-of-range requests returning 416 Range Not Satisfiable with Content-Range `bytes */total`,
+    conditional If-None-Match returning 304 Not Modified, and duration and file size matching item metadata.
+- [x] A 5,000-track generated library scans in under 2 minutes and album list queries return in under 200 ms.
+  - `tests/integration/test_phase5_acceptance.py::test_criterion3_benchmark_5000_tracks_scan_under_2_minutes_and_album_query_under_200ms`
+    generates 5,000 audio files (50 artists x 10 albums x 10 tracks), scans the library in ~3.5 seconds
+    (well under the 120-second budget), and validates that `/api/v1/albums?limit=50` queries execute in
+    ~4 to 12 ms (average ~8 ms, peak well below the 200 ms budget).
+
+### Phase 5 Quality Gates
+
+- `uv run ruff check`: clean; `uv run ruff format --check`: clean (148 files).
+- `uv run mypy app`: no issues in 81 source files.
+- `uv run pytest`: **421 passed, 9 skipped** (ffprobe tests skipped when system ffprobe binary is absent on host).
+- `uv run python scripts/export_openapi.py --check`: up to date (41 API paths).
+- Acceptance tests: `uv run pytest tests/integration/test_phase5_acceptance.py` -> 3 passed.
+
+### Deliverables
+
+- In-process metadata tag extraction via Mutagen (ID3, Vorbis Comments, MP4 iTunes atoms, APE) bypassing ffprobe for audio files.
+- Embedded cover art extraction saved to Hearth image storage with auto-derived SHA-256 deduplication and blurhash.
+- Rate-limited MusicBrainz client (token-bucket capped at 1 req/sec) and Cover Art Archive integration.
+- Local image discovery (`artist.jpg`, `cover.jpg`, `folder.jpg`) honoring directory structure.
+- Native music API endpoints:
+  - `/api/v1/artists`, `/api/v1/artists/{id}`, `/api/v1/artists/{id}/albums`
+  - `/api/v1/albums`, `/api/v1/albums/{id}`
+  - `/api/v1/tracks`, `/api/v1/tracks/{id}`
+  - `/api/v1/music/search`, `/api/v1/music/random`, `/api/v1/music/recently-added`, `/api/v1/music/most-played`
+  - `/api/v1/playlists` CRUD with two-phase safe item reordering.
+- Audio streaming endpoints (`/stream/audio/{track_id}` and `/stream/{file_id}`) with RFC 9110 HTTP Range support, Content-Range, Content-Length, ETag caching, and bearer or media-token query authentication.
+- Play tracking: playback progress and scrobbling at >= 50% or 4 minutes of track playback, user favorites, 1–5 star ratings, and background scrobbling to ListenBrainz with encrypted user token storage.
+
+### Known Phase 5 Limitations (intentional)
+
+- Subsonic API compatibility layer is deferred to Phase 6.
+- Direct FLAC/MP3/AAC/Opus streaming is native; on-the-fly audio transcoding is scheduled for Phase 7 transcoding pipeline.
+- Audio lyrics reading (USLT/SYLT) is planned for future client UX enhancements.
 
 
 ---
