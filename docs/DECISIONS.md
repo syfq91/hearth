@@ -301,3 +301,12 @@
 - **Decision:** Model `Series`, `Season`, and `Episode` as type-specific extensions attached 1-to-1 to generic `MediaItem` rows (`type in ('series', 'season', 'episode')`). `Series` owns `seasons` and `episodes`. `Season` references `series.item_id` with a uniqueness constraint on `(series_id, season_number)`. `Episode` references `series.item_id`, optional `season.item_id` (allowing unmatched/special episodes without a defined season), and links to `media_files.id` via nullable `file_id` (foreign key with `ondelete='SET NULL'`). Single-episode files store `media_files.item_id = episode.item_id`; multi-episode files store `media_files.item_id = first_episode.item_id` (ensuring library containment and streaming continue to work), while all constituent episode rows reference the shared file via `file_id`.
 - **Alternatives Considered:** Separate standalone tables not inheriting from `MediaItem` (loses unified watch progress, FTS indexing, and library access rules), a dedicated many-to-many join table for episode files (unnecessary complexity since direct foreign key on episode covers multi-episode files and `media_files.item_id` covers multiple versions).
 
+## ADR 038: TV Episode Parsing Rules and Folder Hints
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** TV episodes follow varied release naming conventions: standard `S01E01`, multi-episode `S01E01E02` / `1x01-02`, specials `S00E01` / `SP01` / `Specials/`, date-based daily shows `YYYY-MM-DD` / `YYYY.MM.DD`, and anime absolute numbering.
+- **Decision:** `parse_episode_path` pairs `guessit` with targeted regexes and directory hierarchy hints. When an episode resides inside a series directory, the series directory establishes `series_title` and `series_year`. If guessit misassigns an episode title as the show title (e.g. `Fringe/1x04 - The Arrival.mkv`), the folder sets `series_title` and the filename token becomes `episode_title`. Multi-episode patterns yield sorted tuples of episode numbers. Daily shows extract ISO `YYYY-MM-DD` dates and clear year-as-season confusion. Specials detect season 0, `Specials` folders, and `SP(\d+)` markers. Anime releases without season indicators preserve `absolute_number`.
+- **Alternatives Considered:** Relying on guessit alone without folder context (fails on generic filenames like `S01E01.mkv` and confuses episode titles with show titles), separate parsers per format (complex routing before reading filename tokens).
+
+
