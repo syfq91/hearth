@@ -288,7 +288,7 @@
 | --- | --- | --- | --- |
 | 4.1 | Models: `Series`, `Season`, `Episode` linked to `MediaFile` | Complete | `feat: add series, season and episode models with migration` |
 | 4.2 | Parsing with `guessit` (multi-episode, date-based, specials, anime) | Complete | `feat: parse tv show and episode paths with guessit` |
-| 4.3 | `TMDBProvider` TV support (series, seasons, episodes, stills, cast) | In Progress | |
+| 4.3 | `TMDBProvider` TV support (series, seasons, episodes, stills, cast) | Complete | `feat: add tmdb tv metadata support` |
 | 4.4 | Scanner changes (group files by series, match series, then episodes) | Not Started | |
 | 4.5 | API (series detail, seasons list, episodes list, next-up, mark watched) | Not Started | |
 | 4.6 | Playback direct play verification for TV shows | Not Started | |

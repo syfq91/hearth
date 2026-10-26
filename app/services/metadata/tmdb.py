@@ -12,6 +12,7 @@ from app.core.config import Settings
 from app.db.base import utcnow
 from app.db.models import ProviderCache
 from app.services.metadata.base import (
+    EpisodeMetadata,
     MetadataProvider,
     MovieMetadata,
     PersonCredit,
@@ -19,6 +20,8 @@ from app.services.metadata.base import (
     ProviderImage,
     ProviderUnavailable,
     SearchResult,
+    SeasonMetadata,
+    SeriesMetadata,
 )
 
 logger = logging.getLogger("hearth.metadata.tmdb")
@@ -187,6 +190,376 @@ class TMDBProvider(MetadataProvider):
             f"/movie/{provider_id}/images",
             {"include_image_language": "en,null"},
             cache_key=f"images:{provider_id}",
+        )
+
+        images: list[ProviderImage] = []
+        for kind, key, size, limit in (
+            ("poster", "posters", "w780", 4),
+            ("backdrop", "backdrops", "w1280", 4),
+        ):
+            items = [
+                item
+                for item in payload.get(key) or []
+                if isinstance(item, dict) and item.get("file_path")
+            ]
+            items.sort(
+                key=lambda item: (
+                    _as_float(item.get("vote_average")) or 0.0,
+                    _as_int(item.get("vote_count")) or 0,
+                ),
+                reverse=True,
+            )
+            for index, item in enumerate(items[:limit]):
+                images.append(
+                    ProviderImage(
+                        kind=kind,
+                        source_url=self._image_url(item.get("file_path"), size),
+                        width=_as_int(item.get("width")),
+                        height=_as_int(item.get("height")),
+                        is_primary=index == 0,
+                        language=item.get("iso_639_1"),
+                    )
+                )
+        return images
+
+    async def search_tv(self, query: str, year: int | None = None) -> list[SearchResult]:
+        params: dict[str, str | int] = {
+            "query": query,
+            "include_adult": "false",
+            "language": "en-US",
+        }
+        if year is not None:
+            params["first_air_date_year"] = year
+        payload = await self._get_json(
+            "/search/tv",
+            params,
+            cache_key=f"search_tv:{year or ''}:{query.casefold()[:180]}",
+        )
+
+        results: list[SearchResult] = []
+        for item in payload.get("results") or []:
+            if not isinstance(item, dict):
+                continue
+            provider_id = item.get("id")
+            title = item.get("name") or item.get("original_name")
+            if provider_id is None or not title:
+                continue
+            results.append(
+                SearchResult(
+                    provider=self.name,
+                    provider_id=str(provider_id),
+                    title=str(title),
+                    year=_year_from_date(item.get("first_air_date")),
+                    overview=item.get("overview"),
+                    poster_url=self._image_url(item.get("poster_path"), "w342"),
+                    backdrop_url=self._image_url(item.get("backdrop_path"), "w780"),
+                    popularity=_as_float(item.get("popularity")) or 0.0,
+                )
+            )
+        return results
+
+    async def fetch_tv_details(self, series_id: str) -> SeriesMetadata | None:
+        payload = await self._get_json(
+            f"/tv/{series_id}",
+            {"language": "en-US", "append_to_response": "credits,external_ids"},
+            cache_key=f"tv:{series_id}",
+        )
+        if not payload:
+            return None
+
+        title = payload.get("name") or payload.get("original_name")
+        if not title:
+            return None
+
+        genres = tuple(
+            str(genre["name"])
+            for genre in payload.get("genres") or []
+            if isinstance(genre, dict) and genre.get("name")
+        )
+        credits: list[PersonCredit] = []
+        credits_payload = payload.get("credits") or {}
+        for ordering, cast in enumerate(credits_payload.get("cast") or []):
+            if not isinstance(cast, dict) or not cast.get("name"):
+                continue
+            credits.append(
+                PersonCredit(
+                    name=str(cast["name"]),
+                    role="cast",
+                    character=cast.get("character") or None,
+                    ordering=ordering,
+                    provider_id=str(cast["id"]) if cast.get("id") is not None else None,
+                )
+            )
+        for crew in credits_payload.get("crew") or []:
+            if not isinstance(crew, dict) or not crew.get("name"):
+                continue
+            job = (crew.get("job") or "").casefold()
+            if job in {"director", "writer", "screenplay", "story"}:
+                role = "director" if job == "director" else "writer"
+                credits.append(
+                    PersonCredit(
+                        name=str(crew["name"]),
+                        role=role,
+                        ordering=len(credits),
+                        provider_id=str(crew["id"]) if crew.get("id") is not None else None,
+                    )
+                )
+        for creator in payload.get("created_by") or []:
+            if isinstance(creator, dict) and creator.get("name"):
+                credits.append(
+                    PersonCredit(
+                        name=str(creator["name"]),
+                        role="creator",
+                        ordering=len(credits),
+                        provider_id=str(creator["id"]) if creator.get("id") is not None else None,
+                    )
+                )
+
+        provider_ids = {"tmdb": str(payload.get("id") or series_id)}
+        external_ids = payload.get("external_ids") or {}
+        if external_ids.get("imdb_id"):
+            provider_ids["imdb"] = str(external_ids["imdb_id"])
+        if external_ids.get("tvdb_id"):
+            provider_ids["tvdb"] = str(external_ids["tvdb_id"])
+
+        rating = _as_float(payload.get("vote_average"))
+        if rating is not None and rating <= 0:
+            rating = None
+        first_air_date = payload.get("first_air_date") or None
+
+        network = None
+        networks = payload.get("networks") or []
+        if networks and isinstance(networks[0], dict):
+            network = networks[0].get("name")
+
+        seasons: list[SeasonMetadata] = []
+        for s in payload.get("seasons") or []:
+            if not isinstance(s, dict):
+                continue
+            s_num = _as_int(s.get("season_number"))
+            if s_num is None:
+                continue
+            seasons.append(
+                SeasonMetadata(
+                    provider=self.name,
+                    provider_id=str(s.get("id")) if s.get("id") is not None else None,
+                    series_provider_id=str(payload.get("id") or series_id),
+                    season_number=s_num,
+                    title=s.get("name") or None,
+                    overview=s.get("overview") or None,
+                    air_date=s.get("air_date") or None,
+                    poster_url=self._image_url(s.get("poster_path"), "w780"),
+                    episode_count=_as_int(s.get("episode_count")),
+                )
+            )
+
+        return SeriesMetadata(
+            provider=self.name,
+            provider_id=str(payload.get("id") or series_id),
+            title=str(title),
+            year=_year_from_date(first_air_date),
+            original_title=payload.get("original_name") or None,
+            first_air_date=first_air_date,
+            overview=payload.get("overview") or None,
+            status=payload.get("status") or None,
+            network=network,
+            rating=rating,
+            genres=genres,
+            credits=tuple(credits),
+            provider_ids=provider_ids,
+            seasons=tuple(seasons),
+            raw={"tmdb": payload},
+        )
+
+    async def fetch_tv_season(self, series_id: str, season_number: int) -> SeasonMetadata | None:
+        payload = await self._get_json(
+            f"/tv/{series_id}/season/{season_number}",
+            {"language": "en-US", "append_to_response": "credits,external_ids"},
+            cache_key=f"tv:{series_id}:season:{season_number}",
+        )
+        if not payload:
+            return None
+
+        poster_url = self._image_url(payload.get("poster_path"), "w780")
+        season_images: list[ProviderImage] = []
+        if poster_url:
+            season_images.append(
+                ProviderImage(
+                    kind="poster",
+                    source_url=poster_url,
+                    is_primary=True,
+                )
+            )
+
+        episodes: list[EpisodeMetadata] = []
+        for ep in payload.get("episodes") or []:
+            if not isinstance(ep, dict):
+                continue
+            ep_num = _as_int(ep.get("episode_number"))
+            if ep_num is None:
+                continue
+            ep_id = str(ep.get("id") or "")
+            runtime_minutes = _as_int(ep.get("runtime"))
+            rating = _as_float(ep.get("vote_average"))
+            if rating is not None and rating <= 0:
+                rating = None
+            still_url = self._image_url(ep.get("still_path"), "w780")
+            ep_images: list[ProviderImage] = []
+            if still_url:
+                ep_images.append(
+                    ProviderImage(
+                        kind="still",
+                        source_url=still_url,
+                        is_primary=True,
+                    )
+                )
+
+            ep_credits: list[PersonCredit] = []
+            for ordering, cast in enumerate(ep.get("guest_stars") or []):
+                if not isinstance(cast, dict) or not cast.get("name"):
+                    continue
+                ep_credits.append(
+                    PersonCredit(
+                        name=str(cast["name"]),
+                        role="cast",
+                        character=cast.get("character") or None,
+                        ordering=ordering,
+                        provider_id=str(cast["id"]) if cast.get("id") is not None else None,
+                    )
+                )
+            for crew in ep.get("crew") or []:
+                if not isinstance(crew, dict) or not crew.get("name"):
+                    continue
+                job = (crew.get("job") or "").casefold()
+                if job in {"director", "writer", "screenplay", "story"}:
+                    role = "director" if job == "director" else "writer"
+                    ep_credits.append(
+                        PersonCredit(
+                            name=str(crew["name"]),
+                            role=role,
+                            ordering=len(ep_credits),
+                            provider_id=str(crew["id"]) if crew.get("id") is not None else None,
+                        )
+                    )
+
+            episodes.append(
+                EpisodeMetadata(
+                    provider=self.name,
+                    provider_id=ep_id,
+                    series_provider_id=str(series_id),
+                    season_number=season_number,
+                    episode_number=ep_num,
+                    title=str(ep.get("name") or f"Episode {ep_num}"),
+                    overview=ep.get("overview") or None,
+                    air_date=ep.get("air_date") or None,
+                    runtime_seconds=runtime_minutes * 60 if runtime_minutes else None,
+                    rating=rating,
+                    still_url=still_url,
+                    credits=tuple(ep_credits),
+                    provider_ids={"tmdb": ep_id},
+                    images=tuple(ep_images),
+                    raw={"tmdb": ep},
+                )
+            )
+
+        return SeasonMetadata(
+            provider=self.name,
+            provider_id=str(payload.get("id")) if payload.get("id") is not None else None,
+            series_provider_id=str(series_id),
+            season_number=season_number,
+            title=payload.get("name") or f"Season {season_number}",
+            overview=payload.get("overview") or None,
+            air_date=payload.get("air_date") or None,
+            poster_url=poster_url,
+            episode_count=len(episodes),
+            episodes=tuple(episodes),
+            images=tuple(season_images),
+            raw={"tmdb": payload},
+        )
+
+    async def fetch_tv_episode(
+        self, series_id: str, season_number: int, episode_number: int
+    ) -> EpisodeMetadata | None:
+        payload = await self._get_json(
+            f"/tv/{series_id}/season/{season_number}/episode/{episode_number}",
+            {"language": "en-US", "append_to_response": "credits,external_ids"},
+            cache_key=f"tv:{series_id}:season:{season_number}:episode:{episode_number}",
+        )
+        if not payload:
+            return None
+
+        ep_id = str(payload.get("id") or "")
+        runtime_minutes = _as_int(payload.get("runtime"))
+        rating = _as_float(payload.get("vote_average"))
+        if rating is not None and rating <= 0:
+            rating = None
+        still_url = self._image_url(payload.get("still_path"), "w780")
+        ep_images: list[ProviderImage] = []
+        if still_url:
+            ep_images.append(
+                ProviderImage(
+                    kind="still",
+                    source_url=still_url,
+                    is_primary=True,
+                )
+            )
+
+        ep_credits: list[PersonCredit] = []
+        for ordering, cast in enumerate(payload.get("guest_stars") or []):
+            if not isinstance(cast, dict) or not cast.get("name"):
+                continue
+            ep_credits.append(
+                PersonCredit(
+                    name=str(cast["name"]),
+                    role="cast",
+                    character=cast.get("character") or None,
+                    ordering=ordering,
+                    provider_id=str(cast["id"]) if cast.get("id") is not None else None,
+                )
+            )
+        for crew in payload.get("crew") or []:
+            if not isinstance(crew, dict) or not crew.get("name"):
+                continue
+            job = (crew.get("job") or "").casefold()
+            if job in {"director", "writer", "screenplay", "story"}:
+                role = "director" if job == "director" else "writer"
+                ep_credits.append(
+                    PersonCredit(
+                        name=str(crew["name"]),
+                        role=role,
+                        ordering=len(ep_credits),
+                        provider_id=str(crew["id"]) if crew.get("id") is not None else None,
+                    )
+                )
+
+        provider_ids = {"tmdb": ep_id}
+        external_ids = payload.get("external_ids") or {}
+        if external_ids.get("imdb_id"):
+            provider_ids["imdb"] = str(external_ids["imdb_id"])
+
+        return EpisodeMetadata(
+            provider=self.name,
+            provider_id=ep_id,
+            series_provider_id=str(series_id),
+            season_number=season_number,
+            episode_number=episode_number,
+            title=str(payload.get("name") or f"Episode {episode_number}"),
+            overview=payload.get("overview") or None,
+            air_date=payload.get("air_date") or None,
+            runtime_seconds=runtime_minutes * 60 if runtime_minutes else None,
+            rating=rating,
+            still_url=still_url,
+            credits=tuple(ep_credits),
+            provider_ids=provider_ids,
+            images=tuple(ep_images),
+            raw={"tmdb": payload},
+        )
+
+    async def fetch_tv_images(self, series_id: str) -> list[ProviderImage]:
+        payload = await self._get_json(
+            f"/tv/{series_id}/images",
+            {"include_image_language": "en,null"},
+            cache_key=f"images_tv:{series_id}",
         )
 
         images: list[ProviderImage] = []
