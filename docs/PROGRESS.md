@@ -336,7 +336,7 @@
 | 5.3 | Metadata enrichment (MusicBrainz, Cover Art Archive, local `artist.jpg`) | Complete | `feat: add musicbrainz and cover art archive metadata enrichment` |
 | 5.4 | Native API: artists, albums, tracks, search, random, playlists CRUD | Complete | `feat: add native music and playlist api endpoints` |
 | 5.5 | Audio streaming and playback: range requests, durations, content-length | Complete | `feat: direct audio streaming with gapless-friendly range support` |
-| 5.6 | Play tracking: play counts, last played, favorites, ratings, ListenBrainz | Pending | |
+| 5.6 | Play tracking: play counts, last played, favorites, ratings, ListenBrainz | Complete | `feat: music play tracking and listenbrainz scrobbling` |
 
 ### Phase 5 Acceptance Checklist
 

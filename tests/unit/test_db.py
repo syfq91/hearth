@@ -55,7 +55,7 @@ async def test_migrations_apply_and_are_idempotent(settings: Settings) -> None:
     finally:
         await engine.dispose()
 
-    assert version == "0005_music"
+    assert version == "0006_listenbrainz"
     assert settings.db_path.exists()
 
 

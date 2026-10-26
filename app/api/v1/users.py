@@ -9,7 +9,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import RequireAdmin, SettingsDep
+from app.core.deps import RequireAdmin, RequireUser, SettingsDep
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
 from app.core.passwords import hash_password, validate_password, validate_username
 from app.db.models import Library, LibraryAccess, RefreshToken, User
@@ -45,6 +45,14 @@ class PasswordReset(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
 
 
+class ListenBrainzStatus(BaseModel):
+    configured: bool
+
+
+class ListenBrainzTokenRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=255)
+
+
 class UserDetail(BaseModel):
     id: str
     username: str
@@ -56,6 +64,7 @@ class UserDetail(BaseModel):
     created_at: datetime
     updated_at: datetime
     library_ids: list[str]
+    listenbrainz_configured: bool = False
 
 
 async def _grants_by_user(session: AsyncSession, user_id: str) -> list[str]:
@@ -79,6 +88,7 @@ async def _detail(session: AsyncSession, user: User) -> UserDetail:
         created_at=user.created_at,
         updated_at=user.updated_at,
         library_ids=await _grants_by_user(session, user.id),
+        listenbrainz_configured=bool(user.listenbrainz_token),
     )
 
 
@@ -182,6 +192,38 @@ async def list_users(_actor: RequireAdmin, session: SessionDep) -> list[UserDeta
     """List all accounts."""
     users = (await session.scalars(select(User).order_by(User.username))).all()
     return [await _detail(session, user) for user in users]
+
+
+@router.get("/me/listenbrainz")
+async def get_my_listenbrainz(user: RequireUser) -> ListenBrainzStatus:
+    """Return whether the current user has configured a ListenBrainz token."""
+    return ListenBrainzStatus(configured=bool(user.listenbrainz_token))
+
+
+@router.put("/me/listenbrainz")
+async def set_my_listenbrainz(
+    body: ListenBrainzTokenRequest,
+    user: RequireUser,
+    session: SessionDep,
+) -> ListenBrainzStatus:
+    """Configure or update the current user's ListenBrainz user token."""
+    db_user = await session.get(User, user.id)
+    if db_user is not None:
+        db_user.listenbrainz_token = body.token.strip()
+        await session.commit()
+    return ListenBrainzStatus(configured=True)
+
+
+@router.delete("/me/listenbrainz", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_my_listenbrainz(
+    user: RequireUser,
+    session: SessionDep,
+) -> None:
+    """Remove the current user's ListenBrainz token."""
+    db_user = await session.get(User, user.id)
+    if db_user is not None:
+        db_user.listenbrainz_token = None
+        await session.commit()
 
 
 @router.get("/{user_id}")

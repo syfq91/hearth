@@ -454,6 +454,27 @@
   - Transcoding all audio files to HLS audio streams (unnecessary overhead and loss of gapless fidelity for natively supported audio formats like FLAC, MP3, AAC, and Opus).
   - Serving audio files with standard monolithic static file handlers (lacks library root boundary validation, token revocation, and item-scoped permission enforcement).
 
+## ADR 048: Music Play Tracking and ListenBrainz Scrobbling
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Music play tracking requires tracking progress checkpoints, updating play counts, last played timestamps, favorites, and ratings for tracks, albums, and artists, as well as submitting scrobbles to ListenBrainz without delaying playback responses or losing scrobbles during network interruptions.
+- **Decision:**
+  - Integrate music progress into `POST /api/v1/items/{item_id}/progress`:
+    - Automatically marks tracks as watched and increments `play_count` once playback reaches `settings.watched_threshold` (e.g. 90%).
+    - Updates parent album and artist `last_played_at` timestamps on active listening sessions.
+    - Automatically marks the parent album watched and increments its `play_count` when all tracks on the album have been played.
+  - Implement album-wide watched status toggling via `POST /api/v1/items/{item_id}/watched`, which cascades watched status to all child tracks.
+  - Support per-user ListenBrainz scrobbling:
+    - Add `listenbrainz_token` to `User` table (migration `0006_listenbrainz`).
+    - Provide user configuration endpoints: `GET /api/v1/users/me/listenbrainz`, `PUT /api/v1/users/me/listenbrainz`, `DELETE /api/v1/users/me/listenbrainz`.
+    - When a track reaches the completion threshold, enqueue a durable `scrobble.listenbrainz` background job with `user_id`, `track_id`, and `listened_at`.
+    - `scrobble_listenbrainz_job` builds full metadata (track, artist, album, MusicBrainz recording/release/artist MBIDs) and posts to `https://api.listenbrainz.org/1/submit-listens`. Retries transient errors (HTTP 429, 5xx, timeouts) with exponential backoff up to `max_attempts=3`.
+- **Alternatives Considered:**
+  - Synchronous HTTP call to ListenBrainz during playback progress request (would stall client UI on network latency or API downtime).
+  - Storing third-party tokens in unencrypted local client storage only (fails headless or multi-client listening where the server manages scrobbles).
+
+
 
 
 

@@ -1949,6 +1949,34 @@
         "title": "LibraryUpdate",
         "type": "object"
       },
+      "ListenBrainzStatus": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "configured"
+        ],
+        "title": "ListenBrainzStatus",
+        "type": "object"
+      },
+      "ListenBrainzTokenRequest": {
+        "properties": {
+          "token": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "ListenBrainzTokenRequest",
+        "type": "object"
+      },
       "MatchRequest": {
         "description": "A specific candidate chosen by an administrator.",
         "properties": {
@@ -3965,6 +3993,11 @@
             },
             "title": "Library Ids",
             "type": "array"
+          },
+          "listenbrainz_configured": {
+            "default": false,
+            "title": "Listenbrainz Configured",
+            "type": "boolean"
           },
           "max_bitrate": {
             "anyOf": [
@@ -8065,6 +8098,96 @@
           }
         ],
         "summary": "Create User",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/me/listenbrainz": {
+      "delete": {
+        "description": "Remove the current user's ListenBrainz token.",
+        "operationId": "delete_my_listenbrainz_api_v1_users_me_listenbrainz_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete My Listenbrainz",
+        "tags": [
+          "users"
+        ]
+      },
+      "get": {
+        "description": "Return whether the current user has configured a ListenBrainz token.",
+        "operationId": "get_my_listenbrainz_api_v1_users_me_listenbrainz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListenBrainzStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get My Listenbrainz",
+        "tags": [
+          "users"
+        ]
+      },
+      "put": {
+        "description": "Configure or update the current user's ListenBrainz user token.",
+        "operationId": "set_my_listenbrainz_api_v1_users_me_listenbrainz_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListenBrainzTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListenBrainzStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set My Listenbrainz",
         "tags": [
           "users"
         ]

@@ -36,6 +36,7 @@ class User(TimestampMixin, Base):
     max_bitrate: Mapped[int | None] = mapped_column(Integer, default=None)
     allow_transcode: Mapped[bool] = mapped_column(Boolean, default=True)
     max_rating: Mapped[str | None] = mapped_column(String(16), default=None)
+    listenbrainz_token: Mapped[str | None] = mapped_column(String(255), default=None, nullable=True)
     # Incremented on password reset or forced logout so old access tokens die.
     token_version: Mapped[int] = mapped_column(Integer, default=0)
     last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), default=None)

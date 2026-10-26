@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.items import (
@@ -30,10 +30,20 @@ from app.core.deps import (
 from app.core.errors import NotFoundError
 from app.core.tokens import create_media_token
 from app.db.base import utcnow
-from app.db.models import Episode, LibraryPath, MediaFile, MediaItem, Season, User, UserItemState
+from app.db.models import (
+    Episode,
+    LibraryPath,
+    MediaFile,
+    MediaItem,
+    Season,
+    Track,
+    User,
+    UserItemState,
+)
 from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
 from app.services.playback_state import chapters_from_streams, resolve_watch_state
+from app.services.scrobbling.listenbrainz import enqueue_scrobble
 
 router = APIRouter(tags=["playback"])
 
@@ -165,6 +175,39 @@ async def report_progress(
     if body.state is not None or decision.position_ms > 0:
         state.last_played_at = now
 
+    if (
+        item.type == "track"
+        and decision.watched
+        and not was_played
+        and settings.listenbrainz_enabled
+    ):
+        await enqueue_scrobble(session, user.id, item.id)
+
+    if item.type == "track" and item.track and item.track.album_id:
+        alb_state = await _load_state(session, user.id, item.track.album_id)
+        if body.state is not None or decision.position_ms > 0:
+            alb_state.last_played_at = now
+        if decision.watched and not was_played:
+            track_ids = list(
+                await session.scalars(
+                    select(Track.item_id).where(Track.album_id == item.track.album_id)
+                )
+            )
+            if track_ids:
+                played_count = (
+                    await session.scalar(
+                        select(func.count(UserItemState.item_id)).where(
+                            UserItemState.user_id == user.id,
+                            UserItemState.item_id.in_(track_ids),
+                            UserItemState.played.is_(True),
+                        )
+                    )
+                    or 0
+                )
+                if played_count + 1 >= len(track_ids):
+                    alb_state.played = True
+                    alb_state.play_count += 1
+
     await _persist(session, state)
     return ProgressResponse(
         **watch_state_response(state).model_dump(),
@@ -265,6 +308,17 @@ async def set_watched(
                 s_state.play_count = max(s_state.play_count, 1)
             else:
                 s_state.position_ms = 0
+    elif item.type == "album":
+        tracks = list(await session.scalars(select(Track).where(Track.album_id == item.id)))
+        for tr in tracks:
+            tr_state = await _load_state(session, user.id, tr.item_id)
+            tr_state.played = body.watched
+            if body.watched:
+                tr_state.position_ms = 0
+                tr_state.last_played_at = now
+                tr_state.play_count = max(tr_state.play_count, 1)
+            else:
+                tr_state.position_ms = 0
 
     state = await _load_state(session, user.id, item.id)
     state.played = body.watched

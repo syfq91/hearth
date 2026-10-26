@@ -5,8 +5,13 @@ from typing import Any
 
 from app.services.jobs.types import JobCancelled, JobContext, JobHandler, JobSpec
 from app.services.scanner.jobs import SCAN_JOB_TYPE, scan_library_job
+from app.services.scrobbling.listenbrainz import (
+    LISTENBRAINZ_SCROBBLE_JOB_TYPE,
+    scrobble_listenbrainz_job,
+)
 
 __all__ = [
+    "LISTENBRAINZ_SCROBBLE_JOB_TYPE",
     "REGISTRY",
     "SCAN_JOB_TYPE",
     "JobCancelled",
@@ -36,6 +41,7 @@ async def noop(context: JobContext) -> dict[str, Any]:
 REGISTRY: dict[str, JobSpec] = {
     "noop": JobSpec(handler=noop, concurrency=2),
     SCAN_JOB_TYPE: JobSpec(handler=scan_library_job, concurrency=1),
+    LISTENBRAINZ_SCROBBLE_JOB_TYPE: JobSpec(handler=scrobble_listenbrainz_job, concurrency=2),
 }
 
 

@@ -103,6 +103,8 @@ class Settings(BaseSettings):
     )
     musicbrainz_cache_ttl_hours: float = 168.0
     cover_art_archive_base_url: str = "https://coverartarchive.org"
+    listenbrainz_enabled: bool = True
+    listenbrainz_base_url: str = "https://api.listenbrainz.org"
 
     # Images
     image_cache_dir: Path | None = None
