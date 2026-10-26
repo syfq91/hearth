@@ -93,6 +93,17 @@ class Settings(BaseSettings):
     metadata_retry_max_hours: float = 72.0
     metadata_unmatched_retry_hours: float = 24.0
 
+    # Music metadata
+    musicbrainz_enabled: bool = True
+    musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
+    musicbrainz_timeout_seconds: float = 10.0
+    musicbrainz_rate_limit_seconds: float = 1.0
+    musicbrainz_user_agent: str = (
+        "HearthMediaServer/0.1.0 ( https://github.com/hearth-media/hearth )"
+    )
+    musicbrainz_cache_ttl_hours: float = 168.0
+    cover_art_archive_base_url: str = "https://coverartarchive.org"
+
     # Images
     image_cache_dir: Path | None = None
     image_download_timeout_seconds: float = 20.0
@@ -100,7 +111,11 @@ class Settings(BaseSettings):
     image_variant_quality: int = 82
     image_blurhash_components: int = 4
     image_process_workers: int = 2
-    image_allowed_hosts: list[str] = ["image.tmdb.org"]
+    image_allowed_hosts: list[str] = [
+        "image.tmdb.org",
+        "coverartarchive.org",
+        "archive.org",
+    ]
 
     @property
     def database_url(self) -> str:

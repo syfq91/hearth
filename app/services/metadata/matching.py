@@ -32,6 +32,10 @@ from app.db.models import (
     Movie,
     Person,
     Season,
+    Track,
+)
+from app.db.models import (
+    Image as ImageModel,
 )
 from app.services.media.titles import normalize_title, sort_title
 from app.services.metadata.base import (
@@ -45,7 +49,9 @@ from app.services.metadata.base import (
     SearchResult,
 )
 from app.services.metadata.local import LocalProvider
+from app.services.metadata.musicbrainz import MusicBrainzProvider
 from app.services.metadata.tmdb import TMDBProvider
+from app.services.scanner.walker import find_artist_artwork
 
 logger = logging.getLogger("hearth.metadata.matching")
 
@@ -93,6 +99,8 @@ class _ItemSnapshot:
     file_paths: tuple[str, ...]
     duration_seconds: float | None
     type: str = "movie"
+    artist_name: str | None = None
+    musicbrainz_id: str | None = None
 
 
 def _year_score(left: int | None, right: int | None) -> float:
@@ -166,6 +174,8 @@ class MetadataMatcher:
             self.providers: list[MetadataProvider] = [LocalProvider()]
             if settings.tmdb_api_key:
                 self.providers.append(TMDBProvider(settings, sessionmaker))
+            if settings.musicbrainz_enabled:
+                self.providers.append(MusicBrainzProvider(settings, sessionmaker))
         else:
             self.providers = list(providers)
 
@@ -177,6 +187,10 @@ class MetadataMatcher:
         ]
         self._tmdb = next(
             (provider for provider in self.remote_providers if provider.name == "tmdb"),
+            None,
+        )
+        self._musicbrainz = next(
+            (provider for provider in self.remote_providers if provider.name == "musicbrainz"),
             None,
         )
 
@@ -196,11 +210,11 @@ class MetadataMatcher:
         query = (
             select(MediaItem.id)
             .where(
-                MediaItem.type.in_(("movie", "series")),
+                MediaItem.type.in_(("movie", "series", "artist", "album")),
                 MediaItem.match_state.in_(("pending", "unmatched")),
                 or_(MediaItem.next_match_at.is_(None), MediaItem.next_match_at <= now),
                 or_(
-                    MediaItem.type == "series",
+                    MediaItem.type.in_(("series", "artist", "album")),
                     MediaItem.files.any(MediaFile.missing_since.is_(None)),
                 ),
             )
@@ -244,6 +258,10 @@ class MetadataMatcher:
 
         if snapshot.type == "series":
             return await self._match_series(snapshot)
+        if snapshot.type == "artist":
+            return await self._match_artist(snapshot)
+        if snapshot.type == "album":
+            return await self._match_album(snapshot)
 
         local_error: str | None = None
         if self.local_provider is not None:
@@ -362,15 +380,51 @@ class MetadataMatcher:
                 key=lambda file: file.path,
             )
             durations = [file.duration_seconds for file in active if file.duration_seconds]
+            file_paths: list[str] = [file.path for file in active]
+            artist_name: str | None = None
+            musicbrainz_id: str | None = None
+
+            if item.type == "artist":
+                if item.artist is not None:
+                    musicbrainz_id = item.artist.musicbrainz_id
+                track_files = list(
+                    await session.scalars(
+                        select(MediaFile.path)
+                        .join(Track, Track.file_id == MediaFile.id)
+                        .where(Track.artist_id == item.id, MediaFile.missing_since.is_(None))
+                        .limit(5)
+                    )
+                )
+                file_paths.extend(track_files)
+            elif item.type == "album":
+                if item.album is not None:
+                    musicbrainz_id = item.album.musicbrainz_id
+                    artist_name = item.album.album_artist
+                    if not artist_name and item.album.artist is not None:
+                        artist_item = await session.get(MediaItem, item.album.artist.item_id)
+                        if artist_item is not None:
+                            artist_name = artist_item.title
+                track_files = list(
+                    await session.scalars(
+                        select(MediaFile.path)
+                        .join(Track, Track.file_id == MediaFile.id)
+                        .where(Track.album_id == item.id, MediaFile.missing_since.is_(None))
+                        .limit(5)
+                    )
+                )
+                file_paths.extend(track_files)
+
             return _ItemSnapshot(
                 id=item.id,
                 library_id=item.library_id,
                 title=item.title,
                 year=item.year,
                 match_state=item.match_state,
-                file_paths=tuple(file.path for file in active),
+                file_paths=tuple(file_paths),
                 duration_seconds=max(durations) if durations else None,
                 type=item.type,
+                artist_name=artist_name,
+                musicbrainz_id=musicbrainz_id,
             )
 
     async def _local_details(self, snapshot: _ItemSnapshot) -> MovieMetadata | None:
@@ -810,6 +864,162 @@ class MetadataMatcher:
             score=score,
             images=images_stored,
         )
+
+    async def _match_artist(self, snapshot: _ItemSnapshot) -> MatchResult:
+        # 1. Local image discovery (artist.jpg, artist.png, etc.)
+        for path_str in snapshot.file_paths:
+            p = Path(path_str)
+            candidate_dirs = (p.parent, p.parent.parent)
+            found_art: str | None = None
+            for c_dir in candidate_dirs:
+                found_art = find_artist_artwork(c_dir)
+                if found_art:
+                    break
+            if found_art:
+                await self._store_images(
+                    snapshot.id,
+                    "local",
+                    [ProviderImage(kind="poster", file_path=found_art, is_primary=True)],
+                )
+                break
+
+        # 2. Online enrichment via MusicBrainz (if available)
+        mb = self._musicbrainz
+        if mb is not None and mb.enabled:
+            artist_meta = None
+            self._provider_calls += 1
+            if snapshot.musicbrainz_id:
+                try:
+                    artist_meta = await mb.fetch_artist_details(snapshot.musicbrainz_id)
+                except (ProviderError, ProviderUnavailable) as exc:
+                    return await self._save_failure(snapshot.id, str(exc))
+            else:
+                try:
+                    candidates = await mb.search_artist(snapshot.title)
+                    if candidates:
+                        self._provider_calls += 1
+                        artist_meta = await mb.fetch_artist_details(candidates[0].provider_id)
+                except (ProviderError, ProviderUnavailable) as exc:
+                    return await self._save_failure(snapshot.id, str(exc))
+
+            if artist_meta is not None:
+                now = self.clock()
+                async with self.sessionmaker() as session:
+                    item = await session.get(MediaItem, snapshot.id)
+                    if item is not None and item.artist is not None:
+                        item.artist.musicbrainz_id = artist_meta.provider_id
+                        if artist_meta.sort_name:
+                            item.artist.sort_name = artist_meta.sort_name
+                        if artist_meta.country:
+                            item.artist.country = artist_meta.country
+                        if artist_meta.disambiguation:
+                            item.artist.disambiguation = artist_meta.disambiguation
+                        if artist_meta.overview:
+                            item.overview = artist_meta.overview
+                        item.match_state = "matched"
+                        item.matched_at = now
+                        item.next_match_at = None
+                        provider_ids = dict(item.provider_ids or {})
+                        provider_ids["musicbrainz"] = artist_meta.provider_id
+                        item.provider_ids = provider_ids
+                        await self._apply_genres(session, snapshot.id, artist_meta.genres)
+                        await session.commit()
+                return MatchResult(
+                    item_id=snapshot.id,
+                    state="matched",
+                    provider=mb.name,
+                    provider_id=artist_meta.provider_id,
+                    score=1.0,
+                )
+            return await self._save_unmatched(snapshot.id, "No artist match on MusicBrainz")
+
+        # MusicBrainz disabled or not present: mark matched
+        now = self.clock()
+        async with self.sessionmaker() as session:
+            item = await session.get(MediaItem, snapshot.id)
+            if item is not None:
+                item.match_state = "matched"
+                item.matched_at = now
+                await session.commit()
+        return MatchResult(item_id=snapshot.id, state="matched")
+
+    async def _match_album(self, snapshot: _ItemSnapshot) -> MatchResult:
+        mb = self._musicbrainz
+        if mb is not None and mb.enabled:
+            album_meta = None
+            self._provider_calls += 1
+            if snapshot.musicbrainz_id:
+                try:
+                    album_meta = await mb.fetch_album_details(snapshot.musicbrainz_id)
+                except (ProviderError, ProviderUnavailable) as exc:
+                    return await self._save_failure(snapshot.id, str(exc))
+            else:
+                try:
+                    candidates = await mb.search_album(snapshot.title, artist=snapshot.artist_name)
+                    if candidates:
+                        self._provider_calls += 1
+                        album_meta = await mb.fetch_album_details(candidates[0].provider_id)
+                except (ProviderError, ProviderUnavailable) as exc:
+                    return await self._save_failure(snapshot.id, str(exc))
+
+            if album_meta is not None:
+                now = self.clock()
+                async with self.sessionmaker() as session:
+                    item = await session.get(MediaItem, snapshot.id)
+                    if item is not None and item.album is not None:
+                        item.album.musicbrainz_id = album_meta.provider_id
+                        if album_meta.release_group_id:
+                            item.album.musicbrainz_release_group_id = album_meta.release_group_id
+                        if album_meta.release_date:
+                            item.album.release_date = album_meta.release_date
+                        if album_meta.total_discs:
+                            item.album.total_discs = album_meta.total_discs
+                        if album_meta.total_tracks:
+                            item.album.total_tracks = album_meta.total_tracks
+                        if album_meta.year and not item.year:
+                            item.year = album_meta.year
+                        item.match_state = "matched"
+                        item.matched_at = now
+                        item.next_match_at = None
+                        provider_ids = dict(item.provider_ids or {})
+                        provider_ids["musicbrainz"] = album_meta.provider_id
+                        if album_meta.release_group_id:
+                            provider_ids["musicbrainz_release_group"] = album_meta.release_group_id
+                        item.provider_ids = provider_ids
+                        await self._apply_genres(session, snapshot.id, album_meta.genres)
+                        await session.commit()
+
+                # If album has no poster image, fetch Cover Art Archive image
+                stored_images = 0
+                if album_meta.images:
+                    async with self.sessionmaker() as session:
+                        has_img = await session.scalar(
+                            select(ImageModel.id).where(ImageModel.item_id == snapshot.id).limit(1)
+                        )
+                    if not has_img:
+                        stored_images = await self._store_images(
+                            snapshot.id, mb.name, album_meta.images
+                        )
+
+                return MatchResult(
+                    item_id=snapshot.id,
+                    state="matched",
+                    provider=mb.name,
+                    provider_id=album_meta.provider_id,
+                    score=1.0,
+                    images=stored_images,
+                )
+            return await self._save_unmatched(snapshot.id, "No album match on MusicBrainz")
+
+        # MusicBrainz disabled: mark matched
+        now = self.clock()
+        async with self.sessionmaker() as session:
+            item = await session.get(MediaItem, snapshot.id)
+            if item is not None:
+                item.match_state = "matched"
+                item.matched_at = now
+                await session.commit()
+        return MatchResult(item_id=snapshot.id, state="matched")
 
     async def _apply_genres(
         self, session: AsyncSession, item_id: str, names: Sequence[str]

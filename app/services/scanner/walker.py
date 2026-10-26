@@ -255,3 +255,23 @@ def find_album_artwork(album_dir: Path | str) -> str | None:
         if candidate.is_file():
             return str(candidate)
     return None
+
+
+def find_artist_artwork(artist_dir: Path | str) -> str | None:
+    """Find local sidecar artwork file for an artist folder."""
+    p = Path(artist_dir)
+    candidates = (
+        "artist.jpg",
+        "artist.png",
+        "artist.webp",
+        "artist.jpeg",
+        "poster.jpg",
+        "poster.png",
+        "folder.jpg",
+        "folder.png",
+    )
+    for name in candidates:
+        candidate = p / name
+        if candidate.is_file():
+            return str(candidate)
+    return None

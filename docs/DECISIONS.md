@@ -396,5 +396,24 @@
   - Using `ffprobe` for audio metadata (too slow: spawns 5,000 subprocesses, which would fail the 2-minute scan budget).
   - Discarding embedded cover art in favor of online metadata lookups only (fails for unreleased, private, offline, or compilation albums).
 
+## ADR 045: MusicBrainz and Cover Art Archive Metadata Enrichment
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Music catalog items benefit from rich metadata (artist biography, country, disambiguation, genres, release date, label, release group MBID) and remote album artwork from Cover Art Archive. MusicBrainz mandates strict compliance with rate limiting (max 1 req/sec) and identification with a descriptive User-Agent header. Enrichment must be non-blocking and degrade gracefully when MusicBrainz is offline, rate-limited, or disabled.
+- **Decision:**
+  - Implement `MusicBrainzProvider` implementing `MetadataProvider` with artist lookups/search and release lookups/search.
+  - Enforce strict 1 req/sec pacing with `asyncio.Lock` and elapsed monotonic clock timing.
+  - Send structured `User-Agent: HearthMediaServer/0.1.0 ( https://github.com/hearth-media/hearth )` on all HTTP requests.
+  - Cache responses in `provider_cache` using namespace prefixes `mb:artist:`, `mb:release:`, `mb:artist_search:`, `mb:release_search:`.
+  - Wire Cover Art Archive (`https://coverartarchive.org/release/{mbid}/front`) into `AlbumMetadata.images` as fallback artwork when embedded cover art is absent.
+  - Update `ImagePipeline` to allow `coverartarchive.org` and `archive.org` hosts, supporting subdomain redirects (e.g. `iaXXXXXX.us.archive.org`).
+  - Implement local `artist.jpg` / `artist.png` discovery in `walker.py` and `MetadataMatcher._match_artist`.
+  - Integrate music matching into `MetadataMatcher`: `match_pending` processes `artist` and `album` items, enriching database fields and genres non-blockingly. On network failure or missing records, items gracefully remain intact with their embedded tag metadata.
+- **Alternatives Considered:**
+  - Blocking scanner execution to wait for MusicBrainz (would violate the 2-minute scan budget for 5,000 tracks).
+  - Fetching artwork from unverified search engine scrapers (Cover Art Archive is the official, permanent, licensed archive for MusicBrainz releases).
+
+
 
 

@@ -39,6 +39,7 @@ from app.services.scanner.parsing import ParsedMovie, parse_episode_path, parse_
 from app.services.scanner.walker import (
     ScannedFile,
     find_album_artwork,
+    find_artist_artwork,
     scope_dirs,
     walk_movie_files,
     walk_music_files,
@@ -850,6 +851,9 @@ class LibraryScanner:
                     album_artist_name = tags.album_artist or "Unknown Artist"
                     a_key = normalize_title(album_artist_name)
                     artist_id = artist_index.get(a_key)
+                    mb_enabled = self.matcher is not None and any(
+                        p.name == "musicbrainz" for p in self.matcher.providers
+                    )
                     if artist_id is None:
                         artist_id = new_id()
                         artist_item = MediaItem(
@@ -859,7 +863,8 @@ class LibraryScanner:
                             title=album_artist_name,
                             sort_title=sort_title(album_artist_name),
                             added_at=now,
-                            match_state="matched",
+                            match_state="pending" if mb_enabled else "matched",
+                            next_match_at=now if mb_enabled else None,
                         )
                         artist_item.artist = Artist(
                             item_id=artist_id,
@@ -870,6 +875,30 @@ class LibraryScanner:
                         session.add(artist_item)
                         artist_index[a_key] = artist_id
                         stats.added_items += 1
+
+                        # Local artist artwork discovery
+                        if self.matcher is not None and self.matcher.artwork is not None:
+                            art_path = find_artist_artwork(Path(candidate.path).parent)
+                            if not art_path:
+                                art_path = find_artist_artwork(Path(candidate.path).parent.parent)
+                            if art_path:
+                                try:
+                                    await self.matcher.artwork(
+                                        artist_id,
+                                        "local",
+                                        [
+                                            ProviderImage(
+                                                kind="poster",
+                                                file_path=art_path,
+                                                is_primary=True,
+                                            )
+                                        ],
+                                    )
+                                    stats.images_stored += 1
+                                except Exception as exc:
+                                    logger.debug(
+                                        "failed to store artist artwork for %s: %s", artist_id, exc
+                                    )
 
                     # 2. Album
                     album_title = tags.album or "Unknown Album"
@@ -885,7 +914,8 @@ class LibraryScanner:
                             sort_title=sort_title(album_title),
                             year=tags.year,
                             added_at=now,
-                            match_state="matched",
+                            match_state="pending" if mb_enabled else "matched",
+                            next_match_at=now if mb_enabled else None,
                         )
                         album_item.album = Album(
                             item_id=album_id,
@@ -961,7 +991,8 @@ class LibraryScanner:
                                 title=t_artist_name,
                                 sort_title=sort_title(t_artist_name),
                                 added_at=now,
-                                match_state="matched",
+                                match_state="pending" if mb_enabled else "matched",
+                                next_match_at=now if mb_enabled else None,
                             )
                             t_artist_item.artist = Artist(
                                 item_id=track_artist_id,

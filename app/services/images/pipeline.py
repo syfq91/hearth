@@ -376,7 +376,7 @@ class ImagePipeline:
                 if self._client is None:
                     self._client = httpx.AsyncClient(
                         timeout=self.settings.image_download_timeout_seconds,
-                        follow_redirects=False,
+                        follow_redirects=True,
                         headers={"User-Agent": "Hearth/0.1 (+https://github.com/hearth)"},
                     )
         return self._client
@@ -387,7 +387,7 @@ class ImagePipeline:
             return None
         host = (parsed.hostname or "").casefold()
         allowed = {entry.casefold() for entry in self.settings.image_allowed_hosts}
-        if allowed and host not in allowed:
+        if allowed and not (host in allowed or any(host.endswith("." + h) for h in allowed)):
             logger.warning("refusing artwork download", extra={"host": host})
             return None
 

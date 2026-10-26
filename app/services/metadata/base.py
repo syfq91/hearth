@@ -136,10 +136,54 @@ class SeriesMetadata:
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
 
+@dataclass(frozen=True)
+class ArtistMetadata:
+    """Normalized artist details from any provider."""
+
+    provider: str
+    provider_id: str
+    name: str
+    sort_name: str | None = None
+    disambiguation: str | None = None
+    country: str | None = None
+    artist_type: str | None = None
+    genres: tuple[str, ...] = ()
+    overview: str | None = None
+    images: tuple[ProviderImage, ...] = ()
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class AlbumMetadata:
+    """Normalized album details from any provider."""
+
+    provider: str
+    provider_id: str
+    title: str
+    artist_name: str | None = None
+    artist_provider_id: str | None = None
+    release_date: str | None = None
+    year: int | None = None
+    total_discs: int | None = None
+    total_tracks: int | None = None
+    genres: tuple[str, ...] = ()
+    overview: str | None = None
+    label: str | None = None
+    barcode: str | None = None
+    release_group_id: str | None = None
+    images: tuple[ProviderImage, ...] = ()
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+
+
 class MetadataProvider(ABC):
     """The small provider surface the matcher depends on."""
 
     name: str
+
+    @property
+    def enabled(self) -> bool:
+        """Whether this provider is currently configured and active."""
+        return True
 
     @abstractmethod
     async def search(self, query: str, year: int | None = None) -> list[SearchResult]:
@@ -173,6 +217,26 @@ class MetadataProvider(ABC):
 
     async def fetch_tv_images(self, series_id: str) -> list[ProviderImage]:
         """Fetch artwork candidates for a TV series."""
+        return []
+
+    async def search_artist(self, query: str) -> list[SearchResult]:
+        """Search for artist candidates."""
+        return []
+
+    async def fetch_artist_details(self, artist_id: str) -> ArtistMetadata | None:
+        """Fetch normalized artist details."""
+        return None
+
+    async def search_album(self, query: str, artist: str | None = None) -> list[SearchResult]:
+        """Search for album candidates."""
+        return []
+
+    async def fetch_album_details(self, album_id: str) -> AlbumMetadata | None:
+        """Fetch normalized album details."""
+        return None
+
+    async def fetch_album_images(self, album_id: str) -> list[ProviderImage]:
+        """Fetch artwork candidates for an album."""
         return []
 
     async def close(self) -> None:

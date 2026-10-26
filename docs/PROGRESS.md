@@ -332,8 +332,8 @@
 | Task | Description | Status | Commit |
 | --- | --- | --- | --- |
 | 5.1 | Models: `Artist`, `Album`, `Track`, plus `Playlist` and `PlaylistItem` | Complete | `aec68af` |
-| 5.2 | Tag reading with `mutagen` (ID3, Vorbis, MP4, APE) and embedded art | Complete | `feat: read audio tags with mutagen and scan music libraries` |
-| 5.3 | Metadata enrichment (MusicBrainz, Cover Art Archive, local `artist.jpg`) | Pending | |
+| 5.2 | Tag reading with `mutagen` (ID3, Vorbis, MP4, APE) and embedded art | Complete | `17c94c2` |
+| 5.3 | Metadata enrichment (MusicBrainz, Cover Art Archive, local `artist.jpg`) | Complete | `feat: add musicbrainz and cover art archive metadata enrichment` |
 | 5.4 | Native API: artists, albums, tracks, search, random, playlists CRUD | Pending | |
 | 5.5 | Audio streaming and playback: range requests, durations, content-length | Pending | |
 | 5.6 | Play tracking: play counts, last played, favorites, ratings, ListenBrainz | Pending | |
