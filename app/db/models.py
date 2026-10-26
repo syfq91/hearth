@@ -227,6 +227,15 @@ class MediaItem(TimestampMixin, Base):
     movie: Mapped["Movie | None"] = relationship(
         back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
     )
+    series: Mapped["Series | None"] = relationship(
+        back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+    )
+    season: Mapped["Season | None"] = relationship(
+        back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+    )
+    episode: Mapped["Episode | None"] = relationship(
+        back_populates="item", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+    )
     files: Mapped[list["MediaFile"]] = relationship(
         back_populates="item", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -258,6 +267,85 @@ class Movie(Base):
     item: Mapped["MediaItem"] = relationship(back_populates="movie")
 
 
+class Series(Base):
+    """Series-specific metadata attached to one item."""
+
+    __tablename__ = "series"
+
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    original_title: Mapped[str | None] = mapped_column(String(512), default=None)
+    status: Mapped[str | None] = mapped_column(String(64), default=None)
+    first_air_date: Mapped[str | None] = mapped_column(String(10), default=None)
+    network: Mapped[str | None] = mapped_column(String(128), default=None)
+
+    item: Mapped["MediaItem"] = relationship(back_populates="series")
+    seasons: Mapped[list["Season"]] = relationship(
+        back_populates="series", cascade="all, delete-orphan", lazy="selectin"
+    )
+    episodes: Mapped[list["Episode"]] = relationship(
+        back_populates="series", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class Season(Base):
+    """Season-specific metadata attached to one item."""
+
+    __tablename__ = "seasons"
+    __table_args__ = (
+        UniqueConstraint("series_id", "season_number", name="uq_seasons_series_number"),
+    )
+
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    series_id: Mapped[str] = mapped_column(
+        ForeignKey("series.item_id", ondelete="CASCADE"), index=True
+    )
+    season_number: Mapped[int] = mapped_column(Integer, index=True)
+    air_date: Mapped[str | None] = mapped_column(String(10), default=None)
+
+    item: Mapped["MediaItem"] = relationship(back_populates="season")
+    series: Mapped["Series"] = relationship(back_populates="seasons")
+    episodes: Mapped[list["Episode"]] = relationship(
+        back_populates="season", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class Episode(Base):
+    """Episode-specific metadata attached to one item."""
+
+    __tablename__ = "episodes"
+    __table_args__ = (
+        Index("ix_episodes_series_season_episode", "series_id", "season_number", "episode_number"),
+    )
+
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    series_id: Mapped[str] = mapped_column(
+        ForeignKey("series.item_id", ondelete="CASCADE"), index=True
+    )
+    season_id: Mapped[str | None] = mapped_column(
+        ForeignKey("seasons.item_id", ondelete="CASCADE"), index=True, default=None
+    )
+    season_number: Mapped[int | None] = mapped_column(Integer, index=True, default=None)
+    episode_number: Mapped[int | None] = mapped_column(Integer, index=True, default=None)
+    air_date: Mapped[str | None] = mapped_column(String(10), default=None)
+    absolute_number: Mapped[int | None] = mapped_column(Integer, default=None)
+    file_id: Mapped[str | None] = mapped_column(
+        ForeignKey("media_files.id", ondelete="SET NULL"), index=True, default=None
+    )
+
+    item: Mapped["MediaItem"] = relationship(back_populates="episode")
+    series: Mapped["Series"] = relationship(back_populates="episodes")
+    season: Mapped["Season | None"] = relationship(back_populates="episodes")
+    file: Mapped["MediaFile | None"] = relationship(
+        foreign_keys=[file_id], back_populates="episodes", lazy="selectin"
+    )
+
+
 class MediaFile(TimestampMixin, Base):
     """One file on disk for a catalog item; multiple files are versions."""
 
@@ -286,6 +374,7 @@ class MediaFile(TimestampMixin, Base):
     missing_since: Mapped[datetime | None] = mapped_column(UTCDateTime(), default=None)
 
     item: Mapped["MediaItem"] = relationship(back_populates="files")
+    episodes: Mapped[list["Episode"]] = relationship(back_populates="file", lazy="selectin")
 
 
 class Image(Base):

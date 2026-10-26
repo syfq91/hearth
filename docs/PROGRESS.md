@@ -2,8 +2,8 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 3 complete; Phase 4 (TV shows) not started
-- **Overall Status**: Phase 3 accepted
+- **Current Phase**: Phase 4 (TV shows) in progress
+- **Overall Status**: Phase 4 in progress
 
 ---
 
@@ -277,6 +277,28 @@
   - `test_stream.py::test_five_concurrent_streams_do_not_block_api_responses`
     holds five 1 MiB streams open, then asserts twenty `/health` calls each
     complete in under 0.5 seconds before releasing them.
+
+---
+
+## Phase 4: TV shows
+
+**Goal:** Series, seasons and episodes with correct matching and "next up".
+
+| Task | Description | Status | Commit |
+| --- | --- | --- | --- |
+| 4.1 | Models: `Series`, `Season`, `Episode` linked to `MediaFile` | Complete | `feat: add series, season and episode models with migration` |
+| 4.2 | Parsing with `guessit` (multi-episode, date-based, specials, anime) | In Progress | |
+| 4.3 | `TMDBProvider` TV support (series, seasons, episodes, stills, cast) | Not Started | |
+| 4.4 | Scanner changes (group files by series, match series, then episodes) | Not Started | |
+| 4.5 | API (series detail, seasons list, episodes list, next-up, mark watched) | Not Started | |
+| 4.6 | Playback direct play verification for TV shows | Not Started | |
+| 4.7 | Local NFO support for `tvshow.nfo` and `episode.nfo` | Not Started | |
+
+### Phase 4 Acceptance Checklist
+
+- [ ] A fixture tree with 3 series covering normal, multi-episode, date-based and specials files matches 100% correctly.
+- [ ] Next-up behaves correctly across season boundaries and with out-of-order watching.
+- [ ] Manual re-match of a series moves all episodes and preserves watch states where episode numbers still exist.
 
 ---
 

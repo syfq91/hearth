@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
     AuditLog,
+    Episode,
     Genre,
     Image,
     ItemGenre,
@@ -17,6 +18,8 @@ from app.db.models import (
     Movie,
     ProviderCache,
     RefreshToken,
+    Season,
+    Series,
     Setting,
     User,
     UserItemState,
@@ -240,3 +243,157 @@ async def test_provider_cache_round_trip(db_session: AsyncSession) -> None:
     assert loaded is not None
     assert loaded.payload["title"] == "The Matrix"
     assert loaded.fetched_at.tzinfo is not None
+
+
+async def test_tv_models_relationships_and_cascades(db_session: AsyncSession) -> None:
+    library = Library(name="TV Shows", type="tv")
+    library.paths.append(LibraryPath(path="/media/tv"))
+    db_session.add(library)
+    await db_session.flush()
+
+    # 1. Series
+    series_item = MediaItem(
+        library_id=library.id,
+        type="series",
+        title="Breaking Bad",
+        sort_title="breaking bad",
+        year=2008,
+        overview="A high school chemistry teacher diagnosed with cancer turns to meth.",
+        provider_ids={"tmdb": "1396"},
+    )
+    series_item.series = Series(
+        original_title="Breaking Bad",
+        status="Ended",
+        first_air_date="2008-01-20",
+        network="AMC",
+    )
+    db_session.add(series_item)
+    await db_session.flush()
+
+    # 2. Season 1
+    season_item = MediaItem(
+        library_id=library.id,
+        type="season",
+        title="Season 1",
+        sort_title="season 01",
+        year=2008,
+        overview="Season 1 of Breaking Bad.",
+    )
+    season_item.season = Season(
+        series_id=series_item.id,
+        season_number=1,
+        air_date="2008-01-20",
+    )
+    db_session.add(season_item)
+    await db_session.flush()
+
+    # 3. MediaFile shared by two episodes (multi-episode file)
+    media_file = MediaFile(
+        item_id=series_item.id,
+        path="/media/tv/Breaking Bad/Season 1/Breaking Bad - S01E01E02.mkv",
+        size_bytes=100000,
+        mtime=123.0,
+        partial_hash="f" * 64,
+        container="matroska",
+        duration_seconds=5400.0,
+        streams_json={"streams": []},
+    )
+    db_session.add(media_file)
+    await db_session.flush()
+
+    # 4. Episode 1 & 2
+    ep1_item = MediaItem(
+        library_id=library.id,
+        type="episode",
+        title="Pilot",
+        sort_title="pilot",
+        year=2008,
+    )
+    ep1_item.episode = Episode(
+        series_id=series_item.id,
+        season_id=season_item.id,
+        season_number=1,
+        episode_number=1,
+        air_date="2008-01-20",
+        absolute_number=1,
+        file_id=media_file.id,
+    )
+    ep2_item = MediaItem(
+        library_id=library.id,
+        type="episode",
+        title="Cat's in the Bag...",
+        sort_title="cats in the bag",
+        year=2008,
+    )
+    ep2_item.episode = Episode(
+        series_id=series_item.id,
+        season_id=season_item.id,
+        season_number=1,
+        episode_number=2,
+        air_date="2008-01-27",
+        absolute_number=2,
+        file_id=media_file.id,
+    )
+    # 5. Unknown episode (no season)
+    unknown_item = MediaItem(
+        library_id=library.id,
+        type="episode",
+        title="Unknown Special",
+        sort_title="unknown special",
+    )
+    unknown_item.episode = Episode(
+        series_id=series_item.id,
+        season_id=None,
+        season_number=None,
+        episode_number=None,
+    )
+    db_session.add_all([ep1_item, ep2_item, unknown_item])
+    await db_session.commit()
+    db_session.expunge_all()
+
+    # Query and assert relationships
+    loaded_series = await db_session.scalar(select(MediaItem).where(MediaItem.id == series_item.id))
+    assert loaded_series is not None
+    assert loaded_series.series is not None
+    assert loaded_series.series.status == "Ended"
+    assert len(loaded_series.series.seasons) == 1
+    assert loaded_series.series.seasons[0].season_number == 1
+    assert len(loaded_series.series.episodes) == 3
+
+    loaded_season = await db_session.scalar(select(MediaItem).where(MediaItem.id == season_item.id))
+    assert loaded_season is not None
+    assert loaded_season.season is not None
+    assert loaded_season.season.series.item.title == "Breaking Bad"
+    assert len(loaded_season.season.episodes) == 2
+
+    loaded_ep1 = await db_session.scalar(select(MediaItem).where(MediaItem.id == ep1_item.id))
+    assert loaded_ep1 is not None
+    assert loaded_ep1.episode is not None
+    assert loaded_ep1.episode.file is not None
+    assert loaded_ep1.episode.file.path.endswith("Breaking Bad - S01E01E02.mkv")
+    assert len(loaded_ep1.episode.file.episodes) == 2
+
+    # Delete media file: file_id on episode is set to NULL
+    file_to_delete = await db_session.get(MediaFile, media_file.id)
+    assert file_to_delete is not None
+    await db_session.delete(file_to_delete)
+    await db_session.commit()
+    db_session.expunge_all()
+
+    refreshed_ep1 = await db_session.scalar(select(MediaItem).where(MediaItem.id == ep1_item.id))
+    assert refreshed_ep1 is not None
+    assert refreshed_ep1.episode is not None
+    assert refreshed_ep1.episode.file_id is None
+    assert refreshed_ep1.episode.file is None
+
+    # Deleting series cascades to seasons and episodes
+    series_to_delete = await db_session.scalar(
+        select(MediaItem).where(MediaItem.id == series_item.id)
+    )
+    assert series_to_delete is not None
+    await db_session.delete(series_to_delete)
+    await db_session.commit()
+
+    assert await db_session.scalar(select(func.count()).select_from(Series)) == 0
+    assert await db_session.scalar(select(func.count()).select_from(Season)) == 0
+    assert await db_session.scalar(select(func.count()).select_from(Episode)) == 0
