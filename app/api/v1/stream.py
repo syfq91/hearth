@@ -16,7 +16,7 @@ from app.core.deps import (
     user_can_access_library,
 )
 from app.core.errors import NotFoundError
-from app.db.models import Episode, LibraryPath, MediaFile, MediaItem
+from app.db.models import Episode, LibraryPath, MediaFile, MediaItem, Track
 from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
 from app.services.streaming import (
@@ -46,6 +46,50 @@ async def stream_file(
     """
     return await _stream_response(
         file_id,
+        request.method,
+        request.headers,
+        viewer,
+        settings.stream_chunk_bytes,
+        session,
+    )
+
+
+@router.get("/stream/audio/{track_id}")
+async def stream_audio_track(
+    track_id: str,
+    request: Request,
+    viewer: ViewerDep,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> Response:
+    """Stream an audio track by its item ID, honoring a single byte range."""
+    track = await session.get(Track, track_id)
+    if track is None or not track.file_id:
+        raise NotFoundError("Track audio file not found", code="track_not_found")
+    return await _stream_response(
+        track.file_id,
+        request.method,
+        request.headers,
+        viewer,
+        settings.stream_chunk_bytes,
+        session,
+    )
+
+
+@router.head("/stream/audio/{track_id}", include_in_schema=False)
+async def stream_audio_track_head(
+    track_id: str,
+    request: Request,
+    viewer: ViewerDep,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> Response:
+    """Return the same headers as a GET without opening the audio file."""
+    track = await session.get(Track, track_id)
+    if track is None or not track.file_id:
+        raise NotFoundError("Track audio file not found", code="track_not_found")
+    return await _stream_response(
+        track.file_id,
         request.method,
         request.headers,
         viewer,

@@ -12,6 +12,7 @@ from app.api.v1 import (
     jobs,
     libraries,
     metadata,
+    music,
     playback,
     shows,
     stream,
@@ -31,6 +32,7 @@ router.include_router(events.router)
 router.include_router(metadata.router)
 router.include_router(items.router)
 router.include_router(shows.router)
+router.include_router(music.router)
 router.include_router(home.router)
 router.include_router(playback.router)
 router.include_router(images.router)

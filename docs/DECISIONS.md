@@ -414,6 +414,31 @@
   - Blocking scanner execution to wait for MusicBrainz (would violate the 2-minute scan budget for 5,000 tracks).
   - Fetching artwork from unverified search engine scrapers (Cover Art Archive is the official, permanent, licensed archive for MusicBrainz releases).
 
+## ADR 046: Native Music and Playlist API Architecture
+
+- **Date:** 2026-10-26
+- **Status:** Accepted
+- **Context:** Clients require fast, ergonomic, and secure endpoints for browsing artists, albums, tracks, disc-grouped tracklists, shelves (random, recently-added, most-played), cross-entity music search, and full user-isolated playlist lifecycle management (create, read, reorder, delete items, update metadata).
+- **Decision:**
+  - Implement native REST endpoints in `app/api/v1/music.py`:
+    - `GET /artists`: pagination, sort by name or added, filtering, and aggregated album/track counts.
+    - `GET /artists/{id}`: artist detail with sorted discography and top tracks.
+    - `GET /albums`: filter by artist, genre, or title query, with track counts and duration totals.
+    - `GET /albums/{id}`: disc-grouped tracklists (`discs: [{disc_number, tracks: [...]}]`).
+    - `GET /tracks`: track list with album/artist filters.
+    - `GET /tracks/{id}`: track technical details (bitrate, sample rate, channels, container, ReplayGain tags, stream URL).
+    - `GET /music/random`: randomized album and track suggestions with customizable `albums_limit` and `tracks_limit`.
+    - `GET /music/recently-added`: recently ingested albums with full summaries.
+    - `GET /music/most-played`: ranked albums and tracks based on `UserItemState.play_count`.
+    - `GET /music/search`: search matching artists, albums, and tracks across titles and artist names.
+    - Playlist CRUD: `POST /playlists`, `GET /playlists`, `GET /playlists/{id}`, `PATCH /playlists/{id}`, `DELETE /playlists/{id}`, `POST /playlists/{id}/items`, `DELETE /playlists/{id}/items/{item_id}`, `PUT /playlists/{id}/items/reorder`.
+  - Use a two-phase negative temporary index update for playlist item reordering and compacting to satisfy SQLite's immediate evaluation of the `UNIQUE(playlist_id, position)` constraint.
+  - Enforce user isolation and library permission boundaries across all music and playlist endpoints; non-accessible tracks cannot be added to playlists or viewed by ungranted users.
+- **Alternatives Considered:**
+  - Flat un-grouped tracklists on album detail (inferior UX for multi-disc boxsets and soundtracks).
+  - Deferring unique position constraint checks via SQLite pragmas (not supported in SQLite standard tables without schema rebuilds; two-phase negative updates are safe and idiomatic).
+
+
 
 
 
