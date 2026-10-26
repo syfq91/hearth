@@ -396,7 +396,8 @@ def parse_episode_path(path: Path | str, *, root: Path | str | None = None) -> P
 
     # When a date is present, guessit sometimes confuses the year with season
     if air_date and date_match and season_number == int(date_match.group(1)):
-        season_number = None
+        if season_hint is None:
+            season_number = None
         episode_numbers = ()
 
     # Absolute number

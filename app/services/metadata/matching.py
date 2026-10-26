@@ -720,6 +720,84 @@ class MetadataMatcher:
                         ep_item = await session.get(MediaItem, ep.item_id)
                         if ep_item:
                             ep_item.match_state = "unmatched"
+            unseasoned_date_eps = list(
+                await session.scalars(
+                    select(Episode).where(
+                        Episode.series_id == snapshot.id,
+                        Episode.season_id.is_(None),
+                        Episode.air_date.is_not(None),
+                    )
+                )
+            )
+            if unseasoned_date_eps:
+                years: set[int] = set()
+                for ep in unseasoned_date_eps:
+                    if ep.air_date and len(ep.air_date) >= 4 and ep.air_date[:4].isdigit():
+                        years.add(int(ep.air_date[:4]))
+                for year in sorted(years):
+                    self._provider_calls += 1
+                    try:
+                        season_meta = await provider.fetch_tv_season(provider_id, year)
+                    except ProviderError:
+                        season_meta = None
+                    if season_meta is not None:
+                        sea_row = await session.scalar(
+                            select(Season).where(
+                                Season.series_id == snapshot.id,
+                                Season.season_number == year,
+                            )
+                        )
+                        if sea_row is None:
+                            sea_id = new_id()
+                            sea_title = season_meta.title or f"Season {year}"
+                            sea_item = MediaItem(
+                                id=sea_id,
+                                library_id=item.library_id,
+                                type="season",
+                                title=sea_title,
+                                sort_title=sort_title(sea_title),
+                                overview=season_meta.overview,
+                                added_at=now,
+                                match_state="matched",
+                                matched_at=now,
+                            )
+                            sea_item.season = Season(
+                                series_id=snapshot.id,
+                                season_number=year,
+                            )
+                            session.add(sea_item)
+                            await session.flush()
+                            sea_item_id = sea_id
+                        else:
+                            sea_item_id = sea_row.item_id
+
+                        tmdb_by_date = {e.air_date: e for e in season_meta.episodes if e.air_date}
+                        for ep in unseasoned_date_eps:
+                            if ep.air_date and ep.air_date in tmdb_by_date:
+                                ep_meta = tmdb_by_date[ep.air_date]
+                                ep.season_id = sea_item_id
+                                ep.season_number = year
+                                ep.episode_number = ep_meta.episode_number
+                                ep_item = await session.get(MediaItem, ep.item_id)
+                                if ep_item is not None:
+                                    ep_item.title = ep_meta.title
+                                    ep_item.sort_title = sort_title(ep_meta.title)
+                                    ep_item.overview = ep_meta.overview
+                                    ep_item.runtime_seconds = ep_meta.runtime_seconds
+                                    ep_item.rating = ep_meta.rating
+                                    ep_item.provider_ids = dict(ep_meta.provider_ids)
+                                    ep_item.match_state = "matched"
+                                    ep_item.matched_at = now
+                                    ep_item.match_error = None
+                                    ep.air_date = ep_meta.air_date
+                                    if ep_meta.credits:
+                                        await self._apply_credits(
+                                            session, ep_item.id, ep_meta.credits
+                                        )
+                                    if ep_meta.images:
+                                        await self._store_images(
+                                            ep_item.id, provider_name, ep_meta.images
+                                        )
 
             await session.commit()
 

@@ -296,9 +296,32 @@
 
 ### Phase 4 Acceptance Checklist
 
-- [ ] A fixture tree with 3 series covering normal, multi-episode, date-based and specials files matches 100% correctly.
-- [ ] Next-up behaves correctly across season boundaries and with out-of-order watching.
-- [ ] Manual re-match of a series moves all episodes and preserves watch states where episode numbers still exist.
+- [x] A fixture tree with 3 series covering normal, multi-episode, date-based and specials files matches 100% correctly.
+  - `tests/integration/test_phase4_acceptance.py::test_phase4_acceptance_criterion_1_fixture_tree_matches_100_percent`
+    scans a TV library containing *The Wire* (normal episodes + multi-episode file `S01E03E04`),
+    *Battlestar Galactica (2003)* (specials `S00E01` in `Specials/` + normal `S01E01`), and
+    *The Daily Show* (date-based daily episodes `2024-03-01` and `2024-03-02`).
+    Asserts 100% correct matching across all series, seasons, and episodes with 0 unmatched items.
+- [x] Next-up behaves correctly across season boundaries and with out-of-order watching.
+  - `tests/integration/test_phase4_acceptance.py::test_phase4_acceptance_criterion_2_next_up_season_boundaries_and_out_of_order`
+    exercises the complete next-up progression over HTTP API endpoints: unwatched show starts on S01E01;
+    watching sequentially advances through S01; completing the Season 1 finale transitions across the
+    season boundary to S02E01; skipping S02E01 to watch S02E02 advances to S02E03; watching S02E03 (the finale)
+    falls back to the skipped episode S02E01; unwatching and rewatching S01E01 advances to S01E02;
+    and marking the entire show watched returns 404 `next_up_not_found` and removes it from `/shows/next-up`.
+- [x] Manual re-match of a series moves all episodes and preserves watch states where episode numbers still exist.
+  - `tests/integration/test_phase4_acceptance.py::test_phase4_acceptance_criterion_3_manual_rematch_preserves_watch_states`
+    matches *Planet Earth* with episodes S01E01, S01E02, S01E03, attaches watch states (played, progress, favorite, rating),
+    and triggers a manual re-match to *Planet Earth II*. Asserts series and episode metadata update to new titles
+    while all underlying episode item IDs and user watch states are 100% preserved.
+
+### Phase 4 Quality Gates
+
+- `uv run ruff check`: clean; `uv run ruff format --check`: clean (139 files).
+- `uv run mypy app`: no issues in 74 source files.
+- `uv run pytest`: **383 passed, 9 skipped** (ffprobe-dependent tests skipped when system ffprobe binary is absent on host).
+- `uv run python scripts/export_openapi.py --check`: up to date (34 API paths).
+- Acceptance tests: `uv run pytest tests/integration/test_phase4_acceptance.py` -> 3 passed.
 
 ---
 

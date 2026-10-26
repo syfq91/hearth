@@ -701,6 +701,7 @@ class LibraryScanner:
                     else:
                         ep_item_id = new_id()
                         ep_title = parsed_ep.episode_title or Path(candidate.path).stem
+                        is_matchable = bool(parsed_ep.air_date)
                         ep_item = MediaItem(
                             id=ep_item_id,
                             library_id=library_id,
@@ -708,12 +709,13 @@ class LibraryScanner:
                             title=ep_title,
                             sort_title=sort_title(ep_title),
                             added_at=now,
-                            match_state="unmatched",
+                            match_state="pending" if is_matchable else "unmatched",
+                            next_match_at=now if is_matchable else None,
                         )
                         ep_item.episode = Episode(
                             series_id=series_id,
-                            season_id=None,
-                            season_number=None,
+                            season_id=season_id,
+                            season_number=parsed_ep.season_number,
                             episode_number=None,
                             air_date=parsed_ep.air_date,
                             file_id=file_id,
