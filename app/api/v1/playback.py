@@ -42,9 +42,17 @@ from app.db.models import (
 )
 from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
+from app.services.media.probe import ProbeResult
 from app.services.playback_state import chapters_from_streams, resolve_watch_state
 from app.services.scrobbling.listenbrainz import enqueue_scrobble
+from app.services.transcode.capabilities import probe_transcode_capabilities
+from app.services.transcode.decision import (
+    PlaybackOptions,
+    UserLimits,
+    evaluate_playback_plan,
+)
 from app.services.transcode.profile import ClientCapabilities
+from app.services.transcode.session import get_session_manager
 
 router = APIRouter(tags=["playback"])
 
@@ -92,6 +100,10 @@ class PlaybackInfoRequest(BaseModel):
 
     file_id: str | None = Field(default=None, max_length=36)
     capabilities: ClientCapabilities = Field(default_factory=ClientCapabilities)
+    audio_track_index: int | None = None
+    subtitle_track_index: int | None = None
+    start_time_offset_seconds: float = 0.0
+    target_max_bitrate: int | None = Field(default=None, gt=0)
 
 
 class PlaybackFileResponse(BaseModel):
@@ -208,9 +220,9 @@ async def playback_info(
 ) -> PlaybackInfoResponse:
     """Return how the client should play an item.
 
-    Phase 3 always answers ``direct_play`` with an item-scoped media token in
-    the stream and subtitle URLs. Capabilities are accepted now so clients and
-    the schema stay stable when the Phase 7 decision engine starts using them.
+    Evaluates client capabilities against media streams, user bitrate/transcode
+    limits, and server hardware capabilities. Returns either direct play or an
+    HLS stream session.
     """
     request = body or PlaybackInfoRequest()
     item = await _load_item(session, user, item_id)
@@ -225,20 +237,82 @@ async def playback_info(
         item_id=item.id,
     )
     encoded_token = quote(token, safe="")
-    return PlaybackInfoResponse(
-        mode="direct_play",
-        url=f"/api/v1/stream/{media_file.id}?token={encoded_token}",
-        file=PlaybackFileResponse(
-            id=media_file.id,
-            container=media_file.container,
+
+    # Parse stored streams
+    probe_res: ProbeResult
+    try:
+        if isinstance(media_file.streams_json, dict) and "container" in media_file.streams_json:
+            probe_res = ProbeResult.model_validate(media_file.streams_json)
+        elif isinstance(media_file.streams_json, str):
+            probe_res = ProbeResult.model_validate_json(media_file.streams_json)
+        else:
+            probe_res = ProbeResult(
+                container=media_file.container or "mp4",
+                duration_seconds=media_file.duration_seconds,
+                size_bytes=media_file.size_bytes,
+            )
+    except Exception:
+        probe_res = ProbeResult(
+            container=media_file.container or "mp4",
             duration_seconds=media_file.duration_seconds,
             size_bytes=media_file.size_bytes,
-        ),
-        subtitles=subtitle_responses(media_file.id, media_file.path, token=token),
-        reasons=[
-            "Direct play: Phase 3 serves the original file unchanged; "
-            "client capabilities are accepted but not acted on until transcoding exists."
-        ],
+        )
+
+    # Evaluate decision engine
+    server_caps = await probe_transcode_capabilities(settings)
+    user_limits = UserLimits(
+        max_bitrate=user.max_bitrate,
+        allow_transcode=user.allow_transcode,
+    )
+    playback_options = PlaybackOptions(
+        audio_track_index=request.audio_track_index,
+        subtitle_track_index=request.subtitle_track_index,
+        target_max_bitrate=request.target_max_bitrate,
+    )
+    plan = evaluate_playback_plan(
+        probe_res,
+        request.capabilities,
+        user_limits,
+        server_caps,
+        playback_options,
+    )
+
+    file_resp = PlaybackFileResponse(
+        id=media_file.id,
+        container=media_file.container,
+        duration_seconds=media_file.duration_seconds,
+        size_bytes=media_file.size_bytes,
+    )
+    subtitles = subtitle_responses(media_file.id, media_file.path, token=token)
+
+    if plan.mode == "direct_play":
+        return PlaybackInfoResponse(
+            mode="direct_play",
+            url=f"/api/v1/stream/{media_file.id}?token={encoded_token}",
+            file=file_resp,
+            subtitles=subtitles,
+            reasons=plan.reasons,
+            expires_at=expires_at,
+        )
+
+    # Launch or get HLS transcoding session
+    manager = get_session_manager(settings)
+    transcode_session = await manager.create_session(
+        user_id=user.id,
+        item_id=item.id,
+        file_id=media_file.id,
+        input_path=Path(media_file.path),
+        plan=plan,
+        start_offset=request.start_time_offset_seconds,
+    )
+
+    return PlaybackInfoResponse(
+        mode=plan.mode,
+        hls_url=f"/api/v1/hls/{transcode_session.id}/master.m3u8?token={encoded_token}",
+        session_id=transcode_session.id,
+        file=file_resp,
+        subtitles=subtitles if plan.subtitle_action == "sidecar_vtt" else [],
+        reasons=plan.reasons,
         expires_at=expires_at,
     )
 

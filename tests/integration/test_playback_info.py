@@ -36,7 +36,7 @@ async def _seed(
     root.mkdir()
     paths: list[Path] = []
     for index in range(versions):
-        name = "The Matrix (1999).mkv" if index == 0 else f"The Matrix (1999) - v{index + 1}.mkv"
+        name = "The Matrix (1999).mp4" if index == 0 else f"The Matrix (1999) - v{index + 1}.mp4"
         path = root / name
         path.write_bytes(b"video" * 100)
         paths.append(path)
@@ -69,7 +69,7 @@ async def _seed(
                 size_bytes=stat.st_size,
                 mtime=stat.st_mtime,
                 partial_hash=uuid.uuid4().hex * 2,
-                container="matroska",
+                container="mp4",
                 duration_seconds=8160.0 - index,
             )
             session.add(media_file)
@@ -95,7 +95,7 @@ async def test_playback_info_returns_usable_direct_play_urls(
     assert body["mode"] == "direct_play"
     assert body["file"] == {
         "id": file_ids[0],
-        "container": "matroska",
+        "container": "mp4",
         "duration_seconds": 8160.0,
         "size_bytes": 500,
     }
@@ -237,3 +237,80 @@ async def test_playback_info_enforces_access_and_path_containment(
     tampered = await api_client.post(url, headers=_bearer(admin))
     assert tampered.status_code == 404
     assert tampered.json()["error"]["code"] == "file_not_found"
+
+
+async def test_playback_info_transcoding_decision_and_track_selection(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    _, item_id, file_ids, root = await _seed(db_settings, db_sessionmaker)
+
+    # Attach probe streams: 1 video (hevc), 2 audio (aac, dts), 1 subtitle (pgs)
+    streams_json = {
+        "container": "mp4",
+        "duration_seconds": 120.0,
+        "bit_rate": 8_000_000,
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "hevc",
+                "profile": "Main",
+                "width": 1920,
+                "height": 1080,
+            },
+            {
+                "index": 1,
+                "codec_type": "audio",
+                "codec_name": "aac",
+                "channels": 2,
+                "is_default": True,
+            },
+            {
+                "index": 2,
+                "codec_type": "audio",
+                "codec_name": "dts",
+                "channels": 6,
+            },
+            {
+                "index": 3,
+                "codec_type": "subtitle",
+                "codec_name": "hdmv_pgs_subtitle",
+            },
+        ],
+    }
+    async with db_sessionmaker() as session:
+        f = await session.get(MediaFile, file_ids[0])
+        assert f is not None
+        f.streams_json = streams_json
+        await session.commit()
+
+    # 1. Chrome client cannot play HEVC natively -> transcode_hls
+    res = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={"capabilities": {"preset": "chrome"}},
+        headers=_bearer(admin),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["mode"] == "transcode_hls"
+    assert data["session_id"] is not None
+    assert "/api/v1/hls/" in data["hls_url"]
+    assert any("hevc" in r.lower() for r in data["reasons"])
+
+    # 2. Track selection: selecting DTS audio (index 2) and PGS subtitle (index 3)
+    track_res = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={
+            "capabilities": {"preset": "chrome"},
+            "audio_track_index": 2,
+            "subtitle_track_index": 3,
+        },
+        headers=_bearer(admin),
+    )
+    assert track_res.status_code == 200
+    t_data = track_res.json()
+    assert t_data["mode"] == "transcode_hls"
+    assert any("burn-in" in r.lower() for r in t_data["reasons"])

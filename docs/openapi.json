@@ -3321,6 +3321,17 @@
       "PlaybackInfoRequest": {
         "description": "A playback-info request; omitting it asks for defaults.",
         "properties": {
+          "audio_track_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Track Index"
+          },
           "capabilities": {
             "$ref": "#/components/schemas/ClientCapabilities"
           },
@@ -3335,6 +3346,34 @@
               }
             ],
             "title": "File Id"
+          },
+          "start_time_offset_seconds": {
+            "default": 0.0,
+            "title": "Start Time Offset Seconds",
+            "type": "number"
+          },
+          "subtitle_track_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle Track Index"
+          },
+          "target_max_bitrate": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Max Bitrate"
           }
         },
         "title": "PlaybackInfoRequest",
@@ -7468,7 +7507,7 @@
     },
     "/api/v1/items/{item_id}/playback-info": {
       "post": {
-        "description": "Return how the client should play an item.\n\nPhase 3 always answers ``direct_play`` with an item-scoped media token in\nthe stream and subtitle URLs. Capabilities are accepted now so clients and\nthe schema stay stable when the Phase 7 decision engine starts using them.",
+        "description": "Return how the client should play an item.\n\nEvaluates client capabilities against media streams, user bitrate/transcode\nlimits, and server hardware capabilities. Returns either direct play or an\nHLS stream session.",
         "operationId": "playback_info_api_v1_items__item_id__playback_info_post",
         "parameters": [
           {

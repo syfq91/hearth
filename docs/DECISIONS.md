@@ -603,6 +603,21 @@
 - **Alternatives Considered:**
   - Returning playlists immediately and letting players retry 404s (causes player startup stalls and false errors).
 
+## ADR 059: Playback Info Integration, Dynamic Track Selection, and Session Binding
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** The Phase 3 playback-info endpoint returned a fixed `direct_play` response as a placeholder contract. Phase 7 requires integrating the decision engine and session manager so client requests dynamically select audio and subtitle tracks, invoke transcoding sessions when necessary, and return usable HLS or direct stream URLs.
+- **Decision:**
+  - Update `POST /api/v1/items/{item_id}/playback-info` to accept `audio_track_index`, `subtitle_track_index`, `start_time_offset_seconds`, and `target_max_bitrate`.
+  - Evaluate the item against `evaluate_playback_plan` with server VAAPI capabilities and user account limits.
+  - If direct play is compatible: returns `mode="direct_play"` with `/api/v1/stream/{file_id}?token=...`.
+  - If HLS remuxing or transcoding is required: invokes `SessionManager.create_session`, starts the supervised ffmpeg process with container seeking, and returns `mode="remux_hls"` or `mode="transcode_hls"` with `hls_url="/api/v1/hls/{session_id}/master.m3u8?token=..."` and `session_id`.
+  - Sidecar text subtitles are returned in the `subtitles` array when `subtitle_action == "sidecar_vtt"`; bitmap/styled subtitles (PGS/ASS) trigger `subtitle_action == "burn_in"`, omitting sidecar URLs to prevent duplicate display.
+- **Alternatives Considered:**
+  - Creating a separate endpoint for transcoding sessions (would break API-first client simplicity; `/playback-info` remains the single negotiation contract).
+
+
 
 
 
