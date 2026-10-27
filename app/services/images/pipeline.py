@@ -216,7 +216,11 @@ class ImagePipeline:
         known = await self._known_origins(item_id)
         stored = 0
         for provider_image in candidates:
-            origin = provider_image.source_url or provider_image.file_path
+            origin = (
+                provider_image.source_url
+                or provider_image.file_path
+                or (f"embedded:{item_id}" if provider_image.data else None)
+            )
             if not origin or origin in known:
                 continue
             try:

@@ -20,6 +20,9 @@ from app.db.base import utcnow
 from app.db.models import (
     Album,
     Artist,
+    Author,
+    Book,
+    BookSeries,
     Episode,
     Library,
     LibraryPath,
@@ -30,10 +33,17 @@ from app.db.models import (
     Series,
     Track,
 )
+from app.services.images.pipeline import ImagePipeline
+from app.services.media.books import read_book_metadata
 from app.services.media.probe import ProbeResult, probe_media
 from app.services.media.tags import read_audio_tags
 from app.services.media.titles import normalize_title, sort_title
 from app.services.metadata.base import ProviderImage
+from app.services.metadata.local import (
+    find_local_book_cover,
+    find_local_book_opf,
+    parse_local_opf,
+)
 from app.services.scanner.hashing import partial_hash
 from app.services.scanner.parsing import ParsedMovie, parse_episode_path, parse_movie_path
 from app.services.scanner.walker import (
@@ -41,6 +51,7 @@ from app.services.scanner.walker import (
     find_album_artwork,
     find_artist_artwork,
     scope_dirs,
+    walk_book_files,
     walk_movie_files,
     walk_music_files,
 )
@@ -165,6 +176,7 @@ class LibraryScanner:
                 item_index,
                 tv_indices,
                 music_indices,
+                book_indices,
                 library_type,
             ) = await self._load_library(library_id)
             await self._check_cancel(is_cancelled)
@@ -179,6 +191,8 @@ class LibraryScanner:
                 await progress(0.05)
             if library_type == "music":
                 candidates = await asyncio.to_thread(walk_music_files, roots, start_dirs=scopes)
+            elif library_type == "book":
+                candidates = await asyncio.to_thread(walk_book_files, roots, start_dirs=scopes)
             else:
                 candidates = await asyncio.to_thread(walk_movie_files, roots, start_dirs=scopes)
             await self._check_cancel(is_cancelled)
@@ -239,7 +253,7 @@ class LibraryScanner:
                         moved_ids.add(row.id)
                         break
 
-            if library_type == "music":
+            if library_type in ("music", "book"):
                 outcomes = {}
             else:
                 probe_queue = [
@@ -307,6 +321,7 @@ class LibraryScanner:
                 item_index=item_index,
                 tv_indices=tv_indices,
                 music_indices=music_indices,
+                book_indices=book_indices,
                 new_files=[c for c in new_files if c.path not in moved_paths],
                 changed_files=changed_files,
                 restored_files=restored_files,
@@ -381,14 +396,23 @@ class LibraryScanner:
             dict[tuple[str | None, int, int], str],
         ]
         | None,
+        tuple[
+            dict[str, str],
+            dict[str, str],
+            dict[tuple[str | None, str], str],
+            dict[tuple[str, str], str],
+        ]
+        | None,
         str,
     ]:
         async with self.sessionmaker() as session:
             library = await session.get(Library, library_id)
             if library is None:
                 raise ScanError(f"Library {library_id} does not exist")
-            if library.type not in ("movie", "tv", "music"):
-                raise ScanError("Only movie, tv and music libraries can be scanned in this phase")
+            if library.type not in ("movie", "tv", "music", "book"):
+                raise ScanError(
+                    "Only movie, tv, music and book libraries can be scanned in this phase"
+                )
 
             roots = list(
                 await session.scalars(
@@ -479,9 +503,11 @@ class LibraryScanner:
                 }
                 tv_indices = (series_index, season_index, episode_index)
                 music_indices = None
-            else:
+                book_indices = None
+            elif library.type == "music":
                 item_index = {}
                 tv_indices = None
+                book_indices = None
                 artist_rows = (
                     await session.execute(
                         select(MediaItem.id, MediaItem.title).where(
@@ -517,8 +543,49 @@ class LibraryScanner:
                     and row.track_number is not None
                 }
                 music_indices = (artist_index, album_index, track_index)
+            elif library.type == "book":
+                item_index = {}
+                tv_indices = None
+                music_indices = None
 
-        return roots, existing, item_index, tv_indices, music_indices, library.type
+                author_rows = (await session.execute(select(Author.id, Author.name))).all()
+                author_index = {normalize_title(row.name): row.id for row in author_rows}
+
+                b_series_rows = (
+                    await session.execute(select(BookSeries.id, BookSeries.name))
+                ).all()
+                b_series_index = {normalize_title(row.name): row.id for row in b_series_rows}
+
+                book_rows = (
+                    await session.execute(
+                        select(Book.item_id, MediaItem.title, Book.author_id)
+                        .join(MediaItem, MediaItem.id == Book.item_id)
+                        .where(MediaItem.library_id == library_id)
+                    )
+                ).all()
+                book_index = {
+                    (row.author_id, normalize_title(row.title)): row.item_id for row in book_rows
+                }
+
+                existing_files = (
+                    await session.execute(
+                        select(MediaFile.path, MediaFile.item_id)
+                        .join(MediaItem, MediaItem.id == MediaFile.item_id)
+                        .where(MediaItem.library_id == library_id)
+                    )
+                ).all()
+                dir_book_index = {
+                    (str(Path(f_path).parent), normalize_title(Path(f_path).stem)): f_item_id
+                    for f_path, f_item_id in existing_files
+                }
+                book_indices = (author_index, b_series_index, book_index, dir_book_index)
+            else:
+                item_index = {}
+                tv_indices = None
+                music_indices = None
+                book_indices = None
+
+        return roots, existing, item_index, tv_indices, music_indices, book_indices, library.type
 
     async def _hash_files(
         self,
@@ -597,6 +664,15 @@ class LibraryScanner:
             ]
             | None
         ) = None,
+        book_indices: (
+            tuple[
+                dict[str, str],
+                dict[str, str],
+                dict[tuple[str | None, str], str],
+                dict[tuple[str, str], str],
+            ]
+            | None
+        ) = None,
         new_files: Sequence[ScannedFile],
         changed_files: Sequence[ScannedFile],
         restored_files: Sequence[_ExistingFile],
@@ -608,6 +684,7 @@ class LibraryScanner:
         now: datetime,
         stats: ScanStats,
     ) -> None:
+        pending_artworks: list[tuple[str, str, list[ProviderImage]]] = []
         async with self.sessionmaker() as session:
             for candidate_path, (old, candidate) in moves.items():
                 row = await session.get(MediaFile, old.id)
@@ -657,6 +734,12 @@ class LibraryScanner:
                             if track_item is not None:
                                 track_item.title = tags.title
                                 track_item.sort_title = sort_title(tags.title)
+                elif library_type == "book":
+                    row.size_bytes = candidate.size_bytes
+                    row.mtime = candidate.mtime
+                    row.partial_hash = hashes.get(candidate.path, current.partial_hash)
+                    row.missing_since = None
+                    stats.updated += 1
                 else:
                     self._apply_probe(row, outcomes.get(candidate.path))
                     row.size_bytes = candidate.size_bytes
@@ -877,28 +960,23 @@ class LibraryScanner:
                         stats.added_items += 1
 
                         # Local artist artwork discovery
-                        if self.matcher is not None and self.matcher.artwork is not None:
-                            art_path = find_artist_artwork(Path(candidate.path).parent)
-                            if not art_path:
-                                art_path = find_artist_artwork(Path(candidate.path).parent.parent)
-                            if art_path:
-                                try:
-                                    await self.matcher.artwork(
-                                        artist_id,
-                                        "local",
-                                        [
-                                            ProviderImage(
-                                                kind="poster",
-                                                file_path=art_path,
-                                                is_primary=True,
-                                            )
-                                        ],
-                                    )
-                                    stats.images_stored += 1
-                                except Exception as exc:
-                                    logger.debug(
-                                        "failed to store artist artwork for %s: %s", artist_id, exc
-                                    )
+                        art_path = find_artist_artwork(Path(candidate.path).parent)
+                        if not art_path:
+                            art_path = find_artist_artwork(Path(candidate.path).parent.parent)
+                        if art_path:
+                            pending_artworks.append(
+                                (
+                                    artist_id,
+                                    "local",
+                                    [
+                                        ProviderImage(
+                                            kind="poster",
+                                            file_path=art_path,
+                                            is_primary=True,
+                                        )
+                                    ],
+                                )
+                            )
 
                     # 2. Album
                     album_title = tags.album or "Unknown Album"
@@ -932,50 +1010,39 @@ class LibraryScanner:
                         stats.added_items += 1
 
                         # Artwork handling: embedded cover or local sidecar
-                        if self.matcher is not None and self.matcher.artwork is not None:
-                            if tags.embedded_cover is not None:
-                                try:
-                                    await self.matcher.artwork(
+                        if tags.embedded_cover is not None:
+                            pending_artworks.append(
+                                (
+                                    album_id,
+                                    "embedded",
+                                    [
+                                        ProviderImage(
+                                            kind="poster",
+                                            data=tags.embedded_cover.data,
+                                            mime_type=tags.embedded_cover.mime_type,
+                                            is_primary=True,
+                                        )
+                                    ],
+                                )
+                            )
+                        else:
+                            local_art = find_album_artwork(Path(candidate.path).parent)
+                            if not local_art:
+                                local_art = find_album_artwork(Path(candidate.path).parent.parent)
+                            if local_art:
+                                pending_artworks.append(
+                                    (
                                         album_id,
-                                        "embedded",
+                                        "local",
                                         [
                                             ProviderImage(
                                                 kind="poster",
-                                                data=tags.embedded_cover.data,
-                                                mime_type=tags.embedded_cover.mime_type,
+                                                file_path=local_art,
                                                 is_primary=True,
                                             )
                                         ],
                                     )
-                                    stats.images_stored += 1
-                                except Exception as exc:
-                                    logger.debug(
-                                        "failed to store embedded cover for %s: %s", album_id, exc
-                                    )
-                            else:
-                                local_art = find_album_artwork(Path(candidate.path).parent)
-                                if not local_art:
-                                    local_art = find_album_artwork(
-                                        Path(candidate.path).parent.parent
-                                    )
-                                if local_art:
-                                    try:
-                                        await self.matcher.artwork(
-                                            album_id,
-                                            "local",
-                                            [
-                                                ProviderImage(
-                                                    kind="poster",
-                                                    file_path=local_art,
-                                                    is_primary=True,
-                                                )
-                                            ],
-                                        )
-                                        stats.images_stored += 1
-                                    except Exception as exc:
-                                        logger.debug(
-                                            "failed to store local cover for %s: %s", album_id, exc
-                                        )
+                                )
 
                     # 3. Track Artist (if distinct)
                     if tags.artist and tags.artist != tags.album_artist:
@@ -1065,6 +1132,155 @@ class LibraryScanner:
                         track_index[(album_id, tags.disc_number, tags.track_number)] = track_item_id
                     stats.added += 1
                     stats.added_items += 1
+            elif library_type == "book":
+                assert book_indices is not None
+                book_author_index, book_series_index, book_index, dir_book_index = book_indices
+
+                for candidate in new_files:
+                    p = Path(candidate.path)
+                    container = p.suffix.lstrip(".").lower()
+                    digest = hashes.get(candidate.path, "")
+
+                    # 1. Read tags from book file
+                    tag_data = read_book_metadata(p)
+
+                    # 2. Check for local OPF and sidecar cover (Local always wins)
+                    local_opf = find_local_book_opf(p.parent)
+                    local_cover = find_local_book_cover(p.parent)
+                    if local_opf:
+                        local_meta = parse_local_opf(local_opf, cover_path=local_cover)
+                        if local_meta.title:
+                            tag_data.title = local_meta.title
+                        if local_meta.author_name:
+                            tag_data.author = local_meta.author_name
+                        if local_meta.series_name:
+                            tag_data.series = local_meta.series_name
+                        if local_meta.series_index is not None:
+                            tag_data.series_index = local_meta.series_index
+                        if local_meta.isbn:
+                            tag_data.isbn = local_meta.isbn
+                        if local_meta.overview:
+                            tag_data.overview = local_meta.overview
+                        if local_meta.publisher:
+                            tag_data.publisher = local_meta.publisher
+                        if local_meta.published_date:
+                            tag_data.published_date = local_meta.published_date
+
+                    # 3. Resolve or create Author
+                    author_id: str | None = None
+                    if tag_data.author:
+                        norm_author = normalize_title(tag_data.author)
+                        author_id = book_author_index.get(norm_author)
+                        if author_id is None:
+                            author_id = new_id()
+                            author_obj = Author(
+                                id=author_id,
+                                name=tag_data.author,
+                                sort_name=tag_data.author,
+                            )
+                            session.add(author_obj)
+                            book_author_index[norm_author] = author_id
+
+                    # 4. Resolve or create Series
+                    b_series_id: str | None = None
+                    if tag_data.series:
+                        norm_series = normalize_title(tag_data.series)
+                        b_series_id = book_series_index.get(norm_series)
+                        if b_series_id is None:
+                            b_series_id = new_id()
+                            series_obj = BookSeries(id=b_series_id, name=tag_data.series)
+                            session.add(series_obj)
+                            book_series_index[norm_series] = b_series_id
+
+                    # 5. Check if Book item already exists (by directory + stem
+                    # or (author_id, norm_title))
+                    norm_title = normalize_title(tag_data.title)
+                    folder_key = str(p.parent)
+                    book_item_id = dir_book_index.get((folder_key, norm_title)) or book_index.get(
+                        (author_id, norm_title)
+                    )
+
+                    if book_item_id is None:
+                        book_item_id = new_id()
+                        year = None
+                        if tag_data.published_date and len(tag_data.published_date) >= 4:
+                            year_str = tag_data.published_date[:4]
+                            if year_str.isdigit():
+                                year = int(year_str)
+
+                        book_item = MediaItem(
+                            id=book_item_id,
+                            library_id=library_id,
+                            type="book",
+                            title=tag_data.title,
+                            sort_title=sort_title(tag_data.title),
+                            year=year,
+                            overview=tag_data.overview,
+                            added_at=now,
+                            match_state="matched" if (tag_data.author or local_opf) else "pending",
+                        )
+                        session.add(book_item)
+
+                        book_obj = Book(
+                            item_id=book_item_id,
+                            author_id=author_id,
+                            series_id=b_series_id,
+                            series_index=tag_data.series_index,
+                            isbn=tag_data.isbn,
+                            publisher=tag_data.publisher,
+                            published_date=tag_data.published_date,
+                            page_count=tag_data.page_count,
+                            language=tag_data.language,
+                        )
+                        session.add(book_obj)
+
+                        book_index[(author_id, norm_title)] = book_item_id
+                        dir_book_index[(folder_key, norm_title)] = book_item_id
+                        stats.added_items += 1
+
+                        # Store artwork: local cover wins over embedded cover
+                        if local_cover and local_cover.is_file():
+                            pending_artworks.append(
+                                (
+                                    book_item_id,
+                                    "local",
+                                    [
+                                        ProviderImage(
+                                            kind="poster",
+                                            file_path=str(local_cover),
+                                            is_primary=True,
+                                        )
+                                    ],
+                                )
+                            )
+                        elif tag_data.cover_data:
+                            pending_artworks.append(
+                                (
+                                    book_item_id,
+                                    "embedded",
+                                    [
+                                        ProviderImage(
+                                            kind="poster",
+                                            data=tag_data.cover_data,
+                                            mime_type=tag_data.cover_mime,
+                                            is_primary=True,
+                                        )
+                                    ],
+                                )
+                            )
+
+                    # 6. Add MediaFile
+                    file_row = MediaFile(
+                        id=new_id(),
+                        item_id=book_item_id,
+                        path=candidate.path,
+                        size_bytes=candidate.size_bytes,
+                        mtime=candidate.mtime,
+                        partial_hash=digest,
+                        container=container,
+                    )
+                    session.add(file_row)
+                    stats.added += 1
 
             for current in mark_missing:
                 row = await session.get(MediaFile, current.id)
@@ -1186,8 +1402,49 @@ class LibraryScanner:
                     orphan_art_item = await session.get(MediaItem, art.item_id)
                     if orphan_art_item is not None:
                         await session.delete(orphan_art_item)
+            elif library_type == "book":
+                orphan_books = list(
+                    await session.scalars(
+                        select(Book)
+                        .join(MediaItem, MediaItem.id == Book.item_id)
+                        .where(
+                            MediaItem.library_id == library_id,
+                            ~MediaItem.files.any(),
+                        )
+                    )
+                )
+                for b in orphan_books:
+                    orphan_book_item = await session.get(MediaItem, b.item_id)
+                    if orphan_book_item is not None:
+                        await session.delete(orphan_book_item)
+                await session.flush()
+
+                orphan_authors = list(
+                    await session.scalars(select(Author).where(~Author.books.any()))
+                )
+                for a in orphan_authors:
+                    await session.delete(a)
+
+                orphan_series = list(
+                    await session.scalars(select(BookSeries).where(~BookSeries.books.any()))
+                )
+                for s in orphan_series:
+                    await session.delete(s)
 
             await session.commit()
+
+        if pending_artworks:
+            artwork_handler = (
+                self.matcher.artwork
+                if self.matcher is not None and self.matcher.artwork is not None
+                else ImagePipeline(self.settings, self.sessionmaker)
+            )
+            for target_id, prov_name, imgs in pending_artworks:
+                try:
+                    stored_count = await artwork_handler(target_id, prov_name, imgs)
+                    stats.images_stored += stored_count or 0
+                except Exception as exc:
+                    logger.debug("Failed to store artwork for %s: %s", target_id, exc)
 
     @staticmethod
     def _apply_probe(row: MediaFile, outcome: _ProbeOutcome | None) -> None:

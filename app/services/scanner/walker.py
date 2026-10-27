@@ -43,6 +43,18 @@ AUDIO_EXTENSIONS = frozenset(
     }
 )
 
+BOOK_EXTENSIONS = frozenset(
+    {
+        ".epub",
+        ".pdf",
+        ".cbz",
+        ".cbr",
+        ".mobi",
+        ".azw3",
+    }
+)
+
+
 IGNORED_DIRECTORIES = frozenset(
     {
         "extras",
@@ -275,3 +287,50 @@ def find_artist_artwork(artist_dir: Path | str) -> str | None:
         if candidate.is_file():
             return str(candidate)
     return None
+
+
+def walk_book_files(
+    roots: Sequence[str],
+    *,
+    start_dirs: Sequence[str] | None = None,
+) -> list[ScannedFile]:
+    """Walk book roots and return supported, non-ignored book and comic files."""
+    search_dirs = (
+        scope_dirs(roots, start_dirs)
+        if start_dirs is not None
+        else [_normalize_root(root) for root in roots]
+    )
+    files: list[ScannedFile] = []
+
+    for start in search_dirs:
+        if not os.path.isdir(start):
+            continue
+        for dirpath, dirnames, filenames in os.walk(start, topdown=True, followlinks=False):
+            dirnames[:] = [
+                name
+                for name in dirnames
+                if name.casefold() not in IGNORED_DIRECTORIES
+                and not name.startswith(".")
+                and not os.path.islink(os.path.join(dirpath, name))
+            ]
+            if ".nomedia" in filenames:
+                dirnames.clear()
+                continue
+
+            for filename in filenames:
+                if filename.startswith("."):
+                    continue
+                extension = os.path.splitext(filename)[1].casefold()
+                if extension not in BOOK_EXTENSIONS:
+                    continue
+                path = os.path.join(dirpath, filename)
+                try:
+                    stat = os.stat(path, follow_symlinks=False)
+                except OSError:
+                    continue
+                if not os.path.isfile(path) or os.path.islink(path):
+                    continue
+                files.append(ScannedFile(path=path, size_bytes=stat.st_size, mtime=stat.st_mtime))
+
+    files.sort(key=lambda item: item.path)
+    return files

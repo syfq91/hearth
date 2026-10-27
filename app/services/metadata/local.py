@@ -1,10 +1,12 @@
 """Local metadata from Kodi-style NFO files and sidecar artwork."""
 
+import contextlib
 import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from app.services.metadata.base import (
+    BookMetadata,
     EpisodeMetadata,
     MetadataProvider,
     MovieMetadata,
@@ -612,3 +614,96 @@ class LocalProvider(MetadataProvider):
             add("backdrop", path)
 
         return list(found.values())
+
+
+def find_local_book_opf(directory: Path) -> Path | None:
+    """Find a local OPF file (such as metadata.opf) in a book's directory."""
+    candidate = directory / "metadata.opf"
+    if candidate.is_file():
+        return candidate
+    for f in directory.iterdir():
+        if f.is_file() and f.suffix.lower() == ".opf":
+            return f
+    return None
+
+
+def find_local_book_cover(directory: Path) -> Path | None:
+    """Find a local cover image in a book's directory."""
+    for name in ("cover", "folder", "poster"):
+        for ext in (".jpg", ".jpeg", ".png", ".webp"):
+            candidate = directory / f"{name}{ext}"
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+def parse_local_opf(opf_path: Path, cover_path: Path | None = None) -> BookMetadata:
+    """Parse local Calibre metadata.opf file and optional sidecar cover."""
+    tree = ET.parse(opf_path)
+    root = tree.getroot()
+
+    title: str | None = None
+    author: str | None = None
+    overview: str | None = None
+    series: str | None = None
+    series_index: float | None = None
+    isbn: str | None = None
+    publisher: str | None = None
+    published_date: str | None = None
+    language: str | None = None
+
+    for elem in root.iter():
+        tag = _tag(elem)
+        text = (elem.text or "").strip()
+        if tag == "title" and text and not title:
+            title = text
+        elif tag == "creator" and text and not author:
+            author = text
+        elif tag == "description" and text and not overview:
+            overview = text
+        elif tag == "publisher" and text and not publisher:
+            publisher = text
+        elif tag == "language" and text and not language:
+            language = text
+        elif tag == "date" and text and not published_date:
+            published_date = text
+        elif tag == "identifier" and text and not isbn:
+            scheme = elem.attrib.get("scheme", "").upper()
+            for k, v in elem.attrib.items():
+                if _tag(ET.Element(k)) == "scheme":
+                    scheme = v.upper()
+            if scheme == "ISBN" or "isbn" in elem.attrib.get("id", "").lower():
+                isbn = text
+        elif tag == "meta":
+            name = elem.attrib.get("name", "").lower()
+            content = elem.attrib.get("content", text).strip()
+            if name == "calibre:series" and content:
+                series = content
+            elif name == "calibre:series_index" and content:
+                with contextlib.suppress(ValueError):
+                    series_index = float(content)
+
+    images: list[ProviderImage] = []
+    if cover_path and cover_path.is_file():
+        images.append(
+            ProviderImage(
+                kind="poster",
+                file_path=str(cover_path.resolve()),
+                is_primary=True,
+            )
+        )
+
+    return BookMetadata(
+        provider="local",
+        provider_id=str(opf_path),
+        title=title or opf_path.parent.name,
+        author_name=author,
+        series_name=series,
+        series_index=series_index,
+        isbn=isbn,
+        publisher=publisher,
+        published_date=published_date,
+        language=language,
+        overview=overview,
+        images=tuple(images),
+    )

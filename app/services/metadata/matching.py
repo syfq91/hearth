@@ -8,6 +8,7 @@ into the scan.
 """
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
@@ -16,13 +17,15 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Literal, cast
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.ids import new_id
 from app.db.base import utcnow
 from app.db.models import (
+    Author,
+    Book,
     Episode,
     Genre,
     ItemGenre,
@@ -39,6 +42,7 @@ from app.db.models import (
 )
 from app.services.media.titles import normalize_title, sort_title
 from app.services.metadata.base import (
+    BookMetadata,
     EpisodeMetadata,
     MetadataProvider,
     MovieMetadata,
@@ -48,8 +52,15 @@ from app.services.metadata.base import (
     ProviderUnavailable,
     SearchResult,
 )
-from app.services.metadata.local import LocalProvider
+from app.services.metadata.googlebooks import GoogleBooksProvider
+from app.services.metadata.local import (
+    LocalProvider,
+    find_local_book_cover,
+    find_local_book_opf,
+    parse_local_opf,
+)
 from app.services.metadata.musicbrainz import MusicBrainzProvider
+from app.services.metadata.openlibrary import OpenLibraryProvider
 from app.services.metadata.tmdb import TMDBProvider
 from app.services.scanner.walker import find_artist_artwork
 
@@ -101,6 +112,8 @@ class _ItemSnapshot:
     type: str = "movie"
     artist_name: str | None = None
     musicbrainz_id: str | None = None
+    author_name: str | None = None
+    isbn: str | None = None
 
 
 def _year_score(left: int | None, right: int | None) -> float:
@@ -176,6 +189,10 @@ class MetadataMatcher:
                 self.providers.append(TMDBProvider(settings, sessionmaker))
             if settings.musicbrainz_enabled:
                 self.providers.append(MusicBrainzProvider(settings, sessionmaker))
+            if settings.openlibrary_enabled:
+                self.providers.append(OpenLibraryProvider(settings))
+            if settings.google_books_enabled:
+                self.providers.append(GoogleBooksProvider(settings))
         else:
             self.providers = list(providers)
 
@@ -191,6 +208,14 @@ class MetadataMatcher:
         )
         self._musicbrainz = next(
             (provider for provider in self.remote_providers if provider.name == "musicbrainz"),
+            None,
+        )
+        self._openlibrary = next(
+            (provider for provider in self.remote_providers if provider.name == "openlibrary"),
+            None,
+        )
+        self._googlebooks = next(
+            (provider for provider in self.remote_providers if provider.name == "googlebooks"),
             None,
         )
 
@@ -262,6 +287,8 @@ class MetadataMatcher:
             return await self._match_artist(snapshot)
         if snapshot.type == "album":
             return await self._match_album(snapshot)
+        if snapshot.type == "book":
+            return await self._match_book(snapshot)
 
         local_error: str | None = None
         if self.local_provider is not None:
@@ -384,6 +411,9 @@ class MetadataMatcher:
             artist_name: str | None = None
             musicbrainz_id: str | None = None
 
+            author_name: str | None = None
+            isbn: str | None = None
+
             if item.type == "artist":
                 if item.artist is not None:
                     musicbrainz_id = item.artist.musicbrainz_id
@@ -413,6 +443,11 @@ class MetadataMatcher:
                     )
                 )
                 file_paths.extend(track_files)
+            elif item.type == "book":
+                if item.book is not None:
+                    isbn = item.book.isbn
+                    if item.book.author is not None:
+                        author_name = item.book.author.name
 
             return _ItemSnapshot(
                 id=item.id,
@@ -425,6 +460,8 @@ class MetadataMatcher:
                 type=item.type,
                 artist_name=artist_name,
                 musicbrainz_id=musicbrainz_id,
+                author_name=author_name,
+                isbn=isbn,
             )
 
     async def _local_details(self, snapshot: _ItemSnapshot) -> MovieMetadata | None:
@@ -1020,6 +1057,126 @@ class MetadataMatcher:
                 item.matched_at = now
                 await session.commit()
         return MatchResult(item_id=snapshot.id, state="matched")
+
+    async def _match_book(self, snapshot: _ItemSnapshot) -> MatchResult:
+        """Match one book via local OPF, Open Library, or Google Books fallback."""
+        now = self.clock()
+        details: BookMetadata | None = None
+
+        # 1. Local metadata check (always wins)
+        for file_path in snapshot.file_paths:
+            p = Path(file_path)
+            local_opf = find_local_book_opf(p.parent)
+            local_cover = find_local_book_cover(p.parent)
+            if local_opf:
+                details = parse_local_opf(local_opf, cover_path=local_cover)
+                return await self._apply_book_match(
+                    snapshot, "local", str(local_opf), details, list(details.images)
+                )
+
+        # 2. Open Library check
+        if self._openlibrary and self._openlibrary.enabled:
+            self._provider_calls += 1
+            try:
+                candidates = await self._openlibrary.search_book(
+                    snapshot.title,
+                    author=snapshot.author_name,
+                    isbn=snapshot.isbn,
+                )
+                if candidates:
+                    best = candidates[0]
+                    self._provider_calls += 1
+                    details = await self._openlibrary.fetch_book_details(best.provider_id)
+                    if details is not None:
+                        images = list(details.images)
+                        if not images:
+                            images = await self._openlibrary.fetch_book_images(best.provider_id)
+                        return await self._apply_book_match(
+                            snapshot, "openlibrary", best.provider_id, details, images
+                        )
+            except Exception as exc:
+                logger.warning("Open Library match failed for %s: %s", snapshot.id, exc)
+
+        # 3. Google Books fallback
+        if self._googlebooks and self._googlebooks.enabled:
+            self._provider_calls += 1
+            try:
+                candidates = await self._googlebooks.search_book(
+                    snapshot.title,
+                    author=snapshot.author_name,
+                    isbn=snapshot.isbn,
+                )
+                if candidates:
+                    best = candidates[0]
+                    self._provider_calls += 1
+                    details = await self._googlebooks.fetch_book_details(best.provider_id)
+                    if details is not None:
+                        images = list(details.images)
+                        return await self._apply_book_match(
+                            snapshot, "googlebooks", best.provider_id, details, images
+                        )
+            except Exception as exc:
+                logger.warning("Google Books match failed for %s: %s", snapshot.id, exc)
+
+        # No match found
+        async with self.sessionmaker() as session:
+            item = await session.get(MediaItem, snapshot.id)
+            if item is not None:
+                item.match_state = "unmatched"
+                item.next_match_at = now + timedelta(
+                    hours=self.settings.metadata_unmatched_retry_hours
+                )
+                await session.commit()
+        return MatchResult(item_id=snapshot.id, state="unmatched")
+
+    async def _apply_book_match(
+        self,
+        snapshot: _ItemSnapshot,
+        provider_name: str,
+        provider_id: str,
+        details: BookMetadata,
+        images: Sequence[ProviderImage],
+    ) -> MatchResult:
+        now = self.clock()
+        stored_count = await self._store_images(snapshot.id, provider_name, images)
+        async with self.sessionmaker() as session:
+            item = await session.get(MediaItem, snapshot.id)
+            if item is None:
+                return MatchResult(item_id=snapshot.id, state="pending", error="Item deleted")
+
+            item.match_state = "matched"
+            item.matched_at = now
+            item.match_error = None
+            if details.overview and not item.overview:
+                item.overview = details.overview
+            if details.published_date and len(details.published_date) >= 4 and not item.year:
+                with contextlib.suppress(ValueError):
+                    item.year = int(details.published_date[:4])
+
+            book = await session.get(Book, snapshot.id)
+            if book is not None:
+                if details.isbn and not book.isbn:
+                    book.isbn = details.isbn
+                if details.publisher and not book.publisher:
+                    book.publisher = details.publisher
+                if details.published_date and not book.published_date:
+                    book.published_date = details.published_date
+                if details.page_count and not book.page_count:
+                    book.page_count = details.page_count
+                if details.author_name and not book.author_id:
+                    existing_author = await session.scalar(
+                        select(Author).where(func.lower(Author.name) == details.author_name.lower())
+                    )
+                    if existing_author is None:
+                        existing_author = Author(
+                            name=details.author_name, sort_name=details.author_name
+                        )
+                        session.add(existing_author)
+                        await session.flush()
+                    book.author_id = existing_author.id
+
+            await session.commit()
+        return MatchResult(item_id=snapshot.id, state="matched", images=stored_count)
 
     async def _apply_genres(
         self, session: AsyncSession, item_id: str, names: Sequence[str]

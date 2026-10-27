@@ -106,6 +106,13 @@ class Settings(BaseSettings):
     listenbrainz_enabled: bool = True
     listenbrainz_base_url: str = "https://api.listenbrainz.org"
 
+    # Book metadata
+    openlibrary_enabled: bool = True
+    openlibrary_base_url: str = "https://openlibrary.org"
+    openlibrary_covers_base_url: str = "https://covers.openlibrary.org"
+    google_books_enabled: bool = True
+    google_books_base_url: str = "https://www.googleapis.com/books/v1"
+
     # Images
     image_cache_dir: Path | None = None
     image_download_timeout_seconds: float = 20.0
@@ -117,6 +124,8 @@ class Settings(BaseSettings):
         "image.tmdb.org",
         "coverartarchive.org",
         "archive.org",
+        "covers.openlibrary.org",
+        "books.google.com",
     ]
 
     @property

@@ -175,6 +175,27 @@ class AlbumMetadata:
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
 
+@dataclass(frozen=True)
+class BookMetadata:
+    """Normalized book details from any provider."""
+
+    provider: str
+    provider_id: str
+    title: str
+    author_name: str | None = None
+    series_name: str | None = None
+    series_index: float | None = None
+    isbn: str | None = None
+    publisher: str | None = None
+    published_date: str | None = None
+    page_count: int | None = None
+    language: str | None = None
+    overview: str | None = None
+    genres: tuple[str, ...] = ()
+    images: tuple[ProviderImage, ...] = ()
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+
+
 class MetadataProvider(ABC):
     """The small provider surface the matcher depends on."""
 
@@ -237,6 +258,20 @@ class MetadataProvider(ABC):
 
     async def fetch_album_images(self, album_id: str) -> list[ProviderImage]:
         """Fetch artwork candidates for an album."""
+        return []
+
+    async def search_book(
+        self, query: str, author: str | None = None, isbn: str | None = None
+    ) -> list[SearchResult]:
+        """Search for book candidates."""
+        return []
+
+    async def fetch_book_details(self, book_id: str) -> BookMetadata | None:
+        """Fetch normalized book details."""
+        return None
+
+    async def fetch_book_images(self, book_id: str) -> list[ProviderImage]:
+        """Fetch artwork candidates for a book."""
         return []
 
     async def close(self) -> None:

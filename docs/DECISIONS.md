@@ -502,6 +502,26 @@
   - PyMuPDF / `fitz` (rejected due to AGPL-3.0 copyleft license).
   - External command-line `pdftoppm` via subprocess (requires external system package dependencies not guaranteed in minimal environments).
 
+## ADR 051: Open Library and Google Books Metadata Providers
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** Books require external metadata enrichment from public APIs when embedded metadata or local OPF sidecars do not supply full author, series, ISBN, or overview details.
+- **Decision:**
+  - Implement `OpenLibraryProvider` using Open Library Search API (`/search.json`) and Works/Editions APIs (`/works/{id}.json`) with cover downloads via `covers.openlibrary.org`. Rate limit to 1 req/sec in production.
+  - Implement `GoogleBooksProvider` using the Google Books Volumes API (`/books/v1/volumes`) with thumbnail downloads via `books.google.com`. Rate limit to 1 req/sec.
+  - Precedence in matcher: Local sidecar OPF/cover > Open Library > Google Books fallback.
+  - Configurable allowed image hostnames added to settings (`covers.openlibrary.org`, `books.google.com`) with SSRF validation.
+
+## ADR 052: Book Scanner Multi-Format Grouping and Deferred Image Ingestion
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** Ebooks and comics often exist in multiple formats (e.g. `Dune.epub` and `Dune.pdf` in the same directory). In addition, storing extracted embedded covers requires inserting records into the `images` table with foreign key constraints referencing `media_items.id`.
+- **Decision:**
+  - Group book files by folder + normalized stem and by `(author_id, normalized_title)` during scanning. Multiple formats attach as separate `MediaFile` records to a single `MediaItem` (`type="book"`). Deleting one format retains the book item if other format files remain.
+  - In `LibraryScanner._write_changes`, collect embedded and local artwork candidates into `pending_artworks` during file processing, and execute image pipeline ingestion *after* committing the parent `MediaItem` transaction. This satisfies foreign key constraints across concurrent database sessions while preserving scan atomicity.
+
 
 
 
