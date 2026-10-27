@@ -540,6 +540,24 @@
 - **Alternatives Considered:**
   - Requiring clients to submit full raw capability strings every request without presets (burdensome and error-prone for web and lightweight clients).
 
+## ADR 055: Pure-Function Playback Decision Engine and Transcode Matrix
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** Deciding whether to direct play, remux to HLS, or transcode to HLS involves many intersecting dimensions: media containers, video codecs/profiles, resolution constraints, bitrate caps, HDR color transfers, audio formats and layouts, subtitle types (text vs bitmap), client device profiles, user permissions, and server hardware acceleration capabilities.
+- **Decision:**
+  - Implement `evaluate_playback_plan` as a pure, side-effect-free function returning a typed `TranscodePlan`.
+  - Modes:
+    - `direct_play`: All streams and container natively supported, bitrate within client/user limits, no bitmap subtitle burn-in.
+    - `remux_hls`: Video codec compatible with client, but container unsupported (e.g. MKV on Chrome) or audio codec requires transcode (e.g. DTS -> AAC) without touching video.
+    - `transcode_hls`: Video codec unsupported, resolution downscale required, bitrate clamped, HDR to SDR tonemapping required, or bitmap/styled subtitle (PGS, VOBSUB, ASS) burn-in requested.
+  - Video dimensions: Preserves source aspect ratio while enforcing client `max_width`/`max_height` and snapping both dimensions to even integers (required for H.264/NV12/YUV420p).
+  - Hardware selection: Uses VAAPI (`h264_vaapi`) only when hardware is available, forced software is off, the GPU can decode the source video codec, and any required tonemapping is supported; otherwise falls back gracefully to software (`libx264`).
+  - Unit tested with a comprehensive 48-case table-driven matrix.
+- **Alternatives Considered:**
+  - Embedding decision logic directly into HTTP route handlers (untestable in isolation and prone to edge-case bugs).
+
+
 
 
 

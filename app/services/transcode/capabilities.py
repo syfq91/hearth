@@ -69,7 +69,14 @@ class ServerTranscodeCapabilities(BaseModel):
         """Return True if hardware decoding is supported for codec."""
         if self.force_software or not self.available:
             return False
-        cap = self.codecs.get(codec.lower())
+        normalized = codec.lower()
+        if normalized == "mpeg2video":
+            normalized = "mpeg2"
+        elif normalized in ("h265", "hev1", "hvc1"):
+            normalized = "hevc"
+        elif normalized in ("avc", "avc1"):
+            normalized = "h264"
+        cap = self.codecs.get(normalized)
         return bool(cap and cap.decode)
 
 

@@ -7,6 +7,16 @@ from app.services.transcode.capabilities import (
     probe_transcode_capabilities,
     reset_transcode_capabilities_cache,
 )
+from app.services.transcode.decision import (
+    ActionType,
+    HwAccelMode,
+    PlaybackMode,
+    PlaybackOptions,
+    SubtitleAction,
+    TranscodePlan,
+    UserLimits,
+    evaluate_playback_plan,
+)
 from app.services.transcode.profile import (
     BUILTIN_PRESETS,
     ClientCapabilities,
@@ -15,11 +25,19 @@ from app.services.transcode.profile import (
 )
 
 __all__ = [
+    "ActionType",
     "BUILTIN_PRESETS",
     "ClientCapabilities",
     "CodecCapability",
+    "HwAccelMode",
+    "PlaybackMode",
+    "PlaybackOptions",
     "PresetName",
     "ServerTranscodeCapabilities",
+    "SubtitleAction",
+    "TranscodePlan",
+    "UserLimits",
+    "evaluate_playback_plan",
     "parse_vainfo_output",
     "probe_transcode_capabilities",
     "reset_transcode_capabilities_cache",

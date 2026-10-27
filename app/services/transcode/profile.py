@@ -39,13 +39,15 @@ class ClientCapabilities(BaseModel):
     def supports_video_codec(self, codec: str, profile: str | None = None) -> bool:
         """Check if video codec and optional profile are supported."""
         c_lower = codec.lower()
-        # Aliases
         aliases = {c_lower}
-        if c_lower in ("h264", "avc", "avc1"):
+        is_h264 = c_lower in ("h264", "avc", "avc1")
+        is_hevc = c_lower in ("hevc", "h265", "hev1", "hvc1")
+
+        if is_h264:
             aliases.update(["h264", "avc", "avc1"])
-        elif c_lower in ("hevc", "h265", "hev1", "hvc1"):
+        elif is_hevc:
             aliases.update(["hevc", "h265", "hev1", "hvc1"])
-        elif c_lower in ("vp9"):
+        elif c_lower == "vp9":
             aliases.update(["vp9"])
         elif c_lower in ("av1", "av01"):
             aliases.update(["av1", "av01"])
@@ -56,7 +58,10 @@ class ClientCapabilities(BaseModel):
 
         if profile and self.video_profiles:
             p_lower = profile.lower()
-            return any(p.lower() in p_lower or p_lower in p.lower() for p in self.video_profiles)
+            if is_h264 and any(h in p_lower for h in ("baseline", "main", "high")):
+                return any(p.lower() in p_lower for p in self.video_profiles)
+            if is_hevc and "main 10" in p_lower:
+                return any("main 10" in p.lower() for p in self.video_profiles)
         return True
 
     def supports_audio_codec(self, codec: str) -> bool:
