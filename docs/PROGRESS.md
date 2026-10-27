@@ -512,7 +512,7 @@
 | 8.6 | Real-time events: extend SSE with scan progress, library updated, and now playing | Complete | `de439db` |
 | 8.7 | API hardening: CORS, request size limit, ETags on item detail, input validation, OpenAPI response types | Complete | `463a401` |
 | 8.8 | Generate typed API client artifact (`packages/client/src/schema.d.ts`) | Complete | `4c3c2cf` |
-| 8.9 | Write `docs/API.md` with authentication flows and playback-info contract | Complete | pending |
+| 8.9 | Write `docs/API.md` with authentication flows and playback-info contract | Complete | `a2993e5` |
 
 ### Phase 8 Acceptance Checklist
 
