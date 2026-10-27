@@ -7,6 +7,10 @@ from app.db.models import (
     Album,
     Artist,
     AuditLog,
+    Author,
+    Book,
+    BookProgress,
+    BookSeries,
     Episode,
     Genre,
     Image,
@@ -554,3 +558,85 @@ async def test_music_and_playlist_models(db_session: AsyncSession) -> None:
     assert await db_session.scalar(select(func.count()).select_from(Album)) == 0
     assert await db_session.scalar(select(func.count()).select_from(Track)) == 0
     assert await db_session.scalar(select(func.count()).select_from(Artist)) == 1
+
+
+async def test_book_models_and_relationships(db_session: AsyncSession) -> None:
+    user = User(username="reader", password_hash="hash")
+    library = Library(name="Books", type="book")
+    author = Author(name="Frank Herbert", sort_name="Herbert, Frank", openlibrary_id="OL26320A")
+    series = BookSeries(name="Dune", description="Dune Chronicles")
+    db_session.add_all([user, library, author, series])
+    await db_session.flush()
+
+    book_item = MediaItem(
+        library_id=library.id,
+        type="book",
+        title="Dune",
+        sort_title="Dune",
+        year=1965,
+    )
+    db_session.add(book_item)
+    await db_session.flush()
+
+    book = Book(
+        item_id=book_item.id,
+        author_id=author.id,
+        series_id=series.id,
+        series_index=1.0,
+        isbn="9780441172719",
+        publisher="Chilton Books",
+        published_date="1965-08-01",
+        page_count=412,
+        language="en",
+    )
+    epub_file = MediaFile(
+        item_id=book_item.id,
+        path="/media/books/Dune/Dune.epub",
+        size_bytes=2048000,
+        mtime=1700000000.0,
+        partial_hash="a" * 64,
+        container="epub",
+    )
+    pdf_file = MediaFile(
+        item_id=book_item.id,
+        path="/media/books/Dune/Dune.pdf",
+        size_bytes=5120000,
+        mtime=1700000000.0,
+        partial_hash="b" * 64,
+        container="pdf",
+    )
+    progress = BookProgress(
+        user_id=user.id,
+        book_id=book_item.id,
+        locator="epubcfi(/6/4[chap01]!/4/2/10)",
+        percentage=35.5,
+        device_name="E-Reader",
+        completed=False,
+    )
+    db_session.add_all([book, epub_file, pdf_file, progress])
+    await db_session.commit()
+    db_session.expunge_all()
+
+    loaded_book = await db_session.scalar(select(MediaItem).where(MediaItem.id == book_item.id))
+    assert loaded_book is not None
+    assert loaded_book.book is not None
+    assert loaded_book.book.author is not None
+    assert loaded_book.book.author.name == "Frank Herbert"
+    assert loaded_book.book.series is not None
+    assert loaded_book.book.series.name == "Dune"
+    assert loaded_book.book.series_index == 1.0
+    assert loaded_book.book.isbn == "9780441172719"
+    assert len(loaded_book.files) == 2
+    containers = {f.container for f in loaded_book.files}
+    assert containers == {"epub", "pdf"}
+
+    loaded_progress = await db_session.scalar(
+        select(BookProgress).where(
+            BookProgress.user_id == user.id, BookProgress.book_id == book_item.id
+        )
+    )
+    assert loaded_progress is not None
+    assert loaded_progress.locator == "epubcfi(/6/4[chap01]!/4/2/10)"
+    assert loaded_progress.percentage == 35.5
+    assert loaded_progress.device_name == "E-Reader"
+    assert loaded_progress.completed is False

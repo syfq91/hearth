@@ -474,6 +474,21 @@
   - Synchronous HTTP call to ListenBrainz during playback progress request (would stall client UI on network latency or API downtime).
   - Storing third-party tokens in unencrypted local client storage only (fails headless or multi-client listening where the server manages scrobbles).
 
+## ADR 049: Book Catalog and Reading Progress Data Model
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** Phase 6 requires cataloguing written works (ebooks and comics) with support for authors, series, multiple file formats per book (EPUB, PDF, CBZ, CBR, MOBI, AZW3), and cross-device reading progress tracking.
+- **Decision:**
+  - Create `Author` and `BookSeries` tables with UUIDv7 primary keys and search indexes on names and sort names.
+  - Create `Book` table keyed by `item_id` referencing `media_items.id` (cascade delete), with nullable foreign keys to `authors.id` and `book_series.id` (`ondelete="SET NULL"`), series index, ISBN, publisher, publication date, page count, and language.
+  - Multiple file formats for a single book attach as `MediaFile` rows associated with the `MediaItem`, distinguished by their `container` attribute (`epub`, `pdf`, `cbz`, `cbr`, `mobi`, `azw3`).
+  - Implement `BookProgress` table keyed by composite `(user_id, book_id)` referencing `users.id` and `media_items.id`, storing `locator` (CFI string for EPUB, page index for PDF/comic), `percentage` (bounded between 0.0 and 100.0), `device_name`, `completed`, and UTC timestamp `updated_at` with last-write-wins semantics.
+- **Alternatives Considered:**
+  - Storing reading progress in `user_item_state` position_ms (incompatible with string locators like EPUB CFIs).
+  - Creating a separate item for every format file of the same title (fragments book metadata and prevents unified progress sync across formats).
+
+
 
 
 

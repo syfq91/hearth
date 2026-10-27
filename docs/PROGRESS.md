@@ -2,8 +2,8 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 5 (Music) in progress
-- **Overall Status**: Phase 5 in progress
+- **Current Phase**: Phase 6 (Books) in progress
+- **Overall Status**: Phase 6 in progress
 
 ---
 
@@ -385,6 +385,28 @@
 - Subsonic API compatibility layer is deferred to Phase 6.
 - Direct FLAC/MP3/AAC/Opus streaming is native; on-the-fly audio transcoding is scheduled for Phase 7 transcoding pipeline.
 - Audio lyrics reading (USLT/SYLT) is planned for future client UX enhancements.
+
+---
+
+## Phase 6: Books
+
+**Goal:** ebooks and comics are catalogued, downloadable, and readable with progress sync.
+
+| Task | Description | Status | Commit |
+| --- | --- | --- | --- |
+| 6.1 | Models: `Author`, `Book`, `BookSeries`, with `MediaFile` per format, and `BookProgress` | Complete | Pending commit |
+| 6.2 | Readers: EPUB (OPF/Zip), CBZ (ComicInfo/Zip), PDF (pypdf/pypdfium2), cover extraction | Pending | |
+| 6.3 | Provider: Open Library and Google Books fallback, local OPF/cover priority | Pending | |
+| 6.4 | Native API: books, authors, series, search, download, reading progress | Pending | |
+| 6.5 | Comic page serving: on-demand extraction from CBZ/CBR with resizing and caching | Pending | |
+| 6.6 | Reader integration notes for Phase 9 | Pending | |
+
+### Phase 6 Acceptance Checklist
+
+- [ ] Fixture EPUB, PDF and CBZ files produce correct title, author, series and cover.
+- [ ] Native book API endpoints (browsing, search, download, comic page extraction, reading progress) pass automated tests against fixture files.
+- [ ] Progress written from one client is returned to another.
+
 
 
 ---

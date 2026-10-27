@@ -50,6 +50,9 @@ class User(TimestampMixin, Base):
     playlists: Mapped[list["Playlist"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    book_progress: Mapped[list["BookProgress"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class RefreshToken(Base):
@@ -260,6 +263,16 @@ class MediaItem(TimestampMixin, Base):
         passive_deletes=True,
         uselist=False,
         lazy="selectin",
+    )
+    book: Mapped["Book | None"] = relationship(
+        back_populates="item",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
+        lazy="selectin",
+    )
+    book_progress: Mapped[list["BookProgress"]] = relationship(
+        back_populates="item", cascade="all, delete-orphan"
     )
     files: Mapped[list["MediaFile"]] = relationship(
         back_populates="item", cascade="all, delete-orphan", lazy="selectin"
@@ -649,3 +662,79 @@ class PlaylistItem(Base):
 
     playlist: Mapped["Playlist"] = relationship(back_populates="items", lazy="joined")
     item: Mapped["MediaItem"] = relationship(lazy="joined")
+
+
+class Author(Base):
+    """An author or creator of written works."""
+
+    __tablename__ = "authors"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(255), index=True)
+    sort_name: Mapped[str | None] = mapped_column(String(255), default=None, index=True)
+    openlibrary_id: Mapped[str | None] = mapped_column(String(32), default=None, index=True)
+    overview: Mapped[str | None] = mapped_column(Text, default=None)
+
+    books: Mapped[list["Book"]] = relationship(back_populates="author")
+
+
+class BookSeries(Base):
+    """A book series or collection grouping multiple books in order."""
+
+    __tablename__ = "book_series"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(255), index=True)
+    description: Mapped[str | None] = mapped_column(Text, default=None)
+
+    books: Mapped[list["Book"]] = relationship(back_populates="series")
+
+
+class Book(Base):
+    """Book-specific metadata attached to one MediaItem."""
+
+    __tablename__ = "books"
+
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    author_id: Mapped[str | None] = mapped_column(
+        ForeignKey("authors.id", ondelete="SET NULL"), index=True, default=None
+    )
+    series_id: Mapped[str | None] = mapped_column(
+        ForeignKey("book_series.id", ondelete="SET NULL"), index=True, default=None
+    )
+    series_index: Mapped[float | None] = mapped_column(Float, default=None)
+    isbn: Mapped[str | None] = mapped_column(String(32), default=None, index=True)
+    publisher: Mapped[str | None] = mapped_column(String(255), default=None)
+    published_date: Mapped[str | None] = mapped_column(String(32), default=None)
+    page_count: Mapped[int | None] = mapped_column(Integer, default=None)
+    language: Mapped[str | None] = mapped_column(String(16), default=None)
+
+    item: Mapped["MediaItem"] = relationship(back_populates="book", lazy="joined")
+    author: Mapped["Author | None"] = relationship(back_populates="books", lazy="joined")
+    series: Mapped["BookSeries | None"] = relationship(back_populates="books", lazy="joined")
+
+
+class BookProgress(Base):
+    """Per-user reading progress for a book."""
+
+    __tablename__ = "book_progress"
+    __table_args__ = (
+        CheckConstraint("percentage >= 0.0 AND percentage <= 100.0", name="percentage_bounds"),
+    )
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    book_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    locator: Mapped[str] = mapped_column(String(512))
+    percentage: Mapped[float] = mapped_column(Float, default=0.0)
+    device_name: Mapped[str | None] = mapped_column(String(128), default=None)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="book_progress", lazy="joined")
+    item: Mapped["MediaItem"] = relationship(back_populates="book_progress", lazy="joined")
