@@ -617,6 +617,21 @@
 - **Alternatives Considered:**
   - HLS segmented audio delivery (unnecessary complexity, segmentation latency, and filesystem churn for single-track music playback).
 
+## ADR 061: Developer Test Player Transcoding and HLS Integration
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** Developers need to inspect transcoding decisions, test client profiles, switch audio and subtitle tracks, and verify HLS fMP4 streaming directly without a full frontend build.
+- **Decision:**
+  - Upgrade `tools/testplayer/index.html` with `hls.js` (v1.5.17) integration for MSE-compatible HLS fMP4 playback with native Safari fallback.
+  - Expose client profile preset selector (`chrome`, `firefox`, `safari`, `android_tv`, `unknown`), bitrate caps, and resolution limits.
+  - Dynamically populate audio tracks and subtitle tracks (embedded stream indices and external sidecar VTTs) from `playback-info`.
+  - Add an interactive diagnostics debug panel showing mode badges (`direct_play`, `remux_hls`, `transcode_hls`), hardware acceleration badge (`VAAPI` vs `CPU Software`), plan summary cards, decision reasons list, and exact server FFmpeg command.
+  - Clean lifecycle teardown: terminating HLS playback or navigating away explicitly stops the transcode session via `POST /api/v1/hls/{session_id}/stop` (including `navigator.sendBeacon` on unload).
+- **Alternatives Considered:**
+  - Building a full React/Vue frontend (unnecessary build complexity for a developer tool that runs as a static single file).
+
+
 
 
 

@@ -3380,8 +3380,36 @@
         "type": "object"
       },
       "PlaybackInfoResponse": {
-        "description": "A playback decision plus URLs the client can use directly.\n\n``url`` is set for direct play. ``hls_url`` and ``session_id`` are reserved\nfor the Phase 7 HLS modes so adding them does not reshape the payload.",
+        "description": "A playback decision plus URLs the client can use directly.\n\n``url`` is set for direct play. ``hls_url`` and ``session_id`` are populated\nfor the HLS modes so clients can stream fMP4 live transcoding.",
         "properties": {
+          "audio_streams": {
+            "items": {
+              "$ref": "#/components/schemas/ProbeStream"
+            },
+            "title": "Audio Streams",
+            "type": "array"
+          },
+          "command": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Command"
+          },
+          "embedded_subtitles": {
+            "items": {
+              "$ref": "#/components/schemas/ProbeStream"
+            },
+            "title": "Embedded Subtitles",
+            "type": "array"
+          },
           "expires_at": {
             "anyOf": [
               {
@@ -3416,6 +3444,16 @@
             ],
             "title": "Mode",
             "type": "string"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranscodePlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reasons": {
             "items": {
@@ -3691,6 +3729,216 @@
           }
         },
         "title": "PlaylistUpdate",
+        "type": "object"
+      },
+      "ProbeStream": {
+        "description": "One audio, video, subtitle or data stream.",
+        "properties": {
+          "bit_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bit Rate"
+          },
+          "channel_layout": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Layout"
+          },
+          "channels": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          },
+          "codec_long_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codec Long Name"
+          },
+          "codec_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codec Name"
+          },
+          "codec_tag_string": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codec Tag String"
+          },
+          "codec_type": {
+            "title": "Codec Type",
+            "type": "string"
+          },
+          "color_transfer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Transfer"
+          },
+          "hdr_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hdr Format"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "is_default": {
+            "default": false,
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "is_forced": {
+            "default": false,
+            "title": "Is Forced",
+            "type": "boolean"
+          },
+          "is_hdr": {
+            "default": false,
+            "title": "Is Hdr",
+            "type": "boolean"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "pix_fmt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pix Fmt"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "sample_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Rate"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "index",
+          "codec_type"
+        ],
+        "title": "ProbeStream",
         "type": "object"
       },
       "ProgressRequest": {
@@ -4629,6 +4877,144 @@
           "stream_url"
         ],
         "title": "TrackSummary",
+        "type": "object"
+      },
+      "TranscodePlan": {
+        "description": "Detailed plan produced by the decision engine.",
+        "properties": {
+          "audio_action": {
+            "enum": [
+              "copy",
+              "transcode"
+            ],
+            "title": "Audio Action",
+            "type": "string"
+          },
+          "audio_channels": {
+            "title": "Audio Channels",
+            "type": "integer"
+          },
+          "audio_codec": {
+            "title": "Audio Codec",
+            "type": "string"
+          },
+          "audio_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Stream Index"
+          },
+          "hwaccel": {
+            "enum": [
+              "vaapi",
+              "none"
+            ],
+            "title": "Hwaccel",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "direct_play",
+              "remux_hls",
+              "transcode_hls"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "subtitle_action": {
+            "enum": [
+              "none",
+              "sidecar_vtt",
+              "burn_in"
+            ],
+            "title": "Subtitle Action",
+            "type": "string"
+          },
+          "subtitle_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle Stream Index"
+          },
+          "target_bitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Bitrate"
+          },
+          "target_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Height"
+          },
+          "target_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Width"
+          },
+          "tonemap_hdr": {
+            "default": false,
+            "title": "Tonemap Hdr",
+            "type": "boolean"
+          },
+          "video_action": {
+            "enum": [
+              "copy",
+              "transcode"
+            ],
+            "title": "Video Action",
+            "type": "string"
+          },
+          "video_codec": {
+            "title": "Video Codec",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "video_action",
+          "video_codec",
+          "audio_action",
+          "audio_codec",
+          "audio_channels",
+          "subtitle_action",
+          "hwaccel"
+        ],
+        "title": "TranscodePlan",
         "type": "object"
       },
       "UserCreate": {

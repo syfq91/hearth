@@ -42,12 +42,13 @@ from app.db.models import (
 )
 from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
-from app.services.media.probe import ProbeResult
+from app.services.media.probe import ProbeResult, ProbeStream
 from app.services.playback_state import chapters_from_streams, resolve_watch_state
 from app.services.scrobbling.listenbrainz import enqueue_scrobble
 from app.services.transcode.capabilities import probe_transcode_capabilities
 from app.services.transcode.decision import (
     PlaybackOptions,
+    TranscodePlan,
     UserLimits,
     evaluate_playback_plan,
 )
@@ -118,8 +119,8 @@ class PlaybackFileResponse(BaseModel):
 class PlaybackInfoResponse(BaseModel):
     """A playback decision plus URLs the client can use directly.
 
-    ``url`` is set for direct play. ``hls_url`` and ``session_id`` are reserved
-    for the Phase 7 HLS modes so adding them does not reshape the payload.
+    ``url`` is set for direct play. ``hls_url`` and ``session_id`` are populated
+    for the HLS modes so clients can stream fMP4 live transcoding.
     """
 
     mode: PlaybackMode
@@ -128,8 +129,12 @@ class PlaybackInfoResponse(BaseModel):
     session_id: str | None = None
     file: PlaybackFileResponse
     subtitles: list[SubtitleResponse] = Field(default_factory=list)
+    audio_streams: list[ProbeStream] = Field(default_factory=list)
+    embedded_subtitles: list[ProbeStream] = Field(default_factory=list)
     reasons: list[str] = Field(default_factory=list)
     expires_at: datetime | None = None
+    plan: TranscodePlan | None = None
+    command: list[str] | None = None
 
 
 @router.post("/items/{item_id}/progress")
@@ -284,6 +289,8 @@ async def playback_info(
         size_bytes=media_file.size_bytes,
     )
     subtitles = subtitle_responses(media_file.id, media_file.path, token=token)
+    audio_streams = [s for s in probe_res.streams if s.codec_type == "audio"]
+    embedded_subtitles = [s for s in probe_res.streams if s.codec_type == "subtitle"]
 
     if plan.mode == "direct_play":
         return PlaybackInfoResponse(
@@ -291,8 +298,11 @@ async def playback_info(
             url=f"/api/v1/stream/{media_file.id}?token={encoded_token}",
             file=file_resp,
             subtitles=subtitles,
+            audio_streams=audio_streams,
+            embedded_subtitles=embedded_subtitles,
             reasons=plan.reasons,
             expires_at=expires_at,
+            plan=plan,
         )
 
     # Launch or get HLS transcoding session
@@ -312,8 +322,12 @@ async def playback_info(
         session_id=transcode_session.id,
         file=file_resp,
         subtitles=subtitles if plan.subtitle_action == "sidecar_vtt" else [],
+        audio_streams=audio_streams,
+        embedded_subtitles=embedded_subtitles,
         reasons=plan.reasons,
         expires_at=expires_at,
+        plan=plan,
+        command=transcode_session.cmd,
     )
 
 
