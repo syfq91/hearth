@@ -454,7 +454,7 @@
 | 7.4 | ffmpeg command builder (`builder.py`, pure function, snapshot tested) | Complete | `29bfbd6` |
 | 7.5 | Session manager (`session.py`), HLS fMP4 supervisor, idle reaping, crash fallback, concurrency caps | Complete | `836ad13` |
 | 7.6 | HLS endpoints (`/api/v1/hls/{session}/...`), first-segment delay, stop, token reaping | Complete | `990593f` |
-| 7.7 | Audio and track selection, plan regeneration, playback-info integration | Complete | pending |
+| 7.7 | Audio and track selection, plan regeneration, playback-info integration | Complete | `2131880` |
 | 7.8 | Music transcoding path (direct FLAC to Opus/MP3/AAC streaming) | Pending | |
 | 7.9 | Test player upgrade (hls.js, profile selector, track selection, debug panel) | Pending | |
 | 7.10 | Admin diagnostics (sessions listing, session kill, log tailing) | Pending | |
