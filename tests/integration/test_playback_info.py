@@ -300,6 +300,9 @@ async def test_playback_info_transcoding_decision_and_track_selection(
     assert "/api/v1/hls/" in data["hls_url"]
     assert any("hevc" in r.lower() for r in data["reasons"])
 
+    # Stop the previous session so concurrency slots are not exhausted
+    await api_client.post(f"/api/v1/hls/{data['session_id']}/stop", headers=_bearer(admin))
+
     # 2. Track selection: selecting DTS audio (index 2) and PGS subtitle (index 3)
     track_res = await api_client.post(
         f"/api/v1/items/{item_id}/playback-info",

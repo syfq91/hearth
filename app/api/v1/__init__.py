@@ -16,6 +16,7 @@ from app.api.v1 import (
     metadata,
     music,
     playback,
+    search,
     shows,
     stream,
     subtitles,
@@ -33,6 +34,7 @@ router.include_router(jobs.router)
 router.include_router(events.router)
 router.include_router(metadata.router)
 router.include_router(items.router)
+router.include_router(search.router)
 router.include_router(shows.router)
 router.include_router(music.router)
 router.include_router(books.router)

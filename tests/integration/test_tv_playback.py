@@ -119,7 +119,11 @@ async def test_tv_episode_playback_info_and_direct_streaming(
         file_id = media_file.id
 
     # 2. Call playback-info for the episode
-    pb_resp = await api_client.post(f"/api/v1/items/{ep_id}/playback-info", headers=headers)
+    pb_resp = await api_client.post(
+        f"/api/v1/items/{ep_id}/playback-info",
+        json={"capabilities": {"containers": ["matroska", "mp4"]}},
+        headers=headers,
+    )
     assert pb_resp.status_code == 200, pb_resp.text
     pb_data = pb_resp.json()
     assert pb_data["mode"] == "direct_play"
@@ -255,7 +259,11 @@ async def test_multi_episode_file_playback_and_progress_isolation(
         file_id = shared_file.id
 
     # 1. Playback-info for Episode 2 (which does not own the MediaFile item_id directly)
-    pb2_resp = await api_client.post(f"/api/v1/items/{ep2_id}/playback-info", headers=headers)
+    pb2_resp = await api_client.post(
+        f"/api/v1/items/{ep2_id}/playback-info",
+        json={"capabilities": {"containers": ["matroska", "mp4"]}},
+        headers=headers,
+    )
     assert pb2_resp.status_code == 200, pb2_resp.text
     pb2_data = pb2_resp.json()
     assert pb2_data["mode"] == "direct_play"
