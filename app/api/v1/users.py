@@ -15,6 +15,7 @@ from app.core.passwords import hash_password, validate_password, validate_userna
 from app.db.models import Library, LibraryAccess, RefreshToken, User
 from app.db.session import SessionDep
 from app.services.audit import record_audit
+from app.services.transcode.session import get_session_manager
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -275,6 +276,7 @@ async def update_user(
                 .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
                 .values(revoked_at=datetime.now(UTC), revoked_reason="account_disabled")
             )
+            await get_session_manager(settings).stop_user_sessions(user.id)
         if (
             not payload.disabled
             and was_disabled

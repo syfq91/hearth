@@ -27,6 +27,7 @@ from app.core.middleware import RequestIDMiddleware
 from app.core.ratelimit import SlidingWindowLimiter
 from app.db.migrate import run_migrations_async
 from app.db.session import build_engine, build_sessionmaker
+from app.services.transcode.session import get_session_manager
 
 logger = logging.getLogger("hearth.main")
 
@@ -48,12 +49,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # not race. They are executed in a worker thread because Alembic's env
         # owns its own event loop.
         await run_migrations_async(resolved)
+        get_session_manager(resolved).startup_sweep()
         logger.info(
             "hearth starting",
             extra={"env": resolved.env, "version": __version__},
         )
         yield
         logger.info("hearth stopping")
+        await get_session_manager(resolved).stop_all()
         await engine.dispose()
 
     application = FastAPI(

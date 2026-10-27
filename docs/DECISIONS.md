@@ -573,6 +573,24 @@
 - **Alternatives Considered:**
   - Using third-party python ffmpeg wrapper libraries (unnecessary dependencies; often hide crucial VAAPI flags).
 
+## ADR 057: Transcode Session Manager, Concurrency Caps, and Hardware Crash Fallback
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** Transcoding creates active system load (CPU, GPU, memory, and disk I/O in `/transcode`). Without strict session lifecycle supervision, runaway or dead client tabs cause resource exhaustion, orphaned subprocesses, and disk exhaustion. Additionally, hardware driver crashes should not abort user playback.
+- **Decision:**
+  - Implement `SessionManager` managing `TranscodeSession` subprocesses:
+    - Dedicated session directory `<transcode_dir>/<session_id>` storing fMP4 segments and playlists.
+    - Global concurrency limits: separate caps for hardware sessions (`transcode_max_hw_sessions=2`) and software sessions (`transcode_max_sw_sessions=2`). Exceeding caps immediately returns `HTTP 503` with a `Retry-After: 5` header via `TranscodeCapacityExceededError`.
+    - Real-time stderr parsing: captures `frame`, `fps`, and `speed` progress metrics and stores the last 200 stderr lines in a ring buffer for administrative diagnostics.
+    - Automatic hardware-to-software fallback: if a VAAPI hardware process exits with a non-zero code mid-stream, the supervisor automatically switches `hwaccel="none"` and restarts ffmpeg with `libx264` software encoding without dropping the session.
+    - Idle reaper background loop: reaps sessions exceeding `transcode_idle_timeout_seconds` (default 60s) without client activity.
+    - Startup sweep: purges abandoned session directories on server boot.
+    - User revocation cascade: disabling an account or revoking credentials immediately terminates all active transcode sessions belonging to that user.
+- **Alternatives Considered:**
+  - Relying on external process managers (introduces unneeded process complexity outside python's native asyncio supervision).
+
+
 
 
 

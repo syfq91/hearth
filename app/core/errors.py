@@ -182,6 +182,24 @@ class RateLimitError(AppError):
         )
 
 
+class TranscodeCapacityExceededError(AppError):
+    """Concurrent transcoding limit reached (503)."""
+
+    def __init__(
+        self,
+        retry_after: int = 5,
+        message: str = "Transcoding concurrency limit reached; try again later",
+        code: str = "transcode_capacity_exceeded",
+    ) -> None:
+        super().__init__(
+            message=message,
+            code=code,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            details={"retry_after": retry_after},
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
     """Handle custom application exceptions."""
     return JSONResponse(status_code=exc.status_code, content=exc.to_dict(), headers=exc.headers)
