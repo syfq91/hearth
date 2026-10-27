@@ -1405,7 +1405,7 @@
         "type": "object"
       },
       "ClientCapabilities": {
-        "description": "What a client says it can play.\n\nPhase 3 accepts the full profile but always chooses direct play; Phase 7\nresolves presets and uses these fields in the decision engine.",
+        "description": "What a client device or browser player supports.",
         "properties": {
           "audio_codecs": {
             "items": {
@@ -4137,6 +4137,17 @@
         "title": "ServerTranscodeCapabilities",
         "type": "object"
       },
+      "SessionStopResponse": {
+        "properties": {
+          "stopped": {
+            "default": true,
+            "title": "Stopped",
+            "type": "boolean"
+          }
+        },
+        "title": "SessionStopResponse",
+        "type": "object"
+      },
       "SubtitleResponse": {
         "description": "A playable external subtitle track.",
         "properties": {
@@ -6696,6 +6707,337 @@
         "summary": "Health",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/v1/hls/{session_id}/init.mp4": {
+      "get": {
+        "description": "Return the fMP4 initialization segment.",
+        "operationId": "get_init_segment_api_v1_hls__session_id__init_mp4_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Init Segment",
+        "tags": [
+          "hls"
+        ]
+      }
+    },
+    "/api/v1/hls/{session_id}/master.m3u8": {
+      "get": {
+        "description": "Return the master playlist for an active HLS session.\n\nDelays the response until ffmpeg produces the first segment, avoiding 404\nraces in client players.",
+        "operationId": "get_master_playlist_api_v1_hls__session_id__master_m3u8_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Master Playlist",
+        "tags": [
+          "hls"
+        ]
+      }
+    },
+    "/api/v1/hls/{session_id}/media.m3u8": {
+      "get": {
+        "description": "Return the active media playlist with token-appended segment references.",
+        "operationId": "get_media_playlist_api_v1_hls__session_id__media_m3u8_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Media Playlist",
+        "tags": [
+          "hls"
+        ]
+      }
+    },
+    "/api/v1/hls/{session_id}/stop": {
+      "post": {
+        "description": "Explicitly stop an active playback session.",
+        "operationId": "stop_hls_session_api_v1_hls__session_id__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionStopResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stop Hls Session",
+        "tags": [
+          "hls"
+        ]
+      }
+    },
+    "/api/v1/hls/{session_id}/{segment_file}": {
+      "get": {
+        "description": "Return a media segment (.m4s).",
+        "operationId": "get_media_segment_api_v1_hls__session_id___segment_file__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "segment_file",
+            "required": true,
+            "schema": {
+              "title": "Segment File",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Media Segment",
+        "tags": [
+          "hls"
         ]
       }
     },

@@ -590,6 +590,20 @@
 - **Alternatives Considered:**
   - Relying on external process managers (introduces unneeded process complexity outside python's native asyncio supervision).
 
+## ADR 058: HLS fMP4 Delivery and Token Propagation
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** Delivering video via HTTP Live Streaming (HLS) fragmented MP4 requires serving playlists (`master.m3u8`, `media.m3u8`), initialization segments (`init.mp4`), and media data fragments (`seg_N.m4s`). Video tags and players like `hls.js` cannot pass `Authorization: Bearer` headers for subsequent playlist and segment downloads. Furthermore, client playback fails if playlists are requested before the first segment is written to disk.
+- **Decision:**
+  - `GET /api/v1/hls/{session_id}/master.m3u8` delays responding (`wait_for_first_segment`) until both `init.mp4` and `media.m3u8` exist on disk (bounded by `settings.transcode_first_segment_timeout_seconds`), eliminating initial 404 segment races.
+  - Media token propagation: when authenticated via `?token=<media_token>`, the server rewrites relative segment references inside `master.m3u8` and `media.m3u8` (e.g., `#EXT-X-MAP:URI="init.mp4?token=..."` and `seg_000.m4s?token=...`), ensuring all child segment requests remain authenticated without extra client configuration.
+  - Strict segment filename validation (`^seg_\d+\.m4s$`) prevents path traversal.
+  - Provide `POST /api/v1/hls/{session_id}/stop` endpoint allowing players to cleanly terminate transcoding when switching videos or closing tabs.
+- **Alternatives Considered:**
+  - Returning playlists immediately and letting players retry 404s (causes player startup stalls and false errors).
+
+
 
 
 
