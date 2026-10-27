@@ -9228,8 +9228,28 @@
     },
     "/api/v1/events": {
       "get": {
-        "description": "Stream job progress to an authenticated administrator.",
+        "description": "Stream real-time job progress, scan events, and playback status.",
         "operationId": "events_api_v1_events_get",
+        "parameters": [
+          {
+            "description": "Access token query parameter for EventSource clients",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Access token query parameter for EventSource clients",
+              "title": "Token"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -9238,6 +9258,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [

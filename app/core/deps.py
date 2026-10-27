@@ -100,6 +100,40 @@ async def get_current_user(
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+async def get_events_user(
+    credentials: BearerCredentials,
+    settings: SettingsDep,
+    keys: KeysDep,
+    session: SessionDep,
+    token: Annotated[
+        str | None,
+        Query(description="Access token query parameter for EventSource clients"),
+    ] = None,
+) -> User:
+    """Resolve and validate the bearer token from Authorization header or ?token query parameter."""
+    raw_token: str | None = None
+    if credentials is not None and credentials.scheme.lower() == "bearer":
+        raw_token = credentials.credentials
+    elif token:
+        raw_token = token
+
+    if not raw_token:
+        raise UnauthorizedError()
+
+    claims = decode_access_token(raw_token, settings=settings, key=keys.jwt)
+    user = await session.get(User, claims.user_id)
+    if user is None:
+        raise UnauthorizedError("Invalid or expired token", code="invalid_token")
+    if user.disabled:
+        raise UnauthorizedError("Account is disabled", code="account_disabled")
+    if user.token_version != claims.token_version:
+        raise UnauthorizedError("Token has been revoked", code="token_revoked")
+    return user
+
+
+EventsUser = Annotated[User, Depends(get_events_user)]
+
+
 async def get_media_token_claims(
     token: Annotated[str, Query(description="Media access token")],
     keys: KeysDep,

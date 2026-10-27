@@ -41,6 +41,7 @@ from app.db.models import (
     UserItemState,
 )
 from app.db.session import SessionDep
+from app.services.events import get_broadcaster
 from app.services.libraries import path_is_within_roots
 from app.services.media.probe import ProbeResult, ProbeStream
 from app.services.playback_state import chapters_from_streams, resolve_watch_state
@@ -208,6 +209,23 @@ async def report_progress(
                     alb_state.play_count += 1
 
     await _persist(session, state)
+
+    if body.state in {"playing", "paused", "stopped"}:
+        event_name = "playback.active" if body.state == "playing" else f"playback.{body.state}"
+        get_broadcaster().publish(
+            event_name,
+            {
+                "user_id": user.id,
+                "item_id": item.id,
+                "library_id": item.library_id,
+                "position_ms": state.position_ms,
+                "duration_ms": body.duration_ms or _duration_ms(item),
+                "title": item.title,
+                "type": item.type,
+                "state": body.state,
+            },
+        )
+
     return ProgressResponse(
         **watch_state_response(state).model_dump(),
         auto_watched=decision.watched and not was_played,
