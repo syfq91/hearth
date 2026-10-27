@@ -466,3 +466,97 @@ async def test_book_library_access_control(
     resp = await api_client.get("/api/v1/books/search?q=Secret", headers=restricted_headers)
     assert resp.status_code == 200
     assert resp.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_comic_page_extraction_and_caching(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin_tokens = await _setup(api_client)
+    headers = _bearer(admin_tokens)
+
+    lib_id = f"lib-{uuid.uuid4().hex[:8]}"
+    media_dir = db_settings.media_dir / f"books_{uuid.uuid4().hex[:8]}"
+    media_dir.mkdir(parents=True)
+
+    # Create CBZ file with 3 colored pages
+    cbz_path = media_dir / "Saga #1.cbz"
+    import zipfile
+
+    with zipfile.ZipFile(cbz_path, "w") as zf:
+        zf.writestr("01.jpg", _create_img(color="red"))
+        zf.writestr("02.jpg", _create_img(color="green"))
+        zf.writestr("03.jpg", _create_img(color="blue"))
+
+    book_id = f"book-{uuid.uuid4().hex[:8]}"
+    file_id = f"file-{uuid.uuid4().hex[:8]}"
+    now = utcnow()
+
+    async with db_sessionmaker() as session:
+        lib = Library(id=lib_id, name="Comics", type="book")
+        lp_id = f"lp-{uuid.uuid4().hex[:8]}"
+        lib.paths.append(LibraryPath(id=lp_id, library_id=lib_id, path=str(media_dir)))
+        session.add(lib)
+
+        item = MediaItem(
+            id=book_id,
+            library_id=lib_id,
+            type="book",
+            title="Saga #1",
+            sort_title="Saga #1",
+            added_at=now,
+        )
+        book = Book(item_id=book_id)
+        mfile = MediaFile(
+            id=file_id,
+            item_id=book_id,
+            path=str(cbz_path),
+            size_bytes=cbz_path.stat().st_size,
+            container="cbz",
+            partial_hash="dummycbz123",
+            mtime=now.timestamp(),
+        )
+        session.add_all([item, book, mfile])
+        await session.commit()
+
+    # 1. Request page 1: Cache MISS
+    resp1 = await api_client.get(f"/api/v1/books/{book_id}/pages/1", headers=headers)
+    assert resp1.status_code == 200
+    assert resp1.headers.get("X-Cache") == "MISS"
+    assert resp1.headers.get("Cache-Control") == "private, max-age=86400"
+    assert len(resp1.content) > 0
+
+    # 2. Request page 1 again: Cache HIT
+    resp2 = await api_client.get(f"/api/v1/books/{book_id}/pages/1", headers=headers)
+    assert resp2.status_code == 200
+    assert resp2.headers.get("X-Cache") == "HIT"
+    assert resp2.content == resp1.content
+
+    # 3. Request page 1 resized with width=20: returns resized image
+    resp_resized = await api_client.get(
+        f"/api/v1/books/{book_id}/pages/1?width=50", headers=headers
+    )
+    assert resp_resized.status_code == 200
+    assert resp_resized.headers.get("X-Cache") == "MISS"
+    with PILImage.open(io.BytesIO(resp_resized.content)) as im:
+        assert im.width <= 50
+
+    # 4. Request page out of bounds: returns 404
+    resp_oob = await api_client.get(f"/api/v1/books/{book_id}/pages/99", headers=headers)
+    assert resp_oob.status_code == 404
+    assert resp_oob.json()["error"]["code"] == "page_not_found"
+
+    # 5. Access via media token query parameter
+    token_resp = await api_client.post(
+        "/api/v1/auth/media-tokens",
+        json={"item_id": book_id},
+        headers=headers,
+    )
+    assert token_resp.status_code == 201
+    media_token = token_resp.json()["token"]
+
+    resp_token = await api_client.get(f"/api/v1/books/{book_id}/pages/2?token={media_token}")
+    assert resp_token.status_code == 200
+    assert len(resp_token.content) > 0

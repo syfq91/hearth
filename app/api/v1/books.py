@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import io
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import Response
+from PIL import Image as PILImage
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
@@ -26,11 +31,24 @@ from app.db.models import (
     User,
 )
 from app.db.session import SessionDep
+from app.services.media.books import extract_comic_page
 
 router = APIRouter(tags=["books"])
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 100
+
+
+def _resize_image_page(raw: bytes, max_width: int) -> tuple[bytes, str]:
+    with PILImage.open(io.BytesIO(raw)) as img:
+        output: PILImage.Image = img
+        if img.width > max_width:
+            ratio = max_width / img.width
+            new_h = max(1, round(img.height * ratio))
+            output = img.resize((max_width, new_h), PILImage.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        output.convert("RGB").save(buf, format="JPEG", quality=85, optimize=True)
+        return buf.getvalue(), "image/jpeg"
 
 
 # ------------------------------------------------------------- helper queries
@@ -526,6 +544,74 @@ async def download_book_file(
         settings.stream_chunk_bytes,
         session,
         download_filename=filename,
+    )
+
+
+@router.get("/books/{book_id}/pages/{page_number}")
+async def get_comic_page(
+    book_id: str,
+    page_number: int,
+    viewer: ViewerDep,
+    settings: SettingsDep,
+    session: SessionDep,
+    width: Annotated[int | None, Query(ge=50, le=4000)] = None,
+) -> Response:
+    """Extract and serve the nth (1-indexed) page from a comic with caching and resizing."""
+    q = (
+        select(MediaItem)
+        .options(selectinload(MediaItem.files))
+        .where(MediaItem.id == book_id, MediaItem.type == "book")
+    )
+    q = _restrict_to_accessible_libraries(q, viewer.user)
+    item = await session.scalar(q)
+    if item is None:
+        raise NotFoundError("Book not found", code="book_not_found")
+
+    candidate_files = [
+        f for f in item.files if f.container in ("cbz", "cbr", "pdf") and f.missing_since is None
+    ]
+    if not candidate_files:
+        raise NotFoundError("No comic file found for book", code="comic_not_found")
+
+    media_file = candidate_files[0]
+    file_path = Path(media_file.path)
+    if not file_path.is_file():
+        raise NotFoundError("Comic file missing on disk", code="file_not_found")
+
+    # Cache file path
+    cache_dir = settings.comic_cache_dir / book_id
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = (
+        cache_dir / f"p{page_number}_w{width}.jpg"
+        if width is not None
+        else cache_dir / f"p{page_number}.bin"
+    )
+
+    if cache_file.is_file():
+        cached_data = await asyncio.to_thread(cache_file.read_bytes)
+        return Response(
+            content=cached_data,
+            media_type="image/jpeg" if width is not None else "application/octet-stream",
+            headers={"Cache-Control": "private, max-age=86400", "X-Cache": "HIT"},
+        )
+
+    try:
+        data, mime = await asyncio.to_thread(extract_comic_page, file_path, page_number)
+    except IndexError:
+        raise NotFoundError(f"Page {page_number} not found", code="page_not_found") from None
+    except Exception as exc:
+        raise NotFoundError(
+            f"Failed to extract page: {exc}", code="page_extraction_error"
+        ) from None
+
+    if width is not None:
+        data, mime = await asyncio.to_thread(_resize_image_page, data, width)
+
+    await asyncio.to_thread(cache_file.write_bytes, data)
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={"Cache-Control": "private, max-age=86400", "X-Cache": "MISS"},
     )
 
 

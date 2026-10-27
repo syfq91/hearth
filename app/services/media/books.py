@@ -340,6 +340,25 @@ def extract_comic_page(path: Path, page_number: int) -> tuple[bytes, str]:
         except Exception as exc:
             raise RuntimeError(f"Failed to read CBR archive {path}: {exc}") from exc
 
+    elif suffix == ".pdf":
+        try:
+            import pypdfium2 as pdfium
+
+            pdf = pdfium.PdfDocument(str(path))
+            if page_number > len(pdf):
+                raise IndexError(f"Page {page_number} out of bounds (1-{len(pdf)})")
+            page = pdf.get_page(page_number - 1)
+            pil_image = page.render(scale=2.0).to_pil()
+            buf = io.BytesIO()
+            pil_image.save(buf, format="JPEG")
+            return buf.getvalue(), "image/jpeg"
+        except IndexError:
+            raise
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to render PDF page {page_number} from {path}: {exc}"
+            ) from exc
+
     raise ValueError(f"Unsupported comic container: {suffix}")
 
 

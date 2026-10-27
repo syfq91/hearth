@@ -138,6 +138,11 @@ class Settings(BaseSettings):
         """Root directory for cached artwork originals and variants."""
         return self.image_cache_dir or (self.data_dir / "cache" / "images")
 
+    @property
+    def comic_cache_dir(self) -> Path:
+        """Root directory for extracted and resized comic pages."""
+        return self.data_dir / "cache" / "comics"
+
 
 @lru_cache
 def get_settings() -> Settings:
