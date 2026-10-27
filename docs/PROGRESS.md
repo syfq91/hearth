@@ -451,7 +451,7 @@
 | 7.1 | Capability probe (`services/transcode/capabilities.py`), vainfo parsing, 1s test encode, cache, override, and admin endpoint | Complete | `f2299cb` |
 | 7.2 | Client capability profile (Pydantic model) and presets (`chrome`, `firefox`, `safari`, `android_tv`, `unknown`) | Complete | `f806949` |
 | 7.3 | Decision engine (`decision.py`, pure function, 40+ case test matrix) | Complete | `383dfb3` |
-| 7.4 | ffmpeg command builder (`builder.py`, pure function, snapshot tested) | Complete | pending |
+| 7.4 | ffmpeg command builder (`builder.py`, pure function, snapshot tested) | Complete | `29bfbd6` |
 | 7.5 | Session manager (`session.py`), HLS fMP4 supervisor, idle reaping, crash fallback, concurrency caps | Pending | |
 | 7.6 | HLS endpoints (`/api/v1/hls/{session}/...`), first-segment delay, stop, token reaping | Pending | |
 | 7.7 | Audio and track selection, plan regeneration, playback-info integration | Pending | |
