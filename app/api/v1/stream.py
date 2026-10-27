@@ -1,14 +1,18 @@
 """Direct-play streaming with HTTP range support."""
 
+import asyncio
+from collections.abc import AsyncIterator
 from email.utils import formatdate
 from pathlib import Path
+from typing import Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import Headers
 
+from app.core.config import Settings
 from app.core.deps import (
     SettingsDep,
     Viewer,
@@ -73,6 +77,49 @@ async def stream_audio_track(
         viewer,
         settings.stream_chunk_bytes,
         session,
+    )
+
+
+@router.get("/stream/audio/{track_id}/transcode")
+async def stream_audio_track_transcode(
+    track_id: str,
+    viewer: ViewerDep,
+    settings: SettingsDep,
+    session: SessionDep,
+    format: Literal["opus", "mp3", "aac"] = Query(default="opus"),
+    bitrate: int = Query(default=192, ge=32, le=320),
+) -> Response:
+    """Stream an audio track transcoded on the fly to Opus, MP3, or AAC."""
+    track = await session.get(Track, track_id)
+    if track is None or not track.file_id:
+        raise NotFoundError("Track audio file not found", code="track_not_found")
+    return await _stream_transcoded_audio(
+        track.file_id,
+        viewer,
+        settings,
+        session,
+        format_name=format,
+        bitrate_kbps=bitrate,
+    )
+
+
+@router.get("/stream/{file_id}/transcode")
+async def stream_file_transcode(
+    file_id: str,
+    viewer: ViewerDep,
+    settings: SettingsDep,
+    session: SessionDep,
+    format: Literal["opus", "mp3", "aac"] = Query(default="opus"),
+    bitrate: int = Query(default=192, ge=32, le=320),
+) -> Response:
+    """Stream an audio file transcoded on the fly to Opus, MP3, or AAC."""
+    return await _stream_transcoded_audio(
+        file_id,
+        viewer,
+        settings,
+        session,
+        format_name=format,
+        bitrate_kbps=bitrate,
     )
 
 
@@ -215,6 +262,108 @@ async def stream_media_file(
 
 
 _stream_response = stream_media_file
+
+
+async def _stream_transcoded_audio(
+    file_id: str,
+    viewer: Viewer,
+    settings: Settings,
+    session: AsyncSession,
+    format_name: Literal["opus", "mp3", "aac"],
+    bitrate_kbps: int,
+) -> Response:
+    media_file = await session.get(MediaFile, file_id)
+    if media_file is None:
+        raise NotFoundError("Media file not found", code="file_not_found")
+
+    if viewer.item_id and viewer.item_id != media_file.item_id:
+        is_episode_file = await session.scalar(
+            select(func.count(Episode.item_id)).where(
+                Episode.item_id == viewer.item_id,
+                Episode.file_id == media_file.id,
+            )
+        )
+        is_track_file = await session.scalar(
+            select(func.count(Track.item_id)).where(
+                Track.item_id == viewer.item_id,
+                Track.file_id == media_file.id,
+            )
+        )
+        if not is_episode_file and not is_track_file:
+            raise NotFoundError("Media file not found", code="file_not_found")
+
+    item = await session.get(MediaItem, media_file.item_id)
+    if item is None or not await user_can_access_library(session, viewer.user, item.library_id):
+        raise NotFoundError("Media file not found", code="file_not_found")
+
+    roots = list(
+        await session.scalars(
+            select(LibraryPath.path).where(LibraryPath.library_id == item.library_id)
+        )
+    )
+    path = Path(media_file.path)
+    if not path_is_within_roots(path, roots) or not path.is_file():
+        raise NotFoundError("Media file not found", code="file_not_found")
+
+    if format_name == "opus":
+        encoder = "libopus"
+        fmt = "ogg"
+        mime = "audio/ogg; codecs=opus"
+    elif format_name == "mp3":
+        encoder = "libmp3lame"
+        fmt = "mp3"
+        mime = "audio/mpeg"
+    else:
+        encoder = "aac"
+        fmt = "adts"
+        mime = "audio/aac"
+
+    cmd = [
+        settings.ffmpeg_binary,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(path),
+        "-vn",
+        "-c:a",
+        encoder,
+        "-b:a",
+        f"{bitrate_kbps}k",
+        "-f",
+        fmt,
+        "-",
+    ]
+
+    return StreamingResponse(
+        _stream_ffmpeg_pipe(cmd),
+        media_type=mime,
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+async def _stream_ffmpeg_pipe(cmd: list[str]) -> AsyncIterator[bytes]:
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    assert proc.stdout is not None
+    try:
+        while True:
+            chunk = await proc.stdout.read(64 * 1024)
+            if not chunk:
+                break
+            yield chunk
+        await proc.wait()
+    finally:
+        if proc.returncode is None:
+            try:
+                proc.terminate()
+                await asyncio.wait_for(proc.wait(), timeout=1.0)
+            except Exception:
+                proc.kill()
+                await proc.wait()
 
 
 def _matches_etag(header: str | None, etag: str) -> bool:

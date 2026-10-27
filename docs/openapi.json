@@ -9733,6 +9733,97 @@
         ]
       }
     },
+    "/api/v1/stream/audio/{track_id}/transcode": {
+      "get": {
+        "description": "Stream an audio track transcoded on the fly to Opus, MP3, or AAC.",
+        "operationId": "stream_audio_track_transcode_api_v1_stream_audio__track_id__transcode_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "track_id",
+            "required": true,
+            "schema": {
+              "title": "Track Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "opus",
+              "enum": [
+                "opus",
+                "mp3",
+                "aac"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bitrate",
+            "required": false,
+            "schema": {
+              "default": 192,
+              "maximum": 320,
+              "minimum": 32,
+              "title": "Bitrate",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stream Audio Track Transcode",
+        "tags": [
+          "stream"
+        ]
+      }
+    },
     "/api/v1/stream/{file_id}": {
       "get": {
         "description": "Stream a registered media file, honoring a single byte range.\n\nAccepts a bearer token or a media token in ``?token=``. The path must be a\nregistered ``media_file`` inside one of its library's roots, so a tampered\ndatabase row cannot turn this endpoint into arbitrary file access.",
@@ -9792,6 +9883,97 @@
           }
         ],
         "summary": "Stream File",
+        "tags": [
+          "stream"
+        ]
+      }
+    },
+    "/api/v1/stream/{file_id}/transcode": {
+      "get": {
+        "description": "Stream an audio file transcoded on the fly to Opus, MP3, or AAC.",
+        "operationId": "stream_file_transcode_api_v1_stream__file_id__transcode_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "title": "File Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "opus",
+              "enum": [
+                "opus",
+                "mp3",
+                "aac"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bitrate",
+            "required": false,
+            "schema": {
+              "default": 192,
+              "maximum": 320,
+              "minimum": 32,
+              "title": "Bitrate",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stream File Transcode",
         "tags": [
           "stream"
         ]

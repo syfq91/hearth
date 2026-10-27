@@ -603,19 +603,20 @@
 - **Alternatives Considered:**
   - Returning playlists immediately and letting players retry 404s (causes player startup stalls and false errors).
 
-## ADR 059: Playback Info Integration, Dynamic Track Selection, and Session Binding
+## ADR 060: Direct On-the-Fly Music Transcoding Pipeline
 
 - **Date:** 2026-10-27
 - **Status:** Accepted
-- **Context:** The Phase 3 playback-info endpoint returned a fixed `direct_play` response as a placeholder contract. Phase 7 requires integrating the decision engine and session manager so client requests dynamically select audio and subtitle tracks, invoke transcoding sessions when necessary, and return usable HLS or direct stream URLs.
+- **Context:** Music collections frequently contain lossless audio formats (FLAC, ALAC, high-resolution WAV/AIFF) that consume significant bandwidth over mobile connections or are unsupported by certain web and mobile player environments. Unlike multi-gigabyte video files requiring segmented HLS with downscaling and tonemapping, audio streams can be efficiently transcoded on-the-fly and piped directly via standard HTTP chunked streaming.
 - **Decision:**
-  - Update `POST /api/v1/items/{item_id}/playback-info` to accept `audio_track_index`, `subtitle_track_index`, `start_time_offset_seconds`, and `target_max_bitrate`.
-  - Evaluate the item against `evaluate_playback_plan` with server VAAPI capabilities and user account limits.
-  - If direct play is compatible: returns `mode="direct_play"` with `/api/v1/stream/{file_id}?token=...`.
-  - If HLS remuxing or transcoding is required: invokes `SessionManager.create_session`, starts the supervised ffmpeg process with container seeking, and returns `mode="remux_hls"` or `mode="transcode_hls"` with `hls_url="/api/v1/hls/{session_id}/master.m3u8?token=..."` and `session_id`.
-  - Sidecar text subtitles are returned in the `subtitles` array when `subtitle_action == "sidecar_vtt"`; bitmap/styled subtitles (PGS/ASS) trigger `subtitle_action == "burn_in"`, omitting sidecar URLs to prevent duplicate display.
+  - Implement direct audio transcoding endpoints: `GET /api/v1/stream/audio/{track_id}/transcode` and `GET /api/v1/stream/{file_id}/transcode`.
+  - Parameterize target audio format (`opus`, `mp3`, `aac`, default `opus`) and audio bitrate (`bitrate` between 64 and 320 kbps, default 128 kbps).
+  - Execute a lightweight single-pass FFmpeg subprocess streaming directly to stdout (`pipe:1`) using `StreamingResponse`. Set standard MIME types (`audio/ogg; codecs=opus`, `audio/mpeg`, `audio/aac`).
+  - Graceful teardown: Generator cleanup in an async context ensures SIGTERM/SIGKILL is sent to the FFmpeg subprocess upon client disconnect, avoiding orphaned processes.
+  - Media token authentication: Supports `?token=<media_token>` alongside standard Bearer authentication.
 - **Alternatives Considered:**
-  - Creating a separate endpoint for transcoding sessions (would break API-first client simplicity; `/playback-info` remains the single negotiation contract).
+  - HLS segmented audio delivery (unnecessary complexity, segmentation latency, and filesystem churn for single-track music playback).
+
 
 
 
