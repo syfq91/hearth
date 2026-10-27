@@ -1,5 +1,6 @@
 """Transcoding subsystem."""
 
+from app.services.transcode.builder import build_ffmpeg_hls_command
 from app.services.transcode.capabilities import (
     CodecCapability,
     ServerTranscodeCapabilities,
@@ -37,6 +38,7 @@ __all__ = [
     "SubtitleAction",
     "TranscodePlan",
     "UserLimits",
+    "build_ffmpeg_hls_command",
     "evaluate_playback_plan",
     "parse_vainfo_output",
     "probe_transcode_capabilities",

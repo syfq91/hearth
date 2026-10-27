@@ -557,6 +557,23 @@
 - **Alternatives Considered:**
   - Embedding decision logic directly into HTTP route handlers (untestable in isolation and prone to edge-case bugs).
 
+## ADR 056: Deterministic FFmpeg Command Builder and Pipeline Snapshots
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** Transcoding pipelines require complex combinations of hardware acceleration, fast container seeking, filter graphs, subtitle overlays, rate control, and HLS fMP4 segmenting. Constructing command lines across multiple layers introduces risk of argument injection, incorrect filter ordering, or inconsistent flag usage.
+- **Decision:**
+  - Implement `build_ffmpeg_hls_command` as a pure function generating structured argument lists with no shell string interpolation.
+  - Seeking: Places `-ss <start_offset>` prior to `-i` to achieve fast keyframe/container seeking rather than slow frame decoding.
+  - VAAPI pipeline: Uses `-hwaccel vaapi -hwaccel_output_format vaapi -vaapi_device <dev>` and `scale_vaapi=format=nv12`, with hardware tonemapping (`tonemap_vaapi`) when needed.
+  - Subtitle burn-in with VAAPI: Uses an explicit software overlay filter bridge (`hwdownload,format=nv12,subtitles='...':si=...,hwupload,scale_vaapi=format=nv12`) enabling hardware encoding while rendering complex bitmap and ASS subtitles.
+  - Software pipeline: Uses `scale` + optional `tonemap=mobius` + `format=yuv420p` with `libx264` (`preset=veryfast`, `crf=23`).
+  - HLS packaging: Configures `-f hls -hls_segment_type fmp4 -hls_time 4 -hls_playlist_type event -hls_fmp4_init_filename init.mp4` for modern fragmented MP4 delivery.
+  - Snapshot test coverage verifies exact argument sequences for all pipelines.
+- **Alternatives Considered:**
+  - Using third-party python ffmpeg wrapper libraries (unnecessary dependencies; often hide crucial VAAPI flags).
+
+
 
 
 
