@@ -398,8 +398,8 @@
 | 6.2 | Readers: EPUB (OPF/Zip), CBZ (ComicInfo/Zip), PDF (pypdf/pypdfium2), cover extraction | Complete | `87abae5` |
 | 6.3 | Provider: Open Library and Google Books fallback, local OPF/cover priority | Complete | `e920a18` |
 | 6.4 | Native API: books, authors, series, search, download, reading progress | Complete | `f13a750` |
-| 6.5 | Comic page serving: on-demand extraction from CBZ/CBR with resizing and caching | Complete | pending commit |
-| 6.6 | Reader integration notes for Phase 9 | Pending | |
+| 6.5 | Comic page serving: on-demand extraction from CBZ/CBR with resizing and caching | Complete | `ec8ccc2` |
+| 6.6 | Reader integration notes for Phase 9 | Complete | pending commit |
 
 ### Phase 6 Acceptance Checklist
 
