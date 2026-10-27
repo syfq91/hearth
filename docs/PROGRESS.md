@@ -2,8 +2,8 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 6 (Books) in progress
-- **Overall Status**: Phase 6 in progress
+- **Current Phase**: Phase 7 (Transcoding with VAAPI) in progress
+- **Overall Status**: Phase 7 in progress
 
 ---
 
@@ -439,6 +439,33 @@
 - Text-to-speech / audio-synchronized narration (Media Overlays / SMIL) is deferred to future audio/ebook integrations.
 
 
+
+---
+
+## Phase 7: Transcoding with VAAPI
+
+**Goal:** Any file plays on any reasonable client, using the GPU when available.
+
+| Task | Description | Status | Commit |
+| --- | --- | --- | --- |
+| 7.1 | Capability probe (`services/transcode/capabilities.py`), vainfo parsing, 1s test encode, cache, override, and admin endpoint | Complete | pending |
+| 7.2 | Client capability profile (Pydantic model) and presets (`chrome`, `firefox`, `safari`, `android_tv`, `unknown`) | Pending | |
+| 7.3 | Decision engine (`decision.py`, pure function, 40+ case test matrix) | Pending | |
+| 7.4 | ffmpeg command builder (`builder.py`, pure function, snapshot tested) | Pending | |
+| 7.5 | Session manager (`session.py`), HLS fMP4 supervisor, idle reaping, crash fallback, concurrency caps | Pending | |
+| 7.6 | HLS endpoints (`/api/v1/hls/{session}/...`), first-segment delay, stop, token reaping | Pending | |
+| 7.7 | Audio and track selection, plan regeneration, playback-info integration | Pending | |
+| 7.8 | Music transcoding path (direct FLAC to Opus/MP3/AAC streaming) | Pending | |
+| 7.9 | Test player upgrade (hls.js, profile selector, track selection, debug panel) | Pending | |
+| 7.10 | Admin diagnostics (sessions listing, session kill, log tailing) | Pending | |
+
+### Phase 7 Acceptance Checklist
+
+- [ ] Decision engine matrix passes. Builder snapshot tests pass for every pipeline.
+- [ ] On a machine with VAAPI: a 4K HEVC HDR fixture transcodes to 1080p H.264 SDR at faster than 1.0x speed, and intel_gpu_top (or equivalent) shows GPU use. Record results in `docs/HARDWARE_TESTS.md`.
+- [ ] On a machine without VAAPI: the same file plays through the software path.
+- [ ] Seeking mid-stream works, killing the browser tab ends ffmpeg within the idle timeout, and no orphan ffmpeg processes remain after 20 start/stop cycles (automated test).
+- [ ] Exceeding the concurrency cap returns a clean error, not a hang.
 
 ---
 

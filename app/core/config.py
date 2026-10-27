@@ -30,6 +30,18 @@ class Settings(BaseSettings):
 
     # Hardware devices
     render_device: Path = Path("/dev/dri/renderD128")
+    vainfo_binary: str = "vainfo"
+    ffmpeg_binary: str = "ffmpeg"
+
+    # Transcoding
+    transcode_force_software: bool = False
+    transcode_max_hw_sessions: int = 2
+    transcode_max_sw_sessions: int = 2
+    transcode_idle_timeout_seconds: float = 60.0
+    transcode_segment_duration_seconds: int = 4
+    transcode_first_segment_timeout_seconds: float = 15.0
+    transcode_audio_bitrate_kbps: int = 192
+    transcode_test_encode_timeout_seconds: float = 5.0
 
     # Authentication. When secret_key is unset a random key is generated once
     # and persisted in data_dir with mode 0600.

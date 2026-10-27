@@ -513,14 +513,21 @@
   - Precedence in matcher: Local sidecar OPF/cover > Open Library > Google Books fallback.
   - Configurable allowed image hostnames added to settings (`covers.openlibrary.org`, `books.google.com`) with SSRF validation.
 
-## ADR 052: Book Scanner Multi-Format Grouping and Deferred Image Ingestion
+## ADR 053: VAAPI Capability Probe and Hardware Encoder Verification
 
 - **Date:** 2026-10-27
 - **Status:** Accepted
-- **Context:** Ebooks and comics often exist in multiple formats (e.g. `Dune.epub` and `Dune.pdf` in the same directory). In addition, storing extracted embedded covers requires inserting records into the `images` table with foreign key constraints referencing `media_items.id`.
+- **Context:** Hardware acceleration varies by GPU generation and driver capabilities. Rather than assuming capabilities based solely on device presence or driver strings, Phase 7 requires querying `vainfo` profile and entrypoints, testing real 1-second encodes per codec with ffmpeg, and safely falling back to CPU mode.
 - **Decision:**
-  - Group book files by folder + normalized stem and by `(author_id, normalized_title)` during scanning. Multiple formats attach as separate `MediaFile` records to a single `MediaItem` (`type="book"`). Deleting one format retains the book item if other format files remain.
-  - In `LibraryScanner._write_changes`, collect embedded and local artwork candidates into `pending_artworks` during file processing, and execute image pipeline ingestion *after* committing the parent `MediaItem` transaction. This satisfies foreign key constraints across concurrent database sessions while preserving scan atomicity.
+  - `parse_vainfo_output` extracts `VAEntrypointVLD` for decoding and `VAEntrypointEncSlice` / `VAEntrypointEncSliceLP` for encoding across H.264, HEVC, AV1, VP9, MPEG2, and VC1.
+  - Run a 1-second test encode (`lavfi testsrc` -> `format=nv12,hwupload` -> `<codec>_vaapi` -> `null`) for each reported hardware encoder. Only encoders that exit 0 within timeout are marked `test_encode_ok=True`.
+  - Cache results in `ServerTranscodeCapabilities` singleton with asynchronous thread-safe lock.
+  - Provide `HEARTH_TRANSCODE_FORCE_SOFTWARE` setting allowing operators to disable hardware transcoding explicitly.
+  - Expose `GET /api/v1/admin/transcoding/capabilities` for administrative inspection.
+- **Alternatives Considered:**
+  - Running test encodes on every playback request (would introduce unacceptable startup latency).
+  - Trusting vainfo strings without executing actual test encodes (fails if driver crashes or permissions lack render access).
+
 
 
 

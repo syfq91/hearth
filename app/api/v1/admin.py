@@ -7,9 +7,13 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.core.deps import RequireAdmin
+from app.core.deps import RequireAdmin, SettingsDep
 from app.db.models import AuditLog
 from app.db.session import SessionDep
+from app.services.transcode.capabilities import (
+    ServerTranscodeCapabilities,
+    probe_transcode_capabilities,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -49,3 +53,12 @@ async def list_audit(
         query = query.where(AuditLog.action == action)
     rows = (await session.scalars(query)).all()
     return [AuditEntry.from_row(row) for row in rows]
+
+
+@router.get("/transcoding/capabilities")
+async def get_transcoding_capabilities(
+    _actor: RequireAdmin,
+    settings: SettingsDep,
+) -> ServerTranscodeCapabilities:
+    """Return hardware and software transcoding capabilities."""
+    return await probe_transcode_capabilities(settings)

@@ -1504,6 +1504,46 @@
         "title": "ClientCapabilities",
         "type": "object"
       },
+      "CodecCapability": {
+        "description": "Capability for a single media codec.",
+        "properties": {
+          "codec": {
+            "title": "Codec",
+            "type": "string"
+          },
+          "decode": {
+            "default": false,
+            "title": "Decode",
+            "type": "boolean"
+          },
+          "encode": {
+            "default": false,
+            "title": "Encode",
+            "type": "boolean"
+          },
+          "test_encode_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Encode Error"
+          },
+          "test_encode_ok": {
+            "default": false,
+            "title": "Test Encode Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "codec"
+        ],
+        "title": "CodecCapability",
+        "type": "object"
+      },
       "ComponentHealth": {
         "description": "Health of a single runtime dependency.",
         "properties": {
@@ -4032,6 +4072,71 @@
         "title": "SeriesBrief",
         "type": "object"
       },
+      "ServerTranscodeCapabilities": {
+        "description": "Aggregated hardware and software transcoding capabilities.",
+        "properties": {
+          "available": {
+            "default": false,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "codecs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CodecCapability"
+            },
+            "title": "Codecs",
+            "type": "object"
+          },
+          "driver_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Version"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "force_software": {
+            "default": false,
+            "title": "Force Software",
+            "type": "boolean"
+          },
+          "render_device": {
+            "title": "Render Device",
+            "type": "string"
+          },
+          "software_encoders": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Software Encoders",
+            "type": "array"
+          },
+          "tonemap_vaapi": {
+            "default": false,
+            "title": "Tonemap Vaapi",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "render_device"
+        ],
+        "title": "ServerTranscodeCapabilities",
+        "type": "object"
+      },
       "SubtitleResponse": {
         "description": "A playable external subtitle track.",
         "properties": {
@@ -5065,6 +5170,33 @@
           }
         ],
         "summary": "List Audit",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/transcoding/capabilities": {
+      "get": {
+        "description": "Return hardware and software transcoding capabilities.",
+        "operationId": "get_transcoding_capabilities_api_v1_admin_transcoding_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerTranscodeCapabilities"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Transcoding Capabilities",
         "tags": [
           "admin"
         ]
