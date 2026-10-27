@@ -509,7 +509,7 @@
 | 8.3 | Content controls: per-user maximum rating (TMDB certification mapping) and per-library access | Complete | `a1939b8` |
 | 8.4 | Admin API: scan controls, unmatched items list, manual fix tools, job history, log tail, system info, transcode settings | Complete | `5c9a1b5` |
 | 8.5 | Backups: `hearth backup` CLI and admin endpoints with SQLite backup API and settings export | Complete | `b8301ec` |
-| 8.6 | Real-time events: extend SSE with scan progress, library updated, and now playing | Complete | `feat(events)` |
+| 8.6 | Real-time events: extend SSE with scan progress, library updated, and now playing | Complete | `de439db` |
 | 8.7 | API hardening: CORS, request size limit, ETags on item detail, input validation, OpenAPI examples | Not started | |
 | 8.8 | Generate typed API client artifact (`packages/client/src/schema.d.ts`) | Not started | |
 | 8.9 | Write `docs/API.md` with authentication flows and playback-info contract | Not started | |
