@@ -117,13 +117,15 @@ async def stream_file_head(
     )
 
 
-async def _stream_response(
+async def stream_media_file(
     file_id: str,
     method: str,
     request_headers: Headers,
     viewer: Viewer,
     chunk_size: int,
     session: AsyncSession,
+    *,
+    download_filename: str | None = None,
 ) -> Response:
     media_file = await session.get(MediaFile, file_id)
     if media_file is None or media_file.missing_since is not None:
@@ -173,6 +175,9 @@ async def _stream_response(
         "Cache-Control": "private, max-age=0, must-revalidate",
         "X-Content-Type-Options": "nosniff",
     }
+    if download_filename:
+        safe_name = download_filename.replace('"', '\\"')
+        headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
     media_type = content_type_for(path)
 
     if _matches_etag(request_headers.get("if-none-match"), etag):
@@ -207,6 +212,9 @@ async def _stream_response(
         media_type=media_type,
         headers=headers,
     )
+
+
+_stream_response = stream_media_file
 
 
 def _matches_etag(header: str | None, etag: str) -> bool:

@@ -396,8 +396,8 @@
 | --- | --- | --- | --- |
 | 6.1 | Models: `Author`, `Book`, `BookSeries`, with `MediaFile` per format, and `BookProgress` | Complete | `c62dc46` |
 | 6.2 | Readers: EPUB (OPF/Zip), CBZ (ComicInfo/Zip), PDF (pypdf/pypdfium2), cover extraction | Complete | `87abae5` |
-| 6.3 | Provider: Open Library and Google Books fallback, local OPF/cover priority | Complete | pending commit |
-| 6.4 | Native API: books, authors, series, search, download, reading progress | Pending | |
+| 6.3 | Provider: Open Library and Google Books fallback, local OPF/cover priority | Complete | `e920a18` |
+| 6.4 | Native API: books, authors, series, search, download, reading progress | Complete | pending commit |
 | 6.5 | Comic page serving: on-demand extraction from CBZ/CBR with resizing and caching | Pending | |
 | 6.6 | Reader integration notes for Phase 9 | Pending | |
 

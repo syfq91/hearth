@@ -1,6 +1,6 @@
 """TV series, season, episode, next-up, and watch-state endpoints."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
@@ -122,15 +122,20 @@ async def get_series_detail(
     series_id: str,
     user: RequireUser,
     session: SessionDep,
-) -> SeriesDetail:
-    """Return complete details for a TV series."""
+) -> Any:
+    """Return complete details for a TV series or book series."""
     item = await session.get(MediaItem, series_id)
     if (
         item is None
         or item.type != "series"
         or not await user_can_access_library(session, user, item.library_id)
     ):
-        raise NotFoundError("Series not found", code="series_not_found")
+        from app.api.v1.books import get_series_detail as get_book_series_detail
+
+        try:
+            return await get_book_series_detail(series_id, user, session)
+        except NotFoundError:
+            raise NotFoundError("Series not found", code="series_not_found") from None
 
     series = item.series
     series_row = series if series is not None else Series(item_id=item.id)

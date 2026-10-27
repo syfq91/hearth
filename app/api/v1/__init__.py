@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     admin,
     auth,
+    books,
     events,
     home,
     images,
@@ -33,6 +34,7 @@ router.include_router(metadata.router)
 router.include_router(items.router)
 router.include_router(shows.router)
 router.include_router(music.router)
+router.include_router(books.router)
 router.include_router(home.router)
 router.include_router(playback.router)
 router.include_router(images.router)

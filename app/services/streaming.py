@@ -30,6 +30,12 @@ _CONTENT_TYPES = {
     ".opus": "audio/ogg",
     ".ogg": "audio/ogg",
     ".wav": "audio/wav",
+    ".epub": "application/epub+zip",
+    ".pdf": "application/pdf",
+    ".cbz": "application/vnd.comicbook+zip",
+    ".cbr": "application/vnd.comicbook-rar",
+    ".mobi": "application/x-mobipocket-ebook",
+    ".azw3": "application/vnd.amazon.ebook",
 }
 
 
