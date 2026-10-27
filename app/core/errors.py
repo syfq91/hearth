@@ -200,6 +200,23 @@ class TranscodeCapacityExceededError(AppError):
         )
 
 
+class PayloadTooLargeError(AppError):
+    """Payload exceeds maximum size limit (413)."""
+
+    def __init__(
+        self,
+        message: str = "Request body exceeds maximum allowed size",
+        code: str = "payload_too_large",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            message=message,
+            code=code,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            details=details,
+        )
+
+
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
     """Handle custom application exceptions."""
     return JSONResponse(status_code=exc.status_code, content=exc.to_dict(), headers=exc.headers)

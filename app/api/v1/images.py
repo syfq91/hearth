@@ -27,7 +27,20 @@ _MEDIA_TYPES = {
 }
 
 
-@router.get("/{image_id}")
+@router.get(
+    "/{image_id}",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "description": "Artwork image variant",
+            "content": {
+                "image/webp": {"schema": {"type": "string", "format": "binary"}},
+                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+                "image/png": {"schema": {"type": "string", "format": "binary"}},
+            },
+        }
+    },
+)
 async def get_image(
     image_id: str,
     viewer: ViewerDep,

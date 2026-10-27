@@ -35,7 +35,20 @@ from app.services.streaming import (
 router = APIRouter(tags=["stream"])
 
 
-@router.get("/stream/{file_id}")
+@router.get(
+    "/stream/{file_id}",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Full media stream",
+            "content": {"video/*": {"schema": {"type": "string", "format": "binary"}}},
+        },
+        206: {
+            "description": "Partial media stream",
+            "content": {"video/*": {"schema": {"type": "string", "format": "binary"}}},
+        },
+    },
+)
 async def stream_file(
     file_id: str,
     request: Request,
@@ -59,7 +72,20 @@ async def stream_file(
     )
 
 
-@router.get("/stream/audio/{track_id}")
+@router.get(
+    "/stream/audio/{track_id}",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Full audio stream",
+            "content": {"audio/*": {"schema": {"type": "string", "format": "binary"}}},
+        },
+        206: {
+            "description": "Partial audio stream",
+            "content": {"audio/*": {"schema": {"type": "string", "format": "binary"}}},
+        },
+    },
+)
 async def stream_audio_track(
     track_id: str,
     request: Request,
@@ -81,7 +107,20 @@ async def stream_audio_track(
     )
 
 
-@router.get("/stream/audio/{track_id}/transcode")
+@router.get(
+    "/stream/audio/{track_id}/transcode",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Transcoded audio stream",
+            "content": {
+                "audio/ogg": {"schema": {"type": "string", "format": "binary"}},
+                "audio/mpeg": {"schema": {"type": "string", "format": "binary"}},
+                "audio/mp4": {"schema": {"type": "string", "format": "binary"}},
+            },
+        }
+    },
+)
 async def stream_audio_track_transcode(
     track_id: str,
     viewer: ViewerDep,
@@ -104,7 +143,20 @@ async def stream_audio_track_transcode(
     )
 
 
-@router.get("/stream/{file_id}/transcode")
+@router.get(
+    "/stream/{file_id}/transcode",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Transcoded audio stream",
+            "content": {
+                "audio/ogg": {"schema": {"type": "string", "format": "binary"}},
+                "audio/mpeg": {"schema": {"type": "string", "format": "binary"}},
+                "audio/mp4": {"schema": {"type": "string", "format": "binary"}},
+            },
+        }
+    },
+)
 async def stream_file_transcode(
     file_id: str,
     viewer: ViewerDep,

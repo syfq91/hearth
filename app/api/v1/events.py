@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -151,7 +151,16 @@ async def job_event_stream(
         await broadcaster.unsubscribe(queue)
 
 
-@router.get("/events")
+@router.get(
+    "/events",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Server-sent events stream",
+            "content": {"text/event-stream": {"schema": {"type": "string"}}},
+        }
+    },
+)
 async def events(
     request: Request,
     user: EventsUser,

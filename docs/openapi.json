@@ -8654,11 +8654,20 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "image/jpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Extracted comic page image"
           },
           "422": {
             "content": {
@@ -9253,11 +9262,13 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Server-sent events stream"
           },
           "422": {
             "content": {
@@ -9339,11 +9350,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "video/mp4": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Initialization fMP4 segment"
           },
           "422": {
             "content": {
@@ -9403,11 +9417,13 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "application/vnd.apple.mpegurl": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Master HLS playlist"
           },
           "422": {
             "content": {
@@ -9467,11 +9483,13 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "application/vnd.apple.mpegurl": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Media playlist"
           },
           "422": {
             "content": {
@@ -9606,11 +9624,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "video/iso.segment": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Media segment fMP4"
           },
           "422": {
             "content": {
@@ -9867,11 +9888,26 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "image/jpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Artwork image variant"
           },
           "422": {
             "content": {
@@ -9908,6 +9944,25 @@
               "title": "Item Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Comma-separated list of field names to include",
+            "in": "query",
+            "name": "fields",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated list of field names to include",
+              "title": "Fields"
+            }
           }
         ],
         "responses": {
@@ -9919,7 +9974,10 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Item detail"
+          },
+          "304": {
+            "description": "Item unchanged (ETag matched)"
           },
           "422": {
             "content": {
@@ -12404,11 +12462,25 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "audio/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Full audio stream"
+          },
+          "206": {
+            "content": {
+              "audio/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Partial audio stream"
           },
           "422": {
             "content": {
@@ -12495,11 +12567,26 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "audio/mp4": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "audio/mpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "audio/ogg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Transcoded audio stream"
           },
           "422": {
             "content": {
@@ -12559,11 +12646,25 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "video/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Full media stream"
+          },
+          "206": {
+            "content": {
+              "video/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Partial media stream"
           },
           "422": {
             "content": {
@@ -12650,11 +12751,26 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "audio/mp4": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "audio/mpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "audio/ogg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "Transcoded audio stream"
           },
           "422": {
             "content": {
@@ -12714,11 +12830,13 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "text/vtt": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "WebVTT subtitle file"
           },
           "422": {
             "content": {

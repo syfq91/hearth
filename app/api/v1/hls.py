@@ -23,7 +23,16 @@ class SessionStopResponse(BaseModel):
     stopped: bool = True
 
 
-@router.get("/{session_id}/master.m3u8")
+@router.get(
+    "/{session_id}/master.m3u8",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Master HLS playlist",
+            "content": {"application/vnd.apple.mpegurl": {"schema": {"type": "string"}}},
+        }
+    },
+)
 async def get_master_playlist(
     session_id: str,
     request: Request,
@@ -73,7 +82,16 @@ async def get_master_playlist(
     )
 
 
-@router.get("/{session_id}/media.m3u8")
+@router.get(
+    "/{session_id}/media.m3u8",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Media playlist",
+            "content": {"application/vnd.apple.mpegurl": {"schema": {"type": "string"}}},
+        }
+    },
+)
 async def get_media_playlist(
     session_id: str,
     viewer: ViewerDep,
@@ -121,7 +139,16 @@ async def get_media_playlist(
     )
 
 
-@router.get("/{session_id}/init.mp4")
+@router.get(
+    "/{session_id}/init.mp4",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "description": "Initialization fMP4 segment",
+            "content": {"video/mp4": {"schema": {"type": "string", "format": "binary"}}},
+        }
+    },
+)
 async def get_init_segment(
     session_id: str,
     viewer: ViewerDep,
@@ -147,7 +174,16 @@ async def get_init_segment(
     )
 
 
-@router.get("/{session_id}/{segment_file}")
+@router.get(
+    "/{session_id}/{segment_file}",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "description": "Media segment fMP4",
+            "content": {"video/iso.segment": {"schema": {"type": "string", "format": "binary"}}},
+        }
+    },
+)
 async def get_media_segment(
     session_id: str,
     segment_file: str,

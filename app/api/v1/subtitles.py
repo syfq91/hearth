@@ -24,7 +24,16 @@ router = APIRouter(tags=["subtitles"])
 _NOT_FOUND = "Subtitle not found"
 
 
-@router.get("/subtitles/{subtitle_id}.vtt")
+@router.get(
+    "/subtitles/{subtitle_id}.vtt",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "WebVTT subtitle file",
+            "content": {"text/vtt": {"schema": {"type": "string"}}},
+        }
+    },
+)
 async def get_subtitle(
     subtitle_id: str,
     viewer: ViewerDep,

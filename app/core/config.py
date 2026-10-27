@@ -82,6 +82,10 @@ class Settings(BaseSettings):
     watched_threshold: float = 0.90
     playback_session_gap_seconds: int = 300
 
+    # API and Security Hardening
+    cors_origins: list[str] = ["*"]
+    max_request_body_bytes: int = 50 * 1024 * 1024
+
     # Scanning
     scan_mass_delete_threshold: float = 0.30
     scan_mass_delete_min_files: int = 10

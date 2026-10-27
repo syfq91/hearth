@@ -2,12 +2,14 @@
 
 import base64
 import binascii
+import hashlib
 import json
 from datetime import datetime
 from typing import Annotated, Any, Literal, cast
 from urllib.parse import quote
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request, Response, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -232,8 +234,24 @@ async def list_library_items(
     )
 
 
-@router.get("/items/{item_id}")
-async def get_item(item_id: str, user: RequireUser, session: SessionDep) -> ItemDetail:
+@router.get(
+    "/items/{item_id}",
+    response_model=ItemDetail,
+    responses={
+        200: {"model": ItemDetail, "description": "Item detail"},
+        304: {"description": "Item unchanged (ETag matched)"},
+    },
+)
+async def get_item(
+    item_id: str,
+    user: RequireUser,
+    session: SessionDep,
+    request: Request,
+    fields: Annotated[
+        str | None,
+        Query(description="Comma-separated list of field names to include", max_length=500),
+    ] = None,
+) -> Response:
     """Return one item if the current user can access its library."""
     item = await session.get(MediaItem, item_id)
     if (
@@ -264,7 +282,7 @@ async def get_item(item_id: str, user: RequireUser, session: SessionDep) -> Item
         else ([episode.file] if episode and episode.file else [])
     )
 
-    return ItemDetail(
+    detail = ItemDetail(
         **summary.model_dump(),
         original_title=original_title,
         tagline=movie.tagline if movie else None,
@@ -289,6 +307,24 @@ async def get_item(item_id: str, user: RequireUser, session: SessionDep) -> Item
         people=people,
         images=[_image_response(image) for image in _ordered_images(item)],
     )
+
+    data = detail.model_dump(mode="json")
+    raw = json.dumps(data, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    etag = f'"{hashlib.sha256(raw).hexdigest()[:16]}"'
+
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match and (if_none_match == "*" or if_none_match.strip('"') == etag.strip('"')):
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+
+    if fields is not None:
+        wanted = {f.strip() for f in fields.split(",") if f.strip()}
+        if wanted:
+            wanted.add("id")
+            wanted.add("type")
+            filtered = {k: v for k, v in data.items() if k in wanted}
+            return JSONResponse(content=filtered, headers={"ETag": etag})
+
+    return JSONResponse(content=data, headers={"ETag": etag})
 
 
 # ------------------------------------------------------------------- helpers

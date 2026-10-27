@@ -23,7 +23,7 @@ from app.core.errors import (
     validation_error_handler,
 )
 from app.core.logging import setup_logging
-from app.core.middleware import RequestIDMiddleware
+from app.core.middleware import RequestIDMiddleware, RequestSizeLimitMiddleware
 from app.core.ratelimit import SlidingWindowLimiter
 from app.db.migrate import run_migrations_async
 from app.db.session import build_engine, build_sessionmaker
@@ -73,6 +73,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         window_seconds=resolved.login_rate_limit_window_seconds,
     )
 
+    if resolved.cors_origins:
+        from fastapi.middleware.cors import CORSMiddleware
+
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=resolved.cors_origins,
+            allow_credentials="*" not in resolved.cors_origins,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            expose_headers=[
+                "ETag",
+                "Content-Length",
+                "Accept-Ranges",
+                "Content-Range",
+                "X-Request-ID",
+            ],
+        )
+
+    application.add_middleware(
+        RequestSizeLimitMiddleware,
+        max_bytes=resolved.max_request_body_bytes,
+    )
     application.add_middleware(RequestIDMiddleware)
 
     application.add_exception_handler(AppError, cast(ExceptionHandler, app_error_handler))

@@ -547,7 +547,19 @@ async def download_book_file(
     )
 
 
-@router.get("/books/{book_id}/pages/{page_number}")
+@router.get(
+    "/books/{book_id}/pages/{page_number}",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Extracted comic page image",
+            "content": {
+                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+                "image/webp": {"schema": {"type": "string", "format": "binary"}},
+            },
+        }
+    },
+)
 async def get_comic_page(
     book_id: str,
     page_number: int,
