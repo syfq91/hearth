@@ -1,0 +1,11 @@
+{
+  "name": "@hearth/client",
+  "version": "0.1.0",
+  "description": "Typed API client and TypeScript definitions for Hearth Media Server",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "generate": "npx openapi-typescript ../../docs/openapi.json -o src/schema.d.ts"
+  },
+  "license": "MIT"
+}

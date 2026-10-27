@@ -511,7 +511,7 @@
 | 8.5 | Backups: `hearth backup` CLI and admin endpoints with SQLite backup API and settings export | Complete | `b8301ec` |
 | 8.6 | Real-time events: extend SSE with scan progress, library updated, and now playing | Complete | `de439db` |
 | 8.7 | API hardening: CORS, request size limit, ETags on item detail, input validation, OpenAPI response types | Complete | `463a401` |
-| 8.8 | Generate typed API client artifact (`packages/client/src/schema.d.ts`) | Not started | |
+| 8.8 | Generate typed API client artifact (`packages/client/src/schema.d.ts`) | Complete | pending |
 | 8.9 | Write `docs/API.md` with authentication flows and playback-info contract | Not started | |
 
 ### Phase 8 Acceptance Checklist
