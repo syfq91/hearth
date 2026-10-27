@@ -456,7 +456,7 @@
 | 7.6 | HLS endpoints (`/api/v1/hls/{session}/...`), first-segment delay, stop, token reaping | Complete | `990593f` |
 | 7.7 | Audio and track selection, plan regeneration, playback-info integration | Complete | `2131880` |
 | 7.8 | Music transcoding path (direct FLAC to Opus/MP3/AAC streaming) | Complete | `9c8c06a` |
-| 7.9 | Test player upgrade (hls.js, profile selector, track selection, debug panel) | Complete | `[hash]` |
+| 7.9 | Test player upgrade (hls.js, profile selector, track selection, debug panel) | Complete | `2763072` |
 | 7.10 | Admin diagnostics (sessions listing, session kill, log tailing) | Pending | |
 
 ### Phase 7 Acceptance Checklist
