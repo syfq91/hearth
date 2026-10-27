@@ -11,6 +11,7 @@ from app.api.v1.items import ItemSummary, item_summary, watch_states
 from app.core.deps import RequireUser
 from app.db.models import ItemPerson, LibraryAccess, MediaItem, Person, UserItemState
 from app.db.session import SessionDep
+from app.services.ratings import is_rating_permitted
 
 router = APIRouter(tags=["search"])
 
@@ -145,7 +146,7 @@ async def search(
 
     for row_id, item_type, _ in item_rows:
         item = items_by_id.get(row_id)
-        if item is None:
+        if item is None or not is_rating_permitted(item.content_rating, user.max_rating):
             continue
         summary = item_summary(item, states.get(item.id))
         if item_type == "movie":

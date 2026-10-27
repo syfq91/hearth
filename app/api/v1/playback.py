@@ -44,6 +44,7 @@ from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
 from app.services.media.probe import ProbeResult, ProbeStream
 from app.services.playback_state import chapters_from_streams, resolve_watch_state
+from app.services.ratings import is_rating_permitted
 from app.services.scrobbling.listenbrainz import enqueue_scrobble
 from app.services.transcode.capabilities import probe_transcode_capabilities
 from app.services.transcode.decision import (
@@ -435,7 +436,11 @@ async def set_rating(
 
 async def _load_item(session: AsyncSession, user: User, item_id: str) -> MediaItem:
     item = await session.get(MediaItem, item_id)
-    if item is None or not await user_can_access_library(session, user, item.library_id):
+    if (
+        item is None
+        or not await user_can_access_library(session, user, item.library_id)
+        or not is_rating_permitted(item.content_rating, user.max_rating)
+    ):
         raise NotFoundError("Item not found", code="item_not_found")
     return item
 

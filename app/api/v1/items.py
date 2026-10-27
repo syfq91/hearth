@@ -30,6 +30,7 @@ from app.db.models import (
     Image as ImageModel,
 )
 from app.db.session import SessionDep
+from app.services.ratings import apply_rating_filter, is_rating_permitted
 from app.services.subtitles import (
     discover_subtitles,
     encode_subtitle_id,
@@ -117,6 +118,7 @@ class ItemSummary(BaseModel):
     year: int | None = None
     overview: str | None = None
     rating: float | None = None
+    content_rating: str | None = None
     runtime_seconds: int | None = None
     added_at: datetime
     match_state: str
@@ -170,6 +172,7 @@ async def list_library_items(
         MediaItem.library_id == library.id,
         MediaItem.type == item_type,
     )
+    query = apply_rating_filter(query, user)
     if genre is not None:
         wanted = genre.strip().casefold()
         if wanted:
@@ -233,7 +236,11 @@ async def list_library_items(
 async def get_item(item_id: str, user: RequireUser, session: SessionDep) -> ItemDetail:
     """Return one item if the current user can access its library."""
     item = await session.get(MediaItem, item_id)
-    if item is None or not await user_can_access_library(session, user, item.library_id):
+    if (
+        item is None
+        or not await user_can_access_library(session, user, item.library_id)
+        or not is_rating_permitted(item.content_rating, user.max_rating)
+    ):
         raise NotFoundError("Item not found", code="item_not_found")
 
     state = await session.scalar(
@@ -433,6 +440,7 @@ def item_summary(item: MediaItem, state: UserItemState | None) -> ItemSummary:
         year=item.year,
         overview=item.overview,
         rating=item.rating,
+        content_rating=item.content_rating,
         runtime_seconds=item.runtime_seconds,
         added_at=item.added_at,
         match_state=item.match_state,

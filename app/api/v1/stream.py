@@ -23,6 +23,7 @@ from app.core.errors import NotFoundError
 from app.db.models import Episode, LibraryPath, MediaFile, MediaItem, Track
 from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
+from app.services.ratings import is_rating_permitted
 from app.services.streaming import (
     ByteRange,
     RangeNotSatisfiable,
@@ -194,7 +195,11 @@ async def stream_media_file(
             raise NotFoundError("Media file not found", code="file_not_found")
 
     item = await session.get(MediaItem, media_file.item_id)
-    if item is None or not await user_can_access_library(session, viewer.user, item.library_id):
+    if (
+        item is None
+        or not await user_can_access_library(session, viewer.user, item.library_id)
+        or not is_rating_permitted(item.content_rating, viewer.user.max_rating)
+    ):
         raise NotFoundError("Media file not found", code="file_not_found")
 
     roots = list(
@@ -293,7 +298,11 @@ async def _stream_transcoded_audio(
             raise NotFoundError("Media file not found", code="file_not_found")
 
     item = await session.get(MediaItem, media_file.item_id)
-    if item is None or not await user_can_access_library(session, viewer.user, item.library_id):
+    if (
+        item is None
+        or not await user_can_access_library(session, viewer.user, item.library_id)
+        or not is_rating_permitted(item.content_rating, viewer.user.max_rating)
+    ):
         raise NotFoundError("Media file not found", code="file_not_found")
 
     roots = list(

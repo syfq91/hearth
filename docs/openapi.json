@@ -2372,6 +2372,17 @@
               }
             ]
           },
+          "content_rating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Rating"
+          },
           "edition": {
             "anyOf": [
               {
@@ -2607,6 +2618,17 @@
                 "type": "null"
               }
             ]
+          },
+          "content_rating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Rating"
           },
           "genres": {
             "default": [],
