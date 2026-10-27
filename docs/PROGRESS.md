@@ -448,7 +448,7 @@
 
 | Task | Description | Status | Commit |
 | --- | --- | --- | --- |
-| 7.1 | Capability probe (`services/transcode/capabilities.py`), vainfo parsing, 1s test encode, cache, override, and admin endpoint | Complete | pending |
+| 7.1 | Capability probe (`services/transcode/capabilities.py`), vainfo parsing, 1s test encode, cache, override, and admin endpoint | Complete | `f2299cb` |
 | 7.2 | Client capability profile (Pydantic model) and presets (`chrome`, `firefox`, `safari`, `android_tv`, `unknown`) | Pending | |
 | 7.3 | Decision engine (`decision.py`, pure function, 40+ case test matrix) | Pending | |
 | 7.4 | ffmpeg command builder (`builder.py`, pure function, snapshot tested) | Pending | |
