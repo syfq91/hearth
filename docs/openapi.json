@@ -4879,6 +4879,27 @@
         "title": "TrackSummary",
         "type": "object"
       },
+      "TranscodeLogsResponse": {
+        "properties": {
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "lines"
+        ],
+        "title": "TranscodeLogsResponse",
+        "type": "object"
+      },
       "TranscodePlan": {
         "description": "Detailed plan produced by the decision engine.",
         "properties": {
@@ -5015,6 +5036,106 @@
           "hwaccel"
         ],
         "title": "TranscodePlan",
+        "type": "object"
+      },
+      "TranscodeSessionResponse": {
+        "properties": {
+          "cmd": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cmd",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "fps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fps"
+          },
+          "frame": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frame"
+          },
+          "hwaccel": {
+            "title": "Hwaccel",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_hardware": {
+            "title": "Is Hardware",
+            "type": "boolean"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "last_activity_at": {
+            "format": "date-time",
+            "title": "Last Activity At",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "speed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed"
+          },
+          "uptime_seconds": {
+            "title": "Uptime Seconds",
+            "type": "number"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "item_id",
+          "file_id",
+          "mode",
+          "is_hardware",
+          "hwaccel",
+          "uptime_seconds",
+          "created_at",
+          "last_activity_at"
+        ],
+        "title": "TranscodeSessionResponse",
         "type": "object"
       },
       "UserCreate": {
@@ -5633,6 +5754,189 @@
           }
         ],
         "summary": "Get Transcoding Capabilities",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/transcoding/sessions": {
+      "get": {
+        "description": "List active transcoding sessions with current progress metrics.",
+        "operationId": "list_transcoding_sessions_api_v1_admin_transcoding_sessions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TranscodeSessionResponse"
+                  },
+                  "title": "Response List Transcoding Sessions Api V1 Admin Transcoding Sessions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Transcoding Sessions",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/transcoding/sessions/{session_id}": {
+      "delete": {
+        "description": "Stop and terminate an active transcoding session.",
+        "operationId": "stop_transcoding_session_api_v1_admin_transcoding_sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Stop Transcoding Session Api V1 Admin Transcoding Sessions  Session Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stop Transcoding Session",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/transcoding/sessions/{session_id}/logs": {
+      "get": {
+        "description": "Return the recent stderr log lines for an active transcoding session.",
+        "operationId": "get_transcoding_session_logs_api_v1_admin_transcoding_sessions__session_id__logs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscodeLogsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Transcoding Session Logs",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/transcoding/sessions/{session_id}/stop": {
+      "post": {
+        "description": "Stop and terminate an active transcoding session.",
+        "operationId": "stop_transcoding_session_api_v1_admin_transcoding_sessions__session_id__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Stop Transcoding Session Api V1 Admin Transcoding Sessions  Session Id  Stop Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stop Transcoding Session",
         "tags": [
           "admin"
         ]

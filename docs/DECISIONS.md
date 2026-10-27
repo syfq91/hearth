@@ -631,6 +631,21 @@
 - **Alternatives Considered:**
   - Building a full React/Vue frontend (unnecessary build complexity for a developer tool that runs as a static single file).
 
+## ADR 062: Administrative Transcode Diagnostics, Session Management, and Log Tailing
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** Operators need visibility into running transcoding sessions, active resource utilization (hardware vs software, fps, speed, frame), the ability to terminate stuck or unwanted transcode jobs, and access to live ffmpeg stderr logs without host SSH access.
+- **Decision:**
+  - Implement administrative session diagnostic endpoints:
+    - `GET /api/v1/admin/transcoding/sessions`: enumerates active sessions managed by `SessionManager` with real-time progress metrics (`fps`, `speed`, `frame`, `is_hardware`, `uptime_seconds`, `cmd`).
+    - `POST /api/v1/admin/transcoding/sessions/{session_id}/stop` and `DELETE /api/v1/admin/transcoding/sessions/{session_id}`: immediately terminates the underlying ffmpeg subprocess, purges temporary output files, and unregisters the session.
+    - `GET /api/v1/admin/transcoding/sessions/{session_id}/logs`: returns the rolling 200-line stderr ring buffer for real-time and post-mortem diagnosis.
+  - Enforce `RequireAdmin` dependency across all diagnostic endpoints, returning 401 for unauthenticated calls and 403 for non-administrative accounts.
+- **Alternatives Considered:**
+  - Inspecting host process tables (`ps` / `procfs`): fragile, platform-dependent, and bypasses the application supervisor.
+
+
 
 
 
