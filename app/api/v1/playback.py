@@ -44,6 +44,7 @@ from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
 from app.services.playback_state import chapters_from_streams, resolve_watch_state
 from app.services.scrobbling.listenbrainz import enqueue_scrobble
+from app.services.transcode.profile import ClientCapabilities
 
 router = APIRouter(tags=["playback"])
 
@@ -84,26 +85,6 @@ class RatingRequest(BaseModel):
 
 
 PlaybackMode = Literal["direct_play", "remux_hls", "transcode_hls"]
-
-
-class ClientCapabilities(BaseModel):
-    """What a client says it can play.
-
-    Phase 3 accepts the full profile but always chooses direct play; Phase 7
-    resolves presets and uses these fields in the decision engine.
-    """
-
-    preset: str | None = Field(default=None, max_length=64)
-    containers: list[str] = Field(default_factory=list)
-    video_codecs: list[str] = Field(default_factory=list)
-    video_profiles: list[str] = Field(default_factory=list)
-    audio_codecs: list[str] = Field(default_factory=list)
-    max_width: int | None = Field(default=None, gt=0)
-    max_height: int | None = Field(default=None, gt=0)
-    max_bitrate: int | None = Field(default=None, gt=0)
-    subtitle_formats: list[str] = Field(default_factory=list)
-    hdr: bool = False
-    hls_fmp4: bool = False
 
 
 class PlaybackInfoRequest(BaseModel):

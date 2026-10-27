@@ -528,6 +528,19 @@
   - Running test encodes on every playback request (would introduce unacceptable startup latency).
   - Trusting vainfo strings without executing actual test encodes (fails if driver crashes or permissions lack render access).
 
+## ADR 054: Client Capability Profiles and Preset Resolution
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** Playback decisions must align server output with client device capabilities. Rather than requiring clients to provide extensive codec, profile, and container specifications on every request, Hearth provides standard presets with optional parameter overrides.
+- **Decision:**
+  - Define built-in presets: `chrome` (H.264, VP9, AV1, VTT, WebM, MP4, HLS fMP4), `firefox` (H.264, VP9, AV1, VTT, WebM, MP4, HLS fMP4), `safari` (H.264, HEVC, Main 10, VTT, MP4, HLS fMP4, HDR), `android_tv` (H.264, HEVC, VP9, AC3, EAC3, DTS, SRT, VTT, MKV, MP4, HLS fMP4), and `unknown` (conservative MP4, H.264 baseline/main/high, AAC, 1080p, 4 Mbps limit).
+  - Clients can specify `preset="chrome"` and selectively override specific constraints (e.g. `max_bitrate=8_000_000` or `max_width=1920`).
+  - Helper methods on `ClientCapabilities` (`supports_container`, `supports_video_codec`, `supports_audio_codec`, `supports_subtitle`) handle container and codec aliases (e.g., `avc1` -> `h264`, `hev1`/`hvc1` -> `hevc`, `ec-3` -> `eac3`, `mov`/`m4v` -> `mp4`).
+- **Alternatives Considered:**
+  - Requiring clients to submit full raw capability strings every request without presets (burdensome and error-prone for web and lightweight clients).
+
+
 
 
 
