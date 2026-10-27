@@ -505,7 +505,7 @@
 | Task | Description | Status | Commit |
 | --- | --- | --- | --- |
 | 8.1 | Unified FTS5 search (`GET /api/v1/search?q=`) across movies, series, episodes, albums, tracks, books, and people with prefix matching, ranking, and per-user library access filtering | Complete | `7de605e` |
-| 8.2 | Collections and playlists: admin collections and per-user playlists across video and audio | Not started | |
+| 8.2 | Collections and playlists: admin collections and per-user playlists across video and audio | Complete | `476fdac` |
 | 8.3 | Content controls: per-user maximum rating (TMDB certification mapping) and per-library access | Not started | |
 | 8.4 | Admin API: scan controls, unmatched items list, manual fix tools, job history, log tail, system info, transcode settings | Not started | |
 | 8.5 | Backups: `hearth backup` CLI and admin endpoints with SQLite backup API and settings export | Not started | |

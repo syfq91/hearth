@@ -33,6 +33,46 @@
         "title": "AboutResponse",
         "type": "object"
       },
+      "AddCollectionItemsRequest": {
+        "additionalProperties": false,
+        "description": "Add items to a collection.",
+        "properties": {
+          "item_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Item Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "item_ids"
+        ],
+        "title": "AddCollectionItemsRequest",
+        "type": "object"
+      },
+      "AddPlaylistItemsRequest": {
+        "description": "Add items to a playlist.",
+        "properties": {
+          "item_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Item Ids",
+            "type": "array"
+          },
+          "track_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Track Ids",
+            "type": "array"
+          }
+        },
+        "title": "AddPlaylistItemsRequest",
+        "type": "object"
+      },
       "AlbumDetail": {
         "properties": {
           "artist_id": {
@@ -1544,6 +1584,149 @@
         "title": "CodecCapability",
         "type": "object"
       },
+      "CollectionDetail": {
+        "additionalProperties": false,
+        "description": "Collection with ordered media items.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ItemSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "poster_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Path"
+          },
+          "tmdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CollectionDetail",
+        "type": "object"
+      },
+      "CollectionSummary": {
+        "additionalProperties": false,
+        "description": "Collection overview without child items.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "item_count": {
+            "default": 0,
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "poster_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Path"
+          },
+          "tmdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CollectionSummary",
+        "type": "object"
+      },
       "ComponentHealth": {
         "description": "Health of a single runtime dependency.",
         "properties": {
@@ -1573,6 +1756,99 @@
           "status"
         ],
         "title": "ComponentHealth",
+        "type": "object"
+      },
+      "CreateCollectionRequest": {
+        "additionalProperties": false,
+        "description": "Create a new collection.",
+        "properties": {
+          "item_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Item Ids",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "poster_path": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Path"
+          },
+          "tmdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Id"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateCollectionRequest",
+        "type": "object"
+      },
+      "CreatePlaylistRequest": {
+        "additionalProperties": false,
+        "description": "Create a new playlist.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "item_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Item Ids",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreatePlaylistRequest",
         "type": "object"
       },
       "Credentials": {
@@ -3499,52 +3775,9 @@
         "title": "PlaybackInfoResponse",
         "type": "object"
       },
-      "PlaylistAddItems": {
-        "properties": {
-          "item_ids": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 500,
-            "minItems": 1,
-            "title": "Item Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "item_ids"
-        ],
-        "title": "PlaylistAddItems",
-        "type": "object"
-      },
-      "PlaylistCreate": {
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "maxLength": 2000,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "name": {
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "PlaylistCreate",
-        "type": "object"
-      },
       "PlaylistDetail": {
+        "additionalProperties": false,
+        "description": "Playlist detail with ordered items.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -3588,6 +3821,11 @@
             "title": "Name",
             "type": "string"
           },
+          "total_duration_seconds": {
+            "default": 0.0,
+            "title": "Total Duration Seconds",
+            "type": "number"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -3604,6 +3842,8 @@
         "type": "object"
       },
       "PlaylistItemDetail": {
+        "additionalProperties": false,
+        "description": "An item within a playlist.",
         "properties": {
           "added_at": {
             "format": "date-time",
@@ -3614,42 +3854,42 @@
             "title": "Id",
             "type": "string"
           },
+          "item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "position": {
             "title": "Position",
             "type": "integer"
           },
           "track": {
-            "$ref": "#/components/schemas/TrackSummary"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrackSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "id",
           "position",
-          "added_at",
-          "track"
+          "added_at"
         ],
         "title": "PlaylistItemDetail",
         "type": "object"
       },
-      "PlaylistReorder": {
-        "properties": {
-          "item_ids": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 500,
-            "minItems": 1,
-            "title": "Item Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "item_ids"
-        ],
-        "title": "PlaylistReorder",
-        "type": "object"
-      },
       "PlaylistSummary": {
+        "additionalProperties": false,
+        "description": "Playlist overview without child items.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -3685,6 +3925,11 @@
             "title": "Name",
             "type": "string"
           },
+          "total_duration_seconds": {
+            "default": 0.0,
+            "title": "Total Duration Seconds",
+            "type": "number"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -3698,37 +3943,6 @@
           "updated_at"
         ],
         "title": "PlaylistSummary",
-        "type": "object"
-      },
-      "PlaylistUpdate": {
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "maxLength": 2000,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          }
-        },
-        "title": "PlaylistUpdate",
         "type": "object"
       },
       "ProbeStream": {
@@ -4083,6 +4297,44 @@
           "refresh_token"
         ],
         "title": "RefreshRequest",
+        "type": "object"
+      },
+      "ReorderCollectionItemsRequest": {
+        "additionalProperties": false,
+        "description": "Reorder items in a collection.",
+        "properties": {
+          "item_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Item Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "item_ids"
+        ],
+        "title": "ReorderCollectionItemsRequest",
+        "type": "object"
+      },
+      "ReorderPlaylistItemsRequest": {
+        "additionalProperties": false,
+        "description": "Reorder items in a playlist.",
+        "properties": {
+          "item_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Item Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "item_ids"
+        ],
+        "title": "ReorderPlaylistItemsRequest",
         "type": "object"
       },
       "ScanJobResponse": {
@@ -5225,6 +5477,93 @@
           "last_activity_at"
         ],
         "title": "TranscodeSessionResponse",
+        "type": "object"
+      },
+      "UpdateCollectionRequest": {
+        "additionalProperties": false,
+        "description": "Update collection metadata.",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "poster_path": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Path"
+          },
+          "tmdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Id"
+          }
+        },
+        "title": "UpdateCollectionRequest",
+        "type": "object"
+      },
+      "UpdatePlaylistRequest": {
+        "additionalProperties": false,
+        "description": "Update playlist metadata.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "UpdatePlaylistRequest",
         "type": "object"
       },
       "UserCreate": {
@@ -7433,6 +7772,398 @@
         ]
       }
     },
+    "/api/v1/collections": {
+      "get": {
+        "description": "List all curated collections with item counts.",
+        "operationId": "list_collections_api_v1_collections_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionSummary"
+                  },
+                  "title": "Response List Collections Api V1 Collections Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Collections",
+        "tags": [
+          "collections"
+        ]
+      },
+      "post": {
+        "description": "Create a new collection (admin only).\n\nIf tmdb_id is supplied and item_ids is empty, any existing movies\nin the database whose provider_ids contain matching tmdb_collection_id\nwill automatically be included.",
+        "operationId": "create_collection_api_v1_collections_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCollectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Collection",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/v1/collections/{collection_id}": {
+      "delete": {
+        "description": "Delete a collection (admin only).",
+        "operationId": "delete_collection_api_v1_collections__collection_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "title": "Collection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Collection",
+        "tags": [
+          "collections"
+        ]
+      },
+      "get": {
+        "description": "Get a collection with its items (respecting library access).",
+        "operationId": "get_collection_api_v1_collections__collection_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "title": "Collection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Collection",
+        "tags": [
+          "collections"
+        ]
+      },
+      "patch": {
+        "description": "Update collection metadata (admin only).",
+        "operationId": "update_collection_api_v1_collections__collection_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "title": "Collection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCollectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Collection",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/v1/collections/{collection_id}/items": {
+      "post": {
+        "description": "Add items to a collection (admin only).",
+        "operationId": "add_collection_items_api_v1_collections__collection_id__items_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "title": "Collection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddCollectionItemsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Collection Items",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/v1/collections/{collection_id}/items/order": {
+      "put": {
+        "description": "Reorder items in a collection (admin only).",
+        "operationId": "reorder_collection_items_api_v1_collections__collection_id__items_order_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "title": "Collection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderCollectionItemsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reorder Collection Items",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/v1/collections/{collection_id}/items/{item_id}": {
+      "delete": {
+        "description": "Remove an item from a collection (admin only).",
+        "operationId": "remove_collection_item_api_v1_collections__collection_id__items__item_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "title": "Collection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Collection Item",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/api/v1/episodes/{episode_id}": {
       "get": {
         "description": "Return complete details for a single episode.",
@@ -9543,7 +10274,7 @@
     },
     "/api/v1/playlists": {
       "get": {
-        "description": "List the current user's playlists.",
+        "description": "List playlists owned by the current user.",
         "operationId": "list_playlists_api_v1_playlists_get",
         "responses": {
           "200": {
@@ -9568,17 +10299,17 @@
         ],
         "summary": "List Playlists",
         "tags": [
-          "music"
+          "playlists"
         ]
       },
       "post": {
-        "description": "Create a new playlist.",
+        "description": "Create a new playlist for the current user.",
         "operationId": "create_playlist_api_v1_playlists_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PlaylistCreate"
+                "$ref": "#/components/schemas/CreatePlaylistRequest"
               }
             }
           },
@@ -9613,7 +10344,7 @@
         ],
         "summary": "Create Playlist",
         "tags": [
-          "music"
+          "playlists"
         ]
       }
     },
@@ -9654,12 +10385,12 @@
         ],
         "summary": "Delete Playlist",
         "tags": [
-          "music"
+          "playlists"
         ]
       },
       "get": {
-        "description": "Return playlist details with ordered track items.",
-        "operationId": "get_playlist_detail_api_v1_playlists__playlist_id__get",
+        "description": "Get playlist detail with items.",
+        "operationId": "get_playlist_api_v1_playlists__playlist_id__get",
         "parameters": [
           {
             "in": "path",
@@ -9698,13 +10429,13 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Playlist Detail",
+        "summary": "Get Playlist",
         "tags": [
-          "music"
+          "playlists"
         ]
       },
       "patch": {
-        "description": "Update playlist name or description.",
+        "description": "Update playlist title or description.",
         "operationId": "update_playlist_api_v1_playlists__playlist_id__patch",
         "parameters": [
           {
@@ -9721,7 +10452,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PlaylistUpdate"
+                "$ref": "#/components/schemas/UpdatePlaylistRequest"
               }
             }
           },
@@ -9756,13 +10487,13 @@
         ],
         "summary": "Update Playlist",
         "tags": [
-          "music"
+          "playlists"
         ]
       }
     },
     "/api/v1/playlists/{playlist_id}/items": {
       "post": {
-        "description": "Add one or more tracks to a playlist.",
+        "description": "Add items to a playlist.",
         "operationId": "add_playlist_items_api_v1_playlists__playlist_id__items_post",
         "parameters": [
           {
@@ -9779,7 +10510,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PlaylistAddItems"
+                "$ref": "#/components/schemas/AddPlaylistItemsRequest"
               }
             }
           },
@@ -9814,14 +10545,14 @@
         ],
         "summary": "Add Playlist Items",
         "tags": [
-          "music"
+          "playlists"
         ]
       }
     },
-    "/api/v1/playlists/{playlist_id}/items/reorder": {
+    "/api/v1/playlists/{playlist_id}/items/order": {
       "put": {
-        "description": "Reorder playlist items according to the given item ID sequence.",
-        "operationId": "reorder_playlist_items_api_v1_playlists__playlist_id__items_reorder_put",
+        "description": "Reorder items in a playlist.",
+        "operationId": "reorder_playlist_items_api_v1_playlists__playlist_id__items_order_put",
         "parameters": [
           {
             "in": "path",
@@ -9837,7 +10568,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PlaylistReorder"
+                "$ref": "#/components/schemas/ReorderPlaylistItemsRequest"
               }
             }
           },
@@ -9872,13 +10603,71 @@
         ],
         "summary": "Reorder Playlist Items",
         "tags": [
-          "music"
+          "playlists"
+        ]
+      }
+    },
+    "/api/v1/playlists/{playlist_id}/items/reorder": {
+      "put": {
+        "description": "Reorder items in a playlist.",
+        "operationId": "reorder_playlist_items_api_v1_playlists__playlist_id__items_reorder_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderPlaylistItemsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaylistDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reorder Playlist Items",
+        "tags": [
+          "playlists"
         ]
       }
     },
     "/api/v1/playlists/{playlist_id}/items/{item_id}": {
       "delete": {
-        "description": "Remove a track from a playlist and compact item positions.",
+        "description": "Remove an item from a playlist and compact positions.",
         "operationId": "remove_playlist_item_api_v1_playlists__playlist_id__items__item_id__delete",
         "parameters": [
           {
@@ -9922,7 +10711,7 @@
         ],
         "summary": "Remove Playlist Item",
         "tags": [
-          "music"
+          "playlists"
         ]
       }
     },

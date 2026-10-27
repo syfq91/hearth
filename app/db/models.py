@@ -222,6 +222,7 @@ class MediaItem(TimestampMixin, Base):
     year: Mapped[int | None] = mapped_column(Integer, default=None, index=True)
     overview: Mapped[str | None] = mapped_column(Text, default=None)
     rating: Mapped[float | None] = mapped_column(Float, default=None)
+    content_rating: Mapped[str | None] = mapped_column(String(16), default=None, index=True)
     runtime_seconds: Mapped[int | None] = mapped_column(Integer, default=None)
     added_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     match_state: Mapped[str] = mapped_column(String(16), default="pending", index=True)
@@ -620,6 +621,53 @@ class UserItemState(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
     item: Mapped["MediaItem"] = relationship(back_populates="user_states")
+
+
+class Collection(TimestampMixin, Base):
+    """Admin-curated or provider-imported collection of media items."""
+
+    __tablename__ = "collections"
+    __table_args__ = (Index("ix_collections_name", "name"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(255))
+    overview: Mapped[str | None] = mapped_column(Text, default=None)
+    poster_path: Mapped[str | None] = mapped_column(String(512), default=None)
+    tmdb_id: Mapped[int | None] = mapped_column(Integer, unique=True, default=None)
+
+    items: Mapped[list["CollectionItem"]] = relationship(
+        back_populates="collection",
+        cascade="all, delete-orphan",
+        order_by="CollectionItem.position",
+        lazy="selectin",
+    )
+
+
+class CollectionItem(Base):
+    """An item in a collection at an ordering position."""
+
+    __tablename__ = "collection_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "collection_id", "media_item_id", name="uq_collection_items_collection_item"
+        ),
+        Index("ix_collection_items_collection_id", "collection_id"),
+        Index("ix_collection_items_media_item_id", "media_item_id"),
+        Index("ix_collection_items_position", "collection_id", "position"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    collection_id: Mapped[str] = mapped_column(
+        ForeignKey("collections.id", ondelete="CASCADE"), index=True
+    )
+    media_item_id: Mapped[str] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), index=True
+    )
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    added_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+    collection: Mapped["Collection"] = relationship(back_populates="items", lazy="joined")
+    item: Mapped["MediaItem"] = relationship(lazy="joined")
 
 
 class Playlist(TimestampMixin, Base):

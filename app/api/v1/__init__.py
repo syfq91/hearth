@@ -6,6 +6,7 @@ from app.api.v1 import (
     admin,
     auth,
     books,
+    collections,
     events,
     hls,
     home,
@@ -16,6 +17,7 @@ from app.api.v1 import (
     metadata,
     music,
     playback,
+    playlists,
     search,
     shows,
     stream,
@@ -34,6 +36,8 @@ router.include_router(jobs.router)
 router.include_router(events.router)
 router.include_router(metadata.router)
 router.include_router(items.router)
+router.include_router(collections.router)
+router.include_router(playlists.router)
 router.include_router(search.router)
 router.include_router(shows.router)
 router.include_router(music.router)
