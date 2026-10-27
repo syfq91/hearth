@@ -4,7 +4,13 @@ import json
 import logging
 from io import StringIO
 
-from app.core.logging import JSONFormatter, get_request_id, set_request_id, setup_logging
+from app.core.logging import (
+    JSONFormatter,
+    RingBufferLogHandler,
+    get_request_id,
+    set_request_id,
+    setup_logging,
+)
 
 
 def test_json_formatter_basic() -> None:
@@ -70,12 +76,15 @@ def test_stream_output() -> None:
 
 
 def test_setup_logging_configures_root_logger() -> None:
-    """Verify setup_logging installs a single JSON handler at the requested level."""
+    """Verify setup_logging installs JSON stream and ring buffer handlers at the requested level."""
     setup_logging("debug")
     root = logging.getLogger()
     assert root.level == logging.DEBUG
-    assert len(root.handlers) == 1
-    assert isinstance(root.handlers[0].formatter, JSONFormatter)
+    assert len(root.handlers) == 2
+    stream_handlers = [h for h in root.handlers if type(h) is logging.StreamHandler]
+    assert len(stream_handlers) == 1
+    assert isinstance(stream_handlers[0].formatter, JSONFormatter)
+    assert any(isinstance(h, RingBufferLogHandler) for h in root.handlers)
 
 
 def test_setup_logging_rejects_unknown_level() -> None:

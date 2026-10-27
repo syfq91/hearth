@@ -3,6 +3,8 @@
 import json
 import logging
 import sys
+import threading
+from collections import deque
 from contextvars import ContextVar, Token
 from datetime import UTC, datetime
 from typing import Any
@@ -72,3 +74,45 @@ def setup_logging(log_level: str = "INFO") -> None:
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JSONFormatter())
     root_logger.addHandler(handler)
+    root_logger.addHandler(ring_buffer_handler)
+
+
+_LOG_BUFFER: deque[dict[str, Any]] = deque(maxlen=2000)
+_LOG_LOCK = threading.Lock()
+
+
+class RingBufferLogHandler(logging.Handler):
+    """Retains the most recent log records in memory for administrative tailing."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            entry: dict[str, Any] = {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+                "request_id": get_request_id(),
+            }
+            if record.exc_info:
+                entry["exception"] = (
+                    self.formatException(record.exc_info)  # type: ignore[attr-defined]
+                    if self.formatter
+                    else str(record.exc_info)
+                )
+            with _LOG_LOCK:
+                _LOG_BUFFER.append(entry)
+        except Exception:
+            self.handleError(record)
+
+
+ring_buffer_handler = RingBufferLogHandler()
+
+
+def get_recent_logs(limit: int = 100, level: str | None = None) -> list[dict[str, Any]]:
+    """Return recent log entries in reverse chronological order (newest first)."""
+    with _LOG_LOCK:
+        logs = list(_LOG_BUFFER)
+    if level:
+        lvl_upper = level.upper()
+        logs = [entry for entry in logs if entry.get("level") == lvl_upper]
+    return list(reversed(logs))[:limit]

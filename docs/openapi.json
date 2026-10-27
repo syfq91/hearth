@@ -73,6 +73,67 @@
         "title": "AddPlaylistItemsRequest",
         "type": "object"
       },
+      "AdminSystemInfoResponse": {
+        "additionalProperties": false,
+        "description": "Host environment, resource metrics, and storage diagnostics.",
+        "properties": {
+          "cpu_count": {
+            "title": "Cpu Count",
+            "type": "integer"
+          },
+          "data_disk": {
+            "$ref": "#/components/schemas/DiskUsage"
+          },
+          "media_disk": {
+            "$ref": "#/components/schemas/DiskUsage"
+          },
+          "memory_rss_bytes": {
+            "title": "Memory Rss Bytes",
+            "type": "integer"
+          },
+          "os_platform": {
+            "title": "Os Platform",
+            "type": "string"
+          },
+          "os_release": {
+            "title": "Os Release",
+            "type": "string"
+          },
+          "pid": {
+            "title": "Pid",
+            "type": "integer"
+          },
+          "python_version": {
+            "title": "Python Version",
+            "type": "string"
+          },
+          "sqlite_version": {
+            "title": "Sqlite Version",
+            "type": "string"
+          },
+          "transcode_capabilities": {
+            "$ref": "#/components/schemas/ServerTranscodeCapabilities"
+          },
+          "transcode_disk": {
+            "$ref": "#/components/schemas/DiskUsage"
+          }
+        },
+        "required": [
+          "os_platform",
+          "os_release",
+          "python_version",
+          "sqlite_version",
+          "pid",
+          "memory_rss_bytes",
+          "cpu_count",
+          "media_disk",
+          "data_disk",
+          "transcode_disk",
+          "transcode_capabilities"
+        ],
+        "title": "AdminSystemInfoResponse",
+        "type": "object"
+      },
       "AlbumDetail": {
         "properties": {
           "artist_id": {
@@ -642,6 +703,7 @@
         "type": "object"
       },
       "AuditEntry": {
+        "additionalProperties": false,
         "properties": {
           "action": {
             "title": "Action",
@@ -1894,6 +1956,30 @@
         "title": "DiscTracklist",
         "type": "object"
       },
+      "DiskUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "free_bytes": {
+            "title": "Free Bytes",
+            "type": "integer"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          },
+          "used_bytes": {
+            "title": "Used Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_bytes",
+          "used_bytes",
+          "free_bytes"
+        ],
+        "title": "DiskUsage",
+        "type": "object"
+      },
       "EpisodeDetail": {
         "description": "Complete detail response for an episode.",
         "properties": {
@@ -3050,6 +3136,56 @@
           "token"
         ],
         "title": "ListenBrainzTokenRequest",
+        "type": "object"
+      },
+      "LogEntryResponse": {
+        "properties": {
+          "exception": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exception"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "logger": {
+            "title": "Logger",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "timestamp",
+          "level",
+          "logger",
+          "message"
+        ],
+        "title": "LogEntryResponse",
         "type": "object"
       },
       "MatchRequest": {
@@ -4321,6 +4457,47 @@
         "title": "RefreshRequest",
         "type": "object"
       },
+      "RematchRequest": {
+        "additionalProperties": false,
+        "description": "Force rematching with optional manual metadata hints.",
+        "properties": {
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "title": "RematchRequest",
+        "type": "object"
+      },
       "ReorderCollectionItemsRequest": {
         "additionalProperties": false,
         "description": "Reorder items in a collection.",
@@ -5243,6 +5420,7 @@
         "type": "object"
       },
       "TranscodeLogsResponse": {
+        "additionalProperties": false,
         "properties": {
           "lines": {
             "items": {
@@ -5402,6 +5580,7 @@
         "type": "object"
       },
       "TranscodeSessionResponse": {
+        "additionalProperties": false,
         "properties": {
           "cmd": {
             "items": {
@@ -5501,6 +5680,125 @@
         "title": "TranscodeSessionResponse",
         "type": "object"
       },
+      "TranscodeSettingsResponse": {
+        "additionalProperties": false,
+        "description": "Active runtime transcode parameters.",
+        "properties": {
+          "audio_bitrate_kbps": {
+            "title": "Audio Bitrate Kbps",
+            "type": "integer"
+          },
+          "default_max_bitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Max Bitrate"
+          },
+          "force_software": {
+            "title": "Force Software",
+            "type": "boolean"
+          },
+          "idle_timeout_seconds": {
+            "title": "Idle Timeout Seconds",
+            "type": "number"
+          },
+          "max_hw_sessions": {
+            "title": "Max Hw Sessions",
+            "type": "integer"
+          },
+          "max_sw_sessions": {
+            "title": "Max Sw Sessions",
+            "type": "integer"
+          },
+          "segment_duration_seconds": {
+            "title": "Segment Duration Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "force_software",
+          "max_hw_sessions",
+          "max_sw_sessions",
+          "idle_timeout_seconds",
+          "segment_duration_seconds",
+          "audio_bitrate_kbps"
+        ],
+        "title": "TranscodeSettingsResponse",
+        "type": "object"
+      },
+      "UnmatchedItemResponse": {
+        "additionalProperties": false,
+        "description": "An item needing provider matching or with a match error.",
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "library_id": {
+            "title": "Library Id",
+            "type": "string"
+          },
+          "match_attempts": {
+            "title": "Match Attempts",
+            "type": "integer"
+          },
+          "match_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Error"
+          },
+          "match_state": {
+            "title": "Match State",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "id",
+          "library_id",
+          "type",
+          "title",
+          "match_state",
+          "match_attempts",
+          "added_at"
+        ],
+        "title": "UnmatchedItemResponse",
+        "type": "object"
+      },
       "UpdateCollectionRequest": {
         "additionalProperties": false,
         "description": "Update collection metadata.",
@@ -5586,6 +5884,89 @@
           }
         },
         "title": "UpdatePlaylistRequest",
+        "type": "object"
+      },
+      "UpdateTranscodeSettingsRequest": {
+        "additionalProperties": false,
+        "description": "Update runtime transcode settings.",
+        "properties": {
+          "audio_bitrate_kbps": {
+            "anyOf": [
+              {
+                "maximum": 512.0,
+                "minimum": 64.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Bitrate Kbps"
+          },
+          "default_max_bitrate": {
+            "anyOf": [
+              {
+                "minimum": 500000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Max Bitrate"
+          },
+          "force_software": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Force Software"
+          },
+          "idle_timeout_seconds": {
+            "anyOf": [
+              {
+                "maximum": 600.0,
+                "minimum": 10.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idle Timeout Seconds"
+          },
+          "max_hw_sessions": {
+            "anyOf": [
+              {
+                "maximum": 32.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Hw Sessions"
+          },
+          "max_sw_sessions": {
+            "anyOf": [
+              {
+                "maximum": 32.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Sw Sessions"
+          }
+        },
+        "title": "UpdateTranscodeSettingsRequest",
         "type": "object"
       },
       "UserCreate": {
@@ -6182,6 +6563,361 @@
         ]
       }
     },
+    "/api/v1/admin/items/{item_id}/rematch": {
+      "post": {
+        "description": "Reset item match state with optional manual hints to force immediate matching.",
+        "operationId": "rematch_item_api_v1_admin_items__item_id__rematch_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RematchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnmatchedItemResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rematch Item",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/jobs": {
+      "get": {
+        "description": "List background jobs with status filter.",
+        "operationId": "list_admin_jobs_api_v1_admin_jobs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobResponse"
+                  },
+                  "title": "Response List Admin Jobs Api V1 Admin Jobs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Admin Jobs",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/jobs/{job_id}/cancel": {
+      "post": {
+        "description": "Request cancellation of an active or pending background job.",
+        "operationId": "cancel_admin_job_api_v1_admin_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel Admin Job",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/libraries/scan": {
+      "post": {
+        "description": "Trigger an immediate scan across all libraries.",
+        "operationId": "scan_all_libraries_api_v1_admin_libraries_scan_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobResponse"
+                  },
+                  "title": "Response Scan All Libraries Api V1 Admin Libraries Scan Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Scan All Libraries",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/libraries/{library_id}/scan": {
+      "post": {
+        "description": "Trigger an immediate scan of a specific library.",
+        "operationId": "scan_single_library_api_v1_admin_libraries__library_id__scan_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "library_id",
+            "required": true,
+            "schema": {
+              "title": "Library Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Scan Single Library",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/logs": {
+      "get": {
+        "description": "Tail recent in-memory log entries in reverse chronological order.",
+        "operationId": "list_admin_logs_api_v1_admin_logs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "level",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 16,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LogEntryResponse"
+                  },
+                  "title": "Response List Admin Logs Api V1 Admin Logs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Admin Logs",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/system/info": {
+      "get": {
+        "description": "Comprehensive host environment, memory, disk, and transcoding telemetry.",
+        "operationId": "get_admin_system_info_api_v1_admin_system_info_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSystemInfoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Admin System Info",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/transcoding/capabilities": {
       "get": {
         "description": "Return hardware and software transcoding capabilities.",
@@ -6387,6 +7123,133 @@
           }
         ],
         "summary": "Stop Transcoding Session",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/transcoding/settings": {
+      "get": {
+        "description": "Return runtime transcoding parameters.",
+        "operationId": "get_transcode_settings_api_v1_admin_transcoding_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscodeSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Transcode Settings",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "description": "Update runtime transcoding parameters.",
+        "operationId": "update_transcode_settings_api_v1_admin_transcoding_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTranscodeSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscodeSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Transcode Settings",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/unmatched": {
+      "get": {
+        "description": "List media items pending match or with match errors.",
+        "operationId": "list_unmatched_items_api_v1_admin_unmatched_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UnmatchedItemResponse"
+                  },
+                  "title": "Response List Unmatched Items Api V1 Admin Unmatched Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Unmatched Items",
         "tags": [
           "admin"
         ]
