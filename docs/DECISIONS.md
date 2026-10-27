@@ -488,6 +488,21 @@
   - Storing reading progress in `user_item_state` position_ms (incompatible with string locators like EPUB CFIs).
   - Creating a separate item for every format file of the same title (fragments book metadata and prevents unified progress sync across formats).
 
+## ADR 050: In-Process Book Readers and PDF Cover Extraction Licensing
+
+- **Date:** 2026-10-27
+- **Status:** Accepted
+- **Context:** Phase 6 requires reading embedded metadata and cover images from EPUB, CBZ, CBR, and PDF book files in-process. For PDF first-page cover rendering, the plan suggests `pdfium` or `pymupdf` and requires recording the licensing choice in `DECISIONS.md`.
+- **Decision:**
+  - EPUB: Parse metadata and Calibre series tags directly from `META-INF/container.xml` and the OPF package via standard library `zipfile` and `xml.etree.ElementTree`. Extract cover images referenced by `<meta name="cover">` or `<item properties="cover-image">`.
+  - CBZ: Parse `ComicInfo.xml` and sort image entries using natural alphanumeric ordering (`1`, `2`, `10`), treating the first image as the cover.
+  - PDF: Extract metadata and page count using `pypdf` (BSD-3-Clause). Render page 0 as a JPEG cover image using `pypdfium2` (Apache-2.0 / BSD-3-Clause). We explicitly select `pypdfium2` over `pymupdf` because PyMuPDF is licensed under AGPL-3.0 (with commercial licensing options), which imposes copyleft obligations that conflict with Hearth's permissive MIT open-source license.
+  - CBR: Attempt reading via `rarfile` when available, falling back gracefully to path-based metadata when unrar tooling is not installed.
+- **Alternatives Considered:**
+  - PyMuPDF / `fitz` (rejected due to AGPL-3.0 copyleft license).
+  - External command-line `pdftoppm` via subprocess (requires external system package dependencies not guaranteed in minimal environments).
+
+
 
 
 
