@@ -1,14 +1,18 @@
 """Administrator controls, system diagnostics, and audit logs."""
 
+import asyncio
 import os
 import platform
 import resource
 import shutil
 import sqlite3
+import tempfile
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Query, Request, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
@@ -20,6 +24,7 @@ from app.db.base import utcnow
 from app.db.models import AuditLog, Job, Library, MediaItem
 from app.db.session import SessionDep
 from app.services.audit import record_audit
+from app.services.backup import create_backup, restore_backup
 from app.services.media.titles import sort_title
 from app.services.scanner.jobs import enqueue_scan
 from app.services.transcode.capabilities import (
@@ -169,6 +174,26 @@ class UpdateTranscodeSettingsRequest(BaseModel):
     idle_timeout_seconds: float | None = Field(default=None, ge=10.0, le=600.0)
     audio_bitrate_kbps: int | None = Field(default=None, ge=64, le=512)
     default_max_bitrate: int | None = Field(default=None, ge=500_000)
+
+
+class AdminRestoreResponse(BaseModel):
+    """Response returned after restoring a database snapshot."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: str
+    schema_version: str
+    created_at: str
+    hearth_version: str
+
+
+class TranscodeStopResponse(BaseModel):
+    """Response returned after terminating an active transcode session."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: str
+    session_id: str
 
 
 @router.get("/audit", response_model=list[AuditEntry])
@@ -518,19 +543,25 @@ async def list_transcoding_sessions(
     ]
 
 
-@router.post("/transcoding/sessions/{session_id}/stop")
-@router.delete("/transcoding/sessions/{session_id}")
+@router.post(
+    "/transcoding/sessions/{session_id}/stop",
+    response_model=TranscodeStopResponse,
+)
+@router.delete(
+    "/transcoding/sessions/{session_id}",
+    response_model=TranscodeStopResponse,
+)
 async def stop_transcoding_session(
     session_id: str,
     _actor: RequireAdmin,
     settings: SettingsDep,
-) -> dict[str, str]:
+) -> TranscodeStopResponse:
     """Stop and terminate an active transcoding session."""
     manager = get_session_manager(settings)
     stopped = await manager.stop_session(session_id)
     if not stopped:
         raise NotFoundError(message="Transcode session not found")
-    return {"status": "stopped", "session_id": session_id}
+    return TranscodeStopResponse(status="stopped", session_id=session_id)
 
 
 @router.get("/transcoding/sessions/{session_id}/logs", response_model=TranscodeLogsResponse)
@@ -547,4 +578,102 @@ async def get_transcoding_session_logs(
     return TranscodeLogsResponse(
         session_id=session.id,
         lines=list(session.stderr_buffer),
+    )
+
+
+# ------------------------------------------------------------- backup & restore
+
+
+@router.post("/backup", response_class=FileResponse)
+async def create_database_backup(
+    actor: RequireAdmin,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> FileResponse:
+    """Trigger an online database backup and download the archive."""
+    archive_path = await asyncio.to_thread(create_backup, settings)
+
+    record_audit(
+        session,
+        actor_id=actor.id,
+        action="system.backup",
+        target_type="system",
+        target_id="database",
+        details={"path": str(archive_path), "filename": archive_path.name},
+    )
+    await session.commit()
+
+    return FileResponse(
+        path=str(archive_path),
+        media_type="application/gzip",
+        filename=archive_path.name,
+    )
+
+
+@router.post(
+    "/restore",
+    response_model=AdminRestoreResponse,
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "description": "Gzipped tar archive containing database snapshot and metadata.",
+            "content": {
+                "application/gzip": {
+                    "schema": {
+                        "type": "string",
+                        "format": "binary",
+                    }
+                },
+                "application/octet-stream": {
+                    "schema": {
+                        "type": "string",
+                        "format": "binary",
+                    }
+                },
+            },
+        }
+    },
+)
+async def restore_database_backup(
+    request: Request,
+    actor: RequireAdmin,
+    settings: SettingsDep,
+    session: SessionDep,
+    force: bool = Query(default=False),
+) -> AdminRestoreResponse:
+    """Restore database from an uploaded tar.gz archive stream."""
+    with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as tmp_file:
+        tmp_path = Path(tmp_file.name)
+        try:
+            async for chunk in request.stream():
+                tmp_file.write(chunk)
+            tmp_file.flush()
+            metadata = await asyncio.to_thread(
+                restore_backup,
+                tmp_path,
+                settings,
+                force=force,
+            )
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+
+    record_audit(
+        session,
+        actor_id=actor.id,
+        action="system.restore",
+        target_type="system",
+        target_id="database",
+        details={
+            "schema_version": metadata.get("schema_version"),
+            "hearth_version": metadata.get("hearth_version"),
+        },
+    )
+    await session.commit()
+
+    return AdminRestoreResponse(
+        status="restored",
+        schema_version=str(metadata.get("schema_version", "unknown")),
+        created_at=str(metadata.get("created_at", "")),
+        hearth_version=str(metadata.get("hearth_version", "")),
     )

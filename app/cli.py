@@ -7,6 +7,7 @@ differs (``hearth api`` vs ``hearth worker``).
 import asyncio
 import logging
 import signal
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -16,6 +17,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import setup_logging
 from app.db.migrate import run_migrations, run_migrations_async
 from app.db.session import build_engine, build_sessionmaker
+from app.services.backup import create_backup, restore_backup
 from app.services.jobs.worker import JobWorker
 from app.services.scanner.scheduler import ScanScheduler
 from app.services.scanner.watcher import LibraryWatcher
@@ -147,3 +149,41 @@ def create_admin(
     )
     typer.echo("create-admin is not implemented until Phase 1.", err=True)
     raise typer.Exit(code=1)
+
+
+@app.command()
+def backup(
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Destination path for backup tar.gz archive."),
+    ] = None,
+) -> None:
+    """Create a consistent online SQLite backup and metadata archive."""
+    settings = get_settings()
+    setup_logging(settings.log_level)
+    target = create_backup(settings, destination_path=output)
+    typer.echo(f"Backup created successfully: {target}")
+
+
+@app.command()
+def restore(
+    input_file: Annotated[
+        Path,
+        typer.Option(
+            "--input",
+            "-i",
+            help="Path to backup tar.gz archive to restore from.",
+            exists=True,
+        ),
+    ],
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Force restore even if schema version differs."),
+    ] = False,
+) -> None:
+    """Restore database from a backup tar.gz archive."""
+    settings = get_settings()
+    setup_logging(settings.log_level)
+    metadata = restore_backup(input_file, settings, force=force)
+    schema = metadata.get("schema_version", "unknown")
+    typer.echo(f"Database successfully restored from {input_file} (schema: {schema})")

@@ -73,6 +73,36 @@
         "title": "AddPlaylistItemsRequest",
         "type": "object"
       },
+      "AdminRestoreResponse": {
+        "additionalProperties": false,
+        "description": "Response returned after restoring a database snapshot.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "hearth_version": {
+            "title": "Hearth Version",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "schema_version",
+          "created_at",
+          "hearth_version"
+        ],
+        "title": "AdminRestoreResponse",
+        "type": "object"
+      },
       "AdminSystemInfoResponse": {
         "additionalProperties": false,
         "description": "Host environment, resource metrics, and storage diagnostics.",
@@ -5731,6 +5761,26 @@
         "title": "TranscodeSettingsResponse",
         "type": "object"
       },
+      "TranscodeStopResponse": {
+        "additionalProperties": false,
+        "description": "Response returned after terminating an active transcode session.",
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "session_id"
+        ],
+        "title": "TranscodeStopResponse",
+        "type": "object"
+      },
       "UnmatchedItemResponse": {
         "additionalProperties": false,
         "description": "An item needing provider matching or with a match error.",
@@ -6563,6 +6613,26 @@
         ]
       }
     },
+    "/api/v1/admin/backup": {
+      "post": {
+        "description": "Trigger an online database backup and download the archive.",
+        "operationId": "create_database_backup_api_v1_admin_backup_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Database Backup",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/items/{item_id}/rematch": {
       "post": {
         "description": "Reset item match state with optional manual hints to force immediate matching.",
@@ -6891,6 +6961,73 @@
         ]
       }
     },
+    "/api/v1/admin/restore": {
+      "post": {
+        "description": "Restore database from an uploaded tar.gz archive stream.",
+        "operationId": "restore_database_backup_api_v1_admin_restore_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Force",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/gzip": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "description": "Gzipped tar archive containing database snapshot and metadata.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminRestoreResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore Database Backup",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/system/info": {
       "get": {
         "description": "Comprehensive host environment, memory, disk, and transcoding telemetry.",
@@ -6996,11 +7133,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Stop Transcoding Session Api V1 Admin Transcoding Sessions  Session Id  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TranscodeStopResponse"
                 }
               }
             },
@@ -7096,11 +7229,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Stop Transcoding Session Api V1 Admin Transcoding Sessions  Session Id  Stop Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TranscodeStopResponse"
                 }
               }
             },
