@@ -667,6 +667,743 @@
         "title": "AuditEntry",
         "type": "object"
       },
+      "AuthorBrief": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "AuthorBrief",
+        "type": "object"
+      },
+      "AuthorDetail": {
+        "properties": {
+          "books": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BookListItem"
+            },
+            "title": "Books",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "sort_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Name"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "AuthorDetail",
+        "type": "object"
+      },
+      "AuthorListItem": {
+        "properties": {
+          "book_count": {
+            "default": 0,
+            "title": "Book Count",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sort_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Name"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "AuthorListItem",
+        "type": "object"
+      },
+      "AuthorListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuthorListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "AuthorListResponse",
+        "type": "object"
+      },
+      "BookDetail": {
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AuthorBrief"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cover_image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Image Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "files": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BookFileResponse"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "formats": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Formats",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "isbn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isbn"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "library_id": {
+            "title": "Library Id",
+            "type": "string"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BookProgressResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeriesBrief"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sort_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Title"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "id",
+          "library_id",
+          "title",
+          "created_at"
+        ],
+        "title": "BookDetail",
+        "type": "object"
+      },
+      "BookFileResponse": {
+        "properties": {
+          "container": {
+            "title": "Container",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "mtime": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mtime"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          }
+        },
+        "required": [
+          "id",
+          "container"
+        ],
+        "title": "BookFileResponse",
+        "type": "object"
+      },
+      "BookListItem": {
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AuthorBrief"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cover_image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Image Id"
+          },
+          "formats": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Formats",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "isbn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isbn"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "library_id": {
+            "title": "Library Id",
+            "type": "string"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BookProgressResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeriesBrief"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sort_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Title"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "id",
+          "library_id",
+          "title"
+        ],
+        "title": "BookListItem",
+        "type": "object"
+      },
+      "BookListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BookListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "BookListResponse",
+        "type": "object"
+      },
+      "BookProgressRequest": {
+        "properties": {
+          "completed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed"
+          },
+          "device_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Name"
+          },
+          "locator": {
+            "maxLength": 1000,
+            "title": "Locator",
+            "type": "string"
+          },
+          "percentage": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Percentage",
+            "type": "number"
+          }
+        },
+        "required": [
+          "locator",
+          "percentage"
+        ],
+        "title": "BookProgressRequest",
+        "type": "object"
+      },
+      "BookProgressResponse": {
+        "properties": {
+          "book_id": {
+            "title": "Book Id",
+            "type": "string"
+          },
+          "completed": {
+            "title": "Completed",
+            "type": "boolean"
+          },
+          "device_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Name"
+          },
+          "locator": {
+            "title": "Locator",
+            "type": "string"
+          },
+          "percentage": {
+            "title": "Percentage",
+            "type": "number"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "book_id",
+          "locator",
+          "percentage",
+          "completed",
+          "updated_at"
+        ],
+        "title": "BookProgressResponse",
+        "type": "object"
+      },
+      "BookSearchResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BookListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "BookSearchResponse",
+        "type": "object"
+      },
+      "BookSeriesDetail": {
+        "properties": {
+          "books": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BookListItem"
+            },
+            "title": "Books",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "BookSeriesDetail",
+        "type": "object"
+      },
+      "BookSeriesListItem": {
+        "properties": {
+          "book_count": {
+            "default": 0,
+            "title": "Book Count",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "BookSeriesListItem",
+        "type": "object"
+      },
+      "BookSeriesListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BookSeriesListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "BookSeriesListResponse",
+        "type": "object"
+      },
       "ClientCapabilities": {
         "description": "What a client says it can play.\n\nPhase 3 accepts the full profile but always chooses direct play; Phase 7\nresolves presets and uses these fields in the decision engine.",
         "properties": {
@@ -3266,108 +4003,13 @@
         "title": "SeasonSummary",
         "type": "object"
       },
-      "SeriesDetail": {
-        "description": "Complete detail response for a TV show.",
+      "SeriesBrief": {
         "properties": {
-          "added_at": {
-            "format": "date-time",
-            "title": "Added At",
-            "type": "string"
-          },
-          "backdrop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ImageResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "genres": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Genres",
-            "type": "array"
-          },
           "id": {
             "title": "Id",
             "type": "string"
           },
-          "images": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ImageResponse"
-            },
-            "title": "Images",
-            "type": "array"
-          },
-          "match_state": {
-            "title": "Match State",
-            "type": "string"
-          },
-          "network": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Network"
-          },
-          "original_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Original Title"
-          },
-          "overview": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Overview"
-          },
-          "people": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/PersonCreditResponse"
-            },
-            "title": "People",
-            "type": "array"
-          },
-          "poster": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ImageResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "provider_ids": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "default": {},
-            "title": "Provider Ids",
-            "type": "object"
-          },
-          "rating": {
+          "index": {
             "anyOf": [
               {
                 "type": "number"
@@ -3376,85 +4018,18 @@
                 "type": "null"
               }
             ],
-            "title": "Rating"
+            "title": "Index"
           },
-          "runtime_seconds": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Runtime Seconds"
-          },
-          "seasons": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/SeasonSummary"
-            },
-            "title": "Seasons",
-            "type": "array"
-          },
-          "sort_title": {
-            "title": "Sort Title",
+          "name": {
+            "title": "Name",
             "type": "string"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "total_episodes": {
-            "default": 0,
-            "title": "Total Episodes",
-            "type": "integer"
-          },
-          "total_seasons": {
-            "default": 0,
-            "title": "Total Seasons",
-            "type": "integer"
-          },
-          "type": {
-            "default": "movie",
-            "title": "Type",
-            "type": "string"
-          },
-          "watch_state": {
-            "$ref": "#/components/schemas/WatchStateResponse"
-          },
-          "year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Year"
           }
         },
         "required": [
           "id",
-          "title",
-          "sort_title",
-          "added_at",
-          "match_state",
-          "watch_state"
+          "name"
         ],
-        "title": "SeriesDetail",
+        "title": "SeriesBrief",
         "type": "object"
       },
       "SubtitleResponse": {
@@ -5077,6 +5652,823 @@
         "summary": "Setup",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/authors": {
+      "get": {
+        "description": "List authors who have books in accessible libraries.",
+        "operationId": "list_authors_api_v1_authors_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "library_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Library Id"
+            }
+          },
+          {
+            "description": "name, -name, count, -count",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "name, -name, count, -count",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Authors",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/api/v1/authors/{author_id}": {
+      "get": {
+        "description": "Get an author and their books in accessible libraries.",
+        "operationId": "get_author_detail_api_v1_authors__author_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "author_id",
+            "required": true,
+            "schema": {
+              "title": "Author Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Author Detail",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/api/v1/book-series": {
+      "get": {
+        "description": "List book series with book counts in accessible libraries.",
+        "operationId": "list_series_api_v1_book_series_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "library_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Library Id"
+            }
+          },
+          {
+            "description": "name, -name, count, -count",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "name, -name, count, -count",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookSeriesListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Series",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/api/v1/book-series/{series_id}": {
+      "get": {
+        "description": "Get a series with its books ordered by series_index.",
+        "operationId": "get_series_detail_api_v1_book_series__series_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "series_id",
+            "required": true,
+            "schema": {
+              "title": "Series Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookSeriesDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Series Detail",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/api/v1/books": {
+      "get": {
+        "description": "List catalogued books with optional filtering, sorting, and pagination.",
+        "operationId": "list_books_api_v1_books_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "library_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Library Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "author_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Author Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "series_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Series Id"
+            }
+          },
+          {
+            "description": "Sort field: title, -title, author, -author, date, -date, added, -added",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "title",
+              "description": "Sort field: title, -title, author, -author, date, -date, added, -added",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Books",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/api/v1/books/search": {
+      "get": {
+        "description": "Search books by title, author name, ISBN, or series name.",
+        "operationId": "search_books_api_v1_books_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query"
+            }
+          },
+          {
+            "in": "query",
+            "name": "library_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Library Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Books",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}": {
+      "get": {
+        "description": "Get full details of a single book including files and reading progress.",
+        "operationId": "get_book_detail_api_v1_books__book_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Book Detail",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}/file/{format}": {
+      "get": {
+        "description": "Download or stream a book format with HTTP Range and Content-Disposition.",
+        "operationId": "download_book_file_api_v1_books__book_id__file__format__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "format",
+            "required": true,
+            "schema": {
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Download Book File Api V1 Books  Book Id  File  Format  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Book File",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}/pages/{page_number}": {
+      "get": {
+        "description": "Extract and serve the nth (1-indexed) page from a comic with caching and resizing.",
+        "operationId": "get_comic_page_api_v1_books__book_id__pages__page_number__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "page_number",
+            "required": true,
+            "schema": {
+              "title": "Page Number",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "width",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 4000,
+                  "minimum": 50,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Width"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Comic Page",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/api/v1/books/{book_id}/progress": {
+      "get": {
+        "description": "Get the current user's reading progress for a book.",
+        "operationId": "get_reading_progress_api_v1_books__book_id__progress_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookProgressResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reading Progress",
+        "tags": [
+          "books"
+        ]
+      },
+      "put": {
+        "description": "Record reading progress (last-write-wins) for a book.",
+        "operationId": "record_reading_progress_api_v1_books__book_id__progress_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookProgressRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookProgressResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Reading Progress",
+        "tags": [
+          "books"
         ]
       }
     },
@@ -7400,9 +8792,99 @@
         ]
       }
     },
+    "/api/v1/series": {
+      "get": {
+        "description": "List book series with book counts in accessible libraries.",
+        "operationId": "list_series_api_v1_series_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "library_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Library Id"
+            }
+          },
+          {
+            "description": "name, -name, count, -count",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "name, -name, count, -count",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookSeriesListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Series",
+        "tags": [
+          "books"
+        ]
+      }
+    },
     "/api/v1/series/{series_id}": {
       "get": {
-        "description": "Return complete details for a TV series.",
+        "description": "Return complete details for a TV series or book series.",
         "operationId": "get_series_detail_api_v1_series__series_id__get",
         "parameters": [
           {
@@ -7420,7 +8902,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SeriesDetail"
+                  "title": "Response Get Series Detail Api V1 Series  Series Id  Get"
                 }
               }
             },

@@ -861,7 +861,7 @@ async def list_series(
 
 
 @router.get("/book-series/{series_id}", response_model=BookSeriesDetail)
-@router.get("/series/{series_id}", response_model=BookSeriesDetail)
+@router.get("/series/{series_id}", response_model=BookSeriesDetail, include_in_schema=False)
 async def get_series_detail(
     series_id: str,
     user: RequireUser,

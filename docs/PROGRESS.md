@@ -399,13 +399,44 @@
 | 6.3 | Provider: Open Library and Google Books fallback, local OPF/cover priority | Complete | `e920a18` |
 | 6.4 | Native API: books, authors, series, search, download, reading progress | Complete | `f13a750` |
 | 6.5 | Comic page serving: on-demand extraction from CBZ/CBR with resizing and caching | Complete | `ec8ccc2` |
-| 6.6 | Reader integration notes for Phase 9 | Complete | pending commit |
+| 6.6 | Reader integration notes for Phase 9 | Complete | `6e475df` |
 
 ### Phase 6 Acceptance Checklist
 
-- [ ] Fixture EPUB, PDF and CBZ files produce correct title, author, series and cover.
-- [ ] Native book API endpoints (browsing, search, download, comic page extraction, reading progress) pass automated tests against fixture files.
-- [ ] Progress written from one client is returned to another.
+- [x] Fixture EPUB, PDF and CBZ files produce correct title, author, series and cover.
+- [x] Native book API endpoints (browsing, search, download, comic page extraction, reading progress) pass automated tests against fixture files.
+- [x] Progress written from one client is returned to another.
+
+### Phase 6 Quality Gates
+
+- `uv run ruff check`: clean
+- `uv run ruff format --check`: clean
+- `uv run mypy app`: clean (86 files)
+- `uv run python scripts/export_openapi.py --check`: up to date
+- Acceptance test suite:
+  `uv run pytest tests/integration/test_phase6_acceptance.py` passes all 3 criteria.
+
+### Deliverables
+
+- In-process book readers (`EpubReader`, `ComicReader`, `PdfReader`) supporting EPUB 2/3 (OPF / Zip container), CBZ/CBR (ComicInfo.xml / Zip container), and PDF (pypdfium2 / pypdf metadata and rasterization).
+- Local-first metadata extraction prioritizing embedded OPF and sidecar `.opf` / `cover.jpg` files over remote APIs.
+- Provider fallback cascade: local metadata -> Open Library API -> Google Books API -> generic file metadata parser.
+- Library scanner integration: multi-format grouping into single `Book` catalog items linked via `BookFormat` and `MediaFile`, with deferred image pipeline storage.
+- Native Books REST API:
+  - Browse books with sorting, filtering, and keyset pagination (`GET /api/v1/libraries/{id}/books`).
+  - Search books by title, author, series, or ISBN (`GET /api/v1/books/search`).
+  - Book detail with authors, series, and available formats (`GET /api/v1/books/{id}`).
+  - Author and series endpoints (`GET /api/v1/authors/{id}`, `GET /api/v1/book-series/{id}`).
+  - Direct file download with range support (`GET /api/v1/books/{id}/formats/{format_id}/file`).
+  - On-demand comic page extraction with width-constrained resizing and caching (`GET /api/v1/books/{id}/pages/{n}`).
+  - Multi-client reading progress sync (`GET` & `POST /api/v1/books/{id}/progress`) supporting CFI, page numbers, percentages, and client state cross-synchronization.
+- Reader Integration Reference: Architectural guide (`docs/READER_INTEGRATION.md`) detailing FolioReader / Foliate-js vs epub.js integration, CFI locators, PDF.js integration, and virtualized comic viewer prefetching for Phase 9.
+
+### Known Phase 6 Limitations (intentional)
+
+- OPDS 1.2 / 2.0 feed compatibility layer is deferred to a future phase or plugin.
+- CBR parsing handles standard zip/tar/uncompressed containers; proprietary RAR5 comics rely on external unrar or cbz transcoding.
+- Text-to-speech / audio-synchronized narration (Media Overlays / SMIL) is deferred to future audio/ebook integrations.
 
 
 

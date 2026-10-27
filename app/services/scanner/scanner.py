@@ -462,6 +462,7 @@ class LibraryScanner:
                 item_index = {(normalize_title(row.title), row.year or 0): row.id for row in items}
                 tv_indices = None
                 music_indices = None
+                book_indices = None
             elif library.type == "tv":
                 item_index = {}
                 series_rows = (
