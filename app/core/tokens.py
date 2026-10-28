@@ -60,7 +60,12 @@ def create_access_token(
 
 
 def decode_access_token(token: str, *, settings: Settings, key: bytes) -> AccessTokenClaims:
-    """Validate signature, issuer, type and expiry of an access token."""
+    """Validate signature, issuer, type and expiry of an access token.
+
+    ``leeway`` tolerates small clock movement between issuing and verifying:
+    ``iat`` is stored with second granularity, so a backwards NTP step of a
+    fraction of a second would otherwise reject a token issued moments ago.
+    """
     try:
         payload = jwt.decode(
             token,
@@ -68,6 +73,7 @@ def decode_access_token(token: str, *, settings: Settings, key: bytes) -> Access
             algorithms=[_ALGORITHM],
             issuer=settings.jwt_issuer,
             audience=settings.jwt_audience,
+            leeway=settings.jwt_leeway_seconds,
             options={"require": ["sub", "exp", "iat", "iss", "aud", "type"]},
         )
     except InvalidTokenError as exc:

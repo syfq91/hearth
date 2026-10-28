@@ -504,7 +504,24 @@ async def get_book_detail(
     )
 
 
-@router.get("/books/{book_id}/file/{format}")
+@router.get(
+    "/books/{book_id}/file/{format}",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Full book file",
+            "content": {
+                "application/octet-stream": {"schema": {"type": "string", "format": "binary"}},
+            },
+        },
+        206: {
+            "description": "Partial book file (range request)",
+            "content": {
+                "application/octet-stream": {"schema": {"type": "string", "format": "binary"}},
+            },
+        },
+    },
+)
 async def download_book_file(
     book_id: str,
     format: str,
@@ -512,7 +529,7 @@ async def download_book_file(
     viewer: ViewerDep,
     settings: SettingsDep,
     session: SessionDep,
-) -> Any:
+) -> Response:
     """Download or stream a book format with HTTP Range and Content-Disposition."""
     q = select(MediaItem).where(MediaItem.id == book_id, MediaItem.type == "book")
     q = _restrict_to_accessible_libraries(q, viewer.user)

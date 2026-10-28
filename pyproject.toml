@@ -82,4 +82,5 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "vaapi: tests requiring VAAPI hardware acceleration (/dev/dri/renderD128)",
+    "container_e2e: container-level end-to-end tests driven by Docker (opt-in via HEARTH_CONTAINER_E2E=1)",
 ]

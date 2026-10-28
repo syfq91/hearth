@@ -1,11 +1,12 @@
 """TV series, season, episode, next-up, and watch-state endpoints."""
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
+from app.api.v1.books import BookSeriesDetail
 from app.api.v1.items import (
     ImageResponse,
     ItemSummary,
@@ -122,7 +123,7 @@ async def get_series_detail(
     series_id: str,
     user: RequireUser,
     session: SessionDep,
-) -> Any:
+) -> SeriesDetail | BookSeriesDetail:
     """Return complete details for a TV series or book series."""
     item = await session.get(MediaItem, series_id)
     if (

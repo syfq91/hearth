@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     secret_key: str | None = None
     jwt_issuer: str = "hearth"
     jwt_audience: str = "hearth-api"
+    # Tolerance, in seconds, for clock movement between issuing and verifying a
+    # token. The ``iat`` claim is stored with second granularity, so an NTP step
+    # of even a fraction of a second backwards can otherwise make a token that
+    # was just issued look like it is from the future and reject every
+    # outstanding session.
+    jwt_leeway_seconds: int = 2
     access_token_minutes: int = 15
     refresh_token_days: int = 30
     media_token_seconds: int = 6 * 60 * 60

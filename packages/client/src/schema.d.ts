@@ -3900,6 +3900,86 @@ export interface components {
             name: string;
         };
         /**
+         * SeriesDetail
+         * @description Complete detail response for a TV show.
+         */
+        SeriesDetail: {
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
+            backdrop?: components["schemas"]["ImageResponse"] | null;
+            /** Content Rating */
+            content_rating?: string | null;
+            /**
+             * Genres
+             * @default []
+             */
+            genres: string[];
+            /** Id */
+            id: string;
+            /**
+             * Images
+             * @default []
+             */
+            images: components["schemas"]["ImageResponse"][];
+            /** Match State */
+            match_state: string;
+            /** Network */
+            network?: string | null;
+            /** Original Title */
+            original_title?: string | null;
+            /** Overview */
+            overview?: string | null;
+            /**
+             * People
+             * @default []
+             */
+            people: components["schemas"]["PersonCreditResponse"][];
+            poster?: components["schemas"]["ImageResponse"] | null;
+            /**
+             * Provider Ids
+             * @default {}
+             */
+            provider_ids: {
+                [key: string]: string;
+            };
+            /** Rating */
+            rating?: number | null;
+            /** Runtime Seconds */
+            runtime_seconds?: number | null;
+            /**
+             * Seasons
+             * @default []
+             */
+            seasons: components["schemas"]["SeasonSummary"][];
+            /** Sort Title */
+            sort_title: string;
+            /** Status */
+            status?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Total Episodes
+             * @default 0
+             */
+            total_episodes: number;
+            /**
+             * Total Seasons
+             * @default 0
+             */
+            total_seasons: number;
+            /**
+             * Type
+             * @default movie
+             */
+            type: string;
+            watch_state: components["schemas"]["WatchStateResponse"];
+            /** Year */
+            year?: number | null;
+        };
+        /**
          * ServerTranscodeCapabilities
          * @description Aggregated hardware and software transcoding capabilities.
          */
@@ -4510,12 +4590,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Gzipped tar archive with the database snapshot */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/gzip": string;
+                };
             };
         };
     };
@@ -5540,13 +5622,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Full book file */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Partial book file (range request) */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
                 };
             };
             /** @description Validation Error */
@@ -7524,7 +7615,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SeriesDetail"] | components["schemas"]["BookSeriesDetail"];
                 };
             };
             /** @description Validation Error */

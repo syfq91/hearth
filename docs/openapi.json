@@ -4929,6 +4929,208 @@
         "title": "SeriesBrief",
         "type": "object"
       },
+      "SeriesDetail": {
+        "description": "Complete detail response for a TV show.",
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "backdrop": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "content_rating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Rating"
+          },
+          "genres": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Genres",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "images": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ImageResponse"
+            },
+            "title": "Images",
+            "type": "array"
+          },
+          "match_state": {
+            "title": "Match State",
+            "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network"
+          },
+          "original_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Title"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "people": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PersonCreditResponse"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "provider_ids": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "title": "Provider Ids",
+            "type": "object"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "runtime_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Seconds"
+          },
+          "seasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SeasonSummary"
+            },
+            "title": "Seasons",
+            "type": "array"
+          },
+          "sort_title": {
+            "title": "Sort Title",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total_episodes": {
+            "default": 0,
+            "title": "Total Episodes",
+            "type": "integer"
+          },
+          "total_seasons": {
+            "default": 0,
+            "title": "Total Seasons",
+            "type": "integer"
+          },
+          "type": {
+            "default": "movie",
+            "title": "Type",
+            "type": "string"
+          },
+          "watch_state": {
+            "$ref": "#/components/schemas/WatchStateResponse"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "sort_title",
+          "added_at",
+          "match_state",
+          "watch_state"
+        ],
+        "title": "SeriesDetail",
+        "type": "object"
+      },
       "ServerTranscodeCapabilities": {
         "description": "Aggregated hardware and software transcoding capabilities.",
         "properties": {
@@ -6619,7 +6821,15 @@
         "operationId": "create_database_backup_api_v1_admin_backup_post",
         "responses": {
           "200": {
-            "description": "Successful Response"
+            "content": {
+              "application/gzip": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Gzipped tar archive with the database snapshot"
           }
         },
         "security": [
@@ -8561,13 +8771,25 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "application/octet-stream": {
                 "schema": {
-                  "title": "Response Download Book File Api V1 Books  Book Id  File  Format  Get"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Full book file"
+          },
+          "206": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Partial book file (range request)"
           },
           "422": {
             "content": {
@@ -12172,6 +12394,14 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SeriesDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BookSeriesDetail"
+                    }
+                  ],
                   "title": "Response Get Series Detail Api V1 Series  Series Id  Get"
                 }
               }

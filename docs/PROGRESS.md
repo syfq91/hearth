@@ -2,8 +2,9 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 7 (Transcoding with VAAPI) in progress
-- **Overall Status**: Phase 7 in progress
+- **Current Phase**: Phase 8 (Search, collections, admin and API polish) — all nine
+  tasks complete and all three acceptance criteria met
+- **Overall Status**: Phase 8 complete (tasks + acceptance); Phase 9 not started
 
 ---
 
@@ -516,9 +517,136 @@
 
 ### Phase 8 Acceptance Checklist
 
-- [ ] An authorization test suite proves every endpoint enforces login, role and library access (parametrized over the full OpenAPI route list, which fails if a route is added without a declared policy).
-- [ ] Backup then restore into a fresh container yields an identical catalog.
-- [ ] The OpenAPI schema has no untyped (`Any`) responses on public endpoints.
+- [x] An authorization test suite proves every endpoint enforces login, role and library access (parametrized over the full OpenAPI route list, which fails if a route is added without a declared policy).
+  - Delivered as `tests/integration/test_authz_matrix.py` (120 tests):
+    - An explicit `POLICY` table declares `public` / `auth` / `admin` / `media`
+      for every operation in `docs/openapi.json` (118 operations).
+    - `test_every_openapi_operation_has_a_declared_policy` fails when a route
+      is added or removed without updating the table.
+    - `test_declared_policy_matches_dependency_wiring` walks the application's
+      real dependency trees (`require_admin`, `require_user`,
+      `get_current_user`, `get_events_user`, `get_viewer`) and fails when the
+      declared policy and the wired dependencies disagree.
+    - `test_route_enforces_declared_policy` is parametrized over all 118
+      operations and probes each over HTTP as anonymous (401 unless
+      `public`), regular user (403 on `admin` routes, not 401/403 elsewhere),
+      admin (accepted on `admin` routes), plus a media token on `media`
+      routes; SSE (`/events`) is handled with a bounded stream probe.
+- [x] Backup then restore into a fresh container yields an identical catalog.
+  - Delivered as `tests/e2e/test_container_backup_restore.py`: seeds a catalog
+    in container A (2 libraries, 1 collection, 2 accounts), downloads the
+    archive from `POST /api/v1/admin/backup`, destroys container A and its
+    volume, starts container B on an empty volume, restores through
+    `POST /api/v1/admin/restore`, logs in as the restored admin, and asserts
+    the `libraries` and `collections` dumps are byte-identical and `users`
+    match on all stable fields (`updated_at` excluded because the post-restore
+    login legitimately bumps it).
+  - Opt-in via `HEARTH_CONTAINER_E2E=1` + `HEARTH_E2E_IMAGE`; the CI
+    `container` job runs it against the `hearth:ci` image it just built.
+  - Writing this test surfaced and fixed a real defect: `POST
+    /admin/restore` recorded its audit row with the *pre-restore* actor id,
+    violating `audit_log.actor_id`'s foreign key (500) whenever the archive
+    came from a different installation. The endpoint now re-resolves the
+    actor against the restored database and falls back to a system entry
+    (`actor_id=NULL`) when the account no longer exists
+    (`app/api/v1/admin.py`).
+- [x] The OpenAPI schema has no untyped (`Any`) responses on public endpoints.
+  - Fixed all three offenders and regenerated `docs/openapi.json` plus
+    `packages/client/src/schema.d.ts`:
+    - `GET /api/v1/series/{series_id}` now returns the typed union
+      `SeriesDetail | BookSeriesDetail`.
+    - `GET /api/v1/books/{book_id}/file/{format}` is annotated `-> Response`
+      with documented 200/206 `application/octet-stream` bodies.
+    - `POST /api/v1/admin/backup` documents its `application/gzip` download
+      (its `FileResponse` produced an empty content map).
+  - Regression guard: `tests/unit/test_openapi.py::test_no_untyped_success_responses`
+    asserts every documented 2xx response (except 204/304) carries a schema
+    with real type information (`type`, `$ref`, `oneOf`/`anyOf`/`allOf`,
+    `properties` or `items`) — this is what `-> Any` responses violate: they
+    emit a `{"title": ...}` stub with no type.
+
+### Phase 8 Quality Gates (measured 2026-10-28)
+
+- `uv run ruff check`: clean; `uv run ruff format --check`: clean (202 files).
+- `uv run mypy app`: no issues in 99 source files.
+- `uv run python scripts/export_openapi.py --check`: up to date (102 paths,
+  118 operations).
+- `uv run pytest -q`: **677 passed, 11 skipped, 5 failed**.
+  - The 5 failures are environmental: `ffmpeg` is not installed on this host, and
+    `tests/integration/test_audio_transcode.py`,
+    `tests/integration/test_phase7_acceptance.py` (criteria 3–5) and
+    `tests/integration/test_playback_info.py` launch `ffmpeg` without the
+    `shutil.which` skip guard that `test_scanner.py` / `test_probe.py` /
+    `test_phase2_acceptance.py` use. The binary does exist in the Docker image
+    (`docker/Dockerfile` installs it), so these are host-environment failures,
+    not code regressions.
+  - The intermittent unexpected `401` ("invalid_token") that had been seen on
+    just-issued tokens in full-suite runs was **root-caused and fixed**. It was
+    not stale reads or key instability: a decomposing stress repro showed the
+    rejected token was well-formed but PyJWT raised
+    `ImmatureSignatureError: The token is not yet valid (iat)`. PyJWT validates
+    `iat` with `iat > datetime.now(UTC).timestamp()`, while
+    `create_access_token` stores `iat` **floored to whole seconds**, so a
+    backwards NTP clock step of even a fraction of a second (this host runs
+    NTP) makes a token issued moments earlier look like it is from the future
+    and rejects every outstanding session. Fixed by passing a configurable
+    `leeway` (`Settings.jwt_leeway_seconds`, default 2 s) to `jwt.decode`, with
+    `tests/unit/test_tokens.py` covering tolerance, the distant-future reject,
+    and a zero-leeway strict mode. Verified by a standalone stress harness that
+    reproduced the 401 within 172–540 iterations before the change and ran
+    **750+ iterations clean** after it.
+  - The 11 skips are the ffmpeg/ffprobe/VAAPI guards (10) plus the container
+    e2e test, which is opt-in (`HEARTH_CONTAINER_E2E=1`) (1).
+- Container acceptance run: `HEARTH_CONTAINER_E2E=1 HEARTH_E2E_IMAGE=hearth:e2e
+  uv run pytest tests/e2e -q` → **1 passed** (image built from
+  `docker/Dockerfile`).
+- Phase 8 acceptance test sets: authz matrix **120 passed**; OpenAPI/schema
+  tests (currency, no-untyped-responses, client artifact) **passed**.
+
+### Phase 8 Deliverables
+
+- `GET /api/v1/search?q=` unified FTS5 search across movies, series,
+  episodes, albums, tracks, books and people with prefix matching, ranking and
+  per-user library filtering.
+- Collections (admin) and playlists (per-user) with ordering, duration and
+  library-access filtering; migration `0008`.
+- Per-user `max_rating` content controls with TMDB certification mapping,
+  enforced on browse, detail, playback-info and stream.
+- Admin API: scan controls, unmatched list, manual rematch, job history,
+  system info, log tail, transcode settings/capabilities/session diagnostics.
+- `hearth backup` / `hearth restore` CLI plus `POST /api/v1/admin/backup` and
+  `/admin/restore` (SQLite online backup API, settings export).
+- SSE extensions: scan progress, library updated, now playing; query-string
+  token auth for `EventSource`.
+- API hardening: CORS, request size limit (413), ETags/304 and `?fields=`
+  selection on item detail, input validation, typed OpenAPI responses.
+- `packages/client/src/schema.d.ts` typed client artifact (240 KB) and
+  `docs/API.md` (321 lines) documenting auth flows and the playback-info
+  contract.
+- **Acceptance 1:** `tests/integration/test_authz_matrix.py` — declared policy
+  table for all 118 OpenAPI operations, dependency-wiring cross-check, and
+  per-route HTTP authorization probes.
+- **Acceptance 2:** `tests/e2e/test_container_backup_restore.py` —
+  backup → destroy → fresh-container restore → identical catalog, plus the CI
+  container-job step that runs it; fix for the restore audit-row foreign key
+  crash (`app/api/v1/admin.py`).
+- **Acceptance 3:** typed `SeriesDetail | BookSeriesDetail` union, documented
+  binary responses for book download and admin backup (regenerated
+  `docs/openapi.json` + `packages/client/src/schema.d.ts`), plus the
+  `test_no_untyped_success_responses` schema guard.
+
+### Known Phase 8 Limitations
+
+- All three acceptance criteria are met; the phase is task- and
+  acceptance-complete.
+- The container backup/restore e2e is opt-in (`HEARTH_CONTAINER_E2E=1`) so the
+  default `uv run pytest` run skips it; CI executes it in the `container` job
+  where an image exists.
+- Transcode-adjacent tests fail on hosts without `ffmpeg` instead of skipping.
+- Access-token validation deliberately tolerates up to
+  `Settings.jwt_leeway_seconds` (default 2 s) of clock movement so a backwards
+  NTP step cannot invalidate live sessions; that same window is the only
+  relaxation of strict `iat`/`exp` checking.
 
 ---
 

@@ -86,6 +86,42 @@ def test_access_token_with_wrong_audience_or_type_is_rejected(settings: Settings
         decode_access_token(wrong_type, settings=settings, key=b"key" * 16)
 
 
+def test_access_token_tolerates_a_small_backwards_clock_step(settings: Settings) -> None:
+    """``iat`` is floored to whole seconds, so a backwards NTP step below one
+    second can make a just-issued token look like it is from the future.
+
+    Without a leeway this rejected every outstanding session.
+    """
+    token, _ = _token(settings, now=datetime.now(UTC) + timedelta(seconds=1))
+
+    claims = decode_access_token(token, settings=settings, key=b"key" * 16)
+
+    assert claims.user_id == "user-1"
+
+
+def test_access_token_still_rejects_a_token_from_the_distant_future(
+    settings: Settings,
+) -> None:
+    """The clock-skew tolerance must not become an ``iat`` bypass."""
+    token, _ = _token(settings, now=datetime.now(UTC) + timedelta(seconds=30))
+
+    with pytest.raises(UnauthorizedError) as excinfo:
+        decode_access_token(token, settings=settings, key=b"key" * 16)
+
+    assert excinfo.value.code == "invalid_token"
+
+
+def test_access_token_leeway_is_configurable() -> None:
+    """A zero leeway restores strict ``iat`` checking."""
+    strict = Settings(env="testing", log_level="WARNING", secret_key="k" * 32, jwt_leeway_seconds=0)
+    token, _ = _token(strict, now=datetime.now(UTC) + timedelta(seconds=1))
+
+    with pytest.raises(UnauthorizedError) as excinfo:
+        decode_access_token(token, settings=strict, key=b"key" * 16)
+
+    assert excinfo.value.code == "invalid_token"
+
+
 def test_refresh_tokens_are_random_and_hashed() -> None:
     first = generate_refresh_token()
     second = generate_refresh_token()

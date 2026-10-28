@@ -21,7 +21,7 @@ from app.core.deps import RequireAdmin, SettingsDep
 from app.core.errors import NotFoundError
 from app.core.logging import get_recent_logs
 from app.db.base import utcnow
-from app.db.models import AuditLog, Job, Library, MediaItem
+from app.db.models import AuditLog, Job, Library, MediaItem, User
 from app.db.session import SessionDep
 from app.services.audit import record_audit
 from app.services.backup import create_backup, restore_backup
@@ -584,7 +584,18 @@ async def get_transcoding_session_logs(
 # ------------------------------------------------------------- backup & restore
 
 
-@router.post("/backup", response_class=FileResponse)
+@router.post(
+    "/backup",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "description": "Gzipped tar archive with the database snapshot",
+            "content": {
+                "application/gzip": {"schema": {"type": "string", "format": "binary"}},
+            },
+        },
+    },
+)
 async def create_database_backup(
     actor: RequireAdmin,
     settings: SettingsDep,
@@ -658,9 +669,16 @@ async def restore_database_backup(
             if tmp_path.exists():
                 tmp_path.unlink()
 
+    # The restore may have replaced the users table with a snapshot that does
+    # not contain the acting account (for example, restoring an archive from a
+    # different installation). Re-resolve the actor against the restored
+    # database; when the account no longer exists the audit entry is recorded
+    # as a system action with no actor so the foreign key still holds.
+    restored_actor = await session.get(User, actor.id, populate_existing=True)
+
     record_audit(
         session,
-        actor_id=actor.id,
+        actor_id=restored_actor.id if restored_actor is not None else None,
         action="system.restore",
         target_type="system",
         target_id="database",
