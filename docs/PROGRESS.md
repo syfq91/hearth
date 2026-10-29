@@ -658,7 +658,7 @@
 | Task | Description | Status | Commit |
 | --- | --- | --- | --- |
 | 9.1 (Step 1) | Write `docs/FRONTEND_DECISION.md` comparing React+Vite, SvelteKit SPA and Vue+Vite on the six plan criteria, with a recommendation; stop for human approval before building | Complete (approved) | `docs: add frontend decision analysis and recommendation`; approval recorded in `docs: record human approval of the sveltekit frontend decision` |
-| 9.2 (Step 2) | Scaffold `web/` with the generated API client; serve the static build from FastAPI at `/` | Not started | — |
+| 9.2 (Step 2) | Scaffold `web/` with the generated API client; serve the static build from FastAPI at `/` | Complete | `feat(web): scaffold sveltekit spa served by fastapi` |
 | 9.3 (Step 2) | Screens in order: setup/login, home, library grid, detail, video player, music, books, search, profile, admin | Not started | — |
 | 9.4 (Step 2) | Responsive phone/tablet/desktop layout plus focus-managed 10-foot TV mode | Not started | — |
 | 9.5 (Step 2) | Accessibility: keyboard navigation, focus rings, captions, reduced motion | Not started | — |
@@ -693,6 +693,42 @@
   Svelte TV library), direct foliate-js/pdf.js web-component integration, and
   the 16.0 KB app-shell advantage in service of the Lighthouse gate.
   Approval status: **approved — Step 2 unlocked**.
+
+### Phase 9 Step 2 — Task 9.2 Scaffold + shell (2026-10-28)
+
+- `npx sv create web/` → SvelteKit 3.1 + Svelte 5 (runes) + Vite 8 + TS
+  strict; `@sveltejs/adapter-static` (pages/assets `dist`,
+  `fallback: 'index.html'`), `ssr = false`, `vite build --target es2019`
+  (Samsung baseline from Step 1).
+- Typed API layer hand-written in `web/src/lib/api/` on top of the generated
+  `packages/client/src/schema.d.ts` schemas: `ApiError`, JSON error envelope,
+  single-flight access-token refresh, media-token minting for `<video>`
+  sources, SSE subscription helper for `/api/v1/events`.
+  **Deviation recorded:** the plan says "the generated API client"; orval was
+  deliberately deferred because the approved stack calls for a runes-based
+  client instead of TanStack Query (orval's Svelte output targets that
+  library). Type safety comes from the generated schema artifact; the client
+  itself is hand-written and unit-testable. Revisit if typed-client churn
+  becomes costly (open ADR at that point).
+- Session state as Svelte runes (`auth.svelte.ts`: setup-required, current
+  user, access token, background refresh, 401 handling); route guard in
+  `+layout.ts`.
+- Screens so far: health-check landing (`/`), `/login`, `/setup` — the first
+  two of task 9.3's ordered list; shell (sidebar + topbar) with `GET /health`
+  banner on API failure.
+- Design tokens + accessibility base in `app.css`: focus-visible ring,
+  reduced-motion, 10-foot-safe minimum sizes.
+- FastAPI serving: `app/core/spa.py` (`find_web_dist`, `SpaStaticFiles`)
+  mounted in the lifespan **after** all API routes, so it can never shadow
+  them; `api/` under the SPA re-raises 404 with the JSON error envelope.
+  Unit-tested (9 tests, including the no-shadowing regression).
+- Packaging/CI: `docker/Dockerfile` gains a `node:22-bookworm-slim` web build
+  stage producing `web/dist` (copied into the runtime image); CI gains a
+  `web` job (`npm ci`, `svelte-kit check`, build).
+- Gates: `ruff check` clean, `ruff format --check` clean,
+  `mypy app` clean, `npm run check` 0 errors, `npm run build` OK,
+  `pytest` 686 passed / 5 failed (all 5 are the pre-existing
+  ffmpeg-not-on-host environmental failures) / 11 skipped.
 
 ### Phase 9 Acceptance Checklist (not yet startable)
 

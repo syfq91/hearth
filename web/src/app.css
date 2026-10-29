@@ -1,0 +1,103 @@
+/* Hearth design tokens and base styles.
+   The full visual design lands with the screens; this file establishes the
+   tokens, focus visibility, and reduced-motion behaviour every screen shares. */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	color-scheme: dark;
+	--bg: #0e1116;
+	--surface: #161b22;
+	--surface-2: #1f2630;
+	--border: #2b3441;
+	--text: #e6edf3;
+	--muted: #9aa7b4;
+	--accent: #ff8a3d;
+	--accent-contrast: #1a1205;
+	--focus-ring: #7cc4ff;
+	--danger: #ff6b6b;
+	--radius: 10px;
+	--gap: 1rem;
+	font-family:
+		system-ui,
+		-apple-system,
+		'Segoe UI',
+		Roboto,
+		'Helvetica Neue',
+		Arial,
+		sans-serif;
+	font-size: 16px;
+	line-height: 1.5;
+	background: var(--bg);
+	color: var(--text);
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+	background: var(--bg);
+	color: var(--text);
+}
+
+h1,
+h2,
+h3 {
+	line-height: 1.25;
+	margin: 0 0 0.5rem;
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+img {
+	max-width: 100%;
+	display: block;
+}
+
+button,
+input,
+select,
+textarea {
+	font: inherit;
+	color: inherit;
+}
+
+/* Visible focus for keyboard and D-pad navigation (accessibility + TV mode). */
+:focus-visible {
+	outline: 3px solid var(--focus-ring);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}

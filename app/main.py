@@ -25,6 +25,7 @@ from app.core.errors import (
 from app.core.logging import setup_logging
 from app.core.middleware import RequestIDMiddleware, RequestSizeLimitMiddleware
 from app.core.ratelimit import SlidingWindowLimiter
+from app.core.spa import SpaStaticFiles, find_web_dist
 from app.db.migrate import run_migrations_async
 from app.db.session import build_engine, build_sessionmaker
 from app.services.transcode.session import get_session_manager
@@ -44,12 +45,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     sessionmaker = build_sessionmaker(engine)
 
     @asynccontextmanager
-    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Migrations run behind a file lock so concurrent API/worker starts do
         # not race. They are executed in a worker thread because Alembic's env
         # owns its own event loop.
         await run_migrations_async(resolved)
         get_session_manager(resolved).startup_sweep()
+        # Mounted at startup, after every application route exists, so the SPA
+        # fallback can never shadow an API route (see app/core/spa.py).
+        _mount_web_ui(app)
         logger.info(
             "hearth starting",
             extra={"env": resolved.env, "version": __version__},
@@ -118,6 +122,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             name="testplayer",
         )
     return application
+
+
+def _mount_web_ui(application: FastAPI) -> None:
+    """Serve the built SPA at `/` when `web/dist` exists.
+
+    Called from the lifespan so the catch-all mount is appended after every
+    API route; a route registered afterwards still wins over the SPA shell.
+    """
+    web_dist = find_web_dist()
+    if web_dist is not None:
+        application.mount(
+            "/",
+            SpaStaticFiles(directory=web_dist, html=True),
+            name="web",
+        )
 
 
 def _testplayer_directory() -> Path | None:

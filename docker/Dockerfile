@@ -24,6 +24,20 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY app ./app
 RUN uv sync --locked --no-dev --no-editable
 
+# --- Web: build the SvelteKit SPA ------------------------------------------
+FROM node:22-bookworm-slim AS web
+
+WORKDIR /src
+
+# Dependency layer: cached unless the lockfile changes.
+COPY web/package.json web/package-lock.json ./web/
+RUN cd web && npm ci
+
+# Build layer: generated API types plus app sources.
+COPY packages/client ./packages/client
+COPY web ./web
+RUN cd web && npm run build
+
 # --- Runtime: Debian 12 with ffmpeg and VAAPI drivers ------------------------
 FROM python:3.12-slim-bookworm AS runtime
 
@@ -54,6 +68,8 @@ RUN groupadd --gid 1000 hearth \
 
 WORKDIR /app
 COPY --from=builder --chown=root:root /app/.venv /app/.venv
+# Built SPA, served by FastAPI at `/` (see app/core/spa.py).
+COPY --from=web --chown=root:root /src/web/dist /app/web/dist
 # Developer-only static player, served at /testplayer when present.
 COPY --chown=root:root tools ./tools
 
