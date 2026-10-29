@@ -2,6 +2,7 @@
 	import '../app.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import { logout, session } from '../lib/auth.svelte';
+	import AudioBar from '../lib/components/AudioBar.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
@@ -29,7 +30,8 @@
 		<nav aria-label="Primary">
 			<a href="/" aria-current={isActive('/') ? 'page' : undefined}>Home</a>
 			<a href="/library" aria-current={isActive('/library') ? 'page' : undefined}>Library</a>
-			<!-- Music, books, search and admin links land with their routes in
+			<a href="/music" aria-current={isActive('/music') ? 'page' : undefined}>Music</a>
+			<!-- Books, search and admin links land with their routes in
 			     Phase 9 task 9.3. -->
 		</nav>
 		<div class="spacer"></div>
@@ -44,6 +46,7 @@
 	<main id="main">
 		{@render children()}
 	</main>
+	<AudioBar />
 </div>
 
 <style>

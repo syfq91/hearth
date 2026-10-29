@@ -1,0 +1,202 @@
+<script lang="ts">
+	import Poster from '../../../../lib/components/Poster.svelte';
+	import { playTrack, player } from '../../../../lib/player.svelte';
+	import type { TrackSummary } from '../../../../lib/api/types';
+	import type { PageProps } from './$types';
+
+	let { data }: PageProps = $props();
+
+	function toPlayerTrack(track: TrackSummary) {
+		return {
+			id: track.id,
+			title: track.title,
+			artistName: track.artist_name ?? null,
+			albumTitle: track.album_title ?? null,
+			streamUrl: track.stream_url
+		};
+	}
+
+	async function play(track: TrackSummary): Promise<void> {
+		await playTrack(toPlayerTrack(track));
+	}
+
+	function playAll(): void {
+		const first = data.album.discs[0]?.tracks[0];
+		if (first) void play(first);
+	}
+
+	function formatDuration(seconds: number | null | undefined): string {
+		if (!seconds || seconds <= 0) return '';
+		const m = Math.floor(seconds / 60);
+		const s = Math.floor(seconds % 60);
+		return `${m}:${s.toString().padStart(2, '0')}`;
+	}
+</script>
+
+<article class="album">
+	<div class="art">
+		<Poster image={data.album.poster} alt="" aspect="1 / 1" width={400} />
+	</div>
+
+	<div class="info">
+		<nav class="crumbs" aria-label="Breadcrumb">
+			<a href="/music">Music</a>
+		</nav>
+		<h1>{data.album.title}</h1>
+		{#if data.album.artist_name}
+			<p class="artist">{data.album.artist_name}</p>
+		{/if}
+		<p class="meta">
+			{[
+				data.album.year,
+				data.album.total_tracks ? `${data.album.total_tracks} tracks` : null,
+				formatDuration(data.album.duration_seconds)
+			]
+				.filter(Boolean)
+				.join(' · ')}
+		</p>
+		<div class="actions">
+			<button type="button" class="play" onclick={playAll}>Play album</button>
+		</div>
+	</div>
+</article>
+
+{#each data.album.discs as disc (disc.disc_number)}
+	<section class="disc" aria-label={`Disc ${disc.disc_number}`}>
+		{#if (data.album.total_discs ?? 1) > 1}
+			<h2>Disc {disc.disc_number}</h2>
+		{/if}
+		<ol class="tracks">
+			{#each disc.tracks as track (track.id)}
+				<li class="track" class:current={player.track?.id === track.id}>
+					<span class="number">{track.track_number}</span>
+					<button type="button" class="name" onclick={() => play(track)}>
+						{track.title}
+					</button>
+					<span class="duration">{formatDuration(track.duration_seconds)}</span>
+				</li>
+			{/each}
+		</ol>
+	</section>
+{/each}
+
+<style>
+	.album {
+		display: grid;
+		grid-template-columns: minmax(180px, 260px) 1fr;
+		gap: 2rem;
+		align-items: start;
+		margin-bottom: 2rem;
+	}
+
+	.art {
+		border-radius: var(--radius);
+		overflow: hidden;
+	}
+
+	.crumbs {
+		font-size: 0.9rem;
+		color: var(--muted);
+		margin-bottom: 0.5rem;
+	}
+
+	.info h1 {
+		font-size: 1.7rem;
+		margin-bottom: 0.25rem;
+	}
+
+	.artist {
+		color: var(--muted);
+		margin: 0 0 0.5rem;
+	}
+
+	.meta {
+		color: var(--muted);
+		font-size: 0.9rem;
+		margin: 0 0 1rem;
+	}
+
+	.play {
+		background: var(--accent);
+		color: var(--accent-contrast);
+		font-weight: 600;
+		border: 0;
+		border-radius: var(--radius);
+		padding: 0.6rem 1.5rem;
+		cursor: pointer;
+	}
+
+	.play:hover {
+		filter: brightness(1.05);
+	}
+
+	.disc h2 {
+		font-size: 1rem;
+		color: var(--muted);
+		margin-bottom: 0.5rem;
+	}
+
+	.tracks {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: grid;
+		gap: 0.15rem;
+	}
+
+	.track {
+		display: grid;
+		grid-template-columns: 2.5rem 1fr auto;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.4rem 0.6rem;
+		border-radius: 6px;
+	}
+
+	.track:hover {
+		background: var(--surface);
+	}
+
+	.track.current .name {
+		color: var(--accent);
+	}
+
+	.number {
+		color: var(--muted);
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.name {
+		background: none;
+		border: 0;
+		color: inherit;
+		text-align: left;
+		padding: 0;
+		cursor: pointer;
+		font: inherit;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.name:hover {
+		text-decoration: underline;
+	}
+
+	.duration {
+		color: var(--muted);
+		font-size: 0.85rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	@media (max-width: 720px) {
+		.album {
+			grid-template-columns: 1fr;
+		}
+
+		.art {
+			max-width: 200px;
+		}
+	}
+</style>
