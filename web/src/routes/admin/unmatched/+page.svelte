@@ -70,6 +70,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Unmatched · Admin · Hearth</title>
+</svelte:head>
+
 <p class="intro">
 	Items the matcher could not identify. Search metadata providers and pick the right match, or
 	trigger a rematch with the automatic matcher.

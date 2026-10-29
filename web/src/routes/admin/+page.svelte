@@ -20,6 +20,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Admin · Hearth</title>
+</svelte:head>
+
 {#if data.error}
 	<p class="banner" role="alert">Some admin data failed to load: {data.error}</p>
 {/if}

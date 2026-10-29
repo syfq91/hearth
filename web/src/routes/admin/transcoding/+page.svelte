@@ -61,6 +61,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Transcoding · Admin · Hearth</title>
+</svelte:head>
+
 {#if data.error}
 	<p class="err" role="alert">Some transcoding data failed to load: {data.error}</p>
 {/if}

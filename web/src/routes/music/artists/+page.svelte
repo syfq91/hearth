@@ -43,6 +43,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Artists · Hearth</title>
+</svelte:head>
+
 <h1>Artists</h1>
 
 <nav class="tabs" aria-label="Music sections">

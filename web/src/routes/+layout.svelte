@@ -35,6 +35,7 @@
 </svelte:head>
 
 <div class="app" use:spatialFocus>
+	<a class="skip-link" href="#main">Skip to content</a>
 	<header class="topbar">
 		<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
 		<nav aria-label="Primary">
@@ -105,6 +106,24 @@
 
 	.spacer {
 		flex: 1;
+	}
+
+	/* Skip link: first in the tab order, visible only once focused. */
+	.skip-link {
+		position: absolute;
+		left: 0.75rem;
+		top: -4rem;
+		background: var(--accent);
+		color: var(--accent-contrast);
+		font-weight: 600;
+		padding: 0.5rem 1.1rem;
+		border-radius: var(--radius);
+		z-index: 100;
+		transition: top 0.15s ease;
+	}
+
+	.skip-link:focus {
+		top: 0.75rem;
 	}
 
 	nav {

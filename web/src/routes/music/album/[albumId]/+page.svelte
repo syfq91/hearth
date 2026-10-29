@@ -41,6 +41,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{data.album.title} · Hearth</title>
+</svelte:head>
+
 <article class="album">
 	<div class="art">
 		<Poster image={data.album.poster} alt="" aspect="1 / 1" width={400} />

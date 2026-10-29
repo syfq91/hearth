@@ -56,6 +56,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Search · Hearth</title>
+</svelte:head>
+
 <h1>Search</h1>
 
 <form

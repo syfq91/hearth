@@ -53,6 +53,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{series.title} · Hearth</title>
+</svelte:head>
+
 <article class="series">
 	<header class="head">
 		<div class="art">

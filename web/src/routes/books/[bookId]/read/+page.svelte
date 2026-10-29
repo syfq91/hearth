@@ -57,6 +57,10 @@
 	const isEpub = $derived(format === 'epub');
 </script>
 
+<svelte:head>
+	<title>{data.book.title} · Reading · Hearth</title>
+</svelte:head>
+
 <header class="head">
 	<nav class="crumbs" aria-label="Breadcrumb">
 		<a href={`/books/${data.book.id}`}>{data.book.title}</a>

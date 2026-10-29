@@ -90,6 +90,10 @@
 	);
 </script>
 
+<svelte:head>
+	<title>{data.library.name} · Hearth</title>
+</svelte:head>
+
 <nav class="crumbs" aria-label="Breadcrumb">
 	<a href="/library">Libraries</a>
 	<span aria-hidden="true">/</span>

@@ -108,6 +108,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Users · Admin · Hearth</title>
+</svelte:head>
+
 <section class="card" aria-labelledby="create-heading">
 	<h2 id="create-heading">Add a user</h2>
 	<form class="row" onsubmit={createUser}>

@@ -6,6 +6,10 @@
 	let { data }: PageProps = $props();
 </script>
 
+<svelte:head>
+	<title>Home · Hearth</title>
+</svelte:head>
+
 <h1>Home</h1>
 
 {#if data.error}

@@ -9,6 +9,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Books · Hearth</title>
+</svelte:head>
+
 <h1>Books</h1>
 
 {#if data.books.items.length === 0}

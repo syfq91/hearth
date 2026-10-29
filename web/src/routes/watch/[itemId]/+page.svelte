@@ -9,6 +9,9 @@
 	let ended = $state(false);
 	let next = $state<NextEpisode | null>(null);
 	let dismissed = $state(false);
+	let dialogEl = $state<HTMLDivElement | null>(null);
+	/** Focus before the dialog opened, restored on dismiss. */
+	let returnFocus: HTMLElement | null = null;
 
 	// A new episode (or a reload) clears any previous up-next prompt.
 	$effect(() => {
@@ -18,8 +21,17 @@
 		dismissed = false;
 	});
 
+	// Move focus into the prompt when it appears, so keyboard and D-pad users
+	// are not left on the finished video.
+	$effect(() => {
+		if (ended && next && !dismissed) {
+			dialogEl?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+		}
+	});
+
 	async function handleEnded(): Promise<void> {
 		ended = true;
+		returnFocus = document.activeElement as HTMLElement | null;
 		if (data.item.type !== 'episode') return;
 		try {
 			next = await findNextEpisode(data.item.id);
@@ -28,11 +40,20 @@
 		}
 	}
 
+	function dismiss(): void {
+		dismissed = true;
+		returnFocus?.focus({ preventScroll: true });
+	}
+
 	function playNext(): void {
 		if (!next) return;
 		void goto(`/watch/${next.id}`);
 	}
 </script>
+
+<svelte:head>
+	<title>{data.item.title} · Hearth</title>
+</svelte:head>
 
 <div class="watch">
 	<VideoPlayer
@@ -43,7 +64,7 @@
 	/>
 
 	{#if ended && next && !dismissed}
-		<div class="upnext" role="dialog" aria-label="Up next">
+		<div class="upnext" role="dialog" aria-label="Up next" bind:this={dialogEl}>
 			<p class="kicker">Up next</p>
 			<h2>{next.title}</h2>
 			{#if next.label}
@@ -51,7 +72,7 @@
 			{/if}
 			<div class="actions">
 				<button type="button" class="play" onclick={playNext}>Play next episode</button>
-				<button type="button" class="ghost" onclick={() => (dismissed = true)}>Dismiss</button>
+				<button type="button" class="ghost" onclick={dismiss}>Dismiss</button>
 			</div>
 		</div>
 	{/if}

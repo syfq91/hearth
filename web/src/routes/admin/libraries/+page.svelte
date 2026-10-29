@@ -75,6 +75,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Libraries · Admin · Hearth</title>
+</svelte:head>
+
 <section class="card" aria-labelledby="create-heading">
 	<h2 id="create-heading">Add a library</h2>
 	<form class="stack" onsubmit={createLibrary}>

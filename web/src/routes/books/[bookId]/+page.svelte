@@ -15,6 +15,10 @@
 	const progress = $derived(data.book.progress);
 </script>
 
+<svelte:head>
+	<title>{data.book.title} · Hearth</title>
+</svelte:head>
+
 <article class="book">
 	<div class="art">
 		<BookCover coverImageId={data.book.cover_image_id} alt="" width={400} />

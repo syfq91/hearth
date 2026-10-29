@@ -67,6 +67,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Profile · Hearth</title>
+</svelte:head>
+
 <h1>Profile</h1>
 
 {#if user}

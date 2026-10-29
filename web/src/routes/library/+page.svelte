@@ -11,6 +11,10 @@
 	};
 </script>
 
+<svelte:head>
+	<title>Libraries · Hearth</title>
+</svelte:head>
+
 <h1>Libraries</h1>
 
 {#if data.libraries.length === 0}
