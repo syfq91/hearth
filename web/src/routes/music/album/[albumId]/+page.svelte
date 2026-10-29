@@ -1,28 +1,36 @@
 <script lang="ts">
 	import Poster from '../../../../lib/components/Poster.svelte';
-	import { playTrack, player } from '../../../../lib/player.svelte';
+	import { playQueue, player, type PlayerTrack } from '../../../../lib/player.svelte';
 	import type { TrackSummary } from '../../../../lib/api/types';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
-	function toPlayerTrack(track: TrackSummary) {
+	function toPlayerTrack(track: TrackSummary): PlayerTrack {
 		return {
 			id: track.id,
 			title: track.title,
 			artistName: track.artist_name ?? null,
 			albumTitle: track.album_title ?? null,
-			streamUrl: track.stream_url
+			streamUrl: track.stream_url,
+			artworkUrl: data.album.poster?.url ?? null
 		};
 	}
 
+	/** The whole album in disc/track order, as one queue. */
+	function albumQueue(): PlayerTrack[] {
+		return data.album.discs.flatMap((disc) => disc.tracks.map(toPlayerTrack));
+	}
+
 	async function play(track: TrackSummary): Promise<void> {
-		await playTrack(toPlayerTrack(track));
+		const queue = albumQueue();
+		const index = queue.findIndex((item) => item.id === track.id);
+		await playQueue(queue, Math.max(0, index));
 	}
 
 	function playAll(): void {
-		const first = data.album.discs[0]?.tracks[0];
-		if (first) void play(first);
+		const queue = albumQueue();
+		if (queue.length > 0) void playQueue(queue, 0);
 	}
 
 	function formatDuration(seconds: number | null | undefined): string {
@@ -44,7 +52,13 @@
 		</nav>
 		<h1>{data.album.title}</h1>
 		{#if data.album.artist_name}
-			<p class="artist">{data.album.artist_name}</p>
+			<p class="artist">
+				{#if data.album.artist_id}
+					<a href={`/music/artist/${data.album.artist_id}`}>{data.album.artist_name}</a>
+				{:else}
+					{data.album.artist_name}
+				{/if}
+			</p>
 		{/if}
 		<p class="meta">
 			{[

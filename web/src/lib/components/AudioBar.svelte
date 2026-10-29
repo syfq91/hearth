@@ -1,5 +1,13 @@
 <script lang="ts">
-	import { player, togglePlay, stop } from '../player.svelte';
+	import {
+		player,
+		togglePlay,
+		stop,
+		playNext,
+		playPrevious,
+		nextTrackSrc
+	} from '../player.svelte';
+	import { withMediaToken } from '../media-token.svelte';
 
 	let audio = $state<HTMLAudioElement | null>(null);
 
@@ -9,7 +17,17 @@
 		const element = audio;
 		const src = player.src;
 		const shouldPlay = player.playing;
-		if (!element || !src) return;
+		if (!element) return;
+		if (!src) {
+			// Cleared (stopped, or restarting the current track): release the
+			// resource so the next src really reloads from the top.
+			if (element.getAttribute('src')) {
+				element.pause();
+				element.removeAttribute('src');
+				element.load();
+			}
+			return;
+		}
 		if (element.src !== new URL(src, window.location.origin).href) {
 			element.src = src;
 			if (shouldPlay) void element.play().catch(() => {
@@ -20,6 +38,109 @@
 		if (shouldPlay && element.paused) void element.play().catch(() => {});
 		if (!shouldPlay && !element.paused) element.pause();
 	});
+
+	// Gapless attempt: warm the next queued track's stream so the handoff on
+	// `ended` only has to swap the element's src.
+	let preloader: HTMLAudioElement | null = null;
+
+	$effect(() => {
+		const index = player.index;
+		void (async () => {
+			const src = await nextTrackSrc();
+			if (!src || player.index !== index) return;
+			const next = new Audio();
+			next.preload = 'auto';
+			next.src = src;
+			preloader?.pause();
+			preloader?.removeAttribute('src');
+			preloader = next;
+		})();
+	});
+
+	// Media Session: OS-level metadata, playback state and media-key actions.
+	$effect(() => {
+		if (!('mediaSession' in navigator)) return;
+		const track = player.track;
+		if (!track) {
+			navigator.mediaSession.metadata = null;
+			return;
+		}
+		navigator.mediaSession.metadata = new MediaMetadata({
+			title: track.title,
+			artist: track.artistName ?? '',
+			album: track.albumTitle ?? ''
+		});
+		const artwork = track.artworkUrl;
+		if (artwork) {
+			void withMediaToken(artwork)
+				.then((url) => {
+					if (player.track?.id !== track.id || !('mediaSession' in navigator)) return;
+					navigator.mediaSession.metadata = new MediaMetadata({
+						title: track.title,
+						artist: track.artistName ?? '',
+						album: track.albumTitle ?? '',
+						artwork: [{ src: url }]
+					});
+				})
+				.catch(() => {
+					/* artwork is decorative */
+				});
+		}
+	});
+
+	$effect(() => {
+		if ('mediaSession' in navigator) {
+			navigator.mediaSession.playbackState = player.playing ? 'playing' : 'paused';
+		}
+	});
+
+	$effect(() => {
+		if (!('mediaSession' in navigator)) return;
+		const mediaSession = navigator.mediaSession;
+		const set = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+			try {
+				mediaSession.setActionHandler(action, handler);
+			} catch {
+				/* action unsupported on this browser */
+			}
+		};
+		set('play', () => {
+			player.playing = true;
+		});
+		set('pause', () => {
+			player.playing = false;
+		});
+		set('nexttrack', () => void playNext());
+		set('previoustrack', () => void playPrevious());
+		set('seekto', (details) => {
+			const element = audio;
+			if (element && details.seekTime != null && Number.isFinite(details.seekTime)) {
+				element.currentTime = details.seekTime;
+			}
+		});
+		return () => {
+			set('play', null);
+			set('pause', null);
+			set('nexttrack', null);
+			set('previoustrack', null);
+			set('seekto', null);
+		};
+	});
+
+	function handleTimeUpdate(): void {
+		if (!('mediaSession' in navigator) || !audio) return;
+		const duration = audio.duration;
+		if (!Number.isFinite(duration) || duration <= 0) return;
+		try {
+			navigator.mediaSession.setPositionState({
+				duration,
+				position: Math.min(Math.max(0, audio.currentTime), duration),
+				playbackRate: audio.playbackRate || 1
+			});
+		} catch {
+			/* some browsers throw for unusual values */
+		}
+	}
 
 	function formatTime(seconds: number): string {
 		if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -48,17 +169,41 @@
 			bind:this={audio}
 			bind:currentTime
 			bind:duration
+			ontimeupdate={handleTimeUpdate}
 			onplay={() => (player.playing = true)}
 			onpause={() => (player.playing = false)}
-			onended={() => (player.playing = false)}
+			onended={() => void playNext()}
 		></audio>
 
 		<div class="controls">
+			{#if player.queue.length > 1}
+				<span class="position" aria-hidden="true">
+					{player.index + 1}/{player.queue.length}
+				</span>
+			{/if}
 			<span class="time" aria-hidden="true">
 				{formatTime(currentTime)} / {formatTime(duration)}
 			</span>
+			<button
+				type="button"
+				class="ghost"
+				onclick={() => void playPrevious()}
+				disabled={player.index < 0}
+				aria-label="Previous track"
+			>
+				⏮
+			</button>
 			<button type="button" class="ghost" onclick={togglePlay}>
 				{player.playing ? 'Pause' : 'Play'}
+			</button>
+			<button
+				type="button"
+				class="ghost"
+				onclick={() => void playNext()}
+				disabled={player.index < 0 || player.index + 1 >= player.queue.length}
+				aria-label="Next track"
+			>
+				⏭
 			</button>
 			<button type="button" class="ghost" onclick={stop}>Stop</button>
 		</div>
@@ -110,6 +255,12 @@
 		gap: 0.5rem;
 	}
 
+	.position {
+		color: var(--muted);
+		font-size: 0.8rem;
+		font-variant-numeric: tabular-nums;
+	}
+
 	.time {
 		color: var(--muted);
 		font-size: 0.85rem;
@@ -124,8 +275,13 @@
 		cursor: pointer;
 	}
 
-	.ghost:hover {
+	.ghost:hover:not(:disabled) {
 		background: var(--surface);
+	}
+
+	.ghost:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 
 	.error {
