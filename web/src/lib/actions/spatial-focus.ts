@@ -73,9 +73,9 @@ function score(
 	}
 }
 
-function moveFocus(container: HTMLElement, direction: Direction): void {
+function moveFocus(container: HTMLElement, direction: Direction): boolean {
 	const options = candidates(container);
-	if (options.length === 0) return;
+	if (options.length === 0) return false;
 
 	const active = document.activeElement as HTMLElement | null;
 	if (!active || active === document.body || !container.contains(active)) {
@@ -89,7 +89,7 @@ function moveFocus(container: HTMLElement, direction: Direction): void {
 		});
 		first.focus({ preventScroll: true });
 		first.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-		return;
+		return true;
 	}
 
 	const from = center(active);
@@ -103,9 +103,10 @@ function moveFocus(container: HTMLElement, direction: Direction): void {
 			best = option;
 		}
 	}
-	if (!best) return;
+	if (!best) return false;
 	best.focus({ preventScroll: true });
 	best.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+	return true;
 }
 
 /** Apply to the app shell; active only while TV mode is on. */
@@ -118,7 +119,13 @@ export function spatialFocus(node: HTMLElement): ActionReturn {
 		// Form controls keep their native arrow-key behaviour.
 		if (target?.closest('input, select, textarea, [contenteditable="true"]')) return;
 		event.preventDefault();
-		moveFocus(node, direction);
+		if (moveFocus(node, direction)) {
+			// Keep the key for ourselves once focus moved: readers and the video
+			// player outside the spatial graph must not also react (the newly
+			// focused element's own handler already ran — listeners are
+			// bubbling-phase, so the target's handler fires before ours).
+			event.stopPropagation();
+		}
 	}
 
 	node.addEventListener('keydown', handleKeydown);

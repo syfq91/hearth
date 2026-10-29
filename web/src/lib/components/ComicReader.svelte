@@ -25,6 +25,7 @@
 	/** Resolved URLs for the pages currently in the window. */
 	let cache = $state<Record<number, string>>({});
 	let loading = $state(false);
+	let comic = $state<HTMLElement | null>(null);
 
 	const WINDOW_BEFORE = 2;
 	const WINDOW_AFTER = 2;
@@ -78,16 +79,24 @@
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
+		// Arrows only turn pages while focus is inside the reader, so arrows
+		// elsewhere in the app keep their own meaning (spatial navigation,
+		// form controls). The buttons below cover keyboard users who are not
+		// focused inside it.
+		const root = comic;
+		if (!root || !root.contains(document.activeElement)) return;
 		const target = event.target as HTMLElement | null;
 		if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT')) return;
 		// RTL comics invert the arrow semantics.
 		switch (event.key) {
 			case 'ArrowRight':
 				event.preventDefault();
+				event.stopPropagation();
 				go(1);
 				break;
 			case 'ArrowLeft':
 				event.preventDefault();
+				event.stopPropagation();
 				go(-1);
 				break;
 			default:
@@ -99,7 +108,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="comic" role="document" aria-label={`Page ${page} of ${pageCount}`}>
+<div class="comic" role="document" aria-label={`Page ${page} of ${pageCount}`} bind:this={comic}>
 	{#if cache[page]}
 		<img
 			class="page"

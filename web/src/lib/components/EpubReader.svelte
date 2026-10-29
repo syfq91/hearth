@@ -29,17 +29,29 @@
 	let host = $state<HTMLElement | null>(null);
 	let ready = $state(false);
 	let error = $state<string | null>(null);
+	/** Reading position (0..1) from the last relocate, for the controls. */
+	let fraction = $state(0);
+
+	// The foliate instance lives outside Svelte's reactivity: it is an
+	// imperative custom element held for the lifetime of the component.
+	let view: FoliateView | null = null;
+
+	function turnPage(delta: 1 | -1): void {
+		if (!view) return;
+		if (delta === 1) void view.next();
+		else void view.prev();
+	}
 
 	// foliate-js is pure ESM with a custom-element side effect; load it only in
 	// the browser so the static build never tries to SSR it.
 	onMount(() => {
-		let view: FoliateView | null = null;
 		let disposed = false;
 
 		const handleRelocate = (event: Event) => {
 			const detail = (event as CustomEvent<{ cfi?: string; fraction?: number }>).detail;
 			if (!detail) return;
 			const percentage = Math.round((detail.fraction ?? 0) * 10000) / 100;
+			fraction = detail.fraction ?? 0;
 			onRelocate?.(detail.cfi ?? '', percentage);
 		};
 
@@ -80,6 +92,18 @@
 	{/if}
 </div>
 
+<div class="controls">
+	<button type="button" class="ghost" onclick={() => turnPage(-1)} disabled={!ready}>
+		← Previous
+	</button>
+	<span class="position" aria-live="polite">
+		{#if ready}{Math.round(fraction * 100)}%{/if}
+	</span>
+	<button type="button" class="ghost" onclick={() => turnPage(1)} disabled={!ready}>
+		Next →
+	</button>
+</div>
+
 <style>
 	.epub {
 		width: 100%;
@@ -96,5 +120,34 @@
 	.banner {
 		color: var(--danger);
 		padding: 1rem;
+	}
+
+	.controls {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 1rem;
+		padding: 0.75rem 0;
+	}
+
+	.position {
+		color: var(--muted);
+		font-variant-numeric: tabular-nums;
+		min-width: 4ch;
+		text-align: center;
+	}
+
+	.ghost {
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		padding: 0.45rem 1rem;
+		cursor: pointer;
+		color: inherit;
+	}
+
+	.ghost:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 </style>
