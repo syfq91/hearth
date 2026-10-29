@@ -1,23 +1,26 @@
 <script lang="ts">
 	import Poster from '../../../lib/components/Poster.svelte';
 	import { api } from '../../../lib/api/client';
-	import type { EpisodeDetail, SeriesDetail } from '../../../lib/api/types';
+	import type { EpisodeDetail } from '../../../lib/api/types';
+	import type { PageProps } from './$types';
 
-	interface Props {
-		series: SeriesDetail;
-	}
+	let { data }: PageProps = $props();
 
-	let { series }: Props = $props();
+	// SvelteKit passes the load result as `data`; keep the template reading
+	// `series` while staying reactive across param changes.
+	const series = $derived(data.series);
 
 	let selectedSeason = $state<string | null>(null);
 	let episodes = $state<EpisodeDetail[]>([]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 
-	// Default to the first season.
+	// Default to the first season, and re-default if the series changes or
+	// the selected season no longer belongs to it.
 	$effect(() => {
-		if (selectedSeason === null && series.seasons.length > 0) {
-			selectedSeason = series.seasons[0].id;
+		const seasons = series.seasons;
+		if (selectedSeason === null || !seasons.some((season) => season.id === selectedSeason)) {
+			selectedSeason = seasons[0]?.id ?? null;
 		}
 	});
 
