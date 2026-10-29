@@ -33,14 +33,21 @@
 			<a href="/music" aria-current={isActive('/music') ? 'page' : undefined}>Music</a>
 			<a href="/books" aria-current={isActive('/books') ? 'page' : undefined}>Books</a>
 			<a href="/search" aria-current={isActive('/search') ? 'page' : undefined}>Search</a>
-			<!-- Admin lands with its route in Phase 9 task 9.3. -->
+			{#if session.status === 'authenticated' && session.user?.role === 'admin'}
+				<a href="/admin" aria-current={isActive('/admin') ? 'page' : undefined}>Admin</a>
+			{/if}
 		</nav>
 		<div class="spacer"></div>
 		{#if session.status === 'authenticated' && session.user}
-			<span class="user" title={session.user.role}>
+			<a
+				class="user"
+				href="/profile"
+				title={session.user.role}
+				aria-current={isActive('/profile') ? 'page' : undefined}
+			>
 				{session.user.username}
 				{#if session.user.role === 'admin'}<span class="badge">admin</span>{/if}
-			</span>
+			</a>
 			<button type="button" class="ghost" onclick={signOut}>Sign out</button>
 		{/if}
 	</header>

@@ -19,5 +19,13 @@ export const load: LayoutLoad = async ({ url }) => {
 	if (session.status === 'authenticated' && isPublic) {
 		throw redirect(307, '/');
 	}
+	// Admin screens are admin-only; everyone else lands back home.
+	if (
+		session.status === 'authenticated' &&
+		path.startsWith('/admin') &&
+		session.user?.role !== 'admin'
+	) {
+		throw redirect(307, '/');
+	}
 	return { auth: session.status };
 };
