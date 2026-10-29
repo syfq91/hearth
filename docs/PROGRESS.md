@@ -658,8 +658,8 @@
 | Task | Description | Status | Commit |
 | --- | --- | --- | --- |
 | 9.1 (Step 1) | Write `docs/FRONTEND_DECISION.md` comparing React+Vite, SvelteKit SPA and Vue+Vite on the six plan criteria, with a recommendation; stop for human approval before building | Complete (approved) | `docs: add frontend decision analysis and recommendation`; approval recorded in `docs: record human approval of the sveltekit frontend decision` |
-| 9.2 (Step 2) | Scaffold `web/` with the generated API client; serve the static build from FastAPI at `/` | Complete | `feat(web): scaffold sveltekit spa served by fastapi` |
-| 9.3 (Step 2) | Screens in order: setup/login, home, library grid, detail, video player, music, books, search, profile, admin | Not started | — |
+| 9.2 (Step 2) | Scaffold `web/` with the generated API client; serve the static build from FastAPI at `/` | Complete | `44ede9e` (the `web/src/lib` layer landed in `2b44771` after a `.gitignore` fix) |
+| 9.3 (Step 2) | Screens in order: setup/login, home, library grid, detail, video player, music, books, search, profile, admin | Complete | `2b44771`, `28a4563`, `29446c2`, `c8a3c5e`, `ad9d7f1`, `440a5c8`, `10d8a12`, `d46ed51`, `2a230f9` |
 | 9.4 (Step 2) | Responsive phone/tablet/desktop layout plus focus-managed 10-foot TV mode | Not started | — |
 | 9.5 (Step 2) | Accessibility: keyboard navigation, focus rings, captions, reduced motion | Not started | — |
 | 9.6 (Step 2) | Playwright e2e: login, play fixture video, seek, resume, read fixture EPUB, play a track; run in CI against the Docker image | Not started | — |
@@ -729,6 +729,61 @@
   `mypy app` clean, `npm run check` 0 errors, `npm run build` OK,
   `pytest` 686 passed / 5 failed (all 5 are the pre-existing
   ffmpeg-not-on-host environmental failures) / 11 skipped.
+
+### Phase 9 Step 2 — Task 9.3 Screens (2026-10-29)
+
+All ten screen groups from the plan's ordered list are built:
+
+- **Setup / login / home** (`2b44771`): shelves Continue watching, Next up,
+  Recently added, Favorites, Recently added albums, loaded with
+  `Promise.allSettled` so one failed shelf degrades instead of blanking the
+  page; `media-token.svelte.ts` mints one unscoped token for `<img>` sources.
+- **Library** (`28a4563`): index of libraries plus a filtered grid
+  (sort/order/genre datalist/year/watched) with cursor "Load more".
+- **Movie & series detail** (`29446c2`): shared `ItemDetail` with
+  favorite/watched toggles; series adds a season picker and episode list.
+- **Video player** (`c8a3c5e`, `d46ed51`): hls.js with native-HLS fallback
+  for TV browsers; resume guard (<30 s to end restarts); progress reporting
+  every 15 s + on pause/ended/pagehide/unmount (the contract resume and
+  next-up depend on); audio + sidecar/embedded subtitle pickers; keyboard
+  space/k/←/→/f; **quality selector** fed from `hls.levels` (Auto + one entry
+  per rendition, hidden when ABR has a single level or on direct play);
+  **next-episode prompt** computed client-side from the season listings when
+  an episode ends (the API's `/series/{id}/next-up` follows *watched* state,
+  so it would return the episode just finished). HLS sessions are stopped on
+  re-plan and on unmount; hls.js stays in a lazy route chunk (≈182 KB gzip),
+  keeping the home route ≈4.8 KB.
+- **Music** (`ad9d7f1`, `2a230f9`): album grid + search, disc-grouped album
+  detail, **artist index** (search + offset pagination) and **artist detail**
+  (top tracks as a queue, album grid). The persistent `AudioBar` owns one
+  `<audio>` in the root layout: queue player with prev/next and position
+  (`3/12`), album/artist pages queue whole lists rather than single tracks,
+  a **gapless attempt** preloads the next queued stream so the handoff on
+  `ended` is a src swap (true gapless would need Web Audio splicing — not
+  attempted), and the **Media Session API** publishes metadata + artwork,
+  `playbackState`, position state and play/pause/next/previous/seekto
+  handlers for OS media keys.
+- **Books** (`440a5c8`): grid with progress bars; format-aware Read/Resume;
+  EPUB via foliate-js `<foliate-view>` (CFI resume), PDF via pdf.js canvases
+  with IntersectionObserver page tracking, CBZ/CBR via the on-demand pages
+  API with a 5-page priority prefetch; progress debounced 1.5 s and flushed
+  on `pagehide`/`visibilitychange`.
+- **Search** (`10d8a12`): 300 ms debounced live search, grouped results,
+  URL-driven (`replace`, keeps filter state).
+- **Profile** (`10d8a12`): account facts, password change, ListenBrainz
+  save/disconnect.
+- **Admin** (`10d8a12`): role-guarded section with tabs — overview (system
+  info, transcode sessions, jobs, audit), libraries (incl. scan), users,
+  unmatched fixer, transcoding settings/status.
+- **Deviation:** no `DELETE /users/{id}` endpoint exists in the API, so the
+  admin UI disables accounts with `PATCH /users/{id}` instead.
+- **Note:** the root `.gitignore` (Python template) had a blanket `lib/`
+  rule that swallowed `web/src/lib/`; fixed with a `!web/src/lib/` negation.
+
+Gates: `ruff check` clean, `ruff format --check` clean, `mypy app` clean,
+`npm run check` 0 errors / 0 warnings, `npm run build` OK, `pytest` 686
+passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
+11 skipped.
 
 ### Phase 9 Acceptance Checklist (not yet startable)
 
