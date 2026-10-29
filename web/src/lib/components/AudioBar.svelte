@@ -219,8 +219,9 @@
 		position: sticky;
 		bottom: 0;
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.5rem 1rem;
 		padding: 0.6rem 1.25rem;
 		background: var(--surface);
 		border-top: 1px solid var(--border);
@@ -252,6 +253,7 @@
 	.controls {
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 0.5rem;
 	}
 

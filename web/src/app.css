@@ -79,6 +79,29 @@ textarea {
 	border-radius: 4px;
 }
 
+/* 10-foot TV mode: all sizing in the app is rem-based, so raising the root
+   font size scales type, controls and spacing together. Focus gets a thicker
+   ring and scroll margins so D-pad focus never lands under the sticky header
+   or the persistent audio bar. */
+html.tv {
+	font-size: 20px;
+	--gap: 1.25rem;
+}
+
+html.tv :focus-visible {
+	outline-width: 4px;
+	outline-offset: 3px;
+}
+
+html.tv a,
+html.tv button,
+html.tv input,
+html.tv select,
+html.tv [tabindex] {
+	scroll-margin-top: 4.5rem;
+	scroll-margin-bottom: 4.5rem;
+}
+
 .visually-hidden {
 	position: absolute;
 	width: 1px;

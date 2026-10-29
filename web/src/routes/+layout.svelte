@@ -2,6 +2,8 @@
 	import '../app.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import { logout, session } from '../lib/auth.svelte';
+	import { setTvMode, tv } from '../lib/tv.svelte';
+	import { spatialFocus } from '../lib/actions/spatial-focus';
 	import AudioBar from '../lib/components/AudioBar.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -17,6 +19,14 @@
 		await logout();
 		await goto('/login');
 	}
+
+	// TV mode scales the whole document (all sizing is rem-based) and enables
+	// D-pad spatial navigation; the class lives on <html> so tokens and type
+	// scale apply everywhere, including lazily loaded reader/player chunks.
+	$effect(() => {
+		document.documentElement.classList.toggle('tv', tv.on);
+		return () => document.documentElement.classList.remove('tv');
+	});
 </script>
 
 <svelte:head>
@@ -24,7 +34,7 @@
 	<title>Hearth</title>
 </svelte:head>
 
-<div class="app">
+<div class="app" use:spatialFocus>
 	<header class="topbar">
 		<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
 		<nav aria-label="Primary">
@@ -38,6 +48,15 @@
 			{/if}
 		</nav>
 		<div class="spacer"></div>
+		<button
+			type="button"
+			class="ghost tv-toggle"
+			aria-pressed={tv.on}
+			title="10-foot mode: larger text and D-pad navigation"
+			onclick={() => setTvMode(!tv.on)}
+		>
+			TV mode
+		</button>
 		{#if session.status === 'authenticated' && session.user}
 			<a
 				class="user"
@@ -51,7 +70,7 @@
 			<button type="button" class="ghost" onclick={signOut}>Sign out</button>
 		{/if}
 	</header>
-	<main id="main">
+	<main id="main" tabindex="-1">
 		{@render children()}
 	</main>
 	<AudioBar />
@@ -66,8 +85,9 @@
 
 	.topbar {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.6rem 1rem;
 		padding: 0.75rem 1.25rem;
 		background: var(--surface);
 		border-bottom: 1px solid var(--border);
@@ -89,6 +109,7 @@
 
 	nav {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.9rem;
 		font-size: 0.95rem;
 	}
@@ -133,11 +154,33 @@
 		background: var(--surface-2);
 	}
 
+	.tv-toggle[aria-pressed='true'] {
+		background: var(--accent);
+		color: var(--accent-contrast);
+		border-color: var(--accent);
+		font-weight: 600;
+	}
+
 	main {
 		flex: 1;
 		padding: 1.25rem;
 		max-width: 1400px;
 		width: 100%;
 		margin: 0 auto;
+	}
+
+	@media (max-width: 720px) {
+		.topbar {
+			padding: 0.6rem 0.75rem;
+		}
+
+		nav {
+			gap: 0.6rem;
+			font-size: 0.9rem;
+		}
+
+		main {
+			padding: 0.75rem;
+		}
 	}
 </style>

@@ -187,26 +187,31 @@
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
-		const target = event.target as HTMLElement | null;
-		if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT')) return;
+		// Bound to the video element: media keys live here, while arrow keys
+		// it does not consume (up/down) bubble out to the app's spatial
+		// navigation, and controls keep their native key handling.
 		switch (event.key) {
 			case ' ':
 			case 'k':
 				event.preventDefault();
+				event.stopPropagation();
 				togglePlay();
 				break;
 			case 'ArrowRight':
 			case 'l':
 				event.preventDefault();
+				event.stopPropagation();
 				seekBy(10);
 				break;
 			case 'ArrowLeft':
 			case 'j':
 				event.preventDefault();
+				event.stopPropagation();
 				seekBy(-10);
 				break;
 			case 'f':
 				event.preventDefault();
+				event.stopPropagation();
 				void video?.parentElement?.requestFullscreen?.().catch(() => {});
 				break;
 			default:
@@ -236,6 +241,17 @@
 
 	$effect(() => {
 		if (video) void startPlayback();
+	});
+
+	// Take keyboard focus on open so the media keys work immediately (and the
+	// D-pad starts from the video rather than the page behind it).
+	let focusTaken = false;
+
+	$effect(() => {
+		const element = video;
+		if (!element || focusTaken) return;
+		focusTaken = true;
+		element.focus({ preventScroll: true });
 	});
 
 	// Unload reporting: keep the resume point when the tab is hidden or closed.
@@ -269,8 +285,6 @@
 	const availableEmbeddedSubtitles = $derived(info?.embedded_subtitles ?? []);
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
 <div class="player">
 	{#if loadError}
 		<p class="banner" role="alert">{loadError}</p>
@@ -281,9 +295,11 @@
 	<!-- svelte-ignore a11y_media_has_caption -->
 	<video
 		bind:this={video}
+		tabindex="0"
 		controls
 		playsinline
 		preload="metadata"
+		onkeydown={handleKeydown}
 		ontimeupdate={handleTimeUpdate}
 		onloadedmetadata={applyResume}
 		onpause={() => void report('paused')}
