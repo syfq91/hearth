@@ -645,6 +645,17 @@
 - **Alternatives Considered:**
   - Inspecting host process tables (`ps` / `procfs`): fragile, platform-dependent, and bypasses the application supervisor.
 
+## ADR 063: Frontend Framework Selection (Phase 9, Step 1)
+
+- **Date:** 2026-10-28
+- **Status:** Proposed — awaiting human approval per the Phase 9 plan gate (see `docs/FRONTEND_DECISION.md`).
+- **Context:** Phases 0–8 delivered an API-first backend with a stable OpenAPI schema, a generated typed client (`packages/client/src/schema.d.ts`), HLS fMP4 playback and framework-agnostic reader integrations (foliate-js, pdf.js). Phase 9 requires choosing a frontend before scaffolding `web/`, judged on HLS playback, TV D-pad navigation, EPUB/PDF reader ecosystem, bundle size, typed client generation, and long-term maintainability for a small project.
+- **Decision:** Recommend **React 19 + Vite as a client-only SPA** (TypeScript strict, React Router with lazy routes, TanStack Query over `openapi-typescript` + `openapi-fetch` types, ES2019 build target for 2020+ TV Chromium, an in-house framework-agnostic `useSpatialFocus` manager for 10-foot mode, FastAPI serving `web/dist` at `/` with SPA fallback). Scorecard: React 27/30, Vue 25/30, SvelteKit 24/30. Bundle sizes were measured locally (React 67.4 KB vs Vue 25.8 KB vs Svelte 16.0 KB gzip app shell; hls.js 181.7 KB and pdf.js 137.6 KB lazy-loaded under any option).
+- **Alternatives Considered:**
+  - Vue 3 + Vite: calmest, most stable core and smallest mainstream runtime; runner-up, reversal trigger recorded in the decision doc.
+  - SvelteKit as an SPA: best bundle size and developer experience; smallest ecosystem buffer (Svelte 4→5 runes churn) and an extra meta-framework layer for a client-only app.
+  - SolidJS, Angular, Astro, vanilla TS + Web Components: set aside for ecosystem weight, ceremony, or hand-rolled scope reasons documented in `docs/FRONTEND_DECISION.md` §3.
+
 
 
 

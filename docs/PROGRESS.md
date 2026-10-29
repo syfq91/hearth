@@ -2,9 +2,10 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 8 (Search, collections, admin and API polish) — all nine
-  tasks complete and all three acceptance criteria met
-- **Overall Status**: Phase 8 complete (tasks + acceptance); Phase 9 not started
+- **Current Phase**: Phase 9 (Frontend selection and build) — Step 1 decision
+  document written and committed; awaiting human approval before Step 2 build
+- **Overall Status**: Phases 0–8 complete (tasks + acceptance); Phase 9 Step 1
+  done (recommendation pending approval); Phase 9 Step 2 not started
 
 ---
 
@@ -647,6 +648,49 @@
   `Settings.jwt_leeway_seconds` (default 2 s) of clock movement so a backwards
   NTP step cannot invalidate live sessions; that same window is the only
   relaxation of strict `iat`/`exp` checking.
+
+---
+
+## Phase 9: Frontend selection and build
+
+**Goal:** choose a frontend, then build the first usable UI against the stable API.
+
+| Task | Description | Status | Commit |
+| --- | --- | --- | --- |
+| 9.1 (Step 1) | Write `docs/FRONTEND_DECISION.md` comparing React+Vite, SvelteKit SPA and Vue+Vite on the six plan criteria, with a recommendation; stop for human approval before building | Complete (awaiting approval) | `docs: add frontend decision analysis and recommendation` |
+| 9.2 (Step 2) | Scaffold `web/` with the generated API client; serve the static build from FastAPI at `/` | Not started | — |
+| 9.3 (Step 2) | Screens in order: setup/login, home, library grid, detail, video player, music, books, search, profile, admin | Not started | — |
+| 9.4 (Step 2) | Responsive phone/tablet/desktop layout plus focus-managed 10-foot TV mode | Not started | — |
+| 9.5 (Step 2) | Accessibility: keyboard navigation, focus rings, captions, reduced motion | Not started | — |
+| 9.6 (Step 2) | Playwright e2e: login, play fixture video, seek, resume, read fixture EPUB, play a track; run in CI against the Docker image | Not started | — |
+
+### Phase 9 Step 1 — Decision (2026-10-28)
+
+- Delivered `docs/FRONTEND_DECISION.md`: three options (React 19 + Vite,
+  SvelteKit as an SPA, Vue 3 + Vite) compared on HLS playback, TV D-pad
+  navigation, EPUB/PDF reader ecosystem, bundle size, typed client generation
+  and long-term maintainability.
+- Evidence gathered rather than assumed:
+  - **Measured** app-shell bundle sizes locally (esbuild, minified, gzip):
+    React 19.3.1 + react-dom **67.4 KB**, Vue 3.5.44 **25.8 KB**,
+    Svelte 5.57.3 **16.0 KB**; shared lazy deps hls.js 1.7.4 **181.7 KB**,
+    foliate-js 1.0.1 view **63.6 KB**, pdfjs-dist 6.4.299 **137.6 KB**.
+  - **Samsung official web engine table** (fetched 2026-10-28): Tizen 2026 =
+    Chromium M130 down to 2020 = M69 and 2018 = M56 — recorded as the
+    ES2019 build-target constraint for TV browsers.
+  - **orval** confirmed to generate React Query, Vue Query and Svelte Query
+    clients, so the typed-client story is a near-tie on top of the existing
+    `openapi-typescript` artifact.
+- **Recommendation: React 19 + Vite, client-only SPA** (scorecard 27/30 vs
+  Vue 25/30 vs SvelteKit 24/30), recorded as ADR 063 (`Proposed`).
+- **Gate:** per the plan, work stops here and waits for human approval before
+  any `web/` scaffolding. Approval status: **pending**.
+
+### Phase 9 Acceptance Checklist (not yet startable)
+
+- [ ] All Playwright flows pass in CI against the Docker image.
+- [ ] A first-time user can go from `docker compose up` to watching a video using only the UI.
+- [ ] Lighthouse performance score of at least 80 on the home page on a desktop profile.
 
 ---
 
