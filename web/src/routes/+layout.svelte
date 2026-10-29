@@ -28,8 +28,9 @@
 		<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
 		<nav aria-label="Primary">
 			<a href="/" aria-current={isActive('/') ? 'page' : undefined}>Home</a>
-			<!-- Library, music, books, search and admin links land with their
-			     routes in Phase 9 task 9.3. -->
+			<a href="/library" aria-current={isActive('/library') ? 'page' : undefined}>Library</a>
+			<!-- Music, books, search and admin links land with their routes in
+			     Phase 9 task 9.3. -->
 		</nav>
 		<div class="spacer"></div>
 		{#if session.status === 'authenticated' && session.user}

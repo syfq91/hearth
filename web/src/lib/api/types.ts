@@ -31,6 +31,7 @@ export type VersionResponse = S['VersionResponse'];
 export type MediaTokenResponse = S['MediaTokenResponse'];
 export type HomeShelf = S['HomeShelf'];
 export type NextUpShelf = S['NextUpShelf'];
+export type ItemPage = S['ItemPage'];
 export type ItemSummary = S['ItemSummary'];
 export type NextUpEpisode = S['NextUpEpisode'];
 export type AlbumSummary = S['AlbumSummary'];
