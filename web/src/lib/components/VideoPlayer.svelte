@@ -8,9 +8,11 @@
 		/** Resume point in milliseconds, from the item's watch state. */
 		startAtMs?: number;
 		title: string;
+		/** Fired once when playback reaches the end of the item. */
+		onEnded?: () => void;
 	}
 
-	let { itemId, startAtMs = 0, title }: Props = $props();
+	let { itemId, startAtMs = 0, title, onEnded }: Props = $props();
 
 	let video = $state<HTMLVideoElement | null>(null);
 	let info = $state<PlaybackInfoResponse | null>(null);
@@ -21,9 +23,16 @@
 	let embeddedSubtitleIndex = $state<number | null>(null);
 
 	let hls: Hls | null = null;
+	/** Server-side HLS session for `info`; plain so re-planning cannot loop effects. */
+	let sessionId: string | null = null;
 	let resumeApplied = false;
 	let lastReportedMs = 0;
 	let destroyed = false;
+
+	/** HLS rendition list for the quality selector (empty = not applicable). */
+	let levels = $state<{ index: number; label: string }[]>([]);
+	/** Selected rendition index, or -1 for auto. */
+	let qualityLevel = $state(-1);
 
 	// Progress checkpoints (docs/API.md §4: resume and next-up depend on
 	// them): every 15s of playback, immediately on pause, and on unload.
@@ -61,6 +70,16 @@
 		destroyed = false;
 		loading = true;
 		loadError = null;
+		// The component is reused across episodes: tear down the previous
+		// source and its server-side session before planning the next one.
+		hls?.destroy();
+		hls = null;
+		const previousSession = sessionId;
+		sessionId = null;
+		info = null;
+		if (previousSession) {
+			void api.post(`/hls/${previousSession}/stop`, { auth: false }).catch(() => {});
+		}
 		embeddedSubtitleIndex = subtitleChoice.startsWith('emb:')
 			? Number.parseInt(subtitleChoice.slice('emb:'.length), 10)
 			: null;
@@ -79,6 +98,7 @@
 		}
 		if (destroyed) return;
 		info = response;
+		sessionId = response.session_id ?? null;
 		await attachSource(response);
 	}
 
@@ -86,6 +106,9 @@
 		const element = video;
 		if (!element) return;
 		resumeApplied = false;
+		lastReportedMs = 0;
+		levels = [];
+		qualityLevel = -1;
 		const source = response.mode === 'direct_play' ? response.url : response.hls_url;
 		if (!source) {
 			loadError = 'The server returned no playable source.';
@@ -100,6 +123,15 @@
 			instance.loadSource(source);
 			instance.attachMedia(element);
 			instance.on(Hls.Events.MANIFEST_PARSED, () => {
+				// Quality selector: one entry per rendition, auto when none picked.
+				const parsed = instance.levels.map((level, index) => ({
+					index,
+					label: level.height
+						? `${level.height}p (${formatBitrate(level.bitrate)})`
+						: `${formatBitrate(level.bitrate)}`
+				}));
+				levels = parsed.length > 1 ? parsed : [];
+				qualityLevel = -1;
 				loading = false;
 				void element.play().catch(() => {
 					/* autoplay blocked: the controls are right there */
@@ -118,6 +150,17 @@
 			loading = false;
 		}
 		applySubtitleChoice();
+	}
+
+	function formatBitrate(bitsPerSecond: number | undefined): string {
+		if (!bitsPerSecond) return 'unknown bitrate';
+		const mbps = bitsPerSecond / 1_000_000;
+		return mbps >= 1 ? `${mbps.toFixed(1)} Mbps` : `${Math.round(bitsPerSecond / 1000)} kbps`;
+	}
+
+	/** Apply the quality select: -1 returns to ABR. */
+	function applyQuality(): void {
+		if (hls) hls.currentLevel = qualityLevel;
 	}
 
 	function applyResume(): void {
@@ -214,7 +257,7 @@
 			void report('stopped');
 			hls?.destroy();
 			hls = null;
-			const session = info?.session_id;
+			const session = sessionId;
 			if (session) {
 				void api.post(`/hls/${session}/stop`, { auth: false }).catch(() => {});
 			}
@@ -244,7 +287,10 @@
 		ontimeupdate={handleTimeUpdate}
 		onloadedmetadata={applyResume}
 		onpause={() => void report('paused')}
-		onended={() => void report('stopped')}
+		onended={() => {
+			void report('stopped');
+			onEnded?.();
+		}}
 	>
 		{#each availableSubtitles as track (track.id)}
 			<track
@@ -274,6 +320,23 @@
 							<option value={track.index}>
 								{track.title ?? track.language ?? 'Audio'} ({track.codec_name ?? '?'})
 							</option>
+						{/each}
+					</select>
+				</label>
+			{/if}
+			{#if levels.length > 1}
+				<label>
+					<span class="visually-hidden">Quality</span>
+					<select
+						value={qualityLevel}
+						onchange={(event) => {
+							qualityLevel = Number.parseInt(event.currentTarget.value, 10);
+							applyQuality();
+						}}
+					>
+						<option value={-1}>Auto quality</option>
+						{#each levels as level (level.index)}
+							<option value={level.index}>{level.label}</option>
 						{/each}
 					</select>
 				</label>
