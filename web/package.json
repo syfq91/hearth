@@ -26,6 +26,8 @@
 	},
 	"dependencies": {
 		"@sveltejs/adapter-static": "^4.0.0",
-		"hls.js": "^1.7.4"
+		"foliate-js": "^1.0.1",
+		"hls.js": "^1.7.4",
+		"pdfjs-dist": "^6.4.299"
 	}
 }

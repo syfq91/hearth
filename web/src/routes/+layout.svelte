@@ -31,8 +31,9 @@
 			<a href="/" aria-current={isActive('/') ? 'page' : undefined}>Home</a>
 			<a href="/library" aria-current={isActive('/library') ? 'page' : undefined}>Library</a>
 			<a href="/music" aria-current={isActive('/music') ? 'page' : undefined}>Music</a>
-			<!-- Books, search and admin links land with their routes in
-			     Phase 9 task 9.3. -->
+			<a href="/books" aria-current={isActive('/books') ? 'page' : undefined}>Books</a>
+			<a href="/search" aria-current={isActive('/search') ? 'page' : undefined}>Search</a>
+			<!-- Admin lands with its route in Phase 9 task 9.3. -->
 		</nav>
 		<div class="spacer"></div>
 		{#if session.status === 'authenticated' && session.user}
