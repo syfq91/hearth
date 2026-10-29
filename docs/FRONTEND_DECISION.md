@@ -250,8 +250,28 @@ React, and direct module imports for hls.js / foliate-js / pdfjs-dist.
 Numbers are indicative of app-shell cost, not of the finished app's total
 bytes; the finished bundle will be measured during the build (Lighthouse gate).
 
-## 9. Approval
+## 9. Approval outcome (recorded 2026-10-28)
 
-Per the plan: **stop and wait for approval before building.** Approval of this
-document unlocks Phase 9 Step 2 (scaffold in `web/`, screens, responsive +
-10-foot layout, accessibility, Playwright e2e in CI).
+**Approved by the human: Option B — SvelteKit as an SPA.**
+
+The plan assigns the final decision to the human, so this overrides the
+agent's React recommendation in §7 (the scorecard and analysis above remain on
+record as the evidence base). Consequences the build must honor:
+
+- **Scaffold**: SvelteKit with `@sveltejs/adapter-static` in SPA mode
+  (`ssr = false`), Svelte 5 (runes), TypeScript strict, built by Vite; served
+  from FastAPI at `/` with an SPA fallback so `docker compose up` yields the
+  UI at the API's origin.
+- **TV mode**: no dedicated spatial-navigation library exists for Svelte, so
+  the framework-agnostic focus manager planned in §5.2 becomes mandatory —
+  an in-house Svelte action implementing roving `tabindex`, arrow-key geometry
+  and visible focus rings for the 10-foot layout.
+- **Readers**: foliate-js and pdf.js are web components / ES modules, which
+  Svelte hosts natively (no wrapper layer); the integration contract in
+  `docs/READER_INTEGRATION.md` is unchanged.
+- **Bundle**: keeps the measured 16.0 KB app-shell advantage, the option's
+  strongest criterion, in service of the Lighthouse ≥ 80 gate.
+- **Typed client**: `packages/client/src/schema.d.ts` is consumed through a
+  build alias; the generation script and CI diff-check stay as they are.
+- The reversal triggers recorded in §7 (Vue for calmness, React for ecosystem
+  depth) remain documented should the Svelte choice prove costly later.

@@ -3,9 +3,9 @@
 ## Status Overview
 
 - **Current Phase**: Phase 9 (Frontend selection and build) — Step 1 decision
-  document written and committed; awaiting human approval before Step 2 build
+  approved by the human (SvelteKit as an SPA); Step 2 build in progress
 - **Overall Status**: Phases 0–8 complete (tasks + acceptance); Phase 9 Step 1
-  done (recommendation pending approval); Phase 9 Step 2 not started
+  approved; Phase 9 Step 2 build underway
 
 ---
 
@@ -657,7 +657,7 @@
 
 | Task | Description | Status | Commit |
 | --- | --- | --- | --- |
-| 9.1 (Step 1) | Write `docs/FRONTEND_DECISION.md` comparing React+Vite, SvelteKit SPA and Vue+Vite on the six plan criteria, with a recommendation; stop for human approval before building | Complete (awaiting approval) | `docs: add frontend decision analysis and recommendation` |
+| 9.1 (Step 1) | Write `docs/FRONTEND_DECISION.md` comparing React+Vite, SvelteKit SPA and Vue+Vite on the six plan criteria, with a recommendation; stop for human approval before building | Complete (approved) | `docs: add frontend decision analysis and recommendation`; approval recorded in `docs: record human approval of the sveltekit frontend decision` |
 | 9.2 (Step 2) | Scaffold `web/` with the generated API client; serve the static build from FastAPI at `/` | Not started | — |
 | 9.3 (Step 2) | Screens in order: setup/login, home, library grid, detail, video player, music, books, search, profile, admin | Not started | — |
 | 9.4 (Step 2) | Responsive phone/tablet/desktop layout plus focus-managed 10-foot TV mode | Not started | — |
@@ -682,9 +682,17 @@
     clients, so the typed-client story is a near-tie on top of the existing
     `openapi-typescript` artifact.
 - **Recommendation: React 19 + Vite, client-only SPA** (scorecard 27/30 vs
-  Vue 25/30 vs SvelteKit 24/30), recorded as ADR 063 (`Proposed`).
-- **Gate:** per the plan, work stops here and waits for human approval before
-  any `web/` scaffolding. Approval status: **pending**.
+  Vue 25/30 vs SvelteKit 24/30), recorded as ADR 063.
+- **Gate:** per the plan, work stopped at the recommendation and waited for
+  human approval before any `web/` scaffolding.
+- **Approval (2026-10-28): the human chose Option B — SvelteKit as an
+  SPA**, overriding the agent's recommendation (the plan gives the final call
+  to the human). ADR 063 flipped to `Accepted`; §9 of
+  `docs/FRONTEND_DECISION.md` records the build consequences: adapter-static
+  SPA mode, in-house Svelte spatial-focus action for TV mode (no dedicated
+  Svelte TV library), direct foliate-js/pdf.js web-component integration, and
+  the 16.0 KB app-shell advantage in service of the Lighthouse gate.
+  Approval status: **approved — Step 2 unlocked**.
 
 ### Phase 9 Acceptance Checklist (not yet startable)
 

@@ -648,12 +648,12 @@
 ## ADR 063: Frontend Framework Selection (Phase 9, Step 1)
 
 - **Date:** 2026-10-28
-- **Status:** Proposed — awaiting human approval per the Phase 9 plan gate (see `docs/FRONTEND_DECISION.md`).
+- **Status:** Accepted — approved by the human on 2026-10-28 as **Option B: SvelteKit as an SPA**, overriding the agent's React recommendation (the plan assigns the final choice to the human; full evidence in `docs/FRONTEND_DECISION.md`).
 - **Context:** Phases 0–8 delivered an API-first backend with a stable OpenAPI schema, a generated typed client (`packages/client/src/schema.d.ts`), HLS fMP4 playback and framework-agnostic reader integrations (foliate-js, pdf.js). Phase 9 requires choosing a frontend before scaffolding `web/`, judged on HLS playback, TV D-pad navigation, EPUB/PDF reader ecosystem, bundle size, typed client generation, and long-term maintainability for a small project.
-- **Decision:** Recommend **React 19 + Vite as a client-only SPA** (TypeScript strict, React Router with lazy routes, TanStack Query over `openapi-typescript` + `openapi-fetch` types, ES2019 build target for 2020+ TV Chromium, an in-house framework-agnostic `useSpatialFocus` manager for 10-foot mode, FastAPI serving `web/dist` at `/` with SPA fallback). Scorecard: React 27/30, Vue 25/30, SvelteKit 24/30. Bundle sizes were measured locally (React 67.4 KB vs Vue 25.8 KB vs Svelte 16.0 KB gzip app shell; hls.js 181.7 KB and pdf.js 137.6 KB lazy-loaded under any option).
+- **Decision:** Build **SvelteKit as a client-only SPA** with `@sveltejs/adapter-static` (SPA mode, `ssr = false`), Svelte 5 (runes), TypeScript strict, Vite build target ES2019 for 2020+ TV Chromium, an in-house Svelte spatial-focus action for 10-foot mode (no dedicated Svelte TV library exists), foliate-js/pdf.js integrated directly as web components, and FastAPI serving `web/dist` at `/` with an SPA fallback. Scorecard evidence: React 27/30, Vue 25/30, SvelteKit 24/30; bundle sizes measured locally (React 67.4 KB vs Vue 25.8 KB vs Svelte 16.0 KB gzip app shell; hls.js 181.7 KB and pdf.js 137.6 KB lazy-loaded under any option).
 - **Alternatives Considered:**
-  - Vue 3 + Vite: calmest, most stable core and smallest mainstream runtime; runner-up, reversal trigger recorded in the decision doc.
-  - SvelteKit as an SPA: best bundle size and developer experience; smallest ecosystem buffer (Svelte 4→5 runes churn) and an extra meta-framework layer for a client-only app.
+  - React 19 + Vite (agent's recommendation, 27/30): deepest TV/reader ecosystem and library availability; declined by the human in favor of Svelte's smaller runtime and developer experience.
+  - Vue 3 + Vite (25/30): calmest, most stable core and smallest mainstream runtime; runner-up, reversal trigger recorded in the decision doc.
   - SolidJS, Angular, Astro, vanilla TS + Web Components: set aside for ecosystem weight, ceremony, or hand-rolled scope reasons documented in `docs/FRONTEND_DECISION.md` §3.
 
 
