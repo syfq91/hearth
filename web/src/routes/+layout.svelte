@@ -3,9 +3,14 @@
 	import favicon from '#lib/assets/favicon.svg';
 	import { logout, session } from '../lib/auth.svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
+
+	function isActive(path: string): boolean {
+		return path === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(path);
+	}
 
 	async function signOut() {
 		await logout();
@@ -22,8 +27,9 @@
 	<header class="topbar">
 		<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
 		<nav aria-label="Primary">
-			<!-- Screen links (library, music, books, search, admin) are added
-			     with their routes in Phase 9 task 9.3. -->
+			<a href="/" aria-current={isActive('/') ? 'page' : undefined}>Home</a>
+			<!-- Library, music, books, search and admin links land with their
+			     routes in Phase 9 task 9.3. -->
 		</nav>
 		<div class="spacer"></div>
 		{#if session.status === 'authenticated' && session.user}
@@ -67,6 +73,26 @@
 
 	.spacer {
 		flex: 1;
+	}
+
+	nav {
+		display: flex;
+		gap: 0.9rem;
+		font-size: 0.95rem;
+	}
+
+	nav a {
+		color: var(--muted);
+		padding: 0.25rem 0.15rem;
+	}
+
+	nav a:hover {
+		color: var(--text);
+	}
+
+	nav a[aria-current='page'] {
+		color: var(--text);
+		font-weight: 600;
 	}
 
 	.user {
