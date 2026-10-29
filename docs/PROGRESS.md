@@ -660,8 +660,8 @@
 | 9.1 (Step 1) | Write `docs/FRONTEND_DECISION.md` comparing React+Vite, SvelteKit SPA and Vue+Vite on the six plan criteria, with a recommendation; stop for human approval before building | Complete (approved) | `docs: add frontend decision analysis and recommendation`; approval recorded in `docs: record human approval of the sveltekit frontend decision` |
 | 9.2 (Step 2) | Scaffold `web/` with the generated API client; serve the static build from FastAPI at `/` | Complete | `44ede9e` (the `web/src/lib` layer landed in `2b44771` after a `.gitignore` fix) |
 | 9.3 (Step 2) | Screens in order: setup/login, home, library grid, detail, video player, music, books, search, profile, admin | Complete | `2b44771`, `28a4563`, `29446c2`, `c8a3c5e`, `ad9d7f1`, `440a5c8`, `10d8a12`, `d46ed51`, `2a230f9` |
-| 9.4 (Step 2) | Responsive phone/tablet/desktop layout plus focus-managed 10-foot TV mode | Not started | — |
-| 9.5 (Step 2) | Accessibility: keyboard navigation, focus rings, captions, reduced motion | Not started | — |
+| 9.4 (Step 2) | Responsive phone/tablet/desktop layout plus focus-managed 10-foot TV mode | Complete | `e977208` |
+| 9.5 (Step 2) | Accessibility: keyboard navigation, focus rings, captions, reduced motion | Complete | `db37c1e`, `f136a15` |
 | 9.6 (Step 2) | Playwright e2e: login, play fixture video, seek, resume, read fixture EPUB, play a track; run in CI against the Docker image | Not started | — |
 
 ### Phase 9 Step 1 — Decision (2026-10-28)
@@ -784,6 +784,54 @@ Gates: `ruff check` clean, `ruff format --check` clean, `mypy app` clean,
 `npm run check` 0 errors / 0 warnings, `npm run build` OK, `pytest` 686
 passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 11 skipped.
+
+### Phase 9 Step 2 — Task 9.4 Responsive + 10-foot TV mode (2026-10-29)
+
+- **Responsive:** most screens were already fluid by construction
+  (`repeat(auto-fill, minmax(...))` grids, `flex-wrap` filter bars,
+  horizontally scrolling shelves with `clamp()` card widths). The shell got
+  the remaining work: topbar wraps on narrow viewports, `main`/nav padding
+  steps down ≤720 px, and the persistent audio bar wraps its controls.
+- **10-foot TV mode** (`web/src/lib/tv.svelte.ts` + `actions/spatial-focus.ts`):
+  - Toggle in the topbar (`aria-pressed`), persisted in `localStorage`;
+    auto-enabled for known TV user agents (Tizen, webOS, Android TV, HbbTV,
+    …) when the user has not chosen explicitly.
+  - `html.tv { font-size: 20px }` — every size in the app is rem-based, so
+    type, controls and spacing scale together; focus ring thickens and
+    `scroll-margin` keeps D-pad focus clear of the sticky header/audio bar.
+  - **In-house spatial-focus action** on the app shell: Arrow keys move focus
+    to the nearest focusable element by geometry (perpendicular offset
+    weighted), scroll it into view, and no-op inside form controls — so the
+    desktop keyboard experience is unchanged when TV mode is off.
+  - **Player keys scoped:** the video player's media keys (space/k/←/→/f)
+    moved from a global window handler to the `<video>` element (which now
+    takes focus on open). Keys it does not consume (↑/↓) bubble to spatial
+    navigation instead of fighting it; controls keep native key handling.
+- **Bug found and fixed while auditing (`db37c1e`):** the series detail
+  screen destructured a `series` prop that SvelteKit never passes (it passes
+  `data`), so it would have thrown at runtime despite passing
+  `svelte-check` — now reads `data.series` reactively and re-defaults the
+  season picker when the series changes. (Static checks do not catch
+  prop-shape bugs; the Playwright suite in 9.6 will.)
+
+### Phase 9 Step 2 — Task 9.5 Accessibility (2026-10-29)
+
+- **Skip link** ("Skip to content" → `#main`, visible on focus) plus
+  focusable `<main id="main" tabindex="-1">` as its target.
+- **Per-page `<title>`** on all 20 routes (`{title} · Hearth`, admin under
+  `Admin · …`) so screen readers and browser history announce navigation;
+  login/setup already had titles.
+- **Focus management:** the up-next prompt (`role="dialog"`) takes focus
+  when it appears after an episode ends and returns focus to the video on
+  Dismiss; the TV-mode action keeps focus visible and scrolled into view.
+- Already in place from earlier tasks and re-verified: global
+  `:focus-visible` ring (thicker in TV mode), `prefers-reduced-motion`
+  rule, subtitle `<track>` elements with `kind`/`srclang`/`label`, labelled
+  inputs (wrapping `<label>` or `for`/`id`), `aria-current` on nav/tabs,
+  `role="status"`/`role="alert"` on async regions, icon buttons with
+  `aria-label`, `lang="en"` in `app.html`.
+- **Deferred:** an automated axe-core scan is not part of this task's list;
+  if added, it belongs with the Playwright suite in 9.6.
 
 ### Phase 9 Acceptance Checklist (not yet startable)
 
