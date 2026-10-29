@@ -25,6 +25,7 @@
 		"#lib/*": "./src/lib/*"
 	},
 	"dependencies": {
-		"@sveltejs/adapter-static": "^4.0.0"
+		"@sveltejs/adapter-static": "^4.0.0",
+		"hls.js": "^1.7.4"
 	}
 }

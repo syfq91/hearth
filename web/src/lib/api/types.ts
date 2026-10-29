@@ -37,6 +37,7 @@ export type SeriesDetail = S['SeriesDetail'];
 export type SeasonSummary = S['SeasonSummary'];
 export type SeasonDetail = S['SeasonDetail'];
 export type EpisodeDetail = S['EpisodeDetail'];
+export type PlaybackInfoResponse = S['PlaybackInfoResponse'];
 export type ItemSummary = S['ItemSummary'];
 export type NextUpEpisode = S['NextUpEpisode'];
 export type AlbumSummary = S['AlbumSummary'];
