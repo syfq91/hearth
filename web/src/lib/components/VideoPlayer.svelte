@@ -78,7 +78,7 @@
 		sessionId = null;
 		info = null;
 		if (previousSession) {
-			void api.post(`/hls/${previousSession}/stop`, { auth: false }).catch(() => {});
+			void api.post(`/hls/${previousSession}/stop`).catch(() => {});
 		}
 		embeddedSubtitleIndex = subtitleChoice.startsWith('emb:')
 			? Number.parseInt(subtitleChoice.slice('emb:'.length), 10)
@@ -148,6 +148,9 @@
 			// Direct play, or native HLS (Safari and some TV browsers).
 			element.src = source;
 			loading = false;
+			// Same autoplay attempt as the hls.js path; if the browser blocks
+			// it, the focused element's space key or the controls start it.
+			void element.play().catch(() => {});
 		}
 		applySubtitleChoice();
 	}
@@ -254,6 +257,27 @@
 		element.focus({ preventScroll: true });
 	});
 
+	/**
+	 * `<video controls>` handles Space itself, and the browser's handler is
+	 * registered before ours — so a `preventDefault` from our own keydown
+	 * listener arrives too late: Space would pause and then immediately resume,
+	 * doing nothing visible. Cancelling it in the capture phase (which runs
+	 * before every target-phase listener) leaves this component the sole owner
+	 * of Space. Keys that start inside the native controls are left alone so
+	 * a focused button still activates.
+	 */
+	$effect(() => {
+		const element = video;
+		if (!element) return;
+		const cancelNativeSpace = (event: KeyboardEvent) => {
+			if (event.key === ' ' && event.composedPath()[0] === element) {
+				event.preventDefault();
+			}
+		};
+		window.addEventListener('keydown', cancelNativeSpace, true);
+		return () => window.removeEventListener('keydown', cancelNativeSpace, true);
+	});
+
 	// Unload reporting: keep the resume point when the tab is hidden or closed.
 	$effect(() => {
 		const onHide = () => void report('paused');
@@ -275,7 +299,7 @@
 			hls = null;
 			const session = sessionId;
 			if (session) {
-				void api.post(`/hls/${session}/stop`, { auth: false }).catch(() => {});
+				void api.post(`/hls/${session}/stop`).catch(() => {});
 			}
 		};
 	});
