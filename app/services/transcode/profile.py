@@ -30,11 +30,20 @@ class ClientCapabilities(BaseModel):
     hls_fmp4: bool = False
 
     def supports_container(self, container: str) -> bool:
-        """Check if container extension/name is supported."""
-        target = container.lower().lstrip(".")
-        # Handle mp4/mov/m4v aliases
-        normalized_target = "mp4" if target in ("mov", "m4v") else target
-        return any(c.lower().lstrip(".") in (target, normalized_target) for c in self.containers)
+        """Check if container extension/name is supported.
+
+        ffprobe reports ``format_name`` as the comma-joined list of demuxer
+        aliases (``mov,mp4,m4a,3gp,3g2,mj2`` for a plain mp4), so the stored
+        container can name several formats; any supported alias matches.
+        """
+        supported = {c.lower().lstrip(".") for c in self.containers}
+        for alias in container.lower().lstrip(".").split(","):
+            target = alias.strip()
+            # Handle mp4/mov/m4v aliases
+            normalized = "mp4" if target in ("mov", "m4v") else target
+            if target in supported or normalized in supported:
+                return True
+        return False
 
     def supports_video_codec(self, codec: str, profile: str | None = None) -> bool:
         """Check if video codec and optional profile are supported."""

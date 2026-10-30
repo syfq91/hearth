@@ -4,6 +4,7 @@ The auto-watched decision lives in :mod:`app.services.playback_state`; these
 routes only load the item, enforce library access and persist the result.
 """
 
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -155,60 +156,68 @@ async def report_progress(
     ``playing`` after at least ``settings.playback_session_gap_seconds`` without
     any progress report.
     """
-    item = await _load_item(session, user, item_id)
-    state = await _load_state(session, user.id, item.id)
+    async with _STATE_LOCK:
+        # Drop the read transaction opened before the lock: a snapshot taken
+        # while waiting would not see the row a concurrent report just
+        # committed, and under WAL that transaction could not insert either.
+        # The rollback also expires the auth-loaded user and anything else read
+        # earlier, so refresh the user and read the item here, inside the lock.
+        await session.rollback()
+        await session.refresh(user)
+        item = await _load_item(session, user, item_id)
+        state = await _load_state(session, user.id, item.id)
 
-    now = utcnow()
-    if body.state == "playing" and _is_new_session(state, now, settings):
-        state.play_count += 1
+        now = utcnow()
+        if body.state == "playing" and _is_new_session(state, now, settings):
+            state.play_count += 1
 
-    was_played = state.played
-    decision = resolve_watch_state(
-        position_ms=body.position_ms,
-        duration_ms=body.duration_ms or _duration_ms(item),
-        chapters=_chapters(item),
-        threshold=settings.watched_threshold,
-    )
-    state.position_ms = decision.position_ms
-    if decision.watched:
-        state.played = True
-    if body.state is not None or decision.position_ms > 0:
-        state.last_played_at = now
-
-    if (
-        item.type == "track"
-        and decision.watched
-        and not was_played
-        and settings.listenbrainz_enabled
-    ):
-        await enqueue_scrobble(session, user.id, item.id)
-
-    if item.type == "track" and item.track and item.track.album_id:
-        alb_state = await _load_state(session, user.id, item.track.album_id)
+        was_played = state.played
+        decision = resolve_watch_state(
+            position_ms=body.position_ms,
+            duration_ms=body.duration_ms or _duration_ms(item),
+            chapters=_chapters(item),
+            threshold=settings.watched_threshold,
+        )
+        state.position_ms = decision.position_ms
+        if decision.watched:
+            state.played = True
         if body.state is not None or decision.position_ms > 0:
-            alb_state.last_played_at = now
-        if decision.watched and not was_played:
-            track_ids = list(
-                await session.scalars(
-                    select(Track.item_id).where(Track.album_id == item.track.album_id)
-                )
-            )
-            if track_ids:
-                played_count = (
-                    await session.scalar(
-                        select(func.count(UserItemState.item_id)).where(
-                            UserItemState.user_id == user.id,
-                            UserItemState.item_id.in_(track_ids),
-                            UserItemState.played.is_(True),
-                        )
-                    )
-                    or 0
-                )
-                if played_count + 1 >= len(track_ids):
-                    alb_state.played = True
-                    alb_state.play_count += 1
+            state.last_played_at = now
 
-    await _persist(session, state)
+        if (
+            item.type == "track"
+            and decision.watched
+            and not was_played
+            and settings.listenbrainz_enabled
+        ):
+            await enqueue_scrobble(session, user.id, item.id)
+
+        if item.type == "track" and item.track and item.track.album_id:
+            alb_state = await _load_state(session, user.id, item.track.album_id)
+            if body.state is not None or decision.position_ms > 0:
+                alb_state.last_played_at = now
+            if decision.watched and not was_played:
+                track_ids = list(
+                    await session.scalars(
+                        select(Track.item_id).where(Track.album_id == item.track.album_id)
+                    )
+                )
+                if track_ids:
+                    played_count = (
+                        await session.scalar(
+                            select(func.count(UserItemState.item_id)).where(
+                                UserItemState.user_id == user.id,
+                                UserItemState.item_id.in_(track_ids),
+                                UserItemState.played.is_(True),
+                            )
+                        )
+                        or 0
+                    )
+                    if played_count + 1 >= len(track_ids):
+                        alb_state.played = True
+                        alb_state.play_count += 1
+
+        await _persist(session, state)
 
     if body.state in {"playing", "paused", "stopped"}:
         event_name = "playback.active" if body.state == "playing" else f"playback.{body.state}"
@@ -362,60 +371,69 @@ async def set_watched(
     Marking unwatched also clears the stored position so the item starts from
     the beginning next time.
     """
-    item = await _load_item(session, user, item_id)
     now = utcnow()
-    if item.type == "season":
-        episodes = list(await session.scalars(select(Episode).where(Episode.season_id == item.id)))
-        for ep in episodes:
-            ep_state = await _load_state(session, user.id, ep.item_id)
-            ep_state.played = body.watched
-            if body.watched:
-                ep_state.position_ms = 0
-                ep_state.last_played_at = now
-                ep_state.play_count = max(ep_state.play_count, 1)
-            else:
-                ep_state.position_ms = 0
-    elif item.type == "series":
-        episodes = list(await session.scalars(select(Episode).where(Episode.series_id == item.id)))
-        for ep in episodes:
-            ep_state = await _load_state(session, user.id, ep.item_id)
-            ep_state.played = body.watched
-            if body.watched:
-                ep_state.position_ms = 0
-                ep_state.last_played_at = now
-                ep_state.play_count = max(ep_state.play_count, 1)
-            else:
-                ep_state.position_ms = 0
-        seasons = list(await session.scalars(select(Season).where(Season.series_id == item.id)))
-        for s in seasons:
-            s_state = await _load_state(session, user.id, s.item_id)
-            s_state.played = body.watched
-            if body.watched:
-                s_state.position_ms = 0
-                s_state.last_played_at = now
-                s_state.play_count = max(s_state.play_count, 1)
-            else:
-                s_state.position_ms = 0
-    elif item.type == "album":
-        tracks = list(await session.scalars(select(Track).where(Track.album_id == item.id)))
-        for tr in tracks:
-            tr_state = await _load_state(session, user.id, tr.item_id)
-            tr_state.played = body.watched
-            if body.watched:
-                tr_state.position_ms = 0
-                tr_state.last_played_at = now
-                tr_state.play_count = max(tr_state.play_count, 1)
-            else:
-                tr_state.position_ms = 0
+    async with _STATE_LOCK:
+        # Rollback drops the pre-lock read snapshot and expires objects read
+        # before it, so refresh the user and load the item inside the lock.
+        await session.rollback()
+        await session.refresh(user)
+        item = await _load_item(session, user, item_id)
+        if item.type == "season":
+            episodes = list(
+                await session.scalars(select(Episode).where(Episode.season_id == item.id))
+            )
+            for ep in episodes:
+                ep_state = await _load_state(session, user.id, ep.item_id)
+                ep_state.played = body.watched
+                if body.watched:
+                    ep_state.position_ms = 0
+                    ep_state.last_played_at = now
+                    ep_state.play_count = max(ep_state.play_count, 1)
+                else:
+                    ep_state.position_ms = 0
+        elif item.type == "series":
+            episodes = list(
+                await session.scalars(select(Episode).where(Episode.series_id == item.id))
+            )
+            for ep in episodes:
+                ep_state = await _load_state(session, user.id, ep.item_id)
+                ep_state.played = body.watched
+                if body.watched:
+                    ep_state.position_ms = 0
+                    ep_state.last_played_at = now
+                    ep_state.play_count = max(ep_state.play_count, 1)
+                else:
+                    ep_state.position_ms = 0
+            seasons = list(await session.scalars(select(Season).where(Season.series_id == item.id)))
+            for s in seasons:
+                s_state = await _load_state(session, user.id, s.item_id)
+                s_state.played = body.watched
+                if body.watched:
+                    s_state.position_ms = 0
+                    s_state.last_played_at = now
+                    s_state.play_count = max(s_state.play_count, 1)
+                else:
+                    s_state.position_ms = 0
+        elif item.type == "album":
+            tracks = list(await session.scalars(select(Track).where(Track.album_id == item.id)))
+            for tr in tracks:
+                tr_state = await _load_state(session, user.id, tr.item_id)
+                tr_state.played = body.watched
+                if body.watched:
+                    tr_state.position_ms = 0
+                    tr_state.last_played_at = now
+                    tr_state.play_count = max(tr_state.play_count, 1)
+                else:
+                    tr_state.position_ms = 0
 
-    state = await _load_state(session, user.id, item.id)
-    state.played = body.watched
-    if not body.watched:
-        state.position_ms = 0
-    elif body.watched:
-        state.last_played_at = now
-        state.play_count = max(state.play_count, 1)
-    await _persist(session, state)
+        state = await _load_state(session, user.id, item.id)
+        state.played = body.watched
+        if not body.watched:
+            state.position_ms = 0
+        elif body.watched:
+            state.last_played_at = now
+            state.play_count = max(state.play_count, 1)
+        await _persist(session, state)
     return watch_state_response(state)
 
 
@@ -427,10 +445,13 @@ async def set_favorite(
     body: FavoriteRequest,
 ) -> WatchStateResponse:
     """Add or remove an item from the current user's favorites."""
-    item = await _load_item(session, user, item_id)
-    state = await _load_state(session, user.id, item.id)
-    state.favorite = body.favorite
-    await _persist(session, state)
+    async with _STATE_LOCK:
+        await session.rollback()
+        await session.refresh(user)
+        item = await _load_item(session, user, item_id)
+        state = await _load_state(session, user.id, item.id)
+        state.favorite = body.favorite
+        await _persist(session, state)
     return watch_state_response(state)
 
 
@@ -442,10 +463,13 @@ async def set_rating(
     session: SessionDep,
 ) -> WatchStateResponse:
     """Set or clear the current user's personal rating for an item."""
-    item = await _load_item(session, user, item_id)
-    state = await _load_state(session, user.id, item.id)
-    state.rating = body.rating
-    await _persist(session, state)
+    async with _STATE_LOCK:
+        await session.rollback()
+        await session.refresh(user)
+        item = await _load_item(session, user, item_id)
+        state = await _load_state(session, user.id, item.id)
+        state.rating = body.rating
+        await _persist(session, state)
     return watch_state_response(state)
 
 
@@ -478,6 +502,18 @@ async def _load_state(session: AsyncSession, user_id: str, item_id: str) -> User
         )
         session.add(state)
     return state
+
+
+# Progress reports are read-modify-write on one row, and a client fires several
+# at once (checkpoint + pause + unload), so two requests could both read "no row
+# yet" and both INSERT — a UNIQUE violation. SQLite is single-writer, so one
+# module lock serializing every state write covers both that race and the WAL
+# read-to-write upgrade failure a concurrent writer would otherwise cause (an
+# INSERT variant cannot help: a transaction that has already read cannot take
+# the write lock once another writer commits). The API runs one event loop, so
+# an asyncio.Lock is sufficient; each section drops its pre-lock read snapshot
+# first so it sees what the previous writer committed.
+_STATE_LOCK = asyncio.Lock()
 
 
 def _select_file(item: MediaItem, file_id: str | None) -> MediaFile:
