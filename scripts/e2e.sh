@@ -25,8 +25,11 @@ SECRET_KEY="e2e-only-secret-key-0123456789abcdef"
 
 # /config must be a real shared directory: SQLite needs a filesystem that both
 # containers can write, so a tmpfs per container would give each its own empty
-# database.
+# database. It is world-writable because the container runs as uid 1000 while
+# the host user may not (CI runners are uid 1001); a 0700 mktemp dir would
+# make the migration lock fail with EACCES.
 CONFIG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/hearth-e2e-config.XXXXXX")"
+chmod 0777 "$CONFIG_DIR"
 
 log() { echo "e2e: $*" >&2; }
 
