@@ -28,6 +28,14 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
+      - name: Install ffmpeg
+        # The runner image no longer ships ffmpeg; the integration suite
+        # exercises real transcode paths and fails without it.
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg
+          ffmpeg -version | head -1
+
       - name: Install locked dependencies
         run: uv sync --locked
 
