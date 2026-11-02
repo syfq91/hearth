@@ -112,14 +112,17 @@ jobs:
         run: |
           docker run -d --name hearth-ci \
             --read-only \
+            --tmpfs /config:size=64m,mode=1777 \
             --tmpfs /transcode:size=1g,mode=1777 \
             --tmpfs /tmp:size=64m \
             -p 8000:8000 \
             hearth:ci
 
       - name: Verify health contract
+        shell: bash
         run: |
-          python - <<'PY'
+          set +e
+          python - <<'PY' 2>&1 | tee health.log
           import json
           import time
           import urllib.request
@@ -142,6 +145,12 @@ jobs:
           assert health["vaapi"]["status"] == "unavailable", health
           assert health["database"]["status"] in {"ok", "not_initialized"}, health
           PY
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            # Annotations are readable without admin rights; job logs are not.
+            echo "::error file=docker/Dockerfile::health contract failed: $(tail -n 5 health.log | tr '\n' ' ')"
+          fi
+          exit "$status"
 
       - name: Verify container runs unprivileged
         run: |
@@ -197,7 +206,21 @@ jobs:
         working-directory: web
 
       - name: Run e2e suite against a fresh container
-        run: ./scripts/e2e.sh
+        shell: bash
+        run: |
+          set +e
+          ./scripts/e2e.sh 2>&1 | tee e2e.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            # Annotations are readable without admin rights; job logs are not.
+            grep -E '^[[:space:]]+[0-9]+\)' e2e.log | while IFS= read -r line; do
+              echo "::error file=web/e2e::${line}"
+            done
+            if ! grep -qE '^[[:space:]]+[0-9]+\)' e2e.log; then
+              echo "::error file=scripts/e2e.sh::e2e failed: $(tail -n 8 e2e.log | tr '\n' ' ')"
+            fi
+          fi
+          exit "$status"
 
       - name: Upload Playwright report
         if: failure()
