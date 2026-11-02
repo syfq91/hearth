@@ -2,10 +2,11 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 9 (Frontend selection and build) — Step 1 decision
-  approved by the human (SvelteKit as an SPA); Step 2 build in progress
-- **Overall Status**: Phases 0–8 complete (tasks + acceptance); Phase 9 Step 1
-  approved; Phase 9 Step 2 build underway
+- **Current Phase**: Phase 9 (Frontend selection and build) — complete;
+  all three acceptance criteria verified (CI green including the Playwright
+  job, `docker compose up` → watch a video, Lighthouse desktop 100)
+- **Overall Status**: Phases 0–8 complete (tasks + acceptance); Phase 9
+  complete (tasks + acceptance); Phase 10 not started
 
 ---
 
@@ -662,7 +663,7 @@
 | 9.3 (Step 2) | Screens in order: setup/login, home, library grid, detail, video player, music, books, search, profile, admin | Complete | `2b44771`, `28a4563`, `29446c2`, `c8a3c5e`, `ad9d7f1`, `440a5c8`, `10d8a12`, `d46ed51`, `2a230f9` |
 | 9.4 (Step 2) | Responsive phone/tablet/desktop layout plus focus-managed 10-foot TV mode | Complete | `e977208` |
 | 9.5 (Step 2) | Accessibility: keyboard navigation, focus rings, captions, reduced motion | Complete | `db37c1e`, `f136a15` |
-| 9.6 (Step 2) | Playwright e2e: login, play fixture video, seek, resume, read fixture EPUB, play a track; run in CI against the Docker image | Not started | — |
+| 9.6 (Step 2) | Playwright e2e: login, play fixture video, seek, resume, read fixture EPUB, play a track; run in CI against the Docker image | Complete | `2d5ecd5`, `46a6a1c`, `7361454`, `e92134d`, `f687968`, `618849f`, `a9bad70`, `f71a67a` |
 
 ### Phase 9 Step 1 — Decision (2026-10-28)
 
@@ -833,11 +834,89 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 - **Deferred:** an automated axe-core scan is not part of this task's list;
   if added, it belongs with the Playwright suite in 9.6.
 
-### Phase 9 Acceptance Checklist (not yet startable)
+### Phase 9 Step 2 — Task 9.6 Playwright e2e + CI (2026-10-30 → 2026-11-02)
 
-- [ ] All Playwright flows pass in CI against the Docker image.
-- [ ] A first-time user can go from `docker compose up` to watching a video using only the UI.
-- [ ] Lighthouse performance score of at least 80 on the home page on a desktop profile.
+- **Suite** (`web/e2e/`, 9 specs, `workers: 1`, 120 s timeout, Chromium
+  channel with `--autoplay-policy=no-user-gesture-required`):
+  `first-run` (setup → libraries → scan → play, against a pristine
+  container), `auth`, `books`, `music`, `video` — covering login, playing
+  the fixture video, seeking, resume, reading the fixture EPUB and playing a
+  track. Fixtures are committed (`web/e2e/fixtures/media`) and regenerable
+  via `scripts/generate_e2e_fixtures.sh`.
+- **Orchestration** (`scripts/e2e.sh`): two containers (api + worker)
+  sharing one host `mktemp` dir at `/config` (SQLite must be one shared
+  filesystem; a single container leaves every scan pending forever), tmpfs
+  `/transcode`+`/tmp`, fixtures at `/media:ro`, ephemeral published port;
+  `first-run` runs first, then `auth books music video`.
+- **CI:** `e2e` job installs Playwright Chromium and runs `scripts/e2e.sh`
+  against the built image, uploading the HTML report on failure.
+- **Bugs the suite caught (all fixed and committed):**
+  - `46a6a1c` — playback state writes (progress/watched/favorite/rating)
+    did a get-then-INSERT on `user_item_state`: concurrent reports raced to
+    a UNIQUE violation, and under WAL a reader cannot upgrade to a write
+    lock (`database is locked`). Serialized on one module `asyncio.Lock`
+    with rollback of the pre-lock snapshot + `session.refresh(user)` first;
+    validated 0/30 races.
+  - `46a6a1c` — `supports_container` compared against ffprobe's comma-joined
+    `format_name` (`mov,mp4,m4a,3gp,3g2,mj2`), so plain H.264 mp4 never
+    matched and every play opened a remux session; split on commas with the
+    asymmetric mov/m4v → mp4 alias kept per candidate.
+  - `7361454` — direct-play branch did not autoplay; Space double-toggled
+    (capture-phase handler now scoped to events on `<video>`); HLS stop
+    calls were unauthenticated (401 leak); admin libraries loader fanned out
+    and 500'd.
+  - `e92134d` — the e2e suite itself (9 specs, helpers, fixtures,
+    `scripts/e2e.sh`, Playwright config, CI job).
+- **CI was red for every run since `04e5a20` (2026-10-21).** Three real
+  defects found and fixed with public-API diagnostics (job logs need admin
+  access; annotations do not — `f687968`, `a9bad70`):
+  1. `618849f` — the runner image no longer ships ffmpeg, so the five
+     ffmpeg-dependent integration tests failed with `FileNotFoundError`.
+     The suite is green with ffmpeg (700 passed / 2 skipped); install it in
+     the `quality` job.
+  2. `a9bad70` — the container smoke test ran `--read-only` with no
+     `/config` mount, so the migration lock (`4ecc7bd`) hit EROFS at startup
+     (reproduced locally with the exact CI `docker run`). Compose and
+     `scripts/e2e.sh` both mount `/config`; the smoke test now gets a tmpfs.
+  3. `f71a67a` — `scripts/e2e.sh`'s shared config dir was `0700` owned by
+     the CI runner (uid 1001) while containers run as uid 1000 →
+     `PermissionError: /config/.migrations.lock`. It only passed locally
+     because host uid == container uid; the ephemeral dir is now `0777`.
+- **Verification (2026-11-02):**
+  - Full suite 9/9 green locally against `hearth:e2e`.
+  - **CI run `41374760281` (`f71a67a`) fully green:** quality
+    (ruff/format/mypy/OpenAPI/pytest), web build, **Playwright against the
+    Docker image**, Docker build + smoke.
+  - `docker compose up -d --build` on this host (no `/dev/dri` →
+    `RENDER_DEVICE=/dev/null`, fixtures as `MEDIA_DIR`) → first-run spec
+    passed in 10.0 s: a first-time user went from compose to a playing
+    video through the UI only.
+  - **Lighthouse desktop performance on the authenticated home page: 100**
+    (FCP 0.2 s, LCP 0.2 s, TBT 0 ms, CLS 0, SI 0.4 s, TTI 0.2 s); all five
+    home data requests returned 200, so it is not a login redirect.
+  - Python gates: ruff clean, mypy clean (100 files), pytest 700 passed /
+    2 skipped with static ffmpeg on PATH (686 passed / 5 ffmpeg-env failed
+    / 11 skipped without it — environmental, now covered in CI).
+  - Web gates: `npm run check` 0/0, `npm run build` OK.
+  - Host tooling added for the compose run (user-local, no sudo): Docker
+    Compose v2.39.4 + buildx v0.33.0 in `~/.docker/cli-plugins/` — the
+    compose file uses the Compose Specification (`name:`) that docker-compose
+    1.29.2 rejects.
+
+### Phase 9 Acceptance Checklist (2026-11-02)
+
+- [x] All Playwright flows pass in CI against the Docker image.
+  - CI run `41374760281` on `f71a67a`: all four jobs green, including
+    "Playwright UI tests against the Docker image" running
+    `scripts/e2e.sh` (9/9 specs).
+- [x] A first-time user can go from `docker compose up` to watching a video using only the UI.
+  - Verified against a literal `docker compose up -d --build` deployment
+    (api + worker, migrations healthy): `first-run.spec.ts` passed in
+    10.0 s — setup account → create libraries → scan → play the movie,
+    all through the UI.
+- [x] Lighthouse performance score of at least 80 on the home page on a desktop profile.
+  - Scored **100** (desktop, authenticated home page): FCP 0.2 s, LCP
+    0.2 s, TBT 0 ms, CLS 0, SI 0.4 s, TTI 0.2 s.
 
 ---
 
