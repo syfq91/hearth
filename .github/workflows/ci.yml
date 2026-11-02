@@ -44,7 +44,19 @@ jobs:
         run: uv run python scripts/export_openapi.py --check
 
       - name: Test
-        run: uv run pytest -q
+        shell: bash
+        run: |
+          set +e
+          uv run pytest -q 2>&1 | tee pytest.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            # Surface the failing tests as annotations (publicly readable even
+            # without repo admin, unlike the job logs).
+            grep -E '^(FAILED|ERROR) ' pytest.log | while IFS= read -r line; do
+              echo "::error file=tests::${line}"
+            done
+          fi
+          exit "$status"
 
       - name: Build wheel
         run: uv build
