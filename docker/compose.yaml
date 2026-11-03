@@ -6,6 +6,7 @@ x-hearth-common: &hearth-common
     dockerfile: docker/Dockerfile
   image: ${HEARTH_IMAGE:-hearth:dev}
   environment:
+    # Direct environment configuration (defaults matching former .env)
     HEARTH_ENV: ${HEARTH_ENV:-production}
     HEARTH_LOG_LEVEL: ${HEARTH_LOG_LEVEL:-INFO}
     HEARTH_HOST: 0.0.0.0
@@ -18,15 +19,16 @@ x-hearth-common: &hearth-common
     TZ: ${TZ:-UTC}
   volumes:
     - hearth-config:/config
-    - ${MEDIA_DIR:-../media}:/media:ro
+    # Host media directory (default: /srv/media)
+    - ${MEDIA_DIR:-/srv/media}:/media:ro
   tmpfs:
     - /transcode:size=4g,mode=1777
     - /tmp:size=64m
   devices:
-    # Host render node; override RENDER_DEVICE for a different GPU.
+    # Host render node; override RENDER_DEVICE for a different GPU (default: /dev/dri/renderD128)
     - ${RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
   group_add:
-    # Host render GID: `getent group render`. Varies per distribution.
+    # Host render GID: `getent group render`. Varies per distribution (default: 105)
     - ${RENDER_GID:-105}
   security_opt:
     - no-new-privileges:true
@@ -40,6 +42,7 @@ services:
     <<: *hearth-common
     restart: unless-stopped
     ports:
+      # Published HTTP port (default: 8000)
       - "${HEARTH_HTTP_PORT:-8000}:8000"
 
   worker:
