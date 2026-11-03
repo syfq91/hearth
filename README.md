@@ -14,7 +14,7 @@ Requirements: Docker with the Compose v2 plugin, plus a directory containing you
 ```bash
 cp .env.example .env          # set MEDIA_DIR to your media library
 export RENDER_GID=$(getent group render | cut -d: -f3)   # e.g. 105 on Debian/Ubuntu
-docker compose --env-file .env -f docker/compose.yaml up --build -d
+docker compose --env-file .env -f docker/compose.yaml up -d
 ```
 
 Open **`http://localhost:8000`** in your browser. The responsive web application guides you through initial administrator setup, adding libraries, and browsing your collection.
@@ -23,18 +23,9 @@ Open **`http://localhost:8000`** in your browser. The responsive web application
 
 Hearth automatically detects and utilizes GPU hardware acceleration for video transcoding:
 
-- **Intel QuickSync (Default / 8th Gen+)**:
-  ```bash
-  docker compose -f docker/compose.yaml -f docker/compose.intel.yaml up -d
-  ```
-- **AMD Radeon / Ryzen APU**:
-  ```bash
-  docker compose -f docker/compose.yaml -f docker/compose.amd.yaml up -d
-  ```
-- **CPU Software Transcoding (Hosts without GPU / `/dev/dri`)**:
-  ```bash
-  docker compose -f docker/compose.yaml -f docker/compose.cpu.yaml up -d
-  ```
+- **Intel QuickSync / VA-API (Default / 8th Gen+)**: Enabled out of the box in `docker/compose.yaml`.
+- **AMD Radeon / Ryzen APU**: Uncomment the AMD configuration in `docker/compose.yaml` (`LIBVA_DRIVER_NAME: radeonsi`, `/dev/kfd`, and `VIDEO_GID`).
+- **CPU Software Transcoding (Hosts without GPU / `/dev/dri`)**: Comment out the `devices` and `group_add` blocks in `docker/compose.yaml`. VA-API will report unavailable and transcoding safely falls back to software (`libx264`).
 
 For detailed GPU permissions, render node discovery, and driver checks, see the [Hardware Transcoding Guide](docs/HARDWARE_TRANSCODING.md).
 

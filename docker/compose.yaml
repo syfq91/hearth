@@ -1,35 +1,40 @@
 name: hearth
 
+# Common base configuration shared by the web/API server and the background worker
 x-hearth-common: &hearth-common
-  build:
-    context: ..
-    dockerfile: docker/Dockerfile
-  image: ${HEARTH_IMAGE:-hearth:dev}
+  image: ghcr.io/syfq91/hearth:latest
+  # Uncomment to build locally from source instead of pulling from GHCR:
+  # build:
+  #   context: ..
+  #   dockerfile: docker/Dockerfile
+  restart: unless-stopped
   environment:
-    # Direct environment configuration (defaults matching former .env)
     HEARTH_ENV: ${HEARTH_ENV:-production}
     HEARTH_LOG_LEVEL: ${HEARTH_LOG_LEVEL:-INFO}
-    HEARTH_HOST: 0.0.0.0
-    HEARTH_PORT: "8000"
-    HEARTH_DATA_DIR: /config
-    HEARTH_DB_PATH: /config/hearth.db
-    HEARTH_TRANSCODE_DIR: /transcode
-    HEARTH_MEDIA_DIR: /media
-    HEARTH_RENDER_DEVICE: /dev/dri/renderD128
     TZ: ${TZ:-UTC}
+    # Hardware acceleration driver (VA-API):
+    # Intel (8th Gen+ / Coffee Lake and newer uses iHD by default; Haswell through Skylake may use i965):
+    # LIBVA_DRIVER_NAME: ${LIBVA_DRIVER_NAME:-iHD}
+    # AMD Radeon (uses radeonsi):
+    # LIBVA_DRIVER_NAME: radeonsi
   volumes:
     - hearth-config:/config
-    # Host media directory (default: /srv/media)
     - ${MEDIA_DIR:-/srv/media}:/media:ro
   tmpfs:
     - /transcode:size=4g,mode=1777
     - /tmp:size=64m
+  # Hardware acceleration devices:
+  # - For CPU-only / hosts without a GPU, comment out the `devices` and `group_add` sections below.
+  # - For AMD GPUs, also uncomment `/dev/kfd` and `VIDEO_GID`.
   devices:
-    # Host render node; override RENDER_DEVICE for a different GPU (default: /dev/dri/renderD128)
     - ${RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
+    # AMD ROCm / GPU compute device (uncomment for AMD):
+    # - /dev/kfd:/dev/kfd
   group_add:
-    # Host render GID: `getent group render`. Varies per distribution (default: 105)
+    # Host render GID: `getent group render` (default: 105)
     - ${RENDER_GID:-105}
+    # AMD video group GID (uncomment for AMD):
+    # - ${VIDEO_GID:-44}
   security_opt:
     - no-new-privileges:true
   cap_drop:
@@ -38,19 +43,17 @@ x-hearth-common: &hearth-common
   stop_grace_period: 30s
 
 services:
+  # HTTP API and Web UI service
   hearth:
     <<: *hearth-common
-    restart: unless-stopped
     ports:
-      # Published HTTP port (default: 8000)
       - "${HEARTH_HTTP_PORT:-8000}:8000"
 
+  # Background job worker (media library scanner, metadata, transcode jobs)
   worker:
     <<: *hearth-common
-    restart: unless-stopped
     command: ["hearth", "worker"]
     healthcheck:
-      # The image healthcheck probes the API, which this process does not serve.
       disable: true
 
 volumes:

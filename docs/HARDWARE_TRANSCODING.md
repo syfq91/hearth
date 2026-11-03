@@ -70,51 +70,40 @@ RENDER_DEVICE=/dev/dri/renderD128
 
 ### Standard Intel Setup (Default)
 
-Use `docker/compose.yaml` (or compose with `docker/compose.intel.yaml`):
+Enabled out of the box in `docker/compose.yaml`:
 
 ```bash
-docker compose -f docker/compose.yaml -f docker/compose.intel.yaml up -d
+docker compose -f docker/compose.yaml up -d
 ```
 
-In `docker/compose.intel.yaml`:
-```yaml
-services:
-  hearth:
-    environment:
-      LIBVA_DRIVER_NAME: iHD
-    devices:
-      - /dev/dri/renderD128:/dev/dri/renderD128
-    group_add:
-      - 105
-```
+For older Intel processors (Haswell through Skylake), uncomment `LIBVA_DRIVER_NAME: i965` in `docker/compose.yaml`.
 
 ### AMD Radeon Setup
 
-AMD GPUs require passing both `/dev/dri/renderD128` and `/dev/kfd` (Kernel Fusion Driver) and assigning both `render` and `video` groups:
+AMD GPUs require passing both `/dev/dri/renderD128` and `/dev/kfd` (Kernel Fusion Driver) and assigning both `render` and `video` groups.
 
-```bash
-docker compose -f docker/compose.yaml -f docker/compose.amd.yaml up -d
+Uncomment the AMD settings in `docker/compose.yaml`:
+```yaml
+  environment:
+    LIBVA_DRIVER_NAME: radeonsi
+  devices:
+    - ${RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
+    - /dev/kfd:/dev/kfd
+  group_add:
+    - ${RENDER_GID:-105}
+    - ${VIDEO_GID:-44}
 ```
 
-In `docker/compose.amd.yaml`:
-```yaml
-services:
-  hearth:
-    environment:
-      LIBVA_DRIVER_NAME: radeonsi
-    devices:
-      - /dev/dri/renderD128:/dev/dri/renderD128
-      - /dev/kfd:/dev/kfd
-    group_add:
-      - 105   # Render GID
-      - 44    # Video GID
+Then start the stack:
+```bash
+docker compose -f docker/compose.yaml up -d
 ```
 
 ### CPU-Only Fallback (No GPU)
 
-If your host has no compatible GPU, use the CPU override:
+If your host has no compatible GPU, comment out the `devices` and `group_add` sections in `docker/compose.yaml`:
 ```bash
-docker compose -f docker/compose.yaml -f docker/compose.cpu.yaml up -d
+docker compose -f docker/compose.yaml up -d
 ```
 Transcoding runs purely in software (`libx264 veryfast`).
 

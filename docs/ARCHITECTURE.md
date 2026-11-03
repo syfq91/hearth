@@ -74,7 +74,7 @@ app/
   workers/             reserved for future worker-only modules
 tests/
   unit/ integration/ e2e/ fixtures/
-docker/                Dockerfile, compose.yaml, compose.cpu.yaml
+docker/                Dockerfile, compose.yaml
 docs/                  PROGRESS.md, DECISIONS.md, ARCHITECTURE.md, openapi.json
 scripts/               dev helpers, OpenAPI export
 ```
