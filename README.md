@@ -9,34 +9,40 @@ current status is tracked in [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## Quick start (Docker)
 
-Requirements: Docker with the Compose v2 plugin, plus a writable media directory.
-A GPU is optional; software transcoding is the fallback.
+Requirements: Docker with the Compose v2 plugin, plus a directory containing your media. A GPU is optional; software transcoding is the automatic fallback.
 
 ```bash
 cp .env.example .env          # set MEDIA_DIR to your media library
 export RENDER_GID=$(getent group render | cut -d: -f3)   # e.g. 105 on Debian/Ubuntu
 docker compose --env-file .env -f docker/compose.yaml up --build -d
-curl http://localhost:8000/api/v1/health
 ```
 
-The render GID differs between distributions, so the compose file reads
-`RENDER_GID` (default `105`). On a host without `/dev/dri`, use the CPU-only
-override instead:
+Open **`http://localhost:8000`** in your browser. The responsive web application guides you through initial administrator setup, adding libraries, and browsing your collection.
 
-```bash
-docker compose --env-file .env -f docker/compose.yaml -f docker/compose.cpu.yaml up --build -d
-```
+### Hardware Transcoding Options
 
-The `vaapi` section of `/api/v1/health` reports `unavailable` in that case and
-the server stays healthy.
+Hearth automatically detects and utilizes GPU hardware acceleration for video transcoding:
 
-The compose stack starts two processes from the same image: `hearth` (API) and
-`worker` (background jobs). Both share the `/config` volume and database.
+- **Intel QuickSync (Default / 8th Gen+)**:
+  ```bash
+  docker compose -f docker/compose.yaml -f docker/compose.intel.yaml up -d
+  ```
+- **AMD Radeon / Ryzen APU**:
+  ```bash
+  docker compose -f docker/compose.yaml -f docker/compose.amd.yaml up -d
+  ```
+- **CPU Software Transcoding (Hosts without GPU / `/dev/dri`)**:
+  ```bash
+  docker compose -f docker/compose.yaml -f docker/compose.cpu.yaml up -d
+  ```
 
-### First run
+For detailed GPU permissions, render node discovery, and driver checks, see the [Hardware Transcoding Guide](docs/HARDWARE_TRANSCODING.md).
 
-Hearth has no default account. Create the first administrator once; the endpoint
-returns 409 afterwards:
+The compose stack runs two processes: `hearth` (FastAPI and embedded Web UI) and `worker` (background scanner, metadata scraper, and cleanup jobs). Both safely share the `/config` SQLite database.
+
+### First Run & Account Setup
+
+Hearth has no default credentials. On first startup, visit `http://localhost:8000` to complete the initial setup wizard, or use the REST API:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/auth/setup \
@@ -44,10 +50,16 @@ curl -X POST http://localhost:8000/api/v1/auth/setup \
   -d '{"username": "admin", "password": "a long passphrase"}'
 ```
 
-The response contains a 15-minute access token and a rotating refresh token. Use
-`Authorization: Bearer <access_token>` for API calls and
-`POST /api/v1/auth/login` for later sessions. Interactive API documentation is at
-`http://localhost:8000/docs`.
+Interactive OpenAPI documentation is available at `http://localhost:8000/docs`.
+
+### Features & Web UI
+
+- **Movies & TV Shows**: Adaptive HLS video player with `hls.js`, audio track switching, subtitle selectors, resume playback, and next-episode prompts.
+- **Music**: Queue player with disc grouping, album artwork, and Media Session API support for OS lockscreen and media key controls.
+- **Books & Comics**: In-browser reader supporting EPUB (via foliate-js), PDF (via pdf.js), and CBZ/CBR comics with cross-client reading progress synchronization.
+- **10-Foot TV Mode**: Dedicated spatial navigation mode with D-pad / arrow key support for living room and smart TV browsers.
+- **Unified Search**: Instant full-text search across all libraries, media items, authors, and actors.
+- **Administration**: Library scanning, unmatched item fixer, live transcode session inspection, log viewer, and online SQLite backup/restore.
 
 ### Library and catalog
 
@@ -139,7 +151,12 @@ uv run mypy app
 
 ## Documentation
 
-- [docs/PROGRESS.md](docs/PROGRESS.md) — phase and task status
-- [docs/DECISIONS.md](docs/DECISIONS.md) — architecture decision records
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — module layout and runtime diagram
+- [docs/HARDWARE_TRANSCODING.md](docs/HARDWARE_TRANSCODING.md) — GPU acceleration, VAAPI drivers, render GID, and troubleshooting
+- [docs/REVERSE_PROXY.md](docs/REVERSE_PROXY.md) — Caddy, Traefik, and Nginx reverse proxy configurations with TLS and SSE streaming
+- [docs/BACKUP_AND_UPGRADE.md](docs/BACKUP_AND_UPGRADE.md) — SQLite online backups, automated snapshot restore, and upgrade procedures
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — Common error resolution, transcode debugging, permissions, and database locks
+- [docs/API.md](docs/API.md) — REST API reference, authentication flows, and playback contracts
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Module layout and runtime architecture diagram
+- [docs/PROGRESS.md](docs/PROGRESS.md) — Implementation phase and acceptance checklist
+- [docs/DECISIONS.md](docs/DECISIONS.md) — Architecture decision records (ADRs)
 - [docs/ATTRIBUTION.md](docs/ATTRIBUTION.md) — TMDB and third-party notices

@@ -927,7 +927,7 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 | 10.2 | Resilience test suite: server restart during playback/scan, missing/unmounted library path, full disk for cache, corrupted media file, SQLite lock contention. | Complete | `test(resilience): add resilience test suite covering restart, unmounted paths, full disk, corrupted files, and locks` |
 | 10.3 | Security review: dependency audit (`pip-audit`), path traversal tests, token scope tests, SSRF review of URL fetching, default-deny CORS, security headers, secrets never logged. | Complete | `test(security): add security review suite, pip-audit gate, headers, and secret redacting` |
 | 10.4 | Observability: optional Prometheus `/metrics` endpoint (off by default), structured logs, admin log viewer, clear error messages when ffmpeg/VAAPI fails. | Complete | `feat(observability): add prometheus metrics, admin log viewer, and structured errors` |
-| 10.5 | Documentation: README quick start, compose examples for Intel/AMD, hardware transcoding guide, reverse proxy examples, backup/upgrade guide, troubleshooting FAQ. | Planned | |
+| 10.5 | Documentation: README quick start, compose examples for Intel/AMD, hardware transcoding guide, reverse proxy examples, backup/upgrade guide, troubleshooting FAQ. | Complete | `docs: add deployment, hardware transcode, reverse proxy, and operations documentation` |
 | 10.6 | Release engineering: semantic versioning, multi-arch image build (amd64 min), published image with tagged release, changelog, migration compatibility test. | Planned | |
 | 10.7 | Final acceptance run: fresh install on real server, real library of each media type, full manual checklist in `docs/RELEASE_CHECKLIST.md`. | Planned | |
 
@@ -984,6 +984,29 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 - **Admin log viewer**:
   - `GET /api/v1/admin/logs` supports level filtering (`level=DEBUG|INFO|WARNING|ERROR`), limit controls, and full-text keyword search (`search=...`) across in-memory ring-buffer logs.
   - Validated in `tests/integration/test_observability.py`.
+
+### Task 10.5 Documentation Deliverables
+
+- **README Quick Start (`README.md`)**:
+  - Streamlined Docker Compose v2 setup highlighting the embedded Web UI, initial admin setup, library creation, and client access.
+  - Added hardware transcoding profile selection: Intel QuickSync (default), AMD Radeon, and CPU software transcoding.
+  - Linked all operator and developer guides.
+- **Hardware Transcoding Guide (`docs/HARDWARE_TRANSCODING.md`)**:
+  - Details DRM render node discovery (`/dev/dri/renderD128`), host group ID resolution (`getent group render`, `stat -c '%g'`), and Docker `group_add` configuration.
+  - Driver verification procedures with `vainfo` inside the container and API capabilities probe (`GET /api/v1/admin/transcoding/capabilities`).
+  - In-depth troubleshooting matrix for `vaInitialize failed`, `vaGetDriverNameByIndex()`, missing `/dev/dri`, tonemapping failures, and `/transcode` disk space limits.
+- **Compose Profiles (`docker/compose.intel.yaml`, `docker/compose.amd.yaml`)**:
+  - Intel QuickSync configuration setting `LIBVA_DRIVER_NAME=iHD` and host render GID pass-through.
+  - AMD Radeon configuration passing both `/dev/dri/renderD128` and `/dev/kfd` with `LIBVA_DRIVER_NAME=radeonsi` and both `render` and `video` group permissions.
+- **Reverse Proxy Guide & Examples (`docs/REVERSE_PROXY.md`, `docker/examples/`)**:
+  - Architectural requirements for SSE stream flushing (`/api/v1/events`), range request pass-through (`Accept-Ranges`), header forwarding (`X-Forwarded-*`), and large backup restore payload limits (500MB).
+  - Production-ready templates for **Caddy** (`docker/examples/caddy/Caddyfile`), **Traefik** (`docker/examples/traefik/compose.traefik.yaml`), and **Nginx**.
+- **Backup & Upgrade Guide (`docs/BACKUP_AND_UPGRADE.md`)**:
+  - Safe, atomic SQLite online backups via API (`POST /api/v1/admin/backup`) and CLI (`hearth backup`).
+  - Cold recovery and disaster restore on fresh servers (`POST /api/v1/admin/restore`, `hearth restore`).
+  - Safe multi-step container upgrade workflow with automated startup migrations, lock handling, and rollback procedures.
+- **Troubleshooting FAQ (`docs/TROUBLESHOOTING.md`)**:
+  - Common operational questions covering playback stuttering, GPU acceleration failures, scanner file permissions and naming, database concurrency/locking on network filesystems, SSE proxy buffering, and diagnostic log inspection.
 
 ---
 

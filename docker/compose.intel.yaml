@@ -1,0 +1,22 @@
+# Intel QuickSync / VAAPI compose override
+# Usage:
+#   docker compose -f docker/compose.yaml -f docker/compose.intel.yaml up -d
+#
+# Intel 8th gen (Coffee Lake) and newer use the iHD driver (default).
+# Older Intel processors (Haswell through Skylake) may set LIBVA_DRIVER_NAME=i965.
+
+services:
+  hearth:
+    environment:
+      LIBVA_DRIVER_NAME: ${LIBVA_DRIVER_NAME:-iHD}
+    devices:
+      - ${RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
+    group_add:
+      - ${RENDER_GID:-105}
+  worker:
+    environment:
+      LIBVA_DRIVER_NAME: ${LIBVA_DRIVER_NAME:-iHD}
+    devices:
+      - ${RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
+    group_add:
+      - ${RENDER_GID:-105}

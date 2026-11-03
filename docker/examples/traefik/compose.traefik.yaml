@@ -1,0 +1,36 @@
+# Traefik v3 Compose example with TLS for Hearth
+# Run alongside docker/compose.yaml:
+#   docker compose -f docker/compose.yaml -f docker/examples/traefik/compose.traefik.yaml up -d
+
+services:
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "traefik-certificates:/letsencrypt"
+
+  hearth:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hearth.rule=Host(`${HEARTH_DOMAIN:-hearth.example.com}`)"
+      - "traefik.http.routers.hearth.entrypoints=websecure"
+      - "traefik.http.routers.hearth.tls.certresolver=letsencrypt"
+      - "traefik.http.services.hearth.loadbalancer.server.port=8000"
+      - "traefik.http.services.hearth.loadbalancer.responseforwarding.flushinterval=100ms"
+
+volumes:
+  traefik-certificates:

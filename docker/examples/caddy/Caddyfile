@@ -1,0 +1,26 @@
+# Caddyfile for Hearth
+# Replace hearth.example.com with your public domain
+
+hearth.example.com {
+    encode gzip zstd
+
+    # Disable proxy buffering for Server-Sent Events (SSE)
+    @events path /api/v1/events*
+    handle @events {
+        reverse_proxy hearth:8000 {
+            flush_interval -1
+        }
+    }
+
+    # Standard API and web frontend reverse proxy
+    handle {
+        reverse_proxy hearth:8000 {
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-For {remote_host}
+        }
+    }
+
+    request_body {
+        max_size 500MB
+    }
+}
