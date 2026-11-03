@@ -227,8 +227,17 @@ async def stream_media_file(
     *,
     download_filename: str | None = None,
 ) -> Response:
-    media_file = await session.get(MediaFile, file_id)
-    if media_file is None or media_file.missing_since is not None:
+    res = (
+        await session.execute(
+            select(MediaFile, MediaItem)
+            .outerjoin(MediaItem, MediaItem.id == MediaFile.item_id)
+            .where(MediaFile.id == file_id)
+        )
+    ).first()
+    if res is None:
+        raise NotFoundError("Media file not found", code="file_not_found")
+    media_file, item = res
+    if media_file.missing_since is not None:
         raise NotFoundError("Media file not found", code="file_not_found")
     if viewer.item_id is not None and viewer.item_id != media_file.item_id:
         is_episode_file = await session.scalar(
@@ -246,7 +255,6 @@ async def stream_media_file(
         if not is_episode_file and not is_track_file:
             raise NotFoundError("Media file not found", code="file_not_found")
 
-    item = await session.get(MediaItem, media_file.item_id)
     if (
         item is None
         or not await user_can_access_library(session, viewer.user, item.library_id)
@@ -309,6 +317,20 @@ async def stream_media_file(
         status_code = 206
         headers["Content-Range"] = byte_range.content_range(size)
     headers["Content-Length"] = str(byte_range.length)
+
+    # Release database connection immediately before reading/streaming bytes.
+    await session.close()
+
+    if byte_range.length <= chunk_size:
+        from app.services.streaming import _read_range
+
+        chunk = await asyncio.to_thread(_read_range, path, byte_range.start, byte_range.length)
+        return Response(
+            content=chunk,
+            status_code=status_code,
+            media_type=media_type,
+            headers=headers,
+        )
 
     return StreamingResponse(
         iter_file_chunks(path, byte_range, chunk_size=chunk_size),
@@ -395,6 +417,9 @@ async def _stream_transcoded_audio(
         fmt,
         "-",
     ]
+
+    # Release database connection before streaming transcoded pipe output.
+    await session.close()
 
     return StreamingResponse(
         _stream_ffmpeg_pipe(cmd),

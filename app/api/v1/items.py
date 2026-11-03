@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.deps import (
@@ -22,6 +23,7 @@ from app.core.deps import (
 )
 from app.core.errors import NotFoundError, ValidationError
 from app.db.models import (
+    Episode,
     Genre,
     ItemPerson,
     MediaItem,
@@ -211,6 +213,7 @@ async def list_library_items(
         query = query.order_by(key_expression.asc(), MediaItem.id.asc())
     else:
         query = query.order_by(key_expression.desc(), MediaItem.id.desc())
+    query = query.options(selectinload(MediaItem.images), selectinload(MediaItem.genres))
     rows = list(await session.scalars(query.limit(limit + 1)))
 
     has_more = len(rows) > limit
@@ -253,7 +256,18 @@ async def get_item(
     ] = None,
 ) -> Response:
     """Return one item if the current user can access its library."""
-    item = await session.get(MediaItem, item_id)
+    res = await session.execute(
+        select(MediaItem)
+        .options(
+            selectinload(MediaItem.movie),
+            selectinload(MediaItem.series),
+            selectinload(MediaItem.episode).selectinload(Episode.file),
+            selectinload(MediaItem.files),
+            selectinload(MediaItem.images),
+        )
+        .where(MediaItem.id == item_id)
+    )
+    item = res.scalar_one_or_none()
     if (
         item is None
         or not await user_can_access_library(session, user, item.library_id)

@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.api.v1.items import ItemSummary, item_summary, watch_states
 from app.core.deps import RequireUser, require_library_access
@@ -46,6 +47,7 @@ async def continue_watching(
             UserItemState.last_played_at.is_not(None),
         )
         .order_by(UserItemState.last_played_at.desc(), MediaItem.id.desc())
+        .options(selectinload(MediaItem.images), selectinload(MediaItem.genres))
     )
     query = _restrict_to_accessible_libraries(query, user)
     rows = (await session.execute(query.limit(limit + 1))).all()
@@ -66,7 +68,11 @@ async def recently_added(
     if library_id is not None:
         await require_library_access(library_id, user, session)
 
-    query = select(MediaItem).order_by(MediaItem.added_at.desc(), MediaItem.id.desc())
+    query = (
+        select(MediaItem)
+        .order_by(MediaItem.added_at.desc(), MediaItem.id.desc())
+        .options(selectinload(MediaItem.images), selectinload(MediaItem.genres))
+    )
     if library_id is not None:
         query = query.where(MediaItem.library_id == library_id)
     else:
@@ -95,6 +101,7 @@ async def favorites(
             UserItemState.favorite.is_(True),
         )
         .order_by(UserItemState.updated_at.desc(), MediaItem.id.desc())
+        .options(selectinload(MediaItem.images), selectinload(MediaItem.genres))
     )
     query = _restrict_to_accessible_libraries(query, user)
     rows = (await session.execute(query.limit(limit + 1))).all()

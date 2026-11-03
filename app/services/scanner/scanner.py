@@ -685,6 +685,16 @@ class LibraryScanner:
         now: datetime,
         stats: ScanStats,
     ) -> None:
+        if (
+            not moves
+            and not changed_files
+            and not new_files
+            and not restored_files
+            and not mark_missing
+            and not delete_now
+        ):
+            return
+
         pending_artworks: list[tuple[str, str, list[ProviderImage]]] = []
         async with self.sessionmaker() as session:
             for candidate_path, (old, candidate) in moves.items():

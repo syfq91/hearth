@@ -1,5 +1,6 @@
 """FastAPI application factory and ASGI entrypoint."""
 
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -28,6 +29,7 @@ from app.core.ratelimit import SlidingWindowLimiter
 from app.core.spa import SpaStaticFiles, find_web_dist
 from app.db.migrate import run_migrations_async
 from app.db.session import build_engine, build_sessionmaker
+from app.services.transcode.capabilities import probe_transcode_capabilities
 from app.services.transcode.session import get_session_manager
 
 logger = logging.getLogger("hearth.main")
@@ -51,6 +53,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # owns its own event loop.
         await run_migrations_async(resolved)
         get_session_manager(resolved).startup_sweep()
+        with contextlib.suppress(Exception):
+            await probe_transcode_capabilities(resolved)
         # Mounted at startup, after every application route exists, so the SPA
         # fallback can never shadow an API route (see app/core/spa.py).
         _mount_web_ui(app)

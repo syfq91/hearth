@@ -35,8 +35,8 @@ class Settings(BaseSettings):
 
     # Transcoding
     transcode_force_software: bool = False
-    transcode_max_hw_sessions: int = 2
-    transcode_max_sw_sessions: int = 2
+    transcode_max_hw_sessions: int = 4
+    transcode_max_sw_sessions: int = 4
     transcode_idle_timeout_seconds: float = 60.0
     transcode_segment_duration_seconds: int = 4
     transcode_first_segment_timeout_seconds: float = 15.0

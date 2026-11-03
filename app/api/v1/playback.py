@@ -14,6 +14,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.v1.items import (
     SubtitleResponse,
@@ -477,7 +478,10 @@ async def set_rating(
 
 
 async def _load_item(session: AsyncSession, user: User, item_id: str) -> MediaItem:
-    item = await session.get(MediaItem, item_id)
+    res = await session.execute(
+        select(MediaItem).options(selectinload(MediaItem.files)).where(MediaItem.id == item_id)
+    )
+    item = res.scalar_one_or_none()
     if (
         item is None
         or not await user_can_access_library(session, user, item.library_id)
@@ -550,7 +554,6 @@ async def _require_inside_library(
 
 async def _persist(session: AsyncSession, state: UserItemState) -> None:
     await session.commit()
-    await session.refresh(state)
 
 
 def _is_new_session(state: UserItemState, now: datetime, settings: Settings) -> bool:

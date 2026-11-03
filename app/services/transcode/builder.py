@@ -23,7 +23,15 @@ def build_ffmpeg_hls_command(
     audio_bitrate_kbps: int = 192,
 ) -> list[str]:
     """Produce argument list for ffmpeg executing HLS fMP4 delivery."""
-    cmd: list[str] = [ffmpeg_binary, "-hide_banner", "-loglevel", "warning", "-y"]
+    cmd: list[str] = [
+        ffmpeg_binary,
+        "-hide_banner",
+        "-loglevel",
+        "warning",
+        "-y",
+        "-threads",
+        "1",
+    ]
 
     # Hardware acceleration input flags
     if plan.hwaccel == "vaapi":

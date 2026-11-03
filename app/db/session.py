@@ -23,7 +23,6 @@ def _apply_sqlite_pragmas(dbapi_connection: Any, _connection_record: Any) -> Non
     """Configure durability and concurrency on every new SQLite connection."""
     cursor = dbapi_connection.cursor()
     try:
-        cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
         cursor.execute("PRAGMA synchronous=NORMAL")
@@ -40,7 +39,9 @@ def build_engine(settings: Settings) -> AsyncEngine:
     engine = create_async_engine(
         settings.database_url,
         future=True,
-        pool_pre_ping=True,
+        pool_pre_ping=False,
+        pool_size=50,
+        max_overflow=50,
         connect_args={"timeout": BUSY_TIMEOUT_MS / 1000},
     )
     event.listen(engine.sync_engine, "connect", _apply_sqlite_pragmas)

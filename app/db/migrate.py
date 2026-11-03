@@ -30,6 +30,14 @@ def make_alembic_config(settings: Settings) -> Config:
 
 def upgrade_to_head(settings: Settings) -> None:
     """Apply all migrations. Safe to call concurrently; callers hold the lock."""
+    import sqlite3
+
+    conn = sqlite3.connect(str(settings.db_path))
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    finally:
+        conn.close()
+
     command.upgrade(make_alembic_config(settings), "head")
     logger.info("database migrations applied")
 

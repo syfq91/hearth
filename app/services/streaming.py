@@ -121,6 +121,12 @@ def content_type_for(path: str | Path) -> str:
     return _CONTENT_TYPES.get(extension, "application/octet-stream")
 
 
+def _read_range(path: Path, start: int, length: int) -> bytes:
+    with path.open("rb") as f:
+        f.seek(start)
+        return f.read(length)
+
+
 async def iter_file_chunks(
     path: Path,
     byte_range: ByteRange,
@@ -132,6 +138,12 @@ async def iter_file_chunks(
     Blocking reads and the seek run in a worker thread; the handle is always
     closed, including when the client disconnects mid-stream.
     """
+    if byte_range.length <= chunk_size:
+        chunk = await asyncio.to_thread(_read_range, path, byte_range.start, byte_range.length)
+        if chunk:
+            yield chunk
+        return
+
     handle = await asyncio.to_thread(path.open, "rb")
     try:
         await asyncio.to_thread(handle.seek, byte_range.start)

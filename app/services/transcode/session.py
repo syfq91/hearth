@@ -99,10 +99,17 @@ class TranscodeSession:
             extra={"session_id": self.id, "cmd": self.cmd},
         )
 
+        def _set_nice() -> None:
+            import os
+
+            with contextlib.suppress(Exception):
+                os.nice(10)
+
         self.process = await asyncio.create_subprocess_exec(
             *self.cmd,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=_set_nice,
         )
         self._monitor_task = asyncio.create_task(self._monitor_stderr())
 
@@ -136,11 +143,13 @@ class TranscodeSession:
             returncode = self.process.returncode
 
             if returncode != 0 and not self.is_stopped:
+                tail = "".join(list(self.stderr_buffer)[-10:])
                 logger.warning(
-                    "transcode session %s exited with code %s",
+                    "transcode session %s exited with code %s; stderr:\n%s",
                     self.id,
                     returncode,
-                    extra={"session_id": self.id, "returncode": returncode},
+                    tail,
+                    extra={"session_id": self.id, "returncode": returncode, "stderr": tail},
                 )
                 # Crash detection and fallback from hardware to software
                 if self.is_hardware and not self.has_fallen_back:

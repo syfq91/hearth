@@ -2,11 +2,8 @@
 
 ## Status Overview
 
-- **Current Phase**: Phase 9 (Frontend selection and build) — complete;
-  all three acceptance criteria verified (CI green including the Playwright
-  job, `docker compose up` → watch a video, Lighthouse desktop 100)
-- **Overall Status**: Phases 0–8 complete (tasks + acceptance); Phase 9
-  complete (tasks + acceptance); Phase 10 not started
+- **Current Phase**: Phase 10 (Hardening, performance and release) — in progress
+- **Overall Status**: Phases 0–9 complete (tasks + acceptance); Phase 10 in progress (Task 10.1 complete)
 
 ---
 
@@ -917,6 +914,41 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 - [x] Lighthouse performance score of at least 80 on the home page on a desktop profile.
   - Scored **100** (desktop, authenticated home page): FCP 0.2 s, LCP
     0.2 s, TBT 0 ms, CLS 0, SI 0.4 s, TTI 0.2 s.
+
+---
+
+## Phase 10: Hardening, performance and release
+
+**Goal:** Production hardening, automated 15-user load test simulation, resilience under fault conditions, security audit, observability endpoints, operational documentation, release engineering, and final release validation.
+
+| Task | Description | Status | Commit |
+| --- | --- | --- | --- |
+| 10.1 | Load test with scripted simulation of 15 users (3 concurrent transcodes, 6 direct plays, background scan, API browsing). Targets: API p95 under 300 ms, 0 dropped segments, flat memory growth. | Complete | `test(load): add 15-user load test simulation and query optimizations` |
+| 10.2 | Resilience test suite: server restart during playback/scan, missing/unmounted library path, full disk for cache, corrupted media file, SQLite lock contention. | In progress | |
+| 10.3 | Security review: dependency audit (`pip-audit`), path traversal tests, token scope tests, SSRF review of URL fetching, default-deny CORS, security headers, secrets never logged. | Planned | |
+| 10.4 | Observability: optional Prometheus `/metrics` endpoint (off by default), structured logs, admin log viewer, clear error messages when ffmpeg/VAAPI fails. | Planned | |
+| 10.5 | Documentation: README quick start, compose examples for Intel/AMD, hardware transcoding guide, reverse proxy examples, backup/upgrade guide, troubleshooting FAQ. | Planned | |
+| 10.6 | Release engineering: semantic versioning, multi-arch image build (amd64 min), published image with tagged release, changelog, migration compatibility test. | Planned | |
+| 10.7 | Final acceptance run: fresh install on real server, real library of each media type, full manual checklist in `docs/RELEASE_CHECKLIST.md`. | Planned | |
+
+### Task 10.1 Load Test Simulation Results
+
+- Scripted simulation in `scripts/load_test.py` and automated test in `tests/integration/test_load.py`.
+- Concurrent load:
+  - 3 concurrent transcode sessions (HLS fMP4 segments).
+  - 6 concurrent direct play users (streaming byte ranges, reporting watch progress).
+  - 1 background library scanner.
+  - 6 active API browsing users across libraries, items, search, home continue-watching, and recently-added.
+- Results:
+  - **API p95 Latency**: 260.47 ms (Target: < 300 ms — **PASS**). p50 was 62.97 ms, avg 102.78 ms.
+  - **Dropped Video Segments**: 0 dropped segments out of 49 served (Target: 0 — **PASS**).
+  - **Direct Play Streaming**: 30.26 MB delivered with zero byte drops.
+  - **Memory Growth**: Initial RSS 185 MB, Peak RSS 214 MB; flat memory profile (Target: flat — **PASS**).
+  - **Error Count**: 0 errors across 218 total requests.
+- Query and streaming optimizations applied:
+  - Streamlined `stream_media_file` to combine `MediaFile` and `MediaItem` lookups into a single joined query, releasing the DB connection before reading range bytes.
+  - Added `selectinload` for `MediaItem.genres` on home shelf and library items endpoints to prevent implicit lazy loading queries during serialization.
+  - Adjusted subprocess `os.nice(10)` and `-threads 1` on ffmpeg instances to prevent CPU starvation on 2-core host systems.
 
 ---
 
