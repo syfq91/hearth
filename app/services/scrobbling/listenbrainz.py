@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import __version__
 from app.db.models import Job, MediaItem, User
 from app.services.jobs.types import JobContext
 
@@ -33,12 +34,12 @@ async def submit_listen(
     headers = {
         "Authorization": f"Token {token}",
         "Content-Type": "application/json",
-        "User-Agent": "HearthMediaServer/0.1.0 ( https://github.com/hearth-media/hearth )",
+        "User-Agent": f"HearthMediaServer/{__version__} ( https://github.com/hearth-media/hearth )",
     }
 
     additional_info: dict[str, Any] = {
         "submission_client": "Hearth",
-        "submission_client_version": "0.1.0",
+        "submission_client_version": __version__,
     }
     if track_metadata.get("musicbrainz_track_id"):
         additional_info["recording_mbid"] = track_metadata["musicbrainz_track_id"]

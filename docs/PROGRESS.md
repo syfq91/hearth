@@ -928,7 +928,7 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 | 10.3 | Security review: dependency audit (`pip-audit`), path traversal tests, token scope tests, SSRF review of URL fetching, default-deny CORS, security headers, secrets never logged. | Complete | `test(security): add security review suite, pip-audit gate, headers, and secret redacting` |
 | 10.4 | Observability: optional Prometheus `/metrics` endpoint (off by default), structured logs, admin log viewer, clear error messages when ffmpeg/VAAPI fails. | Complete | `feat(observability): add prometheus metrics, admin log viewer, and structured errors` |
 | 10.5 | Documentation: README quick start, compose examples for Intel/AMD, hardware transcoding guide, reverse proxy examples, backup/upgrade guide, troubleshooting FAQ. | Complete | `docs: add deployment, hardware transcode, reverse proxy, and operations documentation` |
-| 10.6 | Release engineering: semantic versioning, multi-arch image build (amd64 min), published image with tagged release, changelog, migration compatibility test. | Planned | |
+| 10.6 | Release engineering: semantic versioning, multi-arch image build (amd64 min), published image with tagged release, changelog, migration compatibility test. | Complete | `chore(release): configure release engineering, multi-arch build, and migration compatibility` |
 | 10.7 | Final acceptance run: fresh install on real server, real library of each media type, full manual checklist in `docs/RELEASE_CHECKLIST.md`. | Planned | |
 
 ### Task 10.1 Load Test Simulation Results
@@ -1007,6 +1007,24 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
   - Safe multi-step container upgrade workflow with automated startup migrations, lock handling, and rollback procedures.
 - **Troubleshooting FAQ (`docs/TROUBLESHOOTING.md`)**:
   - Common operational questions covering playback stuttering, GPU acceleration failures, scanner file permissions and naming, database concurrency/locking on network filesystems, SSE proxy buffering, and diagnostic log inspection.
+
+### Task 10.6 Release Engineering Deliverables
+
+- **Semantic Versioning (`v1.0.0`)**:
+  - Bumped version to `1.0.0` in `pyproject.toml`, `app/__init__.py`, `uv.lock`, and `web/package.json`.
+  - Harmonized ListenBrainz client submission agent to use `__version__`.
+  - Re-exported current `docs/openapi.json` and regenerated TypeScript client artifact `packages/client/src/schema.d.ts`.
+- **Multi-Architecture Release Pipeline (`.github/workflows/release.yml`)**:
+  - Configured GitHub Actions release workflow triggering on `v*.*.*` tags.
+  - Multi-architecture Docker image builds targeting `linux/amd64` and `linux/arm64` via Docker Buildx and QEMU.
+  - Automated publishing to GitHub Container Registry (`ghcr.io`) and automated GitHub Release publication with release notes from `CHANGELOG.md`.
+  - Updated `docker/Dockerfile` with architecture-permissive driver installation ensuring clean cross-compilation across architectures.
+- **Changelog (`CHANGELOG.md`)**:
+  - Comprehensive changelog documenting initial production `v1.0.0` release according to Keep a Changelog standards across all media types, transcoding, UI, admin, resilience, security, and observability features.
+- **Migration Compatibility Test Suite (`tests/integration/test_migrations.py`)**:
+  - Full schema progression testing: direct clean upgrade from empty database to `head`.
+  - Incremental release upgrade: verifies pre-existing users, libraries, and items seeded at early revisions (`0003_media_catalog`) survive untouched with full referential integrity and valid default column states across all subsequent migrations (`0004`, `0005`, `0006`, `0007`, `0008` / `head`).
+  - Downgrade & re-upgrade cycle validation asserting reversible migration contracts.
 
 ---
 

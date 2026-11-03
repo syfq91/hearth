@@ -57,8 +57,8 @@ RUN sed -i \
         vainfo \
         libva-drm2 \
         mesa-va-drivers \
-        intel-media-va-driver-non-free \
         tini \
+    && (dpkg --print-architecture | grep -q -E 'amd64|i386' && apt-get install -y --no-install-recommends intel-media-va-driver-non-free || true) \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 1000 hearth \
