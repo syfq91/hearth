@@ -925,7 +925,7 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 | --- | --- | --- | --- |
 | 10.1 | Load test with scripted simulation of 15 users (3 concurrent transcodes, 6 direct plays, background scan, API browsing). Targets: API p95 under 300 ms, 0 dropped segments, flat memory growth. | Complete | `test(load): add 15-user load test simulation and query optimizations` |
 | 10.2 | Resilience test suite: server restart during playback/scan, missing/unmounted library path, full disk for cache, corrupted media file, SQLite lock contention. | Complete | `test(resilience): add resilience test suite covering restart, unmounted paths, full disk, corrupted files, and locks` |
-| 10.3 | Security review: dependency audit (`pip-audit`), path traversal tests, token scope tests, SSRF review of URL fetching, default-deny CORS, security headers, secrets never logged. | Planned | |
+| 10.3 | Security review: dependency audit (`pip-audit`), path traversal tests, token scope tests, SSRF review of URL fetching, default-deny CORS, security headers, secrets never logged. | Complete | `test(security): add security review suite, pip-audit gate, headers, and secret redacting` |
 | 10.4 | Observability: optional Prometheus `/metrics` endpoint (off by default), structured logs, admin log viewer, clear error messages when ffmpeg/VAAPI fails. | Planned | |
 | 10.5 | Documentation: README quick start, compose examples for Intel/AMD, hardware transcoding guide, reverse proxy examples, backup/upgrade guide, troubleshooting FAQ. | Planned | |
 | 10.6 | Release engineering: semantic versioning, multi-arch image build (amd64 min), published image with tagged release, changelog, migration compatibility test. | Planned | |
@@ -958,6 +958,18 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
   - **Full disk cache handling**: `SessionManager.create_session` validates free space in `transcode_dir` (< 50MB) and returns a clean `TranscodeCapacityExceededError` (HTTP 503 Service Unavailable with `Retry-After`) rather than crashing or filling the disk; server health and direct play streaming remain unaffected.
   - **Corrupted media files**: Invalid media with corrupt/truncated container headers (`ffprobe` failure) log structured warnings and populate `MediaFile.probe_error`; subsequent library scans skip unchanged corrupt files rather than retrying in an infinite loop.
   - **SQLite lock contention**: 20 concurrent tasks performing interleaved writes (playback progress updates, continue-watching queries, favorite toggles) complete cleanly without `OperationalError: database is locked`.
+
+### Task 10.3 Security Review Results
+
+- **Dependency vulnerability audit**: Added `pip-audit>=2.8.0` to dev dependencies; upgraded `pypdf` to `>=6.21.4` addressing 7 upstream CVEs. `uv run pip-audit` reports zero known vulnerabilities across all 88 dependencies.
+- **Path traversal protection**: Tested in `tests/security/test_security_review.py`:
+  - HLS segments are strictly constrained by regex `^seg_\d+\.m4s$`; traversal sequences (`../`, `%2e%2e`, etc.) are rejected with HTTP 400/404.
+  - Streaming and subtitle endpoints enforce `path_is_within_roots(path, roots)` with strict symlink resolution, preventing escape from library paths.
+- **Token scope isolation**: Media query tokens (`type: media`) are strictly denied on REST/Admin API endpoints (`type: access` required), returning HTTP 401 `invalid_token`.
+- **SSRF defense**: External metadata and artwork image downloads in `ImagePipeline` enforce scheme restriction (`http`/`https` only), payload size ceilings, and strict domain allowlisting (`image_allowed_hosts`), blocking localhost (`127.0.0.1`), cloud metadata (`169.254.169.254`), and private subnets (`10.0.0.0/8`, `192.168.0.0/16`).
+- **Default-deny CORS**: Default `cors_origins=[]` omits `CORSMiddleware`, preventing wildcard reflection on cross-origin requests.
+- **Defensive headers**: Added global `SecurityHeadersMiddleware` enforcing `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and `Referrer-Policy: strict-origin-when-cross-origin` on all HTTP responses.
+- **Secret redacting**: `JSONFormatter` and `RingBufferLogHandler` automatically mask sensitive keys (`password`, `token`, `secret`, `api_key`, `authorization`, etc.) to `***REDACTED***`.
 
 ---
 

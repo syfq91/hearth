@@ -24,7 +24,11 @@ from app.core.errors import (
     validation_error_handler,
 )
 from app.core.logging import setup_logging
-from app.core.middleware import RequestIDMiddleware, RequestSizeLimitMiddleware
+from app.core.middleware import (
+    RequestIDMiddleware,
+    RequestSizeLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.core.ratelimit import SlidingWindowLimiter
 from app.core.spa import SpaStaticFiles, find_web_dist
 from app.db.migrate import run_migrations_async
@@ -104,6 +108,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         max_bytes=resolved.max_request_body_bytes,
     )
     application.add_middleware(RequestIDMiddleware)
+    application.add_middleware(SecurityHeadersMiddleware)
 
     application.add_exception_handler(AppError, cast(ExceptionHandler, app_error_handler))
     application.add_exception_handler(

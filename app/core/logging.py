@@ -18,6 +18,27 @@ _RESERVED_LOG_RECORD_KEYS = frozenset(logging.LogRecord("", 0, "", 0, "", (), No
     "asctime",
 }
 
+_SENSITIVE_KEYS = frozenset(
+    {
+        "password",
+        "token",
+        "secret",
+        "secret_key",
+        "access_token",
+        "refresh_token",
+        "api_key",
+        "authorization",
+        "cookie",
+    }
+)
+
+
+def _redact_value(key: str, val: Any) -> Any:
+    k = key.lower()
+    if k in _SENSITIVE_KEYS or any(s in k for s in ("password", "secret", "token")):
+        return "***REDACTED***"
+    return val
+
 
 def get_request_id() -> str | None:
     """Retrieve current request ID from context."""
@@ -50,7 +71,7 @@ class JSONFormatter(logging.Formatter):
         # Promote ``logger.info(..., extra={...})`` fields to top-level JSON keys.
         for key, value in record.__dict__.items():
             if key not in _RESERVED_LOG_RECORD_KEYS and not key.startswith("_"):
-                log_obj[key] = value
+                log_obj[key] = _redact_value(key, value)
 
         if record.exc_info:
             log_obj["exception"] = self.formatException(record.exc_info)
@@ -93,6 +114,10 @@ class RingBufferLogHandler(logging.Handler):
                 "message": record.getMessage(),
                 "request_id": get_request_id(),
             }
+            for key, value in record.__dict__.items():
+                if key not in _RESERVED_LOG_RECORD_KEYS and not key.startswith("_"):
+                    entry[key] = _redact_value(key, value)
+
             if record.exc_info:
                 entry["exception"] = (
                     self.formatException(record.exc_info)  # type: ignore[attr-defined]

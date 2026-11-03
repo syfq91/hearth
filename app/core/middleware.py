@@ -85,3 +85,14 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
             raise
         finally:
             reset_request_id(token)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Inject baseline defensive headers into every HTTP response."""
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        return response
