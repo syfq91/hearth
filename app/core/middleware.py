@@ -12,6 +12,7 @@ from starlette.types import ASGIApp
 
 from app.core.errors import PayloadTooLargeError
 from app.core.logging import reset_request_id, set_request_id
+from app.core.metrics import record_http_request
 
 logger = logging.getLogger("hearth.http")
 
@@ -63,6 +64,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
             duration_ms = round((time.perf_counter() - started) * 1000, 2)
             response.headers["X-Request-ID"] = request_id
+            record_http_request(request.method, response.status_code)
             logger.info(
                 "request",
                 extra={

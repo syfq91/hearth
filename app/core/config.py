@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     log_level: str = "INFO"
+    metrics_enabled: bool = False
 
     # Filesystem directories
     data_dir: Path = Path("/config")

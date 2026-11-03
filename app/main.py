@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import cast
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.staticfiles import StaticFiles
@@ -18,6 +18,7 @@ from app.api.v1 import router as api_v1_router
 from app.core.config import Settings, get_settings
 from app.core.errors import (
     AppError,
+    NotFoundError,
     app_error_handler,
     http_exception_handler,
     unhandled_exception_handler,
@@ -122,6 +123,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     application.include_router(api_v1_router)
+
+    @application.get("/metrics", response_class=Response, include_in_schema=False)
+    async def metrics_endpoint() -> Response:
+        if not resolved.metrics_enabled:
+            raise NotFoundError("Metrics endpoint is disabled", code="metrics_disabled")
+        from app.core.metrics import generate_prometheus_metrics
+
+        content = generate_prometheus_metrics(resolved)
+        return Response(
+            content=content,
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
 
     testplayer = _testplayer_directory()
     if testplayer is not None:

@@ -433,9 +433,10 @@ async def list_admin_logs(
     _actor: RequireAdmin,
     limit: int = Query(default=100, ge=1, le=500),
     level: str | None = Query(default=None, max_length=16),
+    search: str | None = Query(default=None, max_length=128),
 ) -> list[LogEntryResponse]:
     """Tail recent in-memory log entries in reverse chronological order."""
-    entries = get_recent_logs(limit=limit, level=level)
+    entries = get_recent_logs(limit=limit, level=level, search=search)
     return [LogEntryResponse.model_validate(e) for e in entries]
 
 

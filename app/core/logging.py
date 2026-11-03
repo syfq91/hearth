@@ -133,11 +133,23 @@ class RingBufferLogHandler(logging.Handler):
 ring_buffer_handler = RingBufferLogHandler()
 
 
-def get_recent_logs(limit: int = 100, level: str | None = None) -> list[dict[str, Any]]:
+def get_recent_logs(
+    limit: int = 100,
+    level: str | None = None,
+    search: str | None = None,
+) -> list[dict[str, Any]]:
     """Return recent log entries in reverse chronological order (newest first)."""
     with _LOG_LOCK:
         logs = list(_LOG_BUFFER)
     if level:
         lvl_upper = level.upper()
         logs = [entry for entry in logs if entry.get("level") == lvl_upper]
+    if search:
+        s_lower = search.lower()
+        logs = [
+            entry
+            for entry in logs
+            if s_lower in str(entry.get("message", "")).lower()
+            or s_lower in str(entry.get("logger", "")).lower()
+        ]
     return list(reversed(logs))[:limit]

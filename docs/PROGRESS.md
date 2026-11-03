@@ -926,7 +926,7 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 | 10.1 | Load test with scripted simulation of 15 users (3 concurrent transcodes, 6 direct plays, background scan, API browsing). Targets: API p95 under 300 ms, 0 dropped segments, flat memory growth. | Complete | `test(load): add 15-user load test simulation and query optimizations` |
 | 10.2 | Resilience test suite: server restart during playback/scan, missing/unmounted library path, full disk for cache, corrupted media file, SQLite lock contention. | Complete | `test(resilience): add resilience test suite covering restart, unmounted paths, full disk, corrupted files, and locks` |
 | 10.3 | Security review: dependency audit (`pip-audit`), path traversal tests, token scope tests, SSRF review of URL fetching, default-deny CORS, security headers, secrets never logged. | Complete | `test(security): add security review suite, pip-audit gate, headers, and secret redacting` |
-| 10.4 | Observability: optional Prometheus `/metrics` endpoint (off by default), structured logs, admin log viewer, clear error messages when ffmpeg/VAAPI fails. | Planned | |
+| 10.4 | Observability: optional Prometheus `/metrics` endpoint (off by default), structured logs, admin log viewer, clear error messages when ffmpeg/VAAPI fails. | Complete | `feat(observability): add prometheus metrics, admin log viewer, and structured errors` |
 | 10.5 | Documentation: README quick start, compose examples for Intel/AMD, hardware transcoding guide, reverse proxy examples, backup/upgrade guide, troubleshooting FAQ. | Planned | |
 | 10.6 | Release engineering: semantic versioning, multi-arch image build (amd64 min), published image with tagged release, changelog, migration compatibility test. | Planned | |
 | 10.7 | Final acceptance run: fresh install on real server, real library of each media type, full manual checklist in `docs/RELEASE_CHECKLIST.md`. | Planned | |
@@ -970,6 +970,20 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 - **Default-deny CORS**: Default `cors_origins=[]` omits `CORSMiddleware`, preventing wildcard reflection on cross-origin requests.
 - **Defensive headers**: Added global `SecurityHeadersMiddleware` enforcing `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and `Referrer-Policy: strict-origin-when-cross-origin` on all HTTP responses.
 - **Secret redacting**: `JSONFormatter` and `RingBufferLogHandler` automatically mask sensitive keys (`password`, `token`, `secret`, `api_key`, `authorization`, etc.) to `***REDACTED***`.
+
+### Task 10.4 Observability Results
+
+- **Prometheus `/metrics` exposition**:
+  - Configurable via `metrics_enabled` (default `False`). Returns 404 Not Found when disabled.
+  - When enabled (`metrics_enabled=True`), serves standard Prometheus exposition text format at `GET /metrics` (`text/plain; version=0.0.4; charset=utf-8`).
+  - Core metrics exported: `hearth_uptime_seconds`, `hearth_process_resident_memory_bytes`, `hearth_system_cpu_count`, `hearth_active_transcode_streams{hwaccel="vaapi|software"}`, `hearth_database_pool_size`, and `hearth_http_requests_total{method="...",status="..."}`.
+  - Request counters automatically updated via `RequestIDMiddleware` across all HTTP endpoints.
+- **Structured error messages & diagnostics**:
+  - Detailed errors captured during ffmpeg and VAAPI transcode initialization and runtime crashes.
+  - Session manager tails up to 200 stderr lines with automatic hardware fallback and exposed diagnostics in `GET /api/v1/admin/transcoding/sessions/{id}/logs`.
+- **Admin log viewer**:
+  - `GET /api/v1/admin/logs` supports level filtering (`level=DEBUG|INFO|WARNING|ERROR`), limit controls, and full-text keyword search (`search=...`) across in-memory ring-buffer logs.
+  - Validated in `tests/integration/test_observability.py`.
 
 ---
 
