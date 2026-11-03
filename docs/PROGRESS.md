@@ -924,7 +924,7 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 | Task | Description | Status | Commit |
 | --- | --- | --- | --- |
 | 10.1 | Load test with scripted simulation of 15 users (3 concurrent transcodes, 6 direct plays, background scan, API browsing). Targets: API p95 under 300 ms, 0 dropped segments, flat memory growth. | Complete | `test(load): add 15-user load test simulation and query optimizations` |
-| 10.2 | Resilience test suite: server restart during playback/scan, missing/unmounted library path, full disk for cache, corrupted media file, SQLite lock contention. | In progress | |
+| 10.2 | Resilience test suite: server restart during playback/scan, missing/unmounted library path, full disk for cache, corrupted media file, SQLite lock contention. | Complete | `test(resilience): add resilience test suite covering restart, unmounted paths, full disk, corrupted files, and locks` |
 | 10.3 | Security review: dependency audit (`pip-audit`), path traversal tests, token scope tests, SSRF review of URL fetching, default-deny CORS, security headers, secrets never logged. | Planned | |
 | 10.4 | Observability: optional Prometheus `/metrics` endpoint (off by default), structured logs, admin log viewer, clear error messages when ffmpeg/VAAPI fails. | Planned | |
 | 10.5 | Documentation: README quick start, compose examples for Intel/AMD, hardware transcoding guide, reverse proxy examples, backup/upgrade guide, troubleshooting FAQ. | Planned | |
@@ -949,6 +949,15 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
   - Streamlined `stream_media_file` to combine `MediaFile` and `MediaItem` lookups into a single joined query, releasing the DB connection before reading range bytes.
   - Added `selectinload` for `MediaItem.genres` on home shelf and library items endpoints to prevent implicit lazy loading queries during serialization.
   - Adjusted subprocess `os.nice(10)` and `-threads 1` on ffmpeg instances to prevent CPU starvation on 2-core host systems.
+
+### Task 10.2 Resilience Verification Results
+
+- Verified fault-tolerance scenarios in `tests/integration/test_resilience.py`:
+  - **Server restart during playback and scan**: Stale session directories in `transcode_dir` are automatically cleared via `startup_sweep()`; in-flight running background jobs left by a terminated process are cleanly returned to `pending` status by `JobWorker.requeue_running()`; client watch position (`position_ms`) is retained across restarts and resumed without errors.
+  - **Missing / unmounted library path**: When a configured library path is unmounted or missing on disk, `LibraryScanner` safely skips without crashing; mass-deletion safeguards protect catalog entries; attempting to stream media files whose paths are missing returns clean HTTP 404 (`NotFoundError`) without unhandled exceptions.
+  - **Full disk cache handling**: `SessionManager.create_session` validates free space in `transcode_dir` (< 50MB) and returns a clean `TranscodeCapacityExceededError` (HTTP 503 Service Unavailable with `Retry-After`) rather than crashing or filling the disk; server health and direct play streaming remain unaffected.
+  - **Corrupted media files**: Invalid media with corrupt/truncated container headers (`ffprobe` failure) log structured warnings and populate `MediaFile.probe_error`; subsequent library scans skip unchanged corrupt files rather than retrying in an infinite loop.
+  - **SQLite lock contention**: 20 concurrent tasks performing interleaved writes (playback progress updates, continue-watching queries, favorite toggles) complete cleanly without `OperationalError: database is locked`.
 
 ---
 

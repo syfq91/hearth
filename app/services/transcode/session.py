@@ -266,6 +266,20 @@ class SessionManager:
                     retry_after=5,
                 )
 
+            # Check disk space for cache/transcode directory
+            try:
+                self.settings.transcode_dir.mkdir(parents=True, exist_ok=True)
+                free_bytes = shutil.disk_usage(self.settings.transcode_dir).free
+                if free_bytes < 50 * 1024 * 1024:
+                    raise TranscodeCapacityExceededError(
+                        message="Transcode cache disk full",
+                        retry_after=30,
+                    )
+            except TranscodeCapacityExceededError:
+                raise
+            except OSError:
+                pass
+
             session_id = uuid.uuid4().hex
             output_dir = self.settings.transcode_dir / session_id
 
