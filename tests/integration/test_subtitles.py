@@ -112,6 +112,12 @@ async def test_item_detail_lists_sidecars_and_serves_webvtt(
     assert "00:00:03.000 --> 00:00:04.000" in served_ass.text
     assert "Hello from ASS" in served_ass.text
 
+    delimiter = "&" if "?" in ass_track["url"] else "?"
+    served_raw = await api_client.get(f"{ass_track['url']}{delimiter}raw=true", headers=_bearer(admin))
+    assert served_raw.status_code == 200
+    assert served_raw.headers["content-type"].startswith("text/x-ssa")
+    assert served_raw.text == ASS
+
 
 async def test_subtitles_accept_scoped_media_tokens(
     api_client: httpx.AsyncClient,

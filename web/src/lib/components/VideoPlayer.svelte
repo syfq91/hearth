@@ -2,6 +2,7 @@
 	import videojs from 'video.js';
 	import type Player from 'video.js/dist/types/player';
 	import 'video.js/dist/video-js.css';
+	import JASSUB from 'jassub';
 	import { api } from '../api/client';
 	import type { PlaybackInfoResponse } from '../api/types';
 
@@ -19,6 +20,7 @@
 	let containerEl = $state<HTMLDivElement | null>(null);
 	let videoEl = $state<HTMLVideoElement | null>(null);
 	let player: Player | null = null;
+	let jassubInstance: JASSUB | null = null;
 
 	let info = $state<PlaybackInfoResponse | null>(null);
 	let loadError = $state<string | null>(null);
@@ -33,6 +35,7 @@
 	let lastReportedMs = 0;
 	let destroyed = false;
 	let focusTaken = false;
+	let syncingTracks = false;
 
 	let lastItemId = '';
 	let lastAudioTrack: number | null = null;
@@ -185,16 +188,141 @@
 		}
 	}
 
-	function applySubtitleChoice(): void {
+	function toAssTimestamp(ts: string): string {
+		const parts = ts.trim().replace(',', '.').split(':');
+		let h = 0;
+		let m = 0;
+		let s = 0;
+		let ms = 0;
+		if (parts.length === 3) {
+			h = Number.parseInt(parts[0], 10) || 0;
+			m = Number.parseInt(parts[1], 10) || 0;
+			const secParts = parts[2].split('.');
+			s = Number.parseInt(secParts[0], 10) || 0;
+			ms = Number.parseInt(secParts[1] ?? '0', 10) || 0;
+		} else if (parts.length === 2) {
+			m = Number.parseInt(parts[0], 10) || 0;
+			const secParts = parts[1].split('.');
+			s = Number.parseInt(secParts[0], 10) || 0;
+			ms = Number.parseInt(secParts[1] ?? '0', 10) || 0;
+		}
+		const cs = Math.floor(ms / 10)
+			.toString()
+			.padStart(2, '0')
+			.slice(0, 2);
+		return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${cs}`;
+	}
+
+	function toAss(content: string): string {
+		if (content.includes('[Script Info]') || content.includes('[Events]')) {
+			return content;
+		}
+		const header = [
+			'[Script Info]',
+			'ScriptType: v4.00+',
+			'WrapStyle: 0',
+			'ScaledBorderAndShadow: yes',
+			'YCbCr Matrix: None',
+			'',
+			'[V4+ Styles]',
+			'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
+			'Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1',
+			'',
+			'[Events]',
+			'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
+		].join('\n');
+
+		const lines = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+		const dialogues: string[] = [];
+		const timeRegex =
+			/((?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{2,3})\s*-->\s*((?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{2,3})/;
+
+		let i = 0;
+		while (i < lines.length) {
+			const line = lines[i].trim();
+			const match = timeRegex.exec(line);
+			if (match) {
+				const start = toAssTimestamp(match[1]);
+				const end = toAssTimestamp(match[2]);
+				i += 1;
+				const textLines: string[] = [];
+				while (i < lines.length && lines[i].trim() !== '') {
+					textLines.push(lines[i].trim());
+					i += 1;
+				}
+				if (textLines.length > 0) {
+					const text = textLines.join('\\N');
+					dialogues.push(`Dialogue: 0,${start},${end},Default,,0,0,0,,${text}`);
+				}
+			} else {
+				i += 1;
+			}
+		}
+		return `${header}\n${dialogues.join('\n')}\n`;
+	}
+
+	async function destroyJassub(): Promise<void> {
+		if (jassubInstance) {
+			const instance = jassubInstance;
+			jassubInstance = null;
+			try {
+				await instance.destroy();
+			} catch {
+				/* ignore */
+			}
+		}
+	}
+
+	async function applySubtitleChoice(): Promise<void> {
 		if (!player || player.isDisposed()) return;
 		const externalId = subtitleChoice.startsWith('ext:')
 			? subtitleChoice.slice('ext:'.length)
 			: null;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const tracks = player.textTracks() as any;
-		for (let i = 0; i < tracks.length; i += 1) {
-			const track = tracks[i];
-			track.mode = externalId !== null && track.id === externalId ? 'showing' : 'disabled';
+
+		await destroyJassub();
+
+		syncingTracks = true;
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const tracks = player.textTracks() as any;
+			for (let i = 0; i < tracks.length; i += 1) {
+				tracks[i].mode = 'disabled';
+			}
+
+			if (!externalId || !videoEl) return;
+
+			const selectedTrack = (info?.subtitles ?? []).find((t) => t.id === externalId);
+			if (!selectedTrack) return;
+
+			const delimiter = selectedTrack.url.includes('?') ? '&' : '?';
+			const fetchUrl =
+				selectedTrack.format === 'ass' || selectedTrack.format === 'ssa'
+					? `${selectedTrack.url}${delimiter}raw=true`
+					: selectedTrack.url;
+
+			try {
+				const res = await fetch(fetchUrl);
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				const text = await res.text();
+				const subContent = toAss(text);
+
+				if (subtitleChoice === `ext:${externalId}` && videoEl) {
+					jassubInstance = new JASSUB({
+						video: videoEl,
+						subContent
+					});
+				}
+			} catch (err) {
+				console.warn('JASSUB initialization failed, falling back to native text track:', err);
+				for (let i = 0; i < tracks.length; i += 1) {
+					const track = tracks[i];
+					if (track.id === externalId) {
+						track.mode = 'showing';
+					}
+				}
+			}
+		} finally {
+			syncingTracks = false;
 		}
 	}
 
@@ -251,6 +379,8 @@
 		levels = [];
 		qualityLevel = -1;
 
+		await destroyJassub();
+
 		const source = response.mode === 'direct_play' ? response.url : response.hls_url;
 		if (!source) {
 			loadError = 'The server returned no playable source.';
@@ -289,7 +419,7 @@
 			/* autoplay blocked: controls are right there */
 		});
 
-		applySubtitleChoice();
+		void applySubtitleChoice();
 	}
 
 	function initPlayer(): void {
@@ -347,6 +477,23 @@
 			ql.on('removequalitylevel', updateQualityLevels);
 		}
 
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const textTracks = instance.textTracks() as any;
+		textTracks?.on('change', () => {
+			if (syncingTracks) return;
+			let activeId: string | null = null;
+			for (let i = 0; i < textTracks.length; i += 1) {
+				if (textTracks[i].mode === 'showing') {
+					activeId = textTracks[i].id;
+					break;
+				}
+			}
+			const targetChoice = activeId ? `ext:${activeId}` : '';
+			if (subtitleChoice !== targetChoice && !subtitleChoice.startsWith('emb:')) {
+				subtitleChoice = targetChoice;
+			}
+		});
+
 		if (!focusTaken) {
 			focusTaken = true;
 			video.focus({ preventScroll: true });
@@ -386,7 +533,7 @@
 			if (currentSub.startsWith('emb:')) {
 				void startPlayback();
 			} else {
-				applySubtitleChoice();
+				void applySubtitleChoice();
 			}
 		}
 	});
@@ -432,6 +579,7 @@
 			if (session) {
 				void api.post(`/hls/${session}/stop`).catch(() => {});
 			}
+			void destroyJassub();
 			if (player && !player.isDisposed()) {
 				player.dispose();
 				player = null;
@@ -545,6 +693,16 @@
 		object-fit: contain;
 	}
 
+	:global(.video-container .JASSUB) {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+		z-index: 1;
+	}
+
 	:global(.video-container .vjs-big-play-button) {
 		background-color: rgba(22, 27, 34, 0.85);
 		border-color: var(--border);
@@ -571,6 +729,7 @@
 	:global(.video-container .vjs-control-bar) {
 		background-color: rgba(14, 17, 22, 0.85);
 		backdrop-filter: blur(8px);
+		z-index: 2;
 	}
 
 	:global(.video-container .vjs-play-progress) {

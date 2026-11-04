@@ -7924,6 +7924,7 @@ export interface operations {
     get_subtitle_api_v1_subtitles__subtitle_id__vtt_get: {
         parameters: {
             query?: {
+                raw?: boolean;
                 /** @description Media access token */
                 token?: string | null;
             };

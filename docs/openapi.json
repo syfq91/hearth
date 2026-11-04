@@ -13056,6 +13056,16 @@
             }
           },
           {
+            "in": "query",
+            "name": "raw",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Raw",
+              "type": "boolean"
+            }
+          },
+          {
             "description": "Media access token",
             "in": "query",
             "name": "token",

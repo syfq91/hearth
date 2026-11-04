@@ -39,6 +39,7 @@ async def get_subtitle(
     viewer: ViewerDep,
     settings: SettingsDep,
     session: SessionDep,
+    raw: bool = False,
 ) -> Response:
     """Return a sidecar subtitle as WebVTT.
 
@@ -98,8 +99,20 @@ async def get_subtitle(
     except OSError:
         raise NotFoundError(_NOT_FOUND, code="subtitle_not_found") from None
 
+    decoded = decode_subtitle_bytes(data)
+    if raw:
+        media_type = "text/x-ssa" if sidecar.suffix.casefold() in (".ass", ".ssa") else "text/plain"
+        return Response(
+            content=decoded,
+            media_type=media_type,
+            headers={
+                "Cache-Control": "private, max-age=0, must-revalidate",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
     try:
-        document = convert_to_webvtt(decode_subtitle_bytes(data), sidecar.suffix)
+        document = convert_to_webvtt(decoded, sidecar.suffix)
     except ValueError:
         raise NotFoundError(_NOT_FOUND, code="subtitle_not_found") from None
 

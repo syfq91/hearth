@@ -45,7 +45,7 @@ Interactive OpenAPI documentation is available at `http://localhost:8000/docs`.
 
 ### Features & Web UI
 
-- **Movies & TV Shows**: Adaptive video player with [Video.js](https://videojs.org/), audio track switching, subtitle selectors, resume playback, and next-episode prompts.
+- **Movies & TV Shows**: Adaptive video player with [Video.js](https://videojs.org/), rich SSA/ASS subtitle rendering via [JASSUB](https://github.com/ThaUnknown/jassub), audio track switching, subtitle selectors, resume playback, and next-episode prompts.
 - **Music**: Queue player with disc grouping, album artwork, and Media Session API support for OS lockscreen and media key controls.
 - **Books & Comics**: In-browser reader supporting EPUB (via foliate-js), PDF (via pdf.js), and CBZ/CBR comics with cross-client reading progress synchronization.
 - **10-Foot TV Mode**: Dedicated spatial navigation mode with D-pad / arrow key support for living room and smart TV browsers.
