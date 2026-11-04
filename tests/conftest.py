@@ -1,6 +1,6 @@
 """Shared pytest fixtures: isolated settings, migrated databases and API client."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
 import httpx
@@ -8,6 +8,7 @@ import pytest
 from asgi_lifespan import LifespanManager
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+import app.services.transcode.session as session_mod
 from app.core.config import Settings
 from app.db.migrate import run_migrations_async
 from app.db.session import build_engine, build_sessionmaker
@@ -58,3 +59,9 @@ async def api_client(db_settings: Settings) -> AsyncIterator[httpx.AsyncClient]:
         transport = httpx.ASGITransport(app=application)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             yield client
+
+
+@pytest.fixture(autouse=True)
+def _reset_singletons() -> Iterator[None]:
+    yield
+    session_mod._session_manager = None

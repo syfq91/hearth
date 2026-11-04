@@ -391,7 +391,9 @@ _session_manager: SessionManager | None = None
 def get_session_manager(settings: Settings | None = None) -> SessionManager:
     """Return the global session manager singleton."""
     global _session_manager
-    if _session_manager is None:
+    if _session_manager is None or (
+        settings is not None and _session_manager.settings is not settings
+    ):
         _session_manager = SessionManager(settings)
     return _session_manager
 
