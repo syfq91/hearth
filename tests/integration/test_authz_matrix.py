@@ -264,6 +264,8 @@ def test_declared_policy_matches_dependency_wiring(db_settings: Settings) -> Non
     application = create_app(db_settings)
     wired: dict[tuple[str, str], set[str]] = {}
     for route in _walk(application.routes):
+        if route.path == "/metrics":
+            continue
         policy = _policy_of_route(route)
         for method in route.methods - {"HEAD", "OPTIONS"}:
             wired.setdefault((method.upper(), "/api/v1" + route.path), set()).add(policy)

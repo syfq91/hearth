@@ -53,15 +53,18 @@ def test_api_passes_settings_to_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_api_embed_worker_sets_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """The --embed-worker option sets the HEARTH_EMBED_WORKER environment variable."""
+    import os
+
     monkeypatch.setattr(cli.uvicorn, "run", lambda *a, **k: None)
     monkeypatch.delenv("HEARTH_EMBED_WORKER", raising=False)
 
-    result = runner.invoke(cli_app, ["api", "--embed-worker"])
-
-    assert result.exit_code == 0
-    import os
-
-    assert os.environ.get("HEARTH_EMBED_WORKER") == "true"
+    try:
+        result = runner.invoke(cli_app, ["api", "--embed-worker"])
+        assert result.exit_code == 0
+        assert os.environ.get("HEARTH_EMBED_WORKER") == "true"
+    finally:
+        os.environ.pop("HEARTH_EMBED_WORKER", None)
+        cli.get_settings.cache_clear()
 
 
 def test_worker_enters_idle_loop(monkeypatch: pytest.MonkeyPatch) -> None:
