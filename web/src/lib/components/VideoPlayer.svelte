@@ -1,5 +1,7 @@
 <script lang="ts">
-	import Hls from 'hls.js';
+	import videojs from 'video.js';
+	import type Player from 'video.js/dist/types/player';
+	import 'video.js/dist/video-js.css';
 	import { api } from '../api/client';
 	import type { PlaybackInfoResponse } from '../api/types';
 
@@ -14,7 +16,10 @@
 
 	let { itemId, startAtMs = 0, title, onEnded }: Props = $props();
 
-	let video = $state<HTMLVideoElement | null>(null);
+	let containerEl = $state<HTMLDivElement | null>(null);
+	let videoEl = $state<HTMLVideoElement | null>(null);
+	let player: Player | null = null;
+
 	let info = $state<PlaybackInfoResponse | null>(null);
 	let loadError = $state<string | null>(null);
 	let loading = $state(true);
@@ -22,29 +27,42 @@
 	/** Embedded subtitle stream handed to the transcode plan, if any. */
 	let embeddedSubtitleIndex = $state<number | null>(null);
 
-	let hls: Hls | null = null;
 	/** Server-side HLS session for `info`; plain so re-planning cannot loop effects. */
 	let sessionId: string | null = null;
 	let resumeApplied = false;
 	let lastReportedMs = 0;
 	let destroyed = false;
+	let focusTaken = false;
+
+	let lastItemId = '';
+	let lastAudioTrack: number | null = null;
+	let lastSubChoice = '';
 
 	/** HLS rendition list for the quality selector (empty = not applicable). */
 	let levels = $state<{ index: number; label: string }[]>([]);
 	/** Selected rendition index, or -1 for auto. */
 	let qualityLevel = $state(-1);
 
+	/**
+	 * Subtitle choice in the select: `ext:<id>` for a sidecar file the browser
+	 * renders from a `<track>`, `emb:<index>` for an embedded stream the
+	 * server must mux into the plan, or empty for off.
+	 */
+	let subtitleChoice = $state('');
+
 	// Progress checkpoints (docs/API.md §4: resume and next-up depend on
 	// them): every 15s of playback, immediately on pause, and on unload.
 	const REPORT_INTERVAL_MS = 15_000;
 
 	async function report(state: 'playing' | 'paused' | 'stopped'): Promise<void> {
-		const element = video;
-		if (!element) return;
-		const position_ms = Math.max(0, Math.floor(element.currentTime * 1000));
-		const duration_ms = Number.isFinite(element.duration)
-			? Math.floor(element.duration * 1000)
-			: undefined;
+		if (!player || player.isDisposed()) return;
+		const cur = player.currentTime() ?? 0;
+		const dur = player.duration();
+		const position_ms = Math.max(0, Math.floor(cur * 1000));
+		const duration_ms =
+			typeof dur === 'number' && Number.isFinite(dur) && dur > 0
+				? Math.floor(dur * 1000)
+				: undefined;
 		lastReportedMs = Math.max(lastReportedMs, position_ms);
 		try {
 			await api.post(`/items/${itemId}/progress`, {
@@ -56,103 +74,13 @@
 	}
 
 	function handleTimeUpdate(): void {
-		const element = video;
-		if (!element) return;
-		const positionMs = Math.floor(element.currentTime * 1000);
+		if (!player || player.isDisposed()) return;
+		const cur = player.currentTime() ?? 0;
+		const positionMs = Math.floor(cur * 1000);
 		if (positionMs - lastReportedMs >= REPORT_INTERVAL_MS) {
 			lastReportedMs = positionMs;
 			void report('playing');
 		}
-	}
-
-	/** (Re)start playback with the current track choices. */
-	async function startPlayback(): Promise<void> {
-		destroyed = false;
-		loading = true;
-		loadError = null;
-		// The component is reused across episodes: tear down the previous
-		// source and its server-side session before planning the next one.
-		hls?.destroy();
-		hls = null;
-		const previousSession = sessionId;
-		sessionId = null;
-		info = null;
-		if (previousSession) {
-			void api.post(`/hls/${previousSession}/stop`).catch(() => {});
-		}
-		embeddedSubtitleIndex = subtitleChoice.startsWith('emb:')
-			? Number.parseInt(subtitleChoice.slice('emb:'.length), 10)
-			: null;
-		let response: PlaybackInfoResponse;
-		try {
-			response = await api.post<PlaybackInfoResponse>(`/items/${itemId}/playback-info`, {
-				body: {
-					audio_track_index: audioTrackIndex,
-					subtitle_track_index: embeddedSubtitleIndex
-				}
-			});
-		} catch (e) {
-			loadError = e instanceof Error ? e.message : String(e);
-			loading = false;
-			return;
-		}
-		if (destroyed) return;
-		info = response;
-		sessionId = response.session_id ?? null;
-		await attachSource(response);
-	}
-
-	async function attachSource(response: PlaybackInfoResponse): Promise<void> {
-		const element = video;
-		if (!element) return;
-		resumeApplied = false;
-		lastReportedMs = 0;
-		levels = [];
-		qualityLevel = -1;
-		const source = response.mode === 'direct_play' ? response.url : response.hls_url;
-		if (!source) {
-			loadError = 'The server returned no playable source.';
-			loading = false;
-			return;
-		}
-		hls?.destroy();
-		hls = null;
-		if (response.mode !== 'direct_play' && Hls.isSupported()) {
-			const instance = new Hls({ enableWorker: true });
-			hls = instance;
-			instance.loadSource(source);
-			instance.attachMedia(element);
-			instance.on(Hls.Events.MANIFEST_PARSED, () => {
-				// Quality selector: one entry per rendition, auto when none picked.
-				const parsed = instance.levels.map((level, index) => ({
-					index,
-					label: level.height
-						? `${level.height}p (${formatBitrate(level.bitrate)})`
-						: `${formatBitrate(level.bitrate)}`
-				}));
-				levels = parsed.length > 1 ? parsed : [];
-				qualityLevel = -1;
-				loading = false;
-				void element.play().catch(() => {
-					/* autoplay blocked: the controls are right there */
-				});
-			});
-			instance.on(Hls.Events.ERROR, (_event, data) => {
-				if (data.fatal && hls === instance) {
-					loadError = `Playback failed: ${data.details}`;
-					instance.destroy();
-					hls = null;
-				}
-			});
-		} else {
-			// Direct play, or native HLS (Safari and some TV browsers).
-			element.src = source;
-			loading = false;
-			// Same autoplay attempt as the hls.js path; if the browser blocks
-			// it, the focused element's space key or the controls start it.
-			void element.play().catch(() => {});
-		}
-		applySubtitleChoice();
 	}
 
 	function formatBitrate(bitsPerSecond: number | undefined): string {
@@ -161,38 +89,69 @@
 		return mbps >= 1 ? `${mbps.toFixed(1)} Mbps` : `${Math.round(bitsPerSecond / 1000)} kbps`;
 	}
 
+	function updateQualityLevels(): void {
+		if (!player || player.isDisposed()) return;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const ql = (player as any).qualityLevels?.();
+		if (!ql || ql.length <= 1) {
+			levels = [];
+			qualityLevel = -1;
+			return;
+		}
+		const parsed: { index: number; label: string }[] = [];
+		for (let i = 0; i < ql.length; i += 1) {
+			const lvl = ql[i];
+			parsed.push({
+				index: i,
+				label: lvl.height
+					? `${lvl.height}p (${formatBitrate(lvl.bitrate)})`
+					: `${formatBitrate(lvl.bitrate)}`
+			});
+		}
+		levels = parsed;
+	}
+
 	/** Apply the quality select: -1 returns to ABR. */
 	function applyQuality(): void {
-		if (hls) hls.currentLevel = qualityLevel;
+		if (!player || player.isDisposed()) return;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const ql = (player as any).qualityLevels?.();
+		if (!ql) return;
+		for (let i = 0; i < ql.length; i += 1) {
+			ql[i].enabled = qualityLevel === -1 || qualityLevel === i;
+		}
 	}
 
 	function applyResume(): void {
-		const element = video;
-		if (resumeApplied || !element || startAtMs <= 0) return;
+		if (resumeApplied || !player || player.isDisposed() || startAtMs <= 0) return;
 		resumeApplied = true;
-		const durationMs = element.duration * 1000;
+		const dur = player.duration() ?? 0;
+		const durationMs = dur * 1000;
 		// Near the end the user wants a rewatch prompt, not a jump to credits.
 		if (Number.isFinite(durationMs) && durationMs - startAtMs < 30_000) return;
-		element.currentTime = startAtMs / 1000;
+		player.currentTime(startAtMs / 1000);
 	}
 
 	function togglePlay(): void {
-		const element = video;
-		if (!element) return;
-		if (element.paused) void element.play().catch(() => {});
-		else element.pause();
+		if (!player || player.isDisposed()) return;
+		if (player.paused()) {
+			void player.play()?.catch(() => {});
+		} else {
+			player.pause();
+		}
 	}
 
 	function seekBy(deltaSeconds: number): void {
-		const element = video;
-		if (!element) return;
-		element.currentTime = Math.max(0, element.currentTime + deltaSeconds);
+		if (!player || player.isDisposed()) return;
+		const cur = player.currentTime() ?? 0;
+		player.currentTime(Math.max(0, cur + deltaSeconds));
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
-		// Bound to the video element: media keys live here, while arrow keys
-		// it does not consume (up/down) bubble out to the app's spatial
-		// navigation, and controls keep their native key handling.
+		// Keys starting inside the control bar buttons or menus are left to Video.js
+		if ((event.target as HTMLElement)?.closest('.vjs-control-bar')) {
+			return;
+		}
 		switch (event.key) {
 			case ' ':
 			case 'k':
@@ -215,62 +174,237 @@
 			case 'f':
 				event.preventDefault();
 				event.stopPropagation();
-				void video?.parentElement?.requestFullscreen?.().catch(() => {});
+				if (player?.isFullscreen()) {
+					void player.exitFullscreen();
+				} else {
+					void player?.requestFullscreen();
+				}
 				break;
 			default:
 				break;
 		}
 	}
 
-	/**
-	 * Subtitle choice in the select: `ext:<id>` for a sidecar file the browser
-	 * renders from a `<track>`, `emb:<index>` for an embedded stream the
-	 * server must mux into the plan, or empty for off.
-	 */
-	let subtitleChoice = $state('');
-
-	/** Applied to the media element after each (re)attach. */
 	function applySubtitleChoice(): void {
-		const element = video;
-		if (!element) return;
+		if (!player || player.isDisposed()) return;
 		const externalId = subtitleChoice.startsWith('ext:')
 			? subtitleChoice.slice('ext:'.length)
 			: null;
-		const tracks = element.textTracks;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const tracks = player.textTracks() as any;
 		for (let i = 0; i < tracks.length; i += 1) {
-			tracks[i].mode = externalId !== null && tracks[i].id === externalId ? 'showing' : 'disabled';
+			const track = tracks[i];
+			track.mode = externalId !== null && track.id === externalId ? 'showing' : 'disabled';
 		}
 	}
 
+	function getSourceType(mode: string, url: string): string {
+		if (mode !== 'direct_play' || url.includes('.m3u8')) {
+			return 'application/x-mpegURL';
+		}
+		if (url.includes('.webm')) return 'video/webm';
+		if (url.includes('.ogg')) return 'video/ogg';
+		return 'video/mp4';
+	}
+
+	/** (Re)start playback with the current track choices. */
+	async function startPlayback(): Promise<void> {
+		destroyed = false;
+		loading = true;
+		loadError = null;
+
+		const previousSession = sessionId;
+		sessionId = null;
+		info = null;
+		if (previousSession) {
+			void api.post(`/hls/${previousSession}/stop`).catch(() => {});
+		}
+
+		embeddedSubtitleIndex = subtitleChoice.startsWith('emb:')
+			? Number.parseInt(subtitleChoice.slice('emb:'.length), 10)
+			: null;
+
+		let response: PlaybackInfoResponse;
+		try {
+			response = await api.post<PlaybackInfoResponse>(`/items/${itemId}/playback-info`, {
+				body: {
+					audio_track_index: audioTrackIndex,
+					subtitle_track_index: embeddedSubtitleIndex
+				}
+			});
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : String(e);
+			loading = false;
+			return;
+		}
+
+		if (destroyed) return;
+		info = response;
+		sessionId = response.session_id ?? null;
+		await attachSource(response);
+	}
+
+	async function attachSource(response: PlaybackInfoResponse): Promise<void> {
+		if (!player || player.isDisposed()) return;
+		resumeApplied = false;
+		lastReportedMs = 0;
+		levels = [];
+		qualityLevel = -1;
+
+		const source = response.mode === 'direct_play' ? response.url : response.hls_url;
+		if (!source) {
+			loadError = 'The server returned no playable source.';
+			loading = false;
+			return;
+		}
+
+		// Clear previous remote text tracks
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const remoteTracks = player.remoteTextTracks() as any;
+		while (remoteTracks && remoteTracks.length > 0) {
+			player.removeRemoteTextTrack(remoteTracks[0]);
+		}
+
+		// Add external subtitles
+		for (const track of response.subtitles ?? []) {
+			player.addRemoteTextTrack(
+				{
+					id: track.id,
+					kind: 'subtitles',
+					src: track.url,
+					srclang: track.language ?? '',
+					label: track.name
+				},
+				false
+			);
+		}
+
+		player.src({
+			src: source,
+			type: getSourceType(response.mode, source)
+		});
+
+		loading = false;
+		void player.play()?.catch(() => {
+			/* autoplay blocked: controls are right there */
+		});
+
+		applySubtitleChoice();
+	}
+
+	function initPlayer(): void {
+		if (!containerEl || player) return;
+
+		const video = document.createElement('video');
+		video.className = 'video-js vjs-default-skin vjs-big-play-centered';
+		video.tabIndex = 0;
+		video.setAttribute('playsinline', '');
+		video.setAttribute('preload', 'metadata');
+		containerEl.appendChild(video);
+		videoEl = video;
+
+		video.addEventListener('keydown', handleKeydown);
+
+		const instance = videojs(video, {
+			controls: true,
+			fill: true,
+			responsive: true,
+			playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
+			controlBar: {
+				skipButtons: {
+					forward: 10,
+					backward: 10
+				}
+			},
+			html5: {
+				vhs: {
+					overrideNative: !videojs.browser.IS_ANY_SAFARI
+				}
+			}
+		});
+
+		player = instance;
+
+		instance.on('timeupdate', handleTimeUpdate);
+		instance.on('loadedmetadata', applyResume);
+		instance.on('canplay', applyResume);
+		instance.on('pause', () => void report('paused'));
+		instance.on('ended', () => {
+			void report('stopped');
+			onEnded?.();
+		});
+		instance.on('error', () => {
+			const err = instance.error();
+			if (err) {
+				loadError = `Playback failed: ${err.message || 'unknown error'}`;
+			}
+		});
+
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const ql = (instance as any).qualityLevels?.();
+		if (ql) {
+			ql.on('addqualitylevel', updateQualityLevels);
+			ql.on('removequalitylevel', updateQualityLevels);
+		}
+
+		if (!focusTaken) {
+			focusTaken = true;
+			video.focus({ preventScroll: true });
+		}
+
+		lastItemId = itemId;
+		lastAudioTrack = audioTrackIndex;
+		lastSubChoice = subtitleChoice;
+		void startPlayback();
+	}
+
 	$effect(() => {
-		if (video) void startPlayback();
+		if (containerEl && !player) {
+			initPlayer();
+		}
 	});
 
-	// Take keyboard focus on open so the media keys work immediately (and the
-	// D-pad starts from the video rather than the page behind it).
-	let focusTaken = false;
-
 	$effect(() => {
-		const element = video;
-		if (!element || focusTaken) return;
+		const currentItem = itemId;
+		const currentAudio = audioTrackIndex;
+		const currentSub = subtitleChoice;
+
+		if (!player) return;
+
+		if (currentItem !== lastItemId) {
+			lastItemId = currentItem;
+			lastAudioTrack = null;
+			audioTrackIndex = null;
+			lastSubChoice = '';
+			subtitleChoice = '';
+			void startPlayback();
+		} else if (currentAudio !== lastAudioTrack) {
+			lastAudioTrack = currentAudio;
+			void startPlayback();
+		} else if (currentSub !== lastSubChoice) {
+			lastSubChoice = currentSub;
+			if (currentSub.startsWith('emb:')) {
+				void startPlayback();
+			} else {
+				applySubtitleChoice();
+			}
+		}
+	});
+
+	// Take keyboard focus on open so the media keys work immediately
+	$effect(() => {
+		const el = videoEl;
+		if (!el || focusTaken) return;
 		focusTaken = true;
-		element.focus({ preventScroll: true });
+		el.focus({ preventScroll: true });
 	});
 
-	/**
-	 * `<video controls>` handles Space itself, and the browser's handler is
-	 * registered before ours — so a `preventDefault` from our own keydown
-	 * listener arrives too late: Space would pause and then immediately resume,
-	 * doing nothing visible. Cancelling it in the capture phase (which runs
-	 * before every target-phase listener) leaves this component the sole owner
-	 * of Space. Keys that start inside the native controls are left alone so
-	 * a focused button still activates.
-	 */
+	// Cancel native space on video so our custom handler is sole owner
 	$effect(() => {
-		const element = video;
-		if (!element) return;
+		const el = videoEl;
+		if (!el) return;
 		const cancelNativeSpace = (event: KeyboardEvent) => {
-			if (event.key === ' ' && event.composedPath()[0] === element) {
+			if (event.key === ' ' && event.composedPath()[0] === el) {
 				event.preventDefault();
 			}
 		};
@@ -278,7 +412,7 @@
 		return () => window.removeEventListener('keydown', cancelNativeSpace, true);
 	});
 
-	// Unload reporting: keep the resume point when the tab is hidden or closed.
+	// Unload reporting: keep the resume point when the tab is hidden or closed
 	$effect(() => {
 		const onHide = () => void report('paused');
 		window.addEventListener('pagehide', onHide);
@@ -289,17 +423,19 @@
 		};
 	});
 
+	// Unmount cleanup
 	$effect(() => {
-		// Unmount-only cleanup: the effect body reads no reactive state, so it
-		// runs once and the teardown fires when the component is destroyed.
 		return () => {
 			destroyed = true;
 			void report('stopped');
-			hls?.destroy();
-			hls = null;
 			const session = sessionId;
 			if (session) {
 				void api.post(`/hls/${session}/stop`).catch(() => {});
+			}
+			if (player && !player.isDisposed()) {
+				player.dispose();
+				player = null;
+				videoEl = null;
 			}
 		};
 	});
@@ -316,32 +452,7 @@
 		<p class="status" role="status">Preparing playback…</p>
 	{/if}
 
-	<!-- svelte-ignore a11y_media_has_caption -->
-	<video
-		bind:this={video}
-		tabindex="0"
-		controls
-		playsinline
-		preload="metadata"
-		onkeydown={handleKeydown}
-		ontimeupdate={handleTimeUpdate}
-		onloadedmetadata={applyResume}
-		onpause={() => void report('paused')}
-		onended={() => {
-			void report('stopped');
-			onEnded?.();
-		}}
-	>
-		{#each availableSubtitles as track (track.id)}
-			<track
-				id={track.id}
-				kind="subtitles"
-				src={track.url}
-				srclang={track.language ?? ''}
-				label={track.name}
-			/>
-		{/each}
-	</video>
+	<div class="video-container" bind:this={containerEl}></div>
 
 	<div class="bar">
 		<h1 class="title">{title}</h1>
@@ -412,11 +523,70 @@
 		gap: 0.75rem;
 	}
 
-	video {
+	.video-container {
 		width: 100%;
+		aspect-ratio: 16 / 9;
 		max-height: 72vh;
 		background: #000;
 		border-radius: var(--radius);
+		overflow: hidden;
+		position: relative;
+		margin: 0 auto;
+	}
+
+	:global(.video-container .video-js) {
+		width: 100%;
+		height: 100%;
+		border-radius: var(--radius);
+		background-color: #000;
+	}
+
+	:global(.video-container .video-js .vjs-tech) {
+		object-fit: contain;
+	}
+
+	:global(.video-container .vjs-big-play-button) {
+		background-color: rgba(22, 27, 34, 0.85);
+		border-color: var(--border);
+		border-radius: var(--radius);
+		font-size: 2.5em;
+		height: 1.8em;
+		line-height: 1.8em;
+		margin-top: -0.9em;
+		margin-left: -1.5em;
+		width: 3em;
+		transition:
+			background-color 0.2s,
+			border-color 0.2s,
+			transform 0.2s;
+	}
+
+	:global(.video-container .video-js:hover .vjs-big-play-button),
+	:global(.video-container .video-js .vjs-big-play-button:focus) {
+		background-color: var(--accent);
+		border-color: var(--accent);
+		color: var(--accent-contrast);
+	}
+
+	:global(.video-container .vjs-control-bar) {
+		background-color: rgba(14, 17, 22, 0.85);
+		backdrop-filter: blur(8px);
+	}
+
+	:global(.video-container .vjs-play-progress) {
+		background-color: var(--accent);
+	}
+
+	:global(.video-container .vjs-volume-level) {
+		background-color: var(--accent);
+	}
+
+	:global(.video-container .vjs-slider) {
+		background-color: rgba(255, 255, 255, 0.2);
+	}
+
+	:global(.video-container .vjs-load-progress) {
+		background: rgba(255, 255, 255, 0.3);
 	}
 
 	.bar {
