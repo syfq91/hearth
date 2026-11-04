@@ -26,6 +26,7 @@ export type TokenPair = S['TokenPair'];
 export type Credentials = S['Credentials'];
 export type RefreshRequest = S['RefreshRequest'];
 export type UserResponse = S['UserResponse'];
+export type SetupStatusResponse = S['SetupStatusResponse'];
 export type HealthResponse = S['HealthResponse'];
 export type VersionResponse = S['VersionResponse'];
 export type MediaTokenResponse = S['MediaTokenResponse'];

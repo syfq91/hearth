@@ -5207,6 +5207,25 @@
         "title": "SessionStopResponse",
         "type": "object"
       },
+      "SetupStatusResponse": {
+        "description": "Public status of initial server setup.",
+        "properties": {
+          "has_admin": {
+            "title": "Has Admin",
+            "type": "boolean"
+          },
+          "setup_required": {
+            "title": "Setup Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_admin",
+          "setup_required"
+        ],
+        "title": "SetupStatusResponse",
+        "type": "object"
+      },
       "SubtitleResponse": {
         "description": "A playable external subtitle track.",
         "properties": {
@@ -8155,6 +8174,26 @@
       }
     },
     "/api/v1/auth/setup": {
+      "get": {
+        "description": "Return whether the server has at least one admin account created.",
+        "operationId": "get_setup_status_api_v1_auth_setup_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Setup Status",
+        "tags": [
+          "auth"
+        ]
+      },
       "post": {
         "description": "Create the first administrator. Only allowed while no accounts exist.",
         "operationId": "setup_api_v1_auth_setup_post",

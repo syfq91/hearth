@@ -46,6 +46,18 @@ async def test_setup_creates_admin_and_returns_tokens(api_client: httpx.AsyncCli
     assert me.json()["disabled"] is False
 
 
+async def test_setup_status_reports_admin_presence(api_client: httpx.AsyncClient) -> None:
+    res = await api_client.get("/api/v1/auth/setup")
+    assert res.status_code == 200
+    assert res.json() == {"has_admin": False, "setup_required": True}
+
+    await _setup(api_client)
+
+    res = await api_client.get("/api/v1/auth/setup")
+    assert res.status_code == 200
+    assert res.json() == {"has_admin": True, "setup_required": False}
+
+
 async def test_setup_is_rejected_once_an_admin_exists(api_client: httpx.AsyncClient) -> None:
     await _setup(api_client)
 

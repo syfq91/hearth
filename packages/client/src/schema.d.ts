@@ -562,7 +562,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get Setup Status
+         * @description Return whether the server has at least one admin account created.
+         */
+        get: operations["get_setup_status_api_v1_auth_setup_get"];
         put?: never;
         /**
          * Setup
@@ -4021,6 +4025,16 @@ export interface components {
             stopped: boolean;
         };
         /**
+         * SetupStatusResponse
+         * @description Public status of initial server setup.
+         */
+        SetupStatusResponse: {
+            /** Has Admin */
+            has_admin: boolean;
+            /** Setup Required */
+            setup_required: boolean;
+        };
+        /**
          * SubtitleResponse
          * @description A playable external subtitle track.
          */
@@ -5337,6 +5351,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_setup_status_api_v1_auth_setup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupStatusResponse"];
                 };
             };
         };

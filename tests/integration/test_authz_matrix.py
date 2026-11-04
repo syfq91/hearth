@@ -64,6 +64,7 @@ POLICY: dict[tuple[str, str], str] = {
     ("GET", "/api/v1/auth/me"): "auth",
     ("POST", "/api/v1/auth/media-tokens"): "auth",
     ("POST", "/api/v1/auth/refresh"): "public",
+    ("GET", "/api/v1/auth/setup"): "public",
     ("POST", "/api/v1/auth/setup"): "public",
     ("GET", "/api/v1/authors"): "auth",
     ("GET", "/api/v1/authors/{author_id}"): "auth",

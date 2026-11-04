@@ -57,6 +57,7 @@ ENDPOINT_POLICIES: dict[tuple[str, str], EndpointPolicy] = {
     ("GET", "/api/v1/version"): EndpointPolicy("public"),
     ("GET", "/api/v1/about"): EndpointPolicy("public"),
     # Auth
+    ("GET", "/api/v1/auth/setup"): EndpointPolicy("public"),
     ("POST", "/api/v1/auth/setup"): EndpointPolicy("public"),
     ("POST", "/api/v1/auth/login"): EndpointPolicy("public"),
     ("POST", "/api/v1/auth/refresh"): EndpointPolicy("public"),

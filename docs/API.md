@@ -67,6 +67,9 @@ sequenceDiagram
   }
   ```
 - **Response**: `201 Created` returning a full token pair and admin user object. Once completed, subsequent calls return `409 Conflict` (`setup_complete`).
+- **Status Endpoint**: `GET /api/v1/auth/setup`
+- **Access**: Public
+- **Response**: `200 OK` returning `{"has_admin": bool, "setup_required": bool}` indicating whether at least one administrator account exists.
 
 ### 2.2 Login
 - **Endpoint**: `POST /api/v1/auth/login`

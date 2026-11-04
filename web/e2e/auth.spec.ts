@@ -11,6 +11,14 @@ test('anonymous visitors are sent to the login page', async ({ page }) => {
 	await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 });
 
+test('login page hides the admin setup link once an account exists', async ({ page, request }) => {
+	await ensureAccount(request);
+
+	await page.goto('/login');
+	await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Set up the admin account' })).not.toBeVisible();
+});
+
 test('a wrong password is rejected with an error', async ({ page, request }) => {
 	await ensureAccount(request);
 

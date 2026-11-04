@@ -138,6 +138,26 @@ async def _revoke_family(
     )
 
 
+class SetupStatusResponse(BaseModel):
+    """Public status of initial server setup."""
+
+    has_admin: bool
+    setup_required: bool
+
+
+@router.get("/setup", response_model=SetupStatusResponse)
+async def get_setup_status(session: SessionDep) -> SetupStatusResponse:
+    """Return whether the server has at least one admin account created."""
+    admin_count = await session.scalar(
+        select(func.count()).select_from(User).where(User.role == "admin")
+    )
+    has_admin = bool(admin_count and admin_count > 0)
+    return SetupStatusResponse(
+        has_admin=has_admin,
+        setup_required=not has_admin,
+    )
+
+
 @router.post("/setup", status_code=status.HTTP_201_CREATED)
 async def setup(
     payload: Credentials,

@@ -2,6 +2,9 @@
 	import { login, session } from '../../lib/auth.svelte';
 	import { ApiError } from '../../lib/api/client';
 	import { goto } from '$app/navigation';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
 
 	let username = $state('');
 	let password = $state('');
@@ -67,9 +70,11 @@
 					{submitting ? 'Signing in…' : 'Sign in'}
 				</button>
 			</form>
-			<p class="muted">
-				First time here? <a href="/setup">Set up the admin account</a>.
-			</p>
+			{#if !data.hasAdmin}
+				<p class="muted">
+					First time here? <a href="/setup">Set up the admin account</a>.
+				</p>
+			{/if}
 		{/if}
 	</section>
 </div>
