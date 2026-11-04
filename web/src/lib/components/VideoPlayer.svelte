@@ -40,6 +40,7 @@
 	let lastItemId = '';
 	let lastAudioTrack: number | null = null;
 	let lastSubChoice = '';
+	let expectedDuration = 0;
 
 	/** HLS rendition list for the quality selector (empty = not applicable). */
 	let levels = $state<{ index: number; label: string }[]>([]);
@@ -62,10 +63,13 @@
 		const cur = player.currentTime() ?? 0;
 		const dur = player.duration();
 		const position_ms = Math.max(0, Math.floor(cur * 1000));
-		const duration_ms =
+		const rawDuration =
 			typeof dur === 'number' && Number.isFinite(dur) && dur > 0
-				? Math.floor(dur * 1000)
-				: undefined;
+				? dur
+				: expectedDuration > 0
+					? expectedDuration
+					: undefined;
+		const duration_ms = rawDuration ? Math.floor(rawDuration * 1000) : undefined;
 		lastReportedMs = Math.max(lastReportedMs, position_ms);
 		try {
 			await api.post(`/items/${itemId}/progress`, {
@@ -73,6 +77,14 @@
 			});
 		} catch {
 			/* progress is best-effort; never block playback on it */
+		}
+	}
+
+	function syncDuration(): void {
+		if (!player || player.isDisposed() || expectedDuration <= 0) return;
+		const dur = player.duration();
+		if (!dur || !Number.isFinite(dur) || (info?.mode !== 'direct_play' && dur < expectedDuration)) {
+			player.duration(expectedDuration);
 		}
 	}
 
@@ -128,7 +140,7 @@
 	function applyResume(): void {
 		if (resumeApplied || !player || player.isDisposed() || startAtMs <= 0) return;
 		resumeApplied = true;
-		const dur = player.duration() ?? 0;
+		const dur = player.duration() ?? expectedDuration;
 		const durationMs = dur * 1000;
 		// Near the end the user wants a rewatch prompt, not a jump to credits.
 		if (Number.isFinite(durationMs) && durationMs - startAtMs < 30_000) return;
@@ -340,6 +352,7 @@
 		destroyed = false;
 		loading = true;
 		loadError = null;
+		expectedDuration = 0;
 
 		const previousSession = sessionId;
 		sessionId = null;
@@ -414,6 +427,9 @@
 			type: getSourceType(response.mode, source)
 		});
 
+		expectedDuration = response.file?.duration_seconds ?? 0;
+		syncDuration();
+
 		loading = false;
 		void player.play()?.catch(() => {
 			/* autoplay blocked: controls are right there */
@@ -444,7 +460,11 @@
 				skipButtons: {
 					forward: 10,
 					backward: 10
-				}
+				},
+				currentTimeDisplay: true,
+				timeDivider: true,
+				durationDisplay: true,
+				remainingTimeDisplay: false
 			},
 			html5: {
 				vhs: {
@@ -456,6 +476,10 @@
 		player = instance;
 
 		instance.on('timeupdate', handleTimeUpdate);
+		instance.on('timeupdate', syncDuration);
+		instance.on('durationchange', syncDuration);
+		instance.on('loadedmetadata', syncDuration);
+		instance.on('canplay', syncDuration);
 		instance.on('loadedmetadata', applyResume);
 		instance.on('canplay', applyResume);
 		instance.on('pause', () => void report('paused'));
@@ -574,6 +598,7 @@
 	$effect(() => {
 		return () => {
 			destroyed = true;
+			expectedDuration = 0;
 			void report('stopped');
 			const session = sessionId;
 			if (session) {
@@ -730,6 +755,31 @@
 		background-color: rgba(14, 17, 22, 0.85);
 		backdrop-filter: blur(8px);
 		z-index: 2;
+	}
+
+	:global(.video-container .video-js:not(.vjs-live) .vjs-current-time),
+	:global(.video-container .video-js:not(.vjs-live) .vjs-time-divider),
+	:global(.video-container .video-js:not(.vjs-live) .vjs-duration) {
+		display: flex;
+		align-items: center;
+	}
+
+	:global(.video-container .video-js .vjs-time-divider) {
+		min-width: auto;
+		padding-left: 0.25rem;
+		padding-right: 0.25rem;
+	}
+
+	:global(.video-container .video-js .vjs-current-time) {
+		padding-right: 0.25rem;
+	}
+
+	:global(.video-container .video-js .vjs-duration) {
+		padding-left: 0.25rem;
+	}
+
+	:global(.video-container .video-js .vjs-remaining-time) {
+		display: none;
 	}
 
 	:global(.video-container .vjs-play-progress) {
