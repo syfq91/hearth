@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from app.api.v1.jobs import JobResponse, cancel_job
 from app.core.deps import RequireAdmin, SettingsDep
-from app.core.errors import NotFoundError
+from app.core.errors import ForbiddenError, NotFoundError, ValidationError
 from app.core.logging import get_recent_logs
 from app.db.base import utcnow
 from app.db.models import AuditLog, Job, Library, MediaItem, User
@@ -695,4 +695,99 @@ async def restore_database_backup(
         schema_version=str(metadata.get("schema_version", "unknown")),
         created_at=str(metadata.get("created_at", "")),
         hearth_version=str(metadata.get("hearth_version", "")),
+    )
+
+
+class FilesystemEntry(BaseModel):
+    name: str
+    path: str
+    has_children: bool = False
+
+
+class FilesystemBrowseResponse(BaseModel):
+    current_path: str
+    parent_path: str | None = None
+    entries: list[FilesystemEntry] = Field(default_factory=list)
+
+
+@router.get("/filesystem", response_model=FilesystemBrowseResponse)
+async def browse_filesystem(
+    _actor: RequireAdmin,
+    settings: SettingsDep,
+    path: str | None = None,
+) -> FilesystemBrowseResponse:
+    """Browse server directories within the configured media mount for library folder selection."""
+    media_root = settings.media_dir.resolve()
+    if not media_root.exists():
+        return FilesystemBrowseResponse(current_path=str(media_root), parent_path=None, entries=[])
+
+    if path is None or not path.strip():
+        target = media_root
+    else:
+        candidate = Path(path.strip())
+        if not candidate.is_absolute():
+            target = (media_root / candidate).resolve()
+        else:
+            target = candidate.resolve()
+
+    if not target.is_relative_to(media_root):
+        raise ValidationError(
+            f"Path is outside the media directory {media_root}: {path}",
+            code="path_outside_media",
+            details={"path": path},
+        )
+
+    if not target.exists():
+        raise NotFoundError("Directory not found", code="directory_not_found")
+
+    if not target.is_dir():
+        raise ValidationError(
+            f"Path is not a directory: {path}",
+            code="not_a_directory",
+            details={"path": path},
+        )
+
+    parent_path: str | None = None
+    if target != media_root:
+        parent = target.parent.resolve()
+        if parent.is_relative_to(media_root):
+            parent_path = str(parent)
+
+    entries: list[FilesystemEntry] = []
+    try:
+        for item in target.iterdir():
+            if item.name.startswith("."):
+                continue
+            try:
+                if not item.is_dir():
+                    continue
+                resolved_item = item.resolve()
+                if not resolved_item.is_relative_to(media_root):
+                    continue
+                has_children = False
+                try:
+                    for child in resolved_item.iterdir():
+                        if not child.name.startswith(".") and child.is_dir():
+                            has_children = True
+                            break
+                except (OSError, PermissionError):
+                    pass
+
+                entries.append(
+                    FilesystemEntry(
+                        name=item.name,
+                        path=str(resolved_item),
+                        has_children=has_children,
+                    )
+                )
+            except (OSError, PermissionError):
+                continue
+    except (OSError, PermissionError) as exc:
+        raise ForbiddenError(f"Directory is not accessible: {exc}", code="permission_denied") from exc
+
+    entries.sort(key=lambda e: e.name.lower())
+    return FilesystemBrowseResponse(
+        current_path=str(target),
+        parent_path=parent_path,
+        entries=entries,
     )

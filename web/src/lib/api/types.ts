@@ -66,3 +66,5 @@ export type ArtistDetail = S['ArtistDetail'];
 export type ArtistListResponse = S['ArtistListResponse'];
 export type TrackListResponse = S['TrackListResponse'];
 export type LibrarySummary = S['LibrarySummary'];
+export type FilesystemBrowseResponse = S['FilesystemBrowseResponse'];
+export type FilesystemEntry = S['FilesystemEntry'];

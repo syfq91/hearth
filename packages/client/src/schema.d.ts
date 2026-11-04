@@ -64,6 +64,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/filesystem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse Filesystem
+         * @description Browse server directories within the configured media mount for library folder selection.
+         */
+        get: operations["browse_filesystem_api_v1_admin_filesystem_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/items/{item_id}/rematch": {
         parameters: {
             query?: never;
@@ -2946,6 +2966,27 @@ export interface components {
              */
             favorite: boolean;
         };
+        /** FilesystemBrowseResponse */
+        FilesystemBrowseResponse: {
+            /** Current Path */
+            current_path: string;
+            /** Entries */
+            entries?: components["schemas"]["FilesystemEntry"][];
+            /** Parent Path */
+            parent_path?: string | null;
+        };
+        /** FilesystemEntry */
+        FilesystemEntry: {
+            /**
+             * Has Children
+             * @default false
+             */
+            has_children: boolean;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -4611,6 +4652,37 @@ export interface operations {
                 };
                 content: {
                     "application/gzip": string;
+                };
+            };
+        };
+    };
+    browse_filesystem_api_v1_admin_filesystem_get: {
+        parameters: {
+            query?: {
+                path?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilesystemBrowseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

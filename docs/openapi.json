@@ -2350,6 +2350,60 @@
         "title": "FavoriteRequest",
         "type": "object"
       },
+      "FilesystemBrowseResponse": {
+        "properties": {
+          "current_path": {
+            "title": "Current Path",
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/FilesystemEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "parent_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Path"
+          }
+        },
+        "required": [
+          "current_path"
+        ],
+        "title": "FilesystemBrowseResponse",
+        "type": "object"
+      },
+      "FilesystemEntry": {
+        "properties": {
+          "has_children": {
+            "default": false,
+            "title": "Has Children",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path"
+        ],
+        "title": "FilesystemEntry",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -6857,6 +6911,61 @@
           }
         ],
         "summary": "Create Database Backup",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/filesystem": {
+      "get": {
+        "description": "Browse server directories within the configured media mount for library folder selection.",
+        "operationId": "browse_filesystem_api_v1_admin_filesystem_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilesystemBrowseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Browse Filesystem",
         "tags": [
           "admin"
         ]

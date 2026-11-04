@@ -3,6 +3,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import type { LibraryDetail } from '../../../lib/api/types';
 	import type { PageProps } from './$types';
+	import FolderBrowserModal from '../../../lib/components/FolderBrowserModal.svelte';
 
 	let { data }: PageProps = $props();
 
@@ -20,27 +21,51 @@
 
 	let name = $state('');
 	let type = $state<(typeof TYPES)[number]['value']>('movie');
-	let pathsText = $state('');
+	let selectedPaths = $state<string[]>([]);
+	let manualEntry = $state(false);
+	let manualPathText = $state('');
+	let browserOpen = $state(false);
+
 	let creating = $state(false);
 	let message = $state<string | null>(null);
 	let error = $state<string | null>(null);
 	let scanningId = $state<string | null>(null);
 
+	function addManualPath(): void {
+		const trimmed = manualPathText.trim();
+		if (!trimmed) return;
+		if (!selectedPaths.includes(trimmed)) {
+			selectedPaths = [...selectedPaths, trimmed];
+			if (!name.trim()) {
+				const folderName = trimmed.split('/').filter(Boolean).pop();
+				if (folderName) name = folderName;
+			}
+		}
+		manualPathText = '';
+	}
+
+	function removePath(pathToRemove: string): void {
+		selectedPaths = selectedPaths.filter((p) => p !== pathToRemove);
+	}
+
 	async function createLibrary(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		const paths = pathsText
-			.split('\n')
-			.map((line) => line.trim())
-			.filter(Boolean);
-		if (!name.trim() || paths.length === 0) return;
+		if (manualPathText.trim() && !selectedPaths.includes(manualPathText.trim())) {
+			selectedPaths = [...selectedPaths, manualPathText.trim()];
+			manualPathText = '';
+		}
+		if (!name.trim() || selectedPaths.length === 0) {
+			error = 'Please provide a library name and at least one folder path.';
+			return;
+		}
 		creating = true;
 		message = null;
 		error = null;
 		try {
-			await api.post('/libraries', { body: { name: name.trim(), type, paths } });
+			await api.post('/libraries', { body: { name: name.trim(), type, paths: selectedPaths } });
 			message = `Library “${name.trim()}” created.`;
 			name = '';
-			pathsText = '';
+			selectedPaths = [];
 			await invalidateAll();
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -94,14 +119,91 @@
 				{/each}
 			</select>
 		</label>
-		<label>
-			<span>Paths (one per line, absolute inside the container)</span>
-			<textarea bind:value={pathsText} rows={3} required placeholder="/media/movies"></textarea>
-		</label>
-		<button type="submit" disabled={creating}>
+
+		<div class="paths-section">
+			<span class="paths-label">Folder Paths</span>
+
+			{#if selectedPaths.length === 0}
+				<div class="no-paths-box">
+					<p class="muted">No folders selected yet.</p>
+					<button
+						type="button"
+						class="browse-btn-highlight"
+						onclick={() => (browserOpen = true)}
+					>
+						📁 Browse server folders…
+					</button>
+				</div>
+			{:else}
+				<ul class="selected-paths-list">
+					{#each selectedPaths as p (p)}
+						<li class="path-item">
+							<span class="path-text">📁 {p}</span>
+							<button
+								type="button"
+								class="remove-path-btn"
+								onclick={() => removePath(p)}
+								aria-label={`Remove path ${p}`}
+								title="Remove path"
+							>
+								✕
+							</button>
+						</li>
+					{/each}
+				</ul>
+				<div class="path-actions">
+					<button
+						type="button"
+						class="ghost"
+						onclick={() => (browserOpen = true)}
+					>
+						📁 Add another folder…
+					</button>
+					<button
+						type="button"
+						class="ghost text-btn"
+						onclick={() => (manualEntry = !manualEntry)}
+					>
+						{manualEntry ? 'Hide manual entry' : '+ Type path manually'}
+					</button>
+				</div>
+			{/if}
+
+			{#if selectedPaths.length === 0}
+				<div class="path-actions secondary">
+					<button
+						type="button"
+						class="ghost text-btn"
+						onclick={() => (manualEntry = !manualEntry)}
+					>
+						{manualEntry ? 'Hide manual entry' : 'Or enter path manually'}
+					</button>
+				</div>
+			{/if}
+
+			{#if manualEntry}
+				<div class="manual-input-row">
+					<input
+						type="text"
+						bind:value={manualPathText}
+						placeholder="/media/movies"
+						onkeydown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								addManualPath();
+							}
+						}}
+					/>
+					<button type="button" class="ghost" onclick={addManualPath}>Add</button>
+				</div>
+			{/if}
+		</div>
+
+		<button type="submit" disabled={creating || selectedPaths.length === 0}>
 			{creating ? 'Creating…' : 'Create library'}
 		</button>
 	</form>
+
 	{#if message}
 		<p class="ok" role="status">{message}</p>
 	{/if}
@@ -109,6 +211,22 @@
 		<p class="err" role="alert">{error}</p>
 	{/if}
 </section>
+
+<FolderBrowserModal
+	open={browserOpen}
+	initialPath={selectedPaths[selectedPaths.length - 1] || ''}
+	onselect={(path) => {
+		if (!selectedPaths.includes(path)) {
+			selectedPaths = [...selectedPaths, path];
+			if (!name.trim()) {
+				const folderName = path.split('/').filter(Boolean).pop();
+				if (folderName) name = folderName;
+			}
+		}
+		browserOpen = false;
+	}}
+	onclose={() => (browserOpen = false)}
+/>
 
 <section class="card" aria-labelledby="existing-heading">
 	<h2 id="existing-heading">Libraries</h2>
@@ -163,8 +281,8 @@
 	.stack {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
-		max-width: 32rem;
+		gap: 0.85rem;
+		max-width: 34rem;
 	}
 
 	label {
@@ -176,8 +294,7 @@
 	}
 
 	input,
-	select,
-	textarea {
+	select {
 		background: var(--surface-2);
 		border: 1px solid var(--border);
 		border-radius: 6px;
@@ -186,8 +303,114 @@
 		font: inherit;
 	}
 
-	textarea {
-		resize: vertical;
+	.paths-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.paths-label {
+		font-size: 0.85rem;
+		color: var(--muted);
+	}
+
+	.no-paths-box {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.5rem;
+		padding: 0.85rem 1rem;
+		border: 1px dashed var(--border);
+		border-radius: var(--radius);
+		background: var(--surface-2);
+	}
+
+	.no-paths-box p {
+		margin: 0;
+		font-size: 0.85rem;
+	}
+
+	.browse-btn-highlight {
+		background: var(--accent);
+		color: var(--accent-contrast);
+		border: 0;
+		border-radius: var(--radius);
+		padding: 0.45rem 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		font-size: 0.85rem;
+	}
+
+	.browse-btn-highlight:hover {
+		opacity: 0.9;
+	}
+
+	.selected-paths-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+
+	.path-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.4rem 0.75rem;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		font-family: ui-monospace, monospace;
+		font-size: 0.85rem;
+	}
+
+	.path-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.remove-path-btn {
+		background: transparent;
+		border: 0;
+		color: var(--muted);
+		cursor: pointer;
+		padding: 0.15rem 0.4rem;
+		border-radius: 4px;
+		font-size: 0.85rem;
+	}
+
+	.remove-path-btn:hover {
+		color: var(--danger);
+		background: var(--surface);
+	}
+
+	.path-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-top: 0.25rem;
+	}
+
+	.path-actions.secondary {
+		margin-top: 0;
+	}
+
+	.text-btn {
+		font-size: 0.8rem;
+		color: var(--muted);
+	}
+
+	.manual-input-row {
+		display: flex;
+		gap: 0.5rem;
+		margin-top: 0.25rem;
+	}
+
+	.manual-input-row input {
+		flex: 1;
 		font-family: ui-monospace, monospace;
 		font-size: 0.85rem;
 	}
@@ -201,6 +424,7 @@
 		padding: 0.55rem 1.2rem;
 		cursor: pointer;
 		align-self: flex-start;
+		margin-top: 0.5rem;
 	}
 
 	button:disabled {
@@ -258,6 +482,7 @@
 		border-radius: var(--radius);
 		padding: 0.4rem 0.9rem;
 		cursor: pointer;
+		font: inherit;
 	}
 
 	.ghost:hover:not(:disabled) {

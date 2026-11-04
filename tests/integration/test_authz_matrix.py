@@ -39,6 +39,7 @@ POLICY: dict[tuple[str, str], str] = {
     ("GET", "/api/v1/about"): "public",
     ("GET", "/api/v1/admin/audit"): "admin",
     ("POST", "/api/v1/admin/backup"): "admin",
+    ("GET", "/api/v1/admin/filesystem"): "admin",
     ("POST", "/api/v1/admin/items/{item_id}/rematch"): "admin",
     ("GET", "/api/v1/admin/jobs"): "admin",
     ("POST", "/api/v1/admin/jobs/{job_id}/cancel"): "admin",

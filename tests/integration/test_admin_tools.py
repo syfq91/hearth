@@ -174,3 +174,44 @@ async def test_admin_transcode_settings(
     updated = put_res.json()
     assert updated["force_software"] is True
     assert updated["max_sw_sessions"] == 6
+
+
+@pytest.mark.asyncio
+async def test_admin_browse_filesystem(
+    api_client: httpx.AsyncClient,
+    tmp_path: pytest.TempPathFactory,
+) -> None:
+    admin_tokens = await _setup(api_client)
+    admin_hdr = _bearer(admin_tokens)
+
+    # 1. Non-admin forbidden
+    u_res = await api_client.post(
+        "/api/v1/users",
+        headers=admin_hdr,
+        json={"username": "fs_viewer", "password": "correct horse", "role": "user"},
+    )
+    assert u_res.status_code == 201
+    viewer_tokens = await _login(api_client, "fs_viewer")
+    viewer_hdr = _bearer(viewer_tokens)
+
+    bad_fs = await api_client.get("/api/v1/admin/filesystem", headers=viewer_hdr)
+    assert bad_fs.status_code == 403
+
+    # 2. Admin browse root (by default media_dir)
+    res = await api_client.get("/api/v1/admin/filesystem", headers=admin_hdr)
+    assert res.status_code == 200
+    data = res.json()
+    assert "current_path" in data
+    assert "entries" in data
+    assert isinstance(data["entries"], list)
+
+    # 3. Path outside media dir fails with validation error
+    bad_path = await api_client.get("/api/v1/admin/filesystem?path=/etc", headers=admin_hdr)
+    assert bad_path.status_code == 422
+
+    # 4. Non-existent path returns 404
+    missing_path = await api_client.get(
+        f"/api/v1/admin/filesystem?path={data['current_path']}/nonexistent_folder_12345",
+        headers=admin_hdr,
+    )
+    assert missing_path.status_code == 404
