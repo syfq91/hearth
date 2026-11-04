@@ -1,51 +1,41 @@
 name: hearth
 
-# Common base configuration shared by the web/API server and the background worker
-x-hearth-common: &hearth-common
-  image: ghcr.io/syfq91/hearth:latest
-  restart: unless-stopped
-  environment:
-    HEARTH_ENV: ${HEARTH_ENV:-production}
-    HEARTH_LOG_LEVEL: ${HEARTH_LOG_LEVEL:-INFO}
-    TZ: ${TZ:-UTC}
-    # Hardware acceleration driver (VA-API):
-    # LIBVA_DRIVER_NAME: ${LIBVA_DRIVER_NAME:-iHD} # Intel (8th Gen+ / Coffee Lake and newer uses iHD by default; Haswell through Skylake may use i965)
-    # LIBVA_DRIVER_NAME: radeonsi # AMD Radeon (uses radeonsi)
-  volumes:
-    - hearth-config:/config
-    - ${MEDIA_DIR:-/srv/media}:/media:ro
-  tmpfs:
-    - /transcode:size=4g,mode=1777
-    - /tmp:size=64m
-  # Hardware acceleration devices:
-  # - For CPU-only / hosts without a GPU, comment out the `devices` and `group_add` sections below.
-  # - For AMD GPUs, also uncomment `/dev/kfd` and `VIDEO_GID`.
-  devices:
-    - ${RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
-    # - /dev/kfd:/dev/kfd # AMD ROCm / GPU compute device (uncomment for AMD)
-  group_add:
-    - ${RENDER_GID:-105} # Host render GID: `getent group render` (default: 105)
-    # - ${VIDEO_GID:-44} # AMD video group GID (uncomment for AMD)
-  security_opt:
-    - no-new-privileges:true
-  cap_drop:
-    - ALL
-  read_only: true
-  stop_grace_period: 30s
-
 services:
-  # HTTP API and Web UI service
+  # Hearth all-in-one service (HTTP API, Web UI, and embedded background worker)
   hearth:
-    <<: *hearth-common
+    image: ghcr.io/syfq91/hearth:latest
+    restart: unless-stopped
     ports:
       - "${HEARTH_HTTP_PORT:-8000}:8000"
-
-  # Background job worker (media library scanner, metadata, transcode jobs)
-  worker:
-    <<: *hearth-common
-    command: ["hearth", "worker"]
-    healthcheck:
-      disable: true
+    environment:
+      HEARTH_ENV: ${HEARTH_ENV:-production}
+      HEARTH_LOG_LEVEL: ${HEARTH_LOG_LEVEL:-INFO}
+      HEARTH_EMBED_WORKER: ${HEARTH_EMBED_WORKER:-true}
+      TZ: ${TZ:-UTC}
+      # Hardware acceleration driver (VA-API):
+      # LIBVA_DRIVER_NAME: ${LIBVA_DRIVER_NAME:-iHD} # Intel (8th Gen+ / Coffee Lake and newer uses iHD by default; Haswell through Skylake may use i965)
+      # LIBVA_DRIVER_NAME: radeonsi # AMD Radeon (uses radeonsi)
+    volumes:
+      - hearth-config:/config
+      - ${MEDIA_DIR:-/srv/media}:/media:ro
+    tmpfs:
+      - /transcode:size=4g,mode=1777
+      - /tmp:size=64m
+    # Hardware acceleration devices:
+    # - For CPU-only / hosts without a GPU, comment out the `devices` and `group_add` sections below.
+    # - For AMD GPUs, also uncomment `/dev/kfd` and `VIDEO_GID`.
+    devices:
+      - ${RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
+      # - /dev/kfd:/dev/kfd # AMD ROCm / GPU compute device (uncomment for AMD)
+    group_add:
+      - ${RENDER_GID:-105} # Host render GID: `getent group render` (default: 105)
+      # - ${VIDEO_GID:-44} # AMD video group GID (uncomment for AMD)
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    stop_grace_period: 30s
 
 volumes:
   hearth-config:

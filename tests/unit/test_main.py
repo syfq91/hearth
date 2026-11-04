@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app import __version__
 from app.core.config import Settings
 from app.core.errors import NotFoundError
 from app.core.system import FFmpegHealth, VaapiHealth
@@ -57,7 +58,7 @@ def test_health_reports_runtime_components(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
-    assert payload["version"] == "0.1.0"
+    assert payload["version"] == __version__
     assert payload["database"]["status"] == "not_initialized"
     assert payload["ffmpeg"] == {
         "status": "ok",
@@ -104,7 +105,7 @@ def test_version_endpoint(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["name"] == "hearth"
-    assert payload["version"] == "0.1.0"
+    assert payload["version"] == __version__
     assert payload["api_version"] == "v1"
     assert payload["python_version"]
 
@@ -226,8 +227,85 @@ def test_about_reports_tmdb_attribution(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["name"] == "Hearth"
-    assert payload["version"] == "0.1.0"
+    assert payload["version"] == __version__
     attribution = payload["attributions"][0]
     assert attribution["provider"] == "TMDB"
     assert "not endorsed or certified by TMDB" in attribution["notice"]
     assert attribution["logo_url"].endswith(".svg")
+
+
+@pytest.mark.asyncio
+async def test_embedded_worker_lifespan(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When embed_worker is enabled, lifespan launches and cancels worker tasks cleanly."""
+    settings.embed_worker = True
+    settings.scan_scheduler_enabled = True
+    settings.scan_watch_enabled = True
+
+    worker_started = False
+    worker_stopped = False
+    scheduler_started = False
+    watcher_started = False
+
+    class FakeJobWorker:
+        def __init__(self, s: object, sm: object) -> None:
+            pass
+
+        async def run(self, stop: object) -> None:
+            nonlocal worker_started, worker_stopped
+            worker_started = True
+            try:
+                import asyncio
+
+                if isinstance(stop, asyncio.Event):
+                    await stop.wait()
+            except asyncio.CancelledError:
+                pass
+            finally:
+                worker_stopped = True
+
+    class FakeScheduler:
+        def __init__(self, s: object, sm: object) -> None:
+            pass
+
+        async def run(self, stop: object) -> None:
+            nonlocal scheduler_started
+            scheduler_started = True
+            try:
+                import asyncio
+
+                if isinstance(stop, asyncio.Event):
+                    await stop.wait()
+            except asyncio.CancelledError:
+                pass
+
+    class FakeWatcher:
+        def __init__(self, s: object, sm: object) -> None:
+            pass
+
+        async def run(self, stop: object) -> None:
+            nonlocal watcher_started
+            watcher_started = True
+            try:
+                import asyncio
+
+                if isinstance(stop, asyncio.Event):
+                    await stop.wait()
+            except asyncio.CancelledError:
+                pass
+
+    monkeypatch.setattr("app.services.jobs.worker.JobWorker", FakeJobWorker)
+    monkeypatch.setattr("app.services.scanner.scheduler.ScanScheduler", FakeScheduler)
+    monkeypatch.setattr("app.services.scanner.watcher.LibraryWatcher", FakeWatcher)
+
+    application = create_app(settings)
+    async with application.router.lifespan_context(application):
+        import asyncio
+
+        await asyncio.sleep(0.01)
+        assert worker_started is True
+        assert scheduler_started is True
+        assert watcher_started is True
+
+    assert worker_stopped is True

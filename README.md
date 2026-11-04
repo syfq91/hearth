@@ -29,7 +29,7 @@ Hearth automatically detects and utilizes GPU hardware acceleration for video tr
 
 For detailed GPU permissions, render node discovery, and driver checks, see the [Hardware Transcoding Guide](docs/HARDWARE_TRANSCODING.md).
 
-The compose stack runs two processes: `hearth` (FastAPI and embedded Web UI) and `worker` (background scanner, metadata scraper, and cleanup jobs). Both safely share the `/config` SQLite database.
+The compose stack runs a unified service: `hearth` (FastAPI, embedded Web UI, and the embedded background worker for scanning, metadata scraping, and cleanup jobs). Background workers can also be run independently by setting `HEARTH_EMBED_WORKER=false` and running `hearth worker`.
 
 ### First Run & Account Setup
 

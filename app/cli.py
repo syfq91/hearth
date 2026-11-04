@@ -46,8 +46,18 @@ def api(
         bool,
         typer.Option("--reload", help="Reload on source changes (development only)."),
     ] = False,
+    embed_worker: Annotated[
+        bool,
+        typer.Option("--embed-worker", help="Run background worker inside the API process."),
+    ] = False,
 ) -> None:
     """Run the HTTP API with uvicorn."""
+    if embed_worker:
+        import os
+
+        os.environ["HEARTH_EMBED_WORKER"] = "true"
+        get_settings.cache_clear()
+
     settings = get_settings()
     setup_logging(settings.log_level)
     logger.info(
@@ -57,6 +67,7 @@ def api(
             "port": port or settings.port,
             "env": settings.env,
             "reload": reload,
+            "embed_worker": settings.embed_worker,
         },
     )
 

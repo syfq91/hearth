@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     trust_proxy_headers: bool = False
 
     # Jobs
+    embed_worker: bool = False
     job_poll_interval: float = 1.0
     job_worker_concurrency: int = 4
     job_retry_base_seconds: float = 2.0

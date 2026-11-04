@@ -13,6 +13,7 @@ def test_default_settings() -> None:
     assert settings.host == "0.0.0.0"
     assert settings.port == 8000
     assert settings.log_level == "INFO"
+    assert settings.embed_worker is False
     assert str(settings.data_dir).endswith("config") or settings.data_dir.name == "config"
     assert settings.render_device.name == "renderD128"
 
@@ -25,12 +26,14 @@ def test_env_override() -> None:
             "HEARTH_ENV": "production",
             "HEARTH_PORT": "9000",
             "HEARTH_LOG_LEVEL": "DEBUG",
+            "HEARTH_EMBED_WORKER": "true",
         },
     ):
         settings = Settings()
         assert settings.env == "production"
         assert settings.port == 9000
         assert settings.log_level == "DEBUG"
+        assert settings.embed_worker is True
 
 
 def test_get_settings_cached() -> None:

@@ -1,5 +1,6 @@
 """FastAPI application factory and ASGI entrypoint."""
 
+import asyncio
 import contextlib
 import logging
 from collections.abc import AsyncIterator
@@ -63,12 +64,52 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Mounted at startup, after every application route exists, so the SPA
         # fallback can never shadow an API route (see app/core/spa.py).
         _mount_web_ui(app)
+
+        worker_tasks: list[asyncio.Task[None]] = []
+        worker_stop: asyncio.Event | None = None
+        if resolved.embed_worker:
+            from app.services.jobs.worker import JobWorker
+            from app.services.scanner.scheduler import ScanScheduler
+            from app.services.scanner.watcher import LibraryWatcher
+
+            worker_stop = asyncio.Event()
+            worker = JobWorker(resolved, sessionmaker)
+            worker_tasks.append(asyncio.create_task(worker.run(worker_stop), name="job-worker"))
+            if resolved.scan_scheduler_enabled:
+                worker_tasks.append(
+                    asyncio.create_task(
+                        ScanScheduler(resolved, sessionmaker).run(worker_stop),
+                        name="scan-scheduler",
+                    )
+                )
+            if resolved.scan_watch_enabled:
+                worker_tasks.append(
+                    asyncio.create_task(
+                        LibraryWatcher(resolved, sessionmaker).run(worker_stop),
+                        name="library-watcher",
+                    )
+                )
+            logger.info(
+                "embedded worker started",
+                extra={
+                    "scheduler": resolved.scan_scheduler_enabled,
+                    "watcher": resolved.scan_watch_enabled,
+                },
+            )
+
         logger.info(
             "hearth starting",
             extra={"env": resolved.env, "version": __version__},
         )
         yield
         logger.info("hearth stopping")
+        if worker_stop is not None:
+            worker_stop.set()
+            for task in worker_tasks:
+                task.cancel()
+            await asyncio.gather(*worker_tasks, return_exceptions=True)
+            logger.info("embedded worker stopped")
+
         await get_session_manager(resolved).stop_all()
         await engine.dispose()
 
