@@ -113,7 +113,9 @@ async def test_item_detail_lists_sidecars_and_serves_webvtt(
     assert "Hello from ASS" in served_ass.text
 
     delimiter = "&" if "?" in ass_track["url"] else "?"
-    served_raw = await api_client.get(f"{ass_track['url']}{delimiter}raw=true", headers=_bearer(admin))
+    served_raw = await api_client.get(
+        f"{ass_track['url']}{delimiter}raw=true", headers=_bearer(admin)
+    )
     assert served_raw.status_code == 200
     assert served_raw.headers["content-type"].startswith("text/x-ssa")
     assert served_raw.text == ASS

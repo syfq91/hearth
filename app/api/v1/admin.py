@@ -783,7 +783,9 @@ async def browse_filesystem(
             except (OSError, PermissionError):
                 continue
     except (OSError, PermissionError) as exc:
-        raise ForbiddenError(f"Directory is not accessible: {exc}", code="permission_denied") from exc
+        raise ForbiddenError(
+            f"Directory is not accessible: {exc}", code="permission_denied"
+        ) from exc
 
     entries.sort(key=lambda e: e.name.lower())
     return FilesystemBrowseResponse(
