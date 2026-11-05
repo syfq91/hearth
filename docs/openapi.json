@@ -11536,7 +11536,7 @@
     },
     "/api/v1/libraries/{library_id}/items": {
       "get": {
-        "description": "List a library's movies, sorted and filtered with keyset pagination.\n\nBook libraries can scope the list to one folder of their directory tree;\nthe parameter is ignored for other library types.",
+        "description": "List a library's movies, sorted and filtered with keyset pagination.\n\nBook libraries keep their directory structure: the list covers one folder\nat a time, defaulting to the library root. ``folder`` is ignored for other\nlibrary types.",
         "operationId": "list_library_items_api_v1_libraries__library_id__items_get",
         "parameters": [
           {
@@ -11665,7 +11665,7 @@
             }
           },
           {
-            "description": "Book libraries only: a folder path from /folders",
+            "description": "Book libraries only: a folder path from /folders (default: library root)",
             "in": "query",
             "name": "folder",
             "required": false,
@@ -11679,7 +11679,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Book libraries only: a folder path from /folders",
+              "description": "Book libraries only: a folder path from /folders (default: library root)",
               "title": "Folder"
             }
           }
