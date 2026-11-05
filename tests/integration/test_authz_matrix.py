@@ -88,6 +88,7 @@ POLICY: dict[tuple[str, str], str] = {
     ("DELETE", "/api/v1/collections/{collection_id}/items/{item_id}"): "admin",
     ("GET", "/api/v1/episodes/{episode_id}"): "auth",
     ("GET", "/api/v1/events"): "auth",
+    ("GET", "/api/v1/genres"): "auth",
     ("GET", "/api/v1/health"): "public",
     ("GET", "/api/v1/hls/{session_id}/init.mp4"): "media",
     ("GET", "/api/v1/hls/{session_id}/master.m3u8"): "media",

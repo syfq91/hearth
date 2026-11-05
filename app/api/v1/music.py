@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.api.v1.items import (
@@ -22,6 +22,7 @@ from app.db.models import (
     Album,
     Artist,
     Genre,
+    ItemGenre,
     LibraryAccess,
     MediaFile,
     MediaItem,
@@ -173,6 +174,19 @@ class AlbumListResponse(BaseModel):
 
 class TrackListResponse(BaseModel):
     items: list[TrackSummary]
+    total: int
+    limit: int
+    offset: int
+
+
+class GenreSummary(BaseModel):
+    name: str
+    album_count: int = 0
+    track_count: int = 0
+
+
+class GenreListResponse(BaseModel):
+    items: list[GenreSummary]
     total: int
     limit: int
     offset: int
@@ -409,6 +423,51 @@ async def get_artist_detail(
         albums=albums,
         top_tracks=top_tracks,
     )
+
+
+# -------------------------------------------------------------- genre endpoints
+
+
+@router.get("/genres")
+async def list_genres(
+    user: RequireUser,
+    session: SessionDep,
+    query: Annotated[str | None, Query(max_length=255)] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> GenreListResponse:
+    """List genres with album and track counts from the user's libraries."""
+    base = (
+        select(
+            Genre.name,
+            func.sum(case((MediaItem.type == "album", 1), else_=0)).label("album_count"),
+            func.sum(case((MediaItem.type == "track", 1), else_=0)).label("track_count"),
+        )
+        .join(ItemGenre, ItemGenre.genre_id == Genre.id)
+        .join(MediaItem, MediaItem.id == ItemGenre.item_id)
+        .where(MediaItem.type.in_(("album", "track")))
+        .group_by(Genre.id, Genre.name)
+    )
+    base = _restrict_to_accessible_libraries(base, user)
+
+    if query:
+        clean_q = query.strip()
+        if clean_q:
+            base = base.where(Genre.name.ilike(f"%{clean_q}%"))
+
+    total = await session.scalar(select(func.count()).select_from(base.subquery())) or 0
+    rows = (
+        await session.execute(base.order_by(Genre.name.asc()).offset(offset).limit(limit))
+    ).all()
+    items = [
+        GenreSummary(
+            name=name,
+            album_count=int(album_count or 0),
+            track_count=int(track_count or 0),
+        )
+        for name, album_count, track_count in rows
+    ]
+    return GenreListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 # -------------------------------------------------------------- album endpoints

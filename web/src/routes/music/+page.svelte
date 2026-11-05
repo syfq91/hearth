@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MusicTabs from '../../lib/components/MusicTabs.svelte';
 	import Poster from '../../lib/components/Poster.svelte';
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
@@ -13,7 +14,10 @@
 	function submitSearch(event: SubmitEvent): void {
 		event.preventDefault();
 		const trimmed = search.trim();
-		void goto(trimmed ? `/music?q=${encodeURIComponent(trimmed)}` : '/music');
+		const params = new URLSearchParams();
+		if (trimmed) params.set('q', trimmed);
+		if (data.genre) params.set('genre', data.genre);
+		void goto(params.size > 0 ? `/music?${params.toString()}` : '/music');
 	}
 </script>
 
@@ -23,10 +27,7 @@
 
 <h1>Music</h1>
 
-<nav class="tabs" aria-label="Music sections">
-	<a href="/music" aria-current="page">Albums</a>
-	<a href="/music/artists">Artists</a>
-</nav>
+<MusicTabs current="albums" />
 
 <form class="search" role="search" onsubmit={submitSearch}>
 	<label class="visually-hidden" for="music-search">Search albums</label>
@@ -42,7 +43,14 @@
 {#if data.query}
 	<p class="muted">
 		Results for “{data.query}” —
-		<a href="/music">clear</a>
+		<a href={data.genre ? `/music?genre=${encodeURIComponent(data.genre)}` : '/music'}>clear</a>
+	</p>
+{/if}
+
+{#if data.genre}
+	<p class="muted">
+		Genre “{data.genre}” —
+		<a href={data.query ? `/music?q=${encodeURIComponent(data.query)}` : '/music'}>clear</a>
 	</p>
 {/if}
 
@@ -72,26 +80,6 @@
 {/if}
 
 <style>
-	.tabs {
-		display: flex;
-		gap: 0.25rem;
-		border-bottom: 1px solid var(--border);
-		margin-bottom: 1.25rem;
-	}
-
-	.tabs a {
-		color: var(--muted);
-		padding: 0.4rem 0.9rem;
-		border-bottom: 2px solid transparent;
-		margin-bottom: -1px;
-	}
-
-	.tabs a[aria-current='page'] {
-		color: var(--text);
-		font-weight: 600;
-		border-bottom-color: var(--accent);
-	}
-
 	.search {
 		display: flex;
 		gap: 0.5rem;

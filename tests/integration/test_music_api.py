@@ -527,6 +527,35 @@ async def test_tracks_api(
 
 
 @pytest.mark.asyncio
+async def test_genres_api(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    await _seed_music_data(db_settings, db_sessionmaker)
+
+    res = await api_client.get("/api/v1/genres", headers=_bearer(admin))
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["total"] == 2
+    assert [g["name"] for g in data["items"]] == ["Electronic", "Rock"]
+    assert all(g["album_count"] == 1 for g in data["items"])
+    assert all(g["track_count"] == 0 for g in data["items"])
+
+    # Search filter
+    res = await api_client.get("/api/v1/genres?query=rock", headers=_bearer(admin))
+    assert res.status_code == 200
+    assert [g["name"] for g in res.json()["items"]] == ["Rock"]
+
+    # Genres from libraries the user cannot access are not listed.
+    user = await _add_user(api_client, admin, "nogrant", [])
+    res = await api_client.get("/api/v1/genres", headers=_bearer(user))
+    assert res.status_code == 200
+    assert res.json()["total"] == 0
+
+
+@pytest.mark.asyncio
 async def test_shelves_and_search(
     api_client: httpx.AsyncClient,
     db_settings: Settings,

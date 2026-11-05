@@ -4,11 +4,14 @@ import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ url }) => {
 	const query = url.searchParams.get('q') ?? '';
-	const [recent, searched] = await Promise.all([
+	const genre = url.searchParams.get('genre') ?? '';
+	const [recent, filtered] = await Promise.all([
 		api.get<AlbumListResponse>('/albums', { query: { sort: 'added', limit: 48 } }),
-		query
-			? api.get<AlbumListResponse>('/albums', { query: { query, limit: 48 } })
+		query || genre
+			? api.get<AlbumListResponse>('/albums', {
+					query: { query: query || undefined, genre: genre || undefined, limit: 48 }
+				})
 			: Promise.resolve(null)
 	]);
-	return { albums: searched ?? recent, query };
+	return { albums: filtered ?? recent, query, genre };
 };
