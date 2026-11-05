@@ -189,6 +189,49 @@ async def test_update_and_delete_library(
     assert {"library.create", "library.update", "library.delete"} <= set(actions)
 
 
+async def test_update_library_keeping_existing_paths(
+    api_client: httpx.AsyncClient, db_settings: Settings
+) -> None:
+    """Renaming must not re-insert unchanged paths and trip the unique constraint."""
+    admin = await _setup(api_client)
+    media = Path(db_settings.media_dir)
+    first = media / "first"
+    second = media / "second"
+    first.mkdir()
+    second.mkdir()
+    created = (await _create_library(api_client, admin, first)).json()
+    existing = created["paths"]
+
+    renamed = await api_client.patch(
+        f"/api/v1/libraries/{created['id']}",
+        json={"name": "Renamed", "type": "movie", "paths": existing},
+        headers=_bearer(admin),
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["name"] == "Renamed"
+    assert renamed.json()["paths"] == existing
+
+    added = await api_client.patch(
+        f"/api/v1/libraries/{created['id']}",
+        json={
+            "name": "Renamed",
+            "type": "movie",
+            "paths": [*existing, str(second.resolve())],
+        },
+        headers=_bearer(admin),
+    )
+    assert added.status_code == 200, added.text
+    assert set(added.json()["paths"]) == {*existing, str(second.resolve())}
+
+    removed = await api_client.patch(
+        f"/api/v1/libraries/{created['id']}",
+        json={"name": "Renamed", "type": "movie", "paths": [str(second.resolve())]},
+        headers=_bearer(admin),
+    )
+    assert removed.status_code == 200, removed.text
+    assert removed.json()["paths"] == [str(second.resolve())]
+
+
 async def test_normal_user_library_detail_hides_paths(
     api_client: httpx.AsyncClient,
     db_sessionmaker: async_sessionmaker[AsyncSession],

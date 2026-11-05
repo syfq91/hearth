@@ -77,6 +77,25 @@ def _detail(library: Library) -> LibraryDetail:
     )
 
 
+def _sync_paths(library: Library, paths: list[str]) -> None:
+    """Apply a validated path list, keeping rows for paths that are unchanged.
+
+    Replacing the relationship wholesale makes SQLAlchemy insert the new
+    ``LibraryPath`` rows before deleting the old ones, which trips the
+    ``(library_id, path)`` unique constraint whenever a path is retained.
+    """
+    desired = set(paths)
+    for existing in list(library.paths):
+        if existing.path not in desired:
+            library.paths.remove(existing)
+
+    present = {path.path for path in library.paths}
+    for path in paths:
+        if path not in present:
+            library.paths.append(LibraryPath(path=path))
+            present.add(path)
+
+
 @router.get("")
 async def list_libraries(user: RequireUser, session: SessionDep) -> list[LibrarySummary]:
     """List the libraries visible to the current user."""
@@ -183,8 +202,7 @@ async def update_library(
     if payload.type is not None:
         library.type = payload.type
     if payload.paths is not None:
-        paths = validate_library_paths(settings, payload.paths)
-        library.paths = [LibraryPath(path=path) for path in paths]
+        _sync_paths(library, validate_library_paths(settings, payload.paths))
 
     record_audit(
         session,
