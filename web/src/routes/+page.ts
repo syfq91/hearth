@@ -13,7 +13,7 @@ export interface HomeData {
 	error: string | null;
 }
 
-export const load: PageLoad = async () => {
+async function loadHome(): Promise<HomeData> {
 	// In SPA mode (`ssr = false`) load functions run in the browser, so the
 	// API client's global fetch (with bearer token + refresh) is correct here.
 	const empty: HomeData = {
@@ -58,4 +58,10 @@ export const load: PageLoad = async () => {
 		data.error = first.reason instanceof Error ? first.reason.message : String(first.reason);
 	}
 	return data;
+}
+
+// Return the request promise instead of awaiting it: SvelteKit commits the
+// navigation immediately and the page renders its own loading state.
+export const load: PageLoad = () => {
+	return { home: loadHome() };
 };

@@ -13,17 +13,20 @@
 
 <h1>Home</h1>
 
-{#if data.error}
-	<p class="banner" role="status">Some shelves failed to load: {data.error}</p>
-{/if}
+{#await data.home}
+	<p class="muted" role="status">Loading…</p>
+{:then home}
+	{#if home.error}
+		<p class="banner" role="status">Some shelves failed to load: {home.error}</p>
+	{/if}
 
-<Shelf title="Continue watching" items={data.continueWatching.items} />
+	<Shelf title="Continue watching" items={home.continueWatching.items} />
 
-{#if data.continueReading.items.length > 0}
-	<section class="shelf" aria-label="Continue reading">
-		<h2 class="heading">Continue reading</h2>
-		<ul class="row">
-			{#each data.continueReading.items as book (book.id)}
+	{#if home.continueReading.items.length > 0}
+		<section class="shelf" aria-label="Continue reading">
+			<h2 class="heading">Continue reading</h2>
+			<ul class="row">
+				{#each home.continueReading.items as book (book.id)}
 				<li>
 					<article class="book">
 						<a href={`/books/${book.id}`} aria-label={book.title}>
@@ -52,39 +55,42 @@
 	</section>
 {/if}
 
-<Shelf title="Next up" items={data.nextUp.items} />
+	<Shelf title="Next up" items={home.nextUp.items} />
 
-{#if data.recentAlbums.length > 0}
-	<section class="shelf" aria-label="Recently added albums">
-		<h2 class="heading">Recently added albums</h2>
-		<ul class="row">
-			{#each data.recentAlbums as album (album.id)}
-				<li>
-					<article class="album">
-						<a href={`/music/album/${album.id}`} aria-label={album.title}>
-							<Poster image={album.poster} alt="" aspect="1 / 1" width={300} />
-						</a>
-						<h3 class="title">{album.title}</h3>
-						{#if album.artist_name}
-							<p class="subtitle">{album.artist_name}</p>
-						{/if}
-					</article>
-				</li>
-			{/each}
-		</ul>
-	</section>
-{/if}
+	{#if home.recentAlbums.length > 0}
+		<section class="shelf" aria-label="Recently added albums">
+			<h2 class="heading">Recently added albums</h2>
+			<ul class="row">
+				{#each home.recentAlbums as album (album.id)}
+					<li>
+						<article class="album">
+							<a href={`/music/album/${album.id}`} aria-label={album.title}>
+								<Poster image={album.poster} alt="" aspect="1 / 1" width={300} />
+							</a>
+							<h3 class="title">{album.title}</h3>
+							{#if album.artist_name}
+								<p class="subtitle">{album.artist_name}</p>
+							{/if}
+						</article>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
 
-<Shelf title="Recently added" items={data.recentlyAdded.items} />
-<Shelf title="Favorites" items={data.favorites.items} />
+	<Shelf title="Recently added" items={home.recentlyAdded.items} />
+	<Shelf title="Favorites" items={home.favorites.items} />
 
-{#if data.recentAlbums.length === 0 && data.continueWatching.items.length === 0 && data.continueReading.items.length === 0 && data.nextUp.items.length === 0 && data.recentlyAdded.items.length === 0 && data.favorites.items.length === 0 && !data.error}
-	<div class="empty-state">
-		<p>Nothing here yet.</p>
-		<p class="muted">Add a library from the admin area to get started.</p>
-		<a class="button" href="/admin/libraries">Set up libraries</a>
-	</div>
-{/if}
+	{#if home.recentAlbums.length === 0 && home.continueWatching.items.length === 0 && home.continueReading.items.length === 0 && home.nextUp.items.length === 0 && home.recentlyAdded.items.length === 0 && home.favorites.items.length === 0 && !home.error}
+		<div class="empty-state">
+			<p>Nothing here yet.</p>
+			<p class="muted">Add a library from the admin area to get started.</p>
+			<a class="button" href="/admin/libraries">Set up libraries</a>
+		</div>
+	{/if}
+{:catch error}
+	<p class="banner" role="alert">{error instanceof Error ? error.message : String(error)}</p>
+{/await}
 
 <style>
 	.banner {

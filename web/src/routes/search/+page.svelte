@@ -1,5 +1,6 @@
 <script lang="ts">
 	import MediaCard from '../../lib/components/MediaCard.svelte';
+	import type { SearchResponse } from '../../lib/api/types';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
@@ -41,7 +42,33 @@
 		}, 300);
 	});
 
-	const results = $derived(data.results);
+	let results = $state<SearchResponse | null>(null);
+	let loading = $state(false);
+	let error = $state<string | null>(null);
+
+	// The loader returns a promise so navigation is not held up by the request.
+	$effect(() => {
+		const request = data.results;
+		let cancelled = false;
+		results = null;
+		error = null;
+		loading = request !== null;
+		if (!request) return;
+		void request
+			.then((value) => {
+				if (cancelled) return;
+				results = value;
+				loading = false;
+			})
+			.catch((e) => {
+				if (cancelled) return;
+				error = e instanceof Error ? e.message : String(e);
+				loading = false;
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	const groups = $derived.by(() => {
 		if (!results) return [];
@@ -88,6 +115,10 @@
 
 {#if !data.q.trim()}
 	<p class="muted">Type to search your libraries.</p>
+{:else if error}
+	<p class="banner" role="alert">{error}</p>
+{:else if loading}
+	<p class="muted" role="status">Searching…</p>
 {:else if results && results.total === 0}
 	<p class="muted">No results for “{data.q}”.</p>
 {:else if results}
@@ -172,6 +203,15 @@
 		list-style: none;
 		padding: 0;
 		margin: 0;
+		color: var(--muted);
+	}
+
+	.banner {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-left: 3px solid var(--danger);
+		border-radius: var(--radius);
+		padding: 0.6rem 1rem;
 		color: var(--muted);
 	}
 

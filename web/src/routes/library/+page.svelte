@@ -1,8 +1,28 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
+	import type { LibrarySummary } from '../../lib/api/types';
 	import { Film, Tv, Music, BookOpen, Folder } from '@lucide/svelte';
 
 	let { data }: PageProps = $props();
+
+	let libraries = $state<LibrarySummary[] | null>(null);
+	let error = $state<string | null>(null);
+
+	// The loader returns a promise so navigation is not held up by the request.
+	$effect(() => {
+		let cancelled = false;
+		error = null;
+		void data.libraries
+			.then((value) => {
+				if (!cancelled) libraries = value;
+			})
+			.catch((e) => {
+				if (!cancelled) error = e instanceof Error ? e.message : String(e);
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	const typeLabel: Record<string, string> = {
 		movie: 'Movies',
@@ -35,12 +55,16 @@
 
 <h1>Libraries</h1>
 
-{#if data.libraries.length === 0}
+{#if error}
+	<p class="banner" role="alert">{error}</p>
+{:else if libraries === null}
+	<p class="empty" role="status">Loading libraries…</p>
+{:else if libraries.length === 0}
 	<p class="empty">No libraries yet. Create one in the admin area.</p>
 	<a class="button" href="/admin/libraries">Set up libraries</a>
 {:else}
 	<ul class="grid">
-		{#each data.libraries as library (library.id)}
+		{#each libraries as library (library.id)}
 			{@const Icon = getIcon(library.type)}
 			<li>
 				<a class="library" href={`/library/${library.id}`}>
@@ -96,6 +120,15 @@
 	.kind {
 		color: var(--muted);
 		font-size: 0.85rem;
+	}
+
+	.banner {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-left: 3px solid var(--danger);
+		border-radius: var(--radius);
+		padding: 0.6rem 1rem;
+		color: var(--muted);
 	}
 
 	.empty {
