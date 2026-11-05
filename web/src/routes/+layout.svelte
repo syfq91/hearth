@@ -8,9 +8,57 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
-	import { House, Layers, Music, BookOpen, Search, Shield, Tv as TvIcon, LogOut, User } from '@lucide/svelte';
+	import {
+		House,
+		Layers,
+		Music,
+		BookOpen,
+		Search,
+		Shield,
+		Tv as TvIcon,
+		LogOut,
+		User,
+		ChevronDown
+	} from '@lucide/svelte';
 
 	let { children }: LayoutProps = $props();
+
+	let userMenuOpen = $state(false);
+	let userMenuRef = $state<HTMLElement | null>(null);
+
+	function toggleUserMenu() {
+		userMenuOpen = !userMenuOpen;
+	}
+
+	function closeUserMenu() {
+		userMenuOpen = false;
+	}
+
+	$effect(() => {
+		// Close menu on route navigation
+		const _ = page.url.pathname;
+		userMenuOpen = false;
+	});
+
+	$effect(() => {
+		if (!userMenuOpen) return;
+		function handleOutside(event: MouseEvent) {
+			if (userMenuRef && !userMenuRef.contains(event.target as Node)) {
+				userMenuOpen = false;
+			}
+		}
+		function handleKeydown(event: KeyboardEvent) {
+			if (event.key === 'Escape') {
+				userMenuOpen = false;
+			}
+		}
+		window.addEventListener('click', handleOutside);
+		window.addEventListener('keydown', handleKeydown);
+		return () => {
+			window.removeEventListener('click', handleOutside);
+			window.removeEventListener('keydown', handleKeydown);
+		};
+	});
 
 	function isActive(path: string): boolean {
 		return path === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(path);
@@ -50,28 +98,64 @@
 			{/if}
 		</nav>
 		<div class="spacer"></div>
-		<button
-			type="button"
-			class="ghost tv-toggle"
-			aria-pressed={tv.on}
-			title="10-foot mode: larger text and D-pad navigation"
-			onclick={() => setTvMode(!tv.on)}
-		>
-			<TvIcon size={16} /> <span>TV mode</span>
-		</button>
 		{#if session.status === 'authenticated' && session.user}
-			<a
-				class="user"
-				href="/profile"
-				title={session.user.role}
-				aria-current={isActive('/profile') ? 'page' : undefined}
-			>
-				<User size={15} /> <span>{session.user.username}</span>
-				{#if session.user.role === 'admin'}<span class="badge">admin</span>{/if}
-			</a>
-			<button type="button" class="ghost sign-out-btn" onclick={signOut} title="Sign out">
-				<LogOut size={15} /> <span>Sign out</span>
-			</button>
+			<div class="user-menu-wrapper" bind:this={userMenuRef}>
+				<button
+					type="button"
+					class="user-btn"
+					onclick={toggleUserMenu}
+					aria-expanded={userMenuOpen}
+					aria-haspopup="menu"
+				>
+					<User size={15} />
+					<span>{session.user.username}</span>
+					<span class="chevron" class:open={userMenuOpen}>
+						<ChevronDown size={14} />
+					</span>
+				</button>
+
+				{#if userMenuOpen}
+					<div class="dropdown-menu" role="menu">
+						<a
+							class="dropdown-item"
+							href="/profile"
+							role="menuitem"
+							onclick={closeUserMenu}
+						>
+							<User size={15} />
+							<span>Profile</span>
+						</a>
+
+						<button
+							type="button"
+							class="dropdown-item"
+							role="menuitem"
+							onclick={() => {
+								setTvMode(!tv.on);
+							}}
+						>
+							<TvIcon size={15} />
+							<span>TV mode</span>
+							<span class="dropdown-item-state">{tv.on ? 'On' : 'Off'}</span>
+						</button>
+
+						<div class="dropdown-divider"></div>
+
+						<button
+							type="button"
+							class="dropdown-item danger"
+							role="menuitem"
+							onclick={() => {
+								closeUserMenu();
+								void signOut();
+							}}
+						>
+							<LogOut size={15} />
+							<span>Sign out</span>
+						</button>
+					</div>
+				{/if}
+			</div>
 		{/if}
 	</header>
 	<main id="main" tabindex="-1">
@@ -153,43 +237,103 @@
 		font-weight: 600;
 	}
 
-	.user {
+	.user-menu-wrapper {
+		position: relative;
 		display: inline-flex;
 		align-items: center;
-		gap: 0.35rem;
-		color: var(--muted);
-		font-size: 0.9rem;
 	}
 
-	.badge {
-		background: var(--surface-2);
-		border: 1px solid var(--border);
-		border-radius: 999px;
-		padding: 0 0.5rem;
-		font-size: 0.75rem;
-		margin-left: 0.35rem;
-	}
-
-	.ghost {
+	.user-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.35rem;
+		gap: 0.45rem;
 		background: transparent;
+		border: 1px solid transparent;
+		border-radius: var(--radius);
+		padding: 0.35rem 0.65rem;
+		color: var(--text);
+		font-size: 0.9rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.15s ease, border-color 0.15s ease;
+	}
+
+	.user-btn:hover,
+	.user-btn[aria-expanded='true'] {
+		background: var(--surface-2);
+		border-color: var(--border);
+	}
+
+	.chevron {
+		display: inline-flex;
+		align-items: center;
+		color: var(--muted);
+		transition: transform 0.2s ease;
+	}
+
+	.chevron.open {
+		transform: rotate(180deg);
+	}
+
+	.dropdown-menu {
+		position: absolute;
+		top: calc(100% + 0.4rem);
+		right: 0;
+		min-width: 180px;
+		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		padding: 0.35rem 0.75rem;
-		cursor: pointer;
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+		padding: 0.35rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		z-index: 100;
 	}
 
-	.ghost:hover {
+	.dropdown-item {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		width: 100%;
+		padding: 0.5rem 0.65rem;
+		font-size: 0.85rem;
+		color: var(--text);
+		background: transparent;
+		border: none;
+		border-radius: calc(var(--radius) - 2px);
+		cursor: pointer;
+		text-align: left;
+		text-decoration: none;
+		box-sizing: border-box;
+	}
+
+	.dropdown-item:hover {
 		background: var(--surface-2);
 	}
 
-	.tv-toggle[aria-pressed='true'] {
-		background: var(--accent);
-		color: var(--accent-contrast);
-		border-color: var(--accent);
-		font-weight: 600;
+	.dropdown-item-state {
+		margin-left: auto;
+		color: var(--muted);
+		font-size: 0.75rem;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		padding: 0.1rem 0.45rem;
+		border-radius: 999px;
+	}
+
+	.dropdown-item.danger {
+		color: #e57373;
+	}
+
+	.dropdown-item.danger:hover {
+		background: rgba(229, 115, 115, 0.12);
+	}
+
+	.dropdown-divider {
+		height: 1px;
+		background: var(--border);
+		margin: 0.25rem 0;
 	}
 
 	main {
