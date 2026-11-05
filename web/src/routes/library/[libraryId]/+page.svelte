@@ -1,10 +1,19 @@
 <script lang="ts">
+	import { Folder } from '@lucide/svelte';
 	import { api } from '../../../lib/api/client';
 	import MediaCard from '../../../lib/components/MediaCard.svelte';
-	import type { ItemPage } from '../../../lib/api/types';
+	import type { ItemPage, LibraryFolderPage } from '../../../lib/api/types';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+
+	// Book libraries keep their on-disk directory tree: the grid shows one
+	// folder at a time, starting at the library root.
+	const isBook = $derived(data.library.type === 'book');
+	let folder = $state('');
+	let folders = $state<LibraryFolderPage['folders']>([]);
+	let foldersLoading = $state(false);
+	let folderSegments = $derived(folder ? folder.split('/') : []);
 
 	type SortKey = 'title' | 'added' | 'year' | 'rating';
 
@@ -27,11 +36,13 @@
 	let loadingMore = $state(false);
 	let error = $state<string | null>(null);
 
-	// Reset pagination when any filter changes, then reload the first page.
-	let filterKey = $derived(`${sort}|${order}|${genre}|${year}|${watched}`);
+	// Reset pagination when any filter or the current folder changes, then
+	// reload the first page.
+	let filterKey = $derived(`${sort}|${order}|${genre}|${year}|${watched}|${folder}`);
 
 	$effect(() => {
 		void loadFirstPage(filterKey);
+		void loadFolders();
 	});
 
 	async function loadFirstPage(_key: string): Promise<void> {
@@ -45,7 +56,8 @@
 					limit: 48,
 					genre: genre || undefined,
 					year: year ? Number(year) : undefined,
-					watched: watched === '' ? undefined : watched === 'true'
+					watched: watched === '' ? undefined : watched === 'true',
+					folder: isBook && folder ? folder : undefined
 				}
 			});
 			items = page.items;
@@ -71,7 +83,8 @@
 					cursor: nextCursor,
 					genre: genre || undefined,
 					year: year ? Number(year) : undefined,
-					watched: watched === '' ? undefined : watched === 'true'
+					watched: watched === '' ? undefined : watched === 'true',
+					folder: isBook && folder ? folder : undefined
 				}
 			});
 			items = [...items, ...page.items];
@@ -81,6 +94,27 @@
 		} finally {
 			loadingMore = false;
 		}
+	}
+
+	async function loadFolders(): Promise<void> {
+		if (!isBook) return;
+		foldersLoading = true;
+		folders = [];
+		try {
+			const page = await api.get<LibraryFolderPage>(
+				`/libraries/${data.library.id}/folders`,
+				{ query: { path: folder || undefined } }
+			);
+			folders = page.folders;
+		} catch {
+			folders = [];
+		} finally {
+			foldersLoading = false;
+		}
+	}
+
+	function openFolder(path: string): void {
+		folder = path;
 	}
 
 	// Genre suggestions come from the cards already on screen, so the filter
@@ -101,6 +135,22 @@
 </nav>
 
 <h1>{data.library.name}</h1>
+
+{#if isBook && folder}
+	<nav class="folder-crumbs" aria-label="Folder breadcrumb">
+		<button type="button" class="crumb" onclick={() => (folder = '')}>All folders</button>
+		{#each folderSegments as segment, index (index)}
+			<span aria-hidden="true">/</span>
+			<button
+				type="button"
+				class="crumb"
+				onclick={() => (folder = folderSegments.slice(0, index + 1).join('/'))}
+			>
+				{segment}
+			</button>
+		{/each}
+	</nav>
+{/if}
 
 <form class="filters" aria-label="Filter items">
 	<label>
@@ -154,23 +204,57 @@
 	<p class="banner" role="alert">{error}</p>
 {/if}
 
+{#if isBook && (folders.length > 0 || foldersLoading)}
+	<section class="folders" aria-label="Folders">
+		<h2 class="section-title">Folders</h2>
+		{#if folders.length > 0}
+			<ul class="folder-grid">
+				{#each folders as entry (entry.path)}
+					<li>
+						<button
+							type="button"
+							class="folder-card"
+							onclick={() => openFolder(entry.path)}
+							aria-label={`Open folder ${entry.name}`}
+						>
+							<span class="folder-icon" aria-hidden="true"><Folder size={28} /></span>
+							<span class="folder-name">{entry.name}</span>
+							<span class="folder-count">
+								{entry.item_count}
+								{entry.item_count === 1 ? 'book' : 'books'}
+							</span>
+						</button>
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<p class="muted" role="status">Loading folders…</p>
+		{/if}
+	</section>
+{/if}
+
 {#if loading}
 	<p class="muted" role="status">Loading…</p>
-{:else if items.length === 0 && !error}
+{:else if items.length === 0 && !error && !(isBook && folders.length > 0)}
 	<p class="muted">No items match these filters.</p>
-{:else}
-	<ul class="grid">
-		{#each items as item (item.id)}
-			<li><MediaCard item={item} /></li>
-		{/each}
-	</ul>
-	{#if nextCursor}
-		<div class="more">
-			<button type="button" class="load-more" onclick={loadMore} disabled={loadingMore}>
-				{loadingMore ? 'Loading…' : 'Load more'}
-			</button>
-		</div>
-	{/if}
+{:else if items.length > 0}
+	<section class="books" aria-label="Books">
+		{#if isBook}
+			<h2 class="section-title">Books</h2>
+		{/if}
+		<ul class="grid">
+			{#each items as item (item.id)}
+				<li><MediaCard item={item} /></li>
+			{/each}
+		</ul>
+		{#if nextCursor}
+			<div class="more">
+				<button type="button" class="load-more" onclick={loadMore} disabled={loadingMore}>
+					{loadingMore ? 'Loading…' : 'Load more'}
+				</button>
+			</div>
+		{/if}
+	</section>
 {/if}
 
 <style>
@@ -217,6 +301,88 @@
 		border-radius: var(--radius);
 		padding: 0.6rem 1rem;
 		color: var(--muted);
+	}
+
+	.folder-crumbs {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+		color: var(--muted);
+		font-size: 0.9rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.crumb {
+		background: none;
+		border: 0;
+		color: inherit;
+		font: inherit;
+		padding: 0;
+		cursor: pointer;
+	}
+
+	.crumb:hover {
+		color: var(--accent);
+		text-decoration: underline;
+	}
+
+	.section-title {
+		font-size: 1rem;
+		font-weight: 600;
+		margin: 0 0 0.75rem;
+	}
+
+	.folders {
+		margin-bottom: 1.75rem;
+	}
+
+	.folder-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+		gap: 0.75rem;
+		list-style: none;
+		padding: 0;
+		margin: 0;
+	}
+
+	.folder-card {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.2rem;
+		width: 100%;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		padding: 0.9rem 1rem;
+		color: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.folder-card:hover {
+		background: var(--surface-2);
+		border-color: var(--accent);
+	}
+
+	.folder-icon {
+		color: var(--accent);
+		display: flex;
+		margin-bottom: 0.2rem;
+	}
+
+	.folder-name {
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 100%;
+	}
+
+	.folder-count {
+		color: var(--muted);
+		font-size: 0.8rem;
 	}
 
 	.grid {

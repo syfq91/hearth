@@ -5,6 +5,7 @@ import binascii
 import hashlib
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 from urllib.parse import quote
 
@@ -26,6 +27,8 @@ from app.db.models import (
     Episode,
     Genre,
     ItemPerson,
+    Library,
+    MediaFile,
     MediaItem,
     Person,
     UserItemState,
@@ -154,6 +157,22 @@ class ItemPage(BaseModel):
     has_more: bool = False
 
 
+class LibraryFolder(BaseModel):
+    """A directory inside a book library and how many books it holds."""
+
+    name: str
+    path: str
+    item_count: int
+
+
+class LibraryFolderPage(BaseModel):
+    """The subfolders of one directory in a book library."""
+
+    path: str
+    parent: str | None = None
+    folders: list[LibraryFolder] = []
+
+
 @router.get("/libraries/{library_id}/items")
 async def list_library_items(
     library: LibraryAccessDep,
@@ -166,8 +185,20 @@ async def list_library_items(
     genre: Annotated[str | None, Query(max_length=64)] = None,
     year: Annotated[int | None, Query(ge=1800, le=2100)] = None,
     watched: Annotated[bool | None, Query()] = None,
+    folder: Annotated[
+        str | None,
+        Query(
+            max_length=1024,
+            description="Book libraries only: a folder path from /folders (default: library root)",
+        ),
+    ] = None,
 ) -> ItemPage:
-    """List a library's movies, sorted and filtered with keyset pagination."""
+    """List a library's movies, sorted and filtered with keyset pagination.
+
+    Book libraries keep their directory structure: the list covers one folder
+    at a time, defaulting to the library root. ``folder`` is ignored for other
+    library types.
+    """
     direction: SortOrder = order or _DEFAULT_ORDER[sort]
     key_expression = _sort_expression(sort, direction)
 
@@ -198,6 +229,8 @@ async def list_library_items(
             )
         )
         query = query.where(played if watched else ~played)
+    if library.type == "book":
+        query = query.where(_in_book_folder(library, _clean_folder(folder)))
 
     if cursor is not None:
         cursor_key, cursor_id = _decode_cursor(cursor, sort=sort, direction=direction)
@@ -242,6 +275,43 @@ async def list_library_items(
         next_cursor=next_cursor,
         has_more=has_more,
     )
+
+
+@router.get("/libraries/{library_id}/folders")
+async def list_library_folders(
+    library: LibraryAccessDep,
+    user: RequireUser,
+    session: SessionDep,
+    path: Annotated[str | None, Query(max_length=1024)] = None,
+) -> LibraryFolderPage:
+    """List the immediate subfolders of one directory in a book library.
+
+    Folder paths are relative to the library root and are derived from the
+    files on disk, so they mirror the directory tree the books came from.
+    """
+    if library.type != "book":
+        raise ValidationError(
+            "Folders are only available for book libraries", code="not_a_book_library"
+        )
+
+    current = _clean_folder(path)
+    prefix = f"{current}/" if current else ""
+    counts: dict[str, int] = {}
+    for item_folders in (await _book_folders(session, library)).values():
+        children: set[str] = set()
+        for item_folder in item_folders:
+            remainder = item_folder[len(prefix) :] if item_folder.startswith(prefix) else ""
+            if remainder:
+                children.add(remainder.split("/", 1)[0])
+        for child in children:
+            counts[child] = counts.get(child, 0) + 1
+
+    folders = [
+        LibraryFolder(name=name, path=f"{prefix}{name}", item_count=count)
+        for name, count in sorted(counts.items(), key=lambda entry: entry[0].casefold())
+    ]
+    parent = current.rpartition("/")[0] if current else None
+    return LibraryFolderPage(path=current, parent=parent, folders=folders)
 
 
 @router.get(
@@ -349,6 +419,67 @@ async def get_item(
 
 
 # ------------------------------------------------------------------- helpers
+
+
+def _clean_folder(folder: str | None) -> str:
+    """Normalize a library-relative folder path, rejecting escapes."""
+    if not folder:
+        return ""
+    parts = [part for part in folder.replace("\\", "/").split("/") if part not in ("", ".")]
+    if any(part == ".." for part in parts):
+        raise ValidationError("Folder path cannot leave the library root", code="invalid_folder")
+    return "/".join(parts)
+
+
+def _relative_folder(path: Path, roots: list[Path]) -> str | None:
+    """Return the folder holding ``path`` relative to its library root."""
+    for root in sorted(roots, key=lambda item: len(item.parts), reverse=True):
+        try:
+            relative = path.parent.relative_to(root).as_posix()
+        except ValueError:
+            continue
+        return "" if relative == "." else relative
+    return None
+
+
+async def _book_folders(session: AsyncSession, library: Library) -> dict[str, set[str]]:
+    """Map every book in the library to the folders that hold its files."""
+    rows = await session.execute(
+        select(MediaItem.id, MediaFile.path)
+        .join(MediaFile, MediaFile.item_id == MediaItem.id)
+        .where(
+            MediaItem.library_id == library.id,
+            MediaItem.type == "book",
+            MediaFile.missing_since.is_(None),
+        )
+    )
+    roots = [Path(root.path) for root in library.paths]
+    folders: dict[str, set[str]] = {}
+    for item_id, file_path in rows.all():
+        folder = _relative_folder(Path(file_path), roots)
+        if folder is not None:
+            folders.setdefault(item_id, set()).add(folder)
+    return folders
+
+
+def _escape_like(value: str) -> str:
+    """Escape LIKE wildcards in a literal path prefix."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _in_book_folder(library: Library, folder: str) -> ColumnElement[bool]:
+    """Match books with a file directly inside ``folder``."""
+    conditions = []
+    for root in library.paths:
+        base = _escape_like(str(Path(root.path) / folder) if folder else str(Path(root.path)))
+        prefix = f"{base}/%"
+        conditions.append(
+            and_(
+                MediaFile.path.like(prefix, escape="\\"),
+                MediaFile.path.not_like(f"{prefix}/%", escape="\\"),
+            )
+        )
+    return MediaItem.files.any(and_(MediaFile.missing_since.is_(None), or_(*conditions)))
 
 
 def _sort_expression(sort: str, direction: SortOrder) -> Any:
