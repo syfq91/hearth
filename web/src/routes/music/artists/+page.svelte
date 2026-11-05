@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MusicTabs from '../../../lib/components/MusicTabs.svelte';
 	import { api } from '../../../lib/api/client';
 	import type { ArtistListResponse } from '../../../lib/api/types';
 	import { goto } from '$app/navigation';
@@ -49,10 +50,7 @@
 
 <h1>Artists</h1>
 
-<nav class="tabs" aria-label="Music sections">
-	<a href="/music">Albums</a>
-	<a href="/music/artists" aria-current="page">Artists</a>
-</nav>
+<MusicTabs current="artists" />
 
 <form class="search" role="search" onsubmit={submitSearch}>
 	<label class="visually-hidden" for="artist-search">Search artists</label>
@@ -97,26 +95,6 @@
 {/if}
 
 <style>
-	.tabs {
-		display: flex;
-		gap: 0.25rem;
-		border-bottom: 1px solid var(--border);
-		margin-bottom: 1.25rem;
-	}
-
-	.tabs a {
-		color: var(--muted);
-		padding: 0.4rem 0.9rem;
-		border-bottom: 2px solid transparent;
-		margin-bottom: -1px;
-	}
-
-	.tabs a[aria-current='page'] {
-		color: var(--text);
-		font-weight: 600;
-		border-bottom-color: var(--accent);
-	}
-
 	.search {
 		display: flex;
 		gap: 0.5rem;

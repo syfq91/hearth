@@ -959,6 +959,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/genres": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Genres
+         * @description List genres with album and track counts from the user's libraries.
+         */
+        get: operations["list_genres_api_v1_genres_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -3019,6 +3039,32 @@ export interface components {
             name: string;
             /** Path */
             path: string;
+        };
+        /** GenreListResponse */
+        GenreListResponse: {
+            /** Items */
+            items: components["schemas"]["GenreSummary"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** GenreSummary */
+        GenreSummary: {
+            /**
+             * Album Count
+             * @default 0
+             */
+            album_count: number;
+            /** Name */
+            name: string;
+            /**
+             * Track Count
+             * @default 0
+             */
+            track_count: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -6194,6 +6240,39 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_genres_api_v1_genres_get: {
+        parameters: {
+            query?: {
+                query?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenreListResponse"];
                 };
             };
             /** @description Validation Error */

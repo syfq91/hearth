@@ -315,6 +315,7 @@ When `method` is `transcode_hls` or `remux_hls`:
 | **Music** | `/api/v1/artists` | GET | User | Browse artists with track counts |
 | | `/api/v1/albums` | GET | User | Browse albums |
 | | `/api/v1/tracks` | GET | User | Browse individual tracks |
+| | `/api/v1/genres` | GET | User | Browse genres with album and track counts |
 | | `/api/v1/playlists` | GET, POST | User | Manage user music/video playlists |
 | **Admin** | `/api/v1/admin/audit` | GET | Admin | View audit log |
 | | `/api/v1/admin/backup` | POST | Admin | Create online SQLite backup archive |
