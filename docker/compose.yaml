@@ -4,6 +4,7 @@ services:
   # Hearth all-in-one service (HTTP API, Web UI, and embedded background worker)
   hearth:
     image: ghcr.io/syfq91/hearth:latest
+    container_name: hearth
     restart: unless-stopped
     ports:
       - "${HEARTH_HTTP_PORT:-8000}:8000"
