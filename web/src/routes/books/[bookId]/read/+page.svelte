@@ -4,7 +4,6 @@
 	import PdfReader from '../../../../lib/components/PdfReader.svelte';
 	import { ProgressSync } from '../../../../lib/reader/progress';
 	import { withMediaToken } from '../../../../lib/media-token.svelte';
-	import { onDestroy, untrack } from 'svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -13,9 +12,15 @@
 	const format = $derived(data.format);
 	const progress = $derived(data.progress);
 
-	// One syncer per mounted reader; the route remounts per book.
-	const sync = untrack(() => new ProgressSync(bookId));
-	onDestroy(() => sync.dispose());
+	// One syncer per mounted reader; cleanly disposed when switching books or unmounting.
+	let sync = $state<ProgressSync | null>(null);
+	$effect(() => {
+		const currentSync = new ProgressSync(bookId);
+		sync = currentSync;
+		return () => {
+			currentSync.dispose();
+		};
+	});
 
 	/** Comic locator is `page:<n>`; EPUB locator is an EPUB CFI. */
 	function parsePage(locator: string | null | undefined): number {
@@ -23,11 +28,14 @@
 		return match ? Number.parseInt(match[1], 10) : 1;
 	}
 
-	// Comic page URLs need a media token; resolved lazily by ComicReader via
-	// withMediaToken, so only the book file URL is built here.
+	const isComic = $derived(format === 'cbz' || format === 'cbr');
+	const isPdf = $derived(format === 'pdf');
+	const isEpub = $derived(format === 'epub');
+
+	// File URL only needed for epub and pdf (ComicReader resolves per-page).
 	let fileUrl = $state<string | null>(null);
 	$effect(() => {
-		if (!format) return;
+		if (!format || isComic) return;
 		let cancelled = false;
 		void withMediaToken(`/api/v1/books/${bookId}/file/${format}`).then((resolved) => {
 			if (!cancelled) fileUrl = resolved;
@@ -38,23 +46,19 @@
 	});
 
 	function handleEpubRelocate(locator: string, percentage: number): void {
-		sync.update({ locator, percentage });
+		sync?.update({ locator, percentage });
 	}
 
 	function handleComicPage(page: number): void {
 		const total = data.book.page_count ?? 0;
 		const percentage = total > 0 ? Math.round((page / total) * 10000) / 100 : 0;
-		sync.update({ locator: `page:${page}`, percentage });
+		sync?.update({ locator: `page:${page}`, percentage });
 	}
 
 	function handlePdfPage(page: number, total: number): void {
 		const percentage = total > 0 ? Math.round((page / total) * 10000) / 100 : 0;
-		sync.update({ locator: `page:${page}`, percentage });
+		sync?.update({ locator: `page:${page}`, percentage });
 	}
-
-	const isComic = $derived(format === 'cbz' || format === 'cbr');
-	const isPdf = $derived(format === 'pdf');
-	const isEpub = $derived(format === 'epub');
 </script>
 
 <svelte:head>

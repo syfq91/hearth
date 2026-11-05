@@ -5,7 +5,7 @@
 	let { data }: PageProps = $props();
 
 	const readerFormats = $derived(
-		data.book.formats.filter((format) => ['epub', 'pdf', 'cbz', 'cbr'].includes(format))
+		(data.book.formats ?? []).filter((format) => ['epub', 'pdf', 'cbz', 'cbr'].includes(format))
 	);
 
 	function readerHref(format: string): string {

@@ -25,6 +25,7 @@
 	/** Resolved URLs for the pages currently in the window. */
 	let cache = $state<Record<number, string>>({});
 	let loading = $state(false);
+	let error = $state<string | null>(null);
 	let comic = $state<HTMLElement | null>(null);
 
 	const WINDOW_BEFORE = 2;
@@ -34,40 +35,70 @@
 		return withMediaToken(`/api/v1/books/${bookId}/pages/${target}`, { width: 1600 });
 	}
 
-	/** Prefetch the window around `current`, nearest first. */
-	async function prefetch(current: number): Promise<void> {
-		const offsets = [1, -1, 2, -2];
-		for (const offset of offsets) {
-			const target = current + offset;
-			if (target < 1 || target > pageCount || cache[target]) continue;
-			const resolved = await urlFor(target);
-			if (cache[target]) continue;
-			cache = { ...cache, [target]: resolved };
-		}
-	}
-
 	$effect(() => {
-		// Prime the token and the window for the current page.
+		// Only depend on `page`, `bookId`, and `pageCount`
+		const current = page;
+		const total = pageCount;
+		let cancelled = false;
+
 		void (async () => {
-			loading = !cache[page];
-			if (!cache[page]) {
-				const resolved = await urlFor(page);
-				cache = { ...cache, [page]: resolved };
+			error = null;
+			const initialCache = untrack(() => cache);
+			if (!initialCache[current]) {
+				loading = true;
+				try {
+					const resolved = await urlFor(current);
+					if (cancelled) return;
+					cache = { ...untrack(() => cache), [current]: resolved };
+				} catch (e) {
+					if (cancelled) return;
+					error = e instanceof Error ? e.message : String(e);
+				} finally {
+					if (!cancelled) loading = false;
+				}
 			}
-			loading = false;
-			void prefetch(page);
+
+			// Prefetch the window around `current`, nearest first.
+			const offsets = [1, -1, 2, -2];
+			for (const offset of offsets) {
+				const target = current + offset;
+				if (target < 1 || target > total) continue;
+				if (untrack(() => cache)[target]) continue;
+				try {
+					const resolved = await urlFor(target);
+					if (cancelled) return;
+					if (untrack(() => cache)[target]) continue;
+					cache = { ...untrack(() => cache), [target]: resolved };
+				} catch {
+					// Prefetch is best-effort
+				}
+			}
+
 			// Trim pages far outside the window so memory stays bounded.
 			const keep = new Set<number>();
 			for (let i = -WINDOW_BEFORE; i <= WINDOW_AFTER; i += 1) {
-				const target = page + i;
-				if (target >= 1 && target <= pageCount) keep.add(target);
+				const target = current + i;
+				if (target >= 1 && target <= total) keep.add(target);
 			}
+			const latestCache = untrack(() => cache);
+			let needsTrim = false;
 			const trimmed: Record<number, string> = {};
-			for (const [key, value] of Object.entries(cache)) {
-				if (keep.has(Number(key))) trimmed[Number(key)] = value;
+			for (const [key, value] of Object.entries(latestCache)) {
+				const numKey = Number(key);
+				if (keep.has(numKey)) {
+					trimmed[numKey] = value;
+				} else {
+					needsTrim = true;
+				}
 			}
-			cache = trimmed;
+			if (needsTrim && !cancelled) {
+				cache = trimmed;
+			}
 		})();
+
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	$effect(() => {
@@ -109,12 +140,14 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="comic" role="document" aria-label={`Page ${page} of ${pageCount}`} bind:this={comic}>
-	{#if cache[page]}
+	{#if error}
+		<p class="banner" role="alert">Could not load page: {error}</p>
+	{:else if cache[page]}
 		<img
 			class="page"
 			src={cache[page]}
 			alt={`Page ${page}`}
-		decoding="async"
+			decoding="async"
 		/>
 	{:else}
 		<p class="status" role="status">Loading page…</p>
@@ -184,5 +217,13 @@
 	.status {
 		color: var(--muted);
 		padding: 2rem;
+	}
+
+	.banner {
+		background: rgba(220, 38, 38, 0.15);
+		border: 1px solid rgba(220, 38, 38, 0.4);
+		color: #fca5a5;
+		padding: 1rem 1.5rem;
+		border-radius: var(--radius);
 	}
 </style>
