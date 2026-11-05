@@ -322,3 +322,97 @@ When `method` is `transcode_hls` or `remux_hls`:
 | | `/api/v1/admin/logs` | GET | Admin | Tail structured server logs |
 | | `/api/v1/admin/transcoding/capabilities` | GET | Admin | Inspect hardware VAAPI capabilities |
 | | `/api/v1/admin/transcoding/sessions` | GET | Admin | Inspect active transcoding sessions |
+
+---
+
+## 8. Quick Start Examples
+
+The examples below target a local server at `http://localhost:8000` and use an
+access token from `POST /api/v1/auth/login`.
+
+```bash
+BASE=http://localhost:8000
+TOKEN="<access_token from login>"
+```
+
+### 8.1 Authenticate
+
+```bash
+curl -s -X POST "$BASE/api/v1/auth/login" \
+  -H 'Content-Type: application/json' \
+  -d '{"username": "admin", "password": "your-password"}'
+```
+
+The response contains `access_token` (15 minutes by default) and
+`refresh_token`. Send the access token as `Authorization: Bearer $TOKEN`.
+
+### 8.2 Create a library and scan it
+
+Library paths must resolve inside the read-only media mount (`/media` in the
+container, `HEARTH_MEDIA_DIR` locally).
+
+```bash
+curl -X POST "$BASE/api/v1/libraries" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "Movies", "type": "movie", "paths": ["/media/movies"]}'
+
+curl -X POST "$BASE/api/v1/libraries/$LIBRARY_ID/scan" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+`POST /libraries/{id}/scan` returns the already-queued job (`202`,
+`created: false`) when a scan is active. Scans also run every six hours and
+shortly after files change.
+
+### 8.3 Browse and inspect items
+
+```bash
+curl "$BASE/api/v1/libraries/$LIBRARY_ID/items?sort=title&limit=20" \
+  -H "Authorization: Bearer $TOKEN"
+
+curl "$BASE/api/v1/items/$ITEM_ID" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+`GET /items/{id}` returns metadata, credits, versions, and artwork. Artwork is
+served by `GET /api/v1/images/{image_id}`, which accepts a media token in
+`?token=` so it can be used directly in `<img>` tags.
+
+Without `HEARTH_TMDB_API_KEY`, movie and TV items stay `pending` and are retried
+with backoff. Local `.nfo` files and sidecar artwork are always used first.
+
+### 8.4 Negotiate playback and report progress
+
+```bash
+curl -X POST "$BASE/api/v1/items/$ITEM_ID/playback-info" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"capabilities": {"preset": "chrome", "hls_fmp4": true}}'
+```
+
+The response contains `mode: "direct_play"` (or an HLS session), a stream `url`
+with an item-scoped media token, tokenized sidecar subtitle URLs, and
+`expires_at`. Report progress with:
+
+```bash
+curl -X POST "$BASE/api/v1/items/$ITEM_ID/progress" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"position_ms": 120000, "duration_ms": 5400000, "state": "playing"}'
+```
+
+The server auto-marks an item watched at 90% (`HEARTH_WATCHED_THRESHOLD`) or at a
+credits chapter. See §4 for the full watch-state contract.
+
+### 8.5 Home shelves
+
+```bash
+curl "$BASE/api/v1/home/continue-watching?limit=20" -H "Authorization: Bearer $TOKEN"
+curl "$BASE/api/v1/home/continue-reading?limit=20"  -H "Authorization: Bearer $TOKEN"
+curl "$BASE/api/v1/home/recently-added?limit=20"    -H "Authorization: Bearer $TOKEN"
+curl "$BASE/api/v1/home/favorites?limit=20"         -H "Authorization: Bearer $TOKEN"
+```
+
+Each shelf returns `{"items": [...], "has_more": bool}`. `continue-watching`
+and `continue-reading` are per user and ordered by most recent activity.
