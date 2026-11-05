@@ -93,9 +93,6 @@
 			<a href="/music" aria-current={isActive('/music') ? 'page' : undefined}><Music size={16} /> <span>Music</span></a>
 			<a href="/books" aria-current={isActive('/books') ? 'page' : undefined}><BookOpen size={16} /> <span>Books</span></a>
 			<a href="/search" aria-current={isActive('/search') ? 'page' : undefined}><Search size={16} /> <span>Search</span></a>
-			{#if session.status === 'authenticated' && session.user?.role === 'admin'}
-				<a href="/admin" aria-current={isActive('/admin') ? 'page' : undefined}><Shield size={16} /> <span>Admin</span></a>
-			{/if}
 		</nav>
 		<div class="spacer"></div>
 		{#if session.status === 'authenticated' && session.user}
@@ -125,6 +122,19 @@
 							<User size={15} />
 							<span>Profile</span>
 						</a>
+
+						{#if session.user.role === 'admin'}
+							<a
+								class="dropdown-item"
+								href="/admin"
+								role="menuitem"
+								aria-current={isActive('/admin') ? 'page' : undefined}
+								onclick={closeUserMenu}
+							>
+								<Shield size={15} />
+								<span>Admin</span>
+							</a>
+						{/if}
 
 						<button
 							type="button"
