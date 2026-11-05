@@ -1,8 +1,37 @@
 <script lang="ts">
+	import { api } from '../../lib/api/client';
+	import type { BookListResponse } from '../../lib/api/types';
 	import BookCover from '../../lib/components/BookCover.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+
+	let extraItems = $state<BookListResponse['items']>([]);
+	let total = $state(0);
+	let loadingMore = $state(false);
+
+	let items = $derived([...data.books.items, ...extraItems]);
+	let currentTotal = $derived(total || data.books.total);
+
+	$effect(() => {
+		const _ = data.books;
+		extraItems = [];
+		total = data.books.total;
+	});
+
+	async function loadMore() {
+		if (loadingMore || items.length >= currentTotal) return;
+		loadingMore = true;
+		try {
+			const res = await api.get<BookListResponse>('/books', {
+				query: { limit: 96, offset: items.length }
+			});
+			extraItems = [...extraItems, ...res.items];
+			total = res.total;
+		} finally {
+			loadingMore = false;
+		}
+	}
 
 	function authorName(book: (typeof data.books.items)[number]): string {
 		return book.author?.name ?? '';
@@ -15,11 +44,11 @@
 
 <h1>Books</h1>
 
-{#if data.books.items.length === 0}
+{#if items.length === 0}
 	<p class="muted">No books yet.</p>
 {:else}
 	<ul class="grid">
-		{#each data.books.items as book (book.id)}
+		{#each items as book (book.id)}
 			<li>
 				<article class="book">
 					<a href={`/books/${book.id}`} aria-label={book.title}>
@@ -47,6 +76,13 @@
 			</li>
 		{/each}
 	</ul>
+	{#if items.length < currentTotal}
+		<div class="more">
+			<button type="button" class="load-more" onclick={loadMore} disabled={loadingMore}>
+				{loadingMore ? 'Loading…' : 'Load more'}
+			</button>
+		</div>
+	{/if}
 {/if}
 
 <style>
@@ -94,6 +130,29 @@
 		display: block;
 		height: 100%;
 		background: var(--accent);
+	}
+
+	.more {
+		margin-top: 2rem;
+		display: flex;
+		justify-content: center;
+	}
+
+	.load-more {
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		padding: 0.6rem 1.4rem;
+		cursor: pointer;
+	}
+
+	.load-more:hover:not(:disabled) {
+		background: var(--surface);
+	}
+
+	.load-more:disabled {
+		opacity: 0.6;
+		cursor: default;
 	}
 
 	.muted {

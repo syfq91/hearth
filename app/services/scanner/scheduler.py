@@ -48,7 +48,10 @@ class ScanScheduler:
             libraries = list(
                 await session.scalars(
                     select(Library)
-                    .where(Library.type == "movie", Library.paths.any())
+                    .where(
+                        Library.type.in_(("movie", "tv", "music", "book")),
+                        Library.paths.any(),
+                    )
                     .order_by(Library.id)
                 )
             )

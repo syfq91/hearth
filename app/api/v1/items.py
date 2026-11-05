@@ -171,7 +171,14 @@ async def list_library_items(
     direction: SortOrder = order or _DEFAULT_ORDER[sort]
     key_expression = _sort_expression(sort, direction)
 
-    item_type = "series" if library.type == "tv" else "movie"
+    if library.type == "tv":
+        item_type = "series"
+    elif library.type == "book":
+        item_type = "book"
+    elif library.type == "music":
+        item_type = "album"
+    else:
+        item_type = "movie"
     query = select(MediaItem).where(
         MediaItem.library_id == library.id,
         MediaItem.type == item_type,

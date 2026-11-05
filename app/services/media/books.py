@@ -53,7 +53,7 @@ def _strip_ns(tag: str) -> str:
 def read_epub_metadata(path: Path) -> BookTagData:
     """Read metadata and cover image from an EPUB file via direct ZIP and XML parsing."""
     try:
-        with zipfile.ZipFile(path, "r") as zf:
+        with zipfile.ZipFile(path, "r", metadata_encoding="utf-8") as zf:
             # 1. Locate OPF file from META-INF/container.xml
             try:
                 container_data = zf.read("META-INF/container.xml")
@@ -217,7 +217,7 @@ def read_epub_metadata(path: Path) -> BookTagData:
 def read_cbz_metadata(path: Path) -> BookTagData:
     """Read metadata and cover from a Comic Book Zip (CBZ) archive."""
     try:
-        with zipfile.ZipFile(path, "r") as zf:
+        with zipfile.ZipFile(path, "r", metadata_encoding="utf-8") as zf:
             namelist = zf.namelist()
             images = [
                 n
@@ -301,7 +301,7 @@ def extract_comic_page(path: Path, page_number: int) -> tuple[bytes, str]:
 
     suffix = path.suffix.lower()
     if suffix == ".cbz" or zipfile.is_zipfile(path):
-        with zipfile.ZipFile(path, "r") as zf:
+        with zipfile.ZipFile(path, "r", metadata_encoding="utf-8") as zf:
             images = [
                 n
                 for n in zf.namelist()

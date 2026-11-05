@@ -116,9 +116,9 @@ async def scan_library(
     library = await session.get(Library, library_id)
     if library is None:
         raise NotFoundError("Library not found", code="library_not_found")
-    if library.type != "movie":
+    if library.type not in ("movie", "tv", "music", "book"):
         raise ValidationError(
-            "Only movie libraries can be scanned in this phase",
+            "Only movie, tv, music and book libraries can be scanned in this phase",
             code="unsupported_library_type",
         )
 

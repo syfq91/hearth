@@ -63,7 +63,7 @@ class LibraryWatcher:
             rows = await session.execute(
                 select(LibraryPath.path, Library.id)
                 .join(Library, Library.id == LibraryPath.library_id)
-                .where(Library.type == "movie")
+                .where(Library.type.in_(("movie", "tv", "music", "book")))
             )
             roots: dict[str, str] = {}
             for raw_path, library_id in rows.all():
