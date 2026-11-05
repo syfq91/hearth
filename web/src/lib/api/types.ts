@@ -31,6 +31,7 @@ export type HealthResponse = S['HealthResponse'];
 export type VersionResponse = S['VersionResponse'];
 export type MediaTokenResponse = S['MediaTokenResponse'];
 export type HomeShelf = S['HomeShelf'];
+export type BookShelf = S['BookShelf'];
 export type NextUpShelf = S['NextUpShelf'];
 export type ItemPage = S['ItemPage'];
 export type ItemDetail = S['ItemDetail'];

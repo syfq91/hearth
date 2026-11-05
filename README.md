@@ -88,8 +88,8 @@ The response contains `mode: "direct_play"`, a stream `url` with an item-scoped
 media token, tokenized sidecar subtitle URLs and `expires_at`. Report progress
 with `POST /api/v1/items/$ITEM_ID/progress`; the server auto-marks an item
 watched at 90% or at a credits chapter. Home shelves are at
-`/api/v1/home/continue-watching`, `/api/v1/home/recently-added` and
-`/api/v1/home/favorites`.
+`/api/v1/home/continue-watching`, `/api/v1/home/continue-reading`,
+`/api/v1/home/recently-added` and `/api/v1/home/favorites`.
 
 ### Developer test player
 

@@ -8,7 +8,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
-from app.db.models import Library, LibraryPath, MediaItem, Movie, User, UserItemState
+from app.db.models import (
+    Book,
+    BookProgress,
+    Library,
+    LibraryPath,
+    MediaItem,
+    Movie,
+    User,
+    UserItemState,
+)
 from app.services.media.titles import sort_title
 
 ADMIN = {"username": "admin", "password": "correct horse"}
@@ -47,12 +56,15 @@ async def _add_user(
 
 
 async def _library(
-    settings: Settings, sessionmaker: async_sessionmaker[AsyncSession], name: str
+    settings: Settings,
+    sessionmaker: async_sessionmaker[AsyncSession],
+    name: str,
+    library_type: str = "movie",
 ) -> str:
     root = settings.media_dir / name
     root.mkdir(exist_ok=True)
     async with sessionmaker() as session:
-        library = Library(name=f"{name} {uuid.uuid4().hex[:8]}", type="movie")
+        library = Library(name=f"{name} {uuid.uuid4().hex[:8]}", type=library_type)
         library.paths.append(LibraryPath(path=str(root)))
         session.add(library)
         await session.commit()
@@ -81,6 +93,51 @@ async def _item(
         session.add(item)
         await session.commit()
         return item.id
+
+
+async def _book(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    library_id: str,
+    *,
+    title: str,
+    added_at: datetime = NOW,
+) -> str:
+    async with sessionmaker() as session:
+        item = MediaItem(
+            library_id=library_id,
+            type="book",
+            title=title,
+            sort_title=sort_title(title),
+            added_at=added_at,
+            match_state="matched",
+        )
+        item.book = Book()
+        session.add(item)
+        await session.commit()
+        return item.id
+
+
+async def _book_progress(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    user_id: str,
+    book_id: str,
+    *,
+    percentage: float,
+    completed: bool = False,
+    updated_at: datetime = NOW,
+) -> None:
+    async with sessionmaker() as session:
+        session.add(
+            BookProgress(
+                user_id=user_id,
+                book_id=book_id,
+                locator="epubcfi(/6/4!/4/2/10)",
+                percentage=percentage,
+                completed=completed,
+                updated_at=updated_at,
+            )
+        )
+        await session.commit()
 
 
 async def _state(
@@ -188,6 +245,59 @@ async def test_continue_watching_is_per_user_and_excludes_finished(
     assert bob_response.json()["items"][0]["watch_state"]["position_ms"] == 5000
 
 
+async def test_continue_reading_is_per_user_and_excludes_finished(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    library_a = await _library(db_settings, db_sessionmaker, "A", library_type="book")
+    library_b = await _library(db_settings, db_sessionmaker, "B", library_type="book")
+    alice = await _add_user(api_client, admin, "alice", [library_a])
+    bob = await _add_user(api_client, admin, "bob", [library_a, library_b])
+    alice_id = await _user_id(db_sessionmaker, "alice")
+    bob_id = await _user_id(db_sessionmaker, "bob")
+
+    recent = await _book(db_sessionmaker, library_a, title="Recent")
+    older = await _book(db_sessionmaker, library_a, title="Older")
+    finished = await _book(db_sessionmaker, library_a, title="Finished")
+    unread = await _book(db_sessionmaker, library_a, title="Unread")
+    elsewhere = await _book(db_sessionmaker, library_b, title="Elsewhere")
+
+    await _book_progress(
+        db_sessionmaker, alice_id, recent, percentage=12.5, updated_at=NOW - timedelta(minutes=1)
+    )
+    await _book_progress(
+        db_sessionmaker, alice_id, older, percentage=40.0, updated_at=NOW - timedelta(minutes=10)
+    )
+    await _book_progress(
+        db_sessionmaker, alice_id, finished, percentage=100.0, completed=True, updated_at=NOW
+    )
+    await _book_progress(db_sessionmaker, alice_id, unread, percentage=0.0, updated_at=NOW)
+    await _book_progress(
+        db_sessionmaker, alice_id, elsewhere, percentage=30.0, updated_at=NOW + timedelta(minutes=5)
+    )
+    await _book_progress(db_sessionmaker, bob_id, recent, percentage=55.0)
+
+    response = await api_client.get("/api/v1/home/continue-reading", headers=_bearer(alice))
+    assert await _titles(response) == ["Recent", "Older"]
+    assert [item["progress"]["percentage"] for item in response.json()["items"]] == [12.5, 40.0]
+    assert response.json()["has_more"] is False
+
+    limited = await api_client.get(
+        "/api/v1/home/continue-reading", params={"limit": 1}, headers=_bearer(alice)
+    )
+    assert await _titles(limited) == ["Recent"]
+    assert limited.json()["has_more"] is True
+
+    bob_response = await api_client.get("/api/v1/home/continue-reading", headers=_bearer(bob))
+    assert await _titles(bob_response) == ["Recent"]
+    assert bob_response.json()["items"][0]["progress"]["percentage"] == 55.0
+
+    admin_response = await api_client.get("/api/v1/home/continue-reading", headers=_bearer(admin))
+    assert await _titles(admin_response) == []
+
+
 async def test_recently_added_orders_and_filters_by_library(
     api_client: httpx.AsyncClient,
     db_settings: Settings,
@@ -273,6 +383,6 @@ async def test_favorites_are_per_user_and_ordered_by_recent_change(
 
 
 async def test_home_shelves_require_authentication(api_client: httpx.AsyncClient) -> None:
-    for path in ("continue-watching", "recently-added", "favorites"):
+    for path in ("continue-watching", "continue-reading", "recently-added", "favorites"):
         response = await api_client.get(f"/api/v1/home/{path}")
         assert response.status_code == 401

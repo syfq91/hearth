@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Shelf from '../lib/components/Shelf.svelte';
 	import Poster from '../lib/components/Poster.svelte';
+	import BookCover from '../lib/components/BookCover.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -17,6 +18,40 @@
 {/if}
 
 <Shelf title="Continue watching" items={data.continueWatching.items} />
+
+{#if data.continueReading.items.length > 0}
+	<section class="shelf" aria-label="Continue reading">
+		<h2 class="heading">Continue reading</h2>
+		<ul class="row">
+			{#each data.continueReading.items as book (book.id)}
+				<li>
+					<article class="book">
+						<a href={`/books/${book.id}`} aria-label={book.title}>
+							<BookCover coverImageId={book.cover_image_id} alt="" />
+						</a>
+						<h3 class="title">{book.title}</h3>
+						{#if book.author}
+							<p class="subtitle">{book.author.name}</p>
+						{/if}
+						{#if book.progress}
+							<div
+								class="progress"
+								role="progressbar"
+								aria-valuenow={Math.round(book.progress.percentage)}
+								aria-valuemin="0"
+								aria-valuemax="100"
+								aria-label="Reading progress"
+							>
+								<span style:width="{book.progress.percentage}%"></span>
+							</div>
+						{/if}
+					</article>
+				</li>
+			{/each}
+		</ul>
+	</section>
+{/if}
+
 <Shelf title="Next up" items={data.nextUp.items} />
 
 {#if data.recentAlbums.length > 0}
@@ -43,7 +78,7 @@
 <Shelf title="Recently added" items={data.recentlyAdded.items} />
 <Shelf title="Favorites" items={data.favorites.items} />
 
-{#if data.recentAlbums.length === 0 && data.continueWatching.items.length === 0 && data.nextUp.items.length === 0 && data.recentlyAdded.items.length === 0 && data.favorites.items.length === 0 && !data.error}
+{#if data.recentAlbums.length === 0 && data.continueWatching.items.length === 0 && data.continueReading.items.length === 0 && data.nextUp.items.length === 0 && data.recentlyAdded.items.length === 0 && data.favorites.items.length === 0 && !data.error}
 	<div class="empty-state">
 		<p>Nothing here yet.</p>
 		<p class="muted">Add a library from the admin area to get started.</p>
@@ -82,11 +117,25 @@
 		scroll-snap-type: x proximity;
 	}
 
-	.album {
+	.album,
+	.book {
 		display: flex;
 		flex-direction: column;
 		gap: 0.4rem;
 		width: 100%;
+	}
+
+	.progress {
+		height: 3px;
+		background: var(--surface-2);
+		border-radius: 2px;
+		overflow: hidden;
+	}
+
+	.progress span {
+		display: block;
+		height: 100%;
+		background: var(--accent);
 	}
 
 	.title {
