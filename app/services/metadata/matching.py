@@ -448,6 +448,16 @@ class MetadataMatcher:
                     isbn = item.book.isbn
                     if item.book.author is not None:
                         author_name = item.book.author.name
+            elif item.type == "series":
+                episode_files = list(
+                    await session.scalars(
+                        select(MediaFile.path)
+                        .join(Episode, Episode.file_id == MediaFile.id)
+                        .where(Episode.series_id == item.id, MediaFile.missing_since.is_(None))
+                        .limit(5)
+                    )
+                )
+                file_paths.extend(episode_files)
 
             return _ItemSnapshot(
                 id=item.id,

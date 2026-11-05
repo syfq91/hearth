@@ -31,6 +31,79 @@
 	let error = $state<string | null>(null);
 	let scanningId = $state<string | null>(null);
 
+	/* ---- edit library state ---- */
+	let editingId = $state<string | null>(null);
+	let editName = $state('');
+	let editType = $state<(typeof TYPES)[number]['value']>('movie');
+	let editSelectedPaths = $state<string[]>([]);
+	let editManualEntry = $state(false);
+	let editManualPathText = $state('');
+	let editBusy = $state(false);
+	let editError = $state<string | null>(null);
+
+	let browserMode = $state<'create' | 'edit'>('create');
+
+	function startEdit(library: LibraryDetail): void {
+		editingId = library.id;
+		editName = library.name;
+		editType = library.type as (typeof TYPES)[number]['value'];
+		editSelectedPaths = [...library.paths];
+		editManualEntry = false;
+		editManualPathText = '';
+		editError = null;
+	}
+
+	function cancelEdit(): void {
+		editingId = null;
+		editError = null;
+		editManualEntry = false;
+		editManualPathText = '';
+	}
+
+	function addEditManualPath(): void {
+		const trimmed = editManualPathText.trim();
+		if (!trimmed) return;
+		if (!editSelectedPaths.includes(trimmed)) {
+			editSelectedPaths = [...editSelectedPaths, trimmed];
+		}
+		editManualPathText = '';
+	}
+
+	function removeEditPath(pathToRemove: string): void {
+		editSelectedPaths = editSelectedPaths.filter((p) => p !== pathToRemove);
+	}
+
+	async function saveEdit(libraryId: string): Promise<void> {
+		if (editManualPathText.trim() && !editSelectedPaths.includes(editManualPathText.trim())) {
+			editSelectedPaths = [...editSelectedPaths, editManualPathText.trim()];
+			editManualPathText = '';
+		}
+		if (!editName.trim() || editSelectedPaths.length === 0) {
+			editError = 'Please provide a library name and at least one folder path.';
+			return;
+		}
+		editBusy = true;
+		editError = null;
+		message = null;
+		try {
+			const updated = await api.patch<LibraryDetail>(`/libraries/${libraryId}`, {
+				body: {
+					name: editName.trim(),
+					type: editType,
+					paths: editSelectedPaths
+				}
+			});
+			libraries = libraries.map((lib) => (lib.id === libraryId ? updated : lib));
+			message = `Library “${updated.name}” updated.`;
+			editingId = null;
+			await invalidateAll();
+		} catch (e) {
+			editError = e instanceof Error ? e.message : String(e);
+		} finally {
+			editBusy = false;
+		}
+	}
+
 	function addManualPath(): void {
 		const trimmed = manualPathText.trim();
 		if (!trimmed) return;
@@ -129,7 +202,10 @@
 					<button
 						type="button"
 						class="browse-btn-highlight"
-						onclick={() => (browserOpen = true)}
+						onclick={() => {
+							browserMode = 'create';
+							browserOpen = true;
+						}}
 					>
 						📁 Browse server folders…
 					</button>
@@ -155,7 +231,10 @@
 					<button
 						type="button"
 						class="ghost"
-						onclick={() => (browserOpen = true)}
+						onclick={() => {
+							browserMode = 'create';
+							browserOpen = true;
+						}}
 					>
 						📁 Add another folder…
 					</button>
@@ -214,13 +293,21 @@
 
 <FolderBrowserModal
 	open={browserOpen}
-	initialPath={selectedPaths[selectedPaths.length - 1] || ''}
+	initialPath={browserMode === 'edit'
+		? editSelectedPaths[editSelectedPaths.length - 1] || ''
+		: selectedPaths[selectedPaths.length - 1] || ''}
 	onselect={(path) => {
-		if (!selectedPaths.includes(path)) {
-			selectedPaths = [...selectedPaths, path];
-			if (!name.trim()) {
-				const folderName = path.split('/').filter(Boolean).pop();
-				if (folderName) name = folderName;
+		if (browserMode === 'edit') {
+			if (!editSelectedPaths.includes(path)) {
+				editSelectedPaths = [...editSelectedPaths, path];
+			}
+		} else {
+			if (!selectedPaths.includes(path)) {
+				selectedPaths = [...selectedPaths, path];
+				if (!name.trim()) {
+					const folderName = path.split('/').filter(Boolean).pop();
+					if (folderName) name = folderName;
+				}
 			}
 		}
 		browserOpen = false;
@@ -235,29 +322,174 @@
 	{:else}
 		<ul class="list">
 			{#each libraries as library (library.id)}
-				<li class="row">
-					<div class="lib">
-						<strong>{library.name}</strong>
-						<span class="chip">{library.type}</span>
-						<p class="paths">{library.paths.join(', ')}</p>
-					</div>
-					<div class="actions">
-						<button
-							type="button"
-							class="ghost"
-							onclick={() => scanLibrary(library.id)}
-							disabled={scanningId === library.id}
+				<li class="row {editingId === library.id ? 'is-editing' : ''}">
+					{#if editingId === library.id}
+						<form
+							class="edit-form stack"
+							onsubmit={(e) => {
+								e.preventDefault();
+								void saveEdit(library.id);
+							}}
 						>
-							{scanningId === library.id ? 'Queuing…' : 'Scan'}
-						</button>
-						<button
-							type="button"
-							class="ghost danger"
-							onclick={() => removeLibrary(library.id, library.name)}
-						>
-							Delete
-						</button>
-					</div>
+							<div class="edit-header">
+								<h3>Edit library</h3>
+								<button
+									type="button"
+									class="close-edit-btn"
+									onclick={cancelEdit}
+									aria-label="Cancel editing"
+									title="Cancel"
+								>
+									✕
+								</button>
+							</div>
+
+							<label>
+								<span>Name</span>
+								<input type="text" bind:value={editName} required maxlength={128} />
+							</label>
+
+							<label>
+								<span>Type</span>
+								<select bind:value={editType}>
+									{#each TYPES as option (option.value)}
+										<option value={option.value}>{option.label}</option>
+									{/each}
+								</select>
+							</label>
+
+							<div class="paths-section">
+								<span class="paths-label">Folder Paths</span>
+
+								{#if editSelectedPaths.length === 0}
+									<div class="no-paths-box">
+										<p class="muted">No folders selected yet. A library needs at least one folder path.</p>
+										<button
+											type="button"
+											class="browse-btn-highlight"
+											onclick={() => {
+												browserMode = 'edit';
+												browserOpen = true;
+											}}
+										>
+											📁 Browse server folders…
+										</button>
+									</div>
+								{:else}
+									<ul class="selected-paths-list">
+										{#each editSelectedPaths as p (p)}
+											<li class="path-item">
+												<span class="path-text">📁 {p}</span>
+												<button
+													type="button"
+													class="remove-path-btn"
+													onclick={() => removeEditPath(p)}
+													aria-label={`Remove path ${p}`}
+													title="Remove path"
+												>
+													✕
+												</button>
+											</li>
+										{/each}
+									</ul>
+									<div class="path-actions">
+										<button
+											type="button"
+											class="ghost"
+											onclick={() => {
+												browserMode = 'edit';
+												browserOpen = true;
+											}}
+										>
+											📁 Add another folder…
+										</button>
+										<button
+											type="button"
+											class="ghost text-btn"
+											onclick={() => (editManualEntry = !editManualEntry)}
+										>
+											{editManualEntry ? 'Hide manual entry' : '+ Type path manually'}
+										</button>
+									</div>
+								{/if}
+
+								{#if editSelectedPaths.length === 0}
+									<div class="path-actions secondary">
+										<button
+											type="button"
+											class="ghost text-btn"
+											onclick={() => (editManualEntry = !editManualEntry)}
+										>
+											{editManualEntry ? 'Hide manual entry' : 'Or enter path manually'}
+										</button>
+									</div>
+								{/if}
+
+								{#if editManualEntry}
+									<div class="manual-input-row">
+										<input
+											type="text"
+											bind:value={editManualPathText}
+											placeholder="/media/movies"
+											onkeydown={(e) => {
+												if (e.key === 'Enter') {
+													e.preventDefault();
+													addEditManualPath();
+												}
+											}}
+										/>
+										<button type="button" class="ghost" onclick={addEditManualPath}>Add</button>
+									</div>
+								{/if}
+							</div>
+
+							{#if editError}
+								<p class="err" role="alert">{editError}</p>
+							{/if}
+
+							<div class="actions edit-actions">
+								<button
+									type="submit"
+									disabled={editBusy || editSelectedPaths.length === 0 || !editName.trim()}
+								>
+									{editBusy ? 'Saving…' : 'Save changes'}
+								</button>
+								<button type="button" class="ghost" onclick={cancelEdit} disabled={editBusy}>
+									Cancel
+								</button>
+							</div>
+						</form>
+					{:else}
+						<div class="lib">
+							<strong>{library.name}</strong>
+							<span class="chip">{library.type}</span>
+							<p class="paths">{library.paths.join(', ')}</p>
+						</div>
+						<div class="actions">
+							<button
+								type="button"
+								class="ghost"
+								onclick={() => startEdit(library)}
+							>
+								Edit
+							</button>
+							<button
+								type="button"
+								class="ghost"
+								onclick={() => scanLibrary(library.id)}
+								disabled={scanningId === library.id}
+							>
+								{scanningId === library.id ? 'Queuing…' : 'Scan'}
+							</button>
+							<button
+								type="button"
+								class="ghost danger"
+								onclick={() => removeLibrary(library.id, library.name)}
+							>
+								Delete
+							</button>
+						</div>
+					{/if}
 				</li>
 			{/each}
 		</ul>
@@ -449,6 +681,51 @@
 		padding: 0.75rem;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
+	}
+
+	.row.is-editing {
+		display: block;
+		background: var(--surface-2);
+		padding: 1rem 1.25rem 1.25rem;
+		border-color: var(--accent);
+	}
+
+	.edit-form {
+		width: 100%;
+		max-width: 34rem;
+	}
+
+	.edit-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 0.25rem;
+	}
+
+	.edit-header h3 {
+		font-size: 0.95rem;
+		margin: 0;
+	}
+
+	.close-edit-btn {
+		background: transparent;
+		border: 0;
+		color: var(--muted);
+		cursor: pointer;
+		font-size: 1rem;
+		padding: 0.2rem 0.4rem;
+		border-radius: 4px;
+	}
+
+	.close-edit-btn:hover {
+		color: var(--text);
+		background: var(--surface);
+	}
+
+	.edit-actions {
+		display: flex;
+		gap: 0.5rem;
+		margin-top: 0.5rem;
 	}
 
 	.lib {
