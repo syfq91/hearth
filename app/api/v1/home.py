@@ -1,4 +1,4 @@
-"""Home shelves: continue watching, recently added and favorites."""
+"""Home shelves: continue watching, continue reading, recently added and favorites."""
 
 from typing import Annotated, Any
 
@@ -7,9 +7,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.api.v1.books import BookListItem, _to_book_list_item
 from app.api.v1.items import ItemSummary, item_summary, watch_states
 from app.core.deps import RequireUser, require_library_access
 from app.db.models import (
+    Book,
+    BookProgress,
     LibraryAccess,
     MediaItem,
     User,
@@ -27,6 +30,13 @@ class HomeShelf(BaseModel):
     """A short, ordered list of items for a home row."""
 
     items: list[ItemSummary]
+    has_more: bool = False
+
+
+class BookShelf(BaseModel):
+    """A short, ordered list of books for a home row."""
+
+    items: list[BookListItem]
     has_more: bool = False
 
 
@@ -53,6 +63,38 @@ async def continue_watching(
     rows = (await session.execute(query.limit(limit + 1))).all()
     return HomeShelf(
         items=[item_summary(item, state) for item, state in rows[:limit]],
+        has_more=len(rows) > limit,
+    )
+
+
+@router.get("/home/continue-reading")
+async def continue_reading(
+    user: RequireUser,
+    session: SessionDep,
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
+) -> BookShelf:
+    """Return the current user's unfinished books, most recently read first."""
+    query = (
+        select(MediaItem, BookProgress)
+        .join(BookProgress, BookProgress.book_id == MediaItem.id)
+        .where(
+            BookProgress.user_id == user.id,
+            BookProgress.percentage > 0,
+            BookProgress.completed.is_(False),
+            MediaItem.type == "book",
+        )
+        .order_by(BookProgress.updated_at.desc(), MediaItem.id.desc())
+        .options(
+            selectinload(MediaItem.book).selectinload(Book.author),
+            selectinload(MediaItem.book).selectinload(Book.series),
+            selectinload(MediaItem.files),
+            selectinload(MediaItem.images),
+        )
+    )
+    query = _restrict_to_accessible_libraries(query, user)
+    rows = (await session.execute(query.limit(limit + 1))).all()
+    return BookShelf(
+        items=[_to_book_list_item(item, progress) for item, progress in rows[:limit]],
         has_more=len(rows) > limit,
     )
 
@@ -119,4 +161,4 @@ def _restrict_to_accessible_libraries(query: Any, user: User) -> Any:
     return query.where(MediaItem.library_id.in_(grant))
 
 
-__all__ = ["HomeShelf", "router"]
+__all__ = ["BookShelf", "HomeShelf", "router"]

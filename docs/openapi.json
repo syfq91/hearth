@@ -1536,6 +1536,28 @@
         "title": "BookSeriesListResponse",
         "type": "object"
       },
+      "BookShelf": {
+        "description": "A short, ordered list of books for a home row.",
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BookListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BookShelf",
+        "type": "object"
+      },
       "ClientCapabilities": {
         "description": "What a client device or browser player supports.",
         "properties": {
@@ -10039,6 +10061,57 @@
         "summary": "Get Media Segment",
         "tags": [
           "hls"
+        ]
+      }
+    },
+    "/api/v1/home/continue-reading": {
+      "get": {
+        "description": "Return the current user's unfinished books, most recently read first.",
+        "operationId": "continue_reading_api_v1_home_continue_reading_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookShelf"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Continue Reading",
+        "tags": [
+          "home"
         ]
       }
     },

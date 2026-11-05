@@ -1082,6 +1082,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/home/continue-reading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Continue Reading
+         * @description Return the current user's unfinished books, most recently read first.
+         */
+        get: operations["continue_reading_api_v1_home_continue_reading_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/home/continue-watching": {
         parameters: {
             query?: never;
@@ -2667,6 +2687,19 @@ export interface components {
             offset: number;
             /** Total */
             total: number;
+        };
+        /**
+         * BookShelf
+         * @description A short, ordered list of books for a home row.
+         */
+        BookShelf: {
+            /**
+             * Has More
+             * @default false
+             */
+            has_more: boolean;
+            /** Items */
+            items: components["schemas"]["BookListItem"][];
         };
         /**
          * ClientCapabilities
@@ -6352,6 +6385,37 @@ export interface operations {
                 };
                 content: {
                     "video/iso.segment": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    continue_reading_api_v1_home_continue_reading_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookShelf"];
                 };
             };
             /** @description Validation Error */
