@@ -79,7 +79,7 @@ async def test_scan_endpoint_unknown_library_is_404(
     assert response.json()["error"]["code"] == "library_not_found"
 
 
-async def test_scan_endpoint_rejects_unsupported_library_type(
+async def test_scan_endpoint_accepts_tv_library(
     api_client: httpx.AsyncClient, db_settings: Settings
 ) -> None:
     admin = await _setup(api_client)
@@ -91,5 +91,4 @@ async def test_scan_endpoint_rejects_unsupported_library_type(
         f"/api/v1/libraries/{library['id']}/scan", headers=_bearer(admin)
     )
 
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "unsupported_library_type"
+    assert response.status_code == 202, response.text

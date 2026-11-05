@@ -158,6 +158,7 @@ ENDPOINT_POLICIES: dict[tuple[str, str], EndpointPolicy] = {
     ("GET", "/api/v1/albums/{album_id}"): EndpointPolicy("user", library_protected=True),
     ("GET", "/api/v1/tracks"): EndpointPolicy("user"),
     ("GET", "/api/v1/tracks/{track_id}"): EndpointPolicy("user", library_protected=True),
+    ("GET", "/api/v1/genres"): EndpointPolicy("user"),
     ("GET", "/api/v1/music/search"): EndpointPolicy("user"),
     ("GET", "/api/v1/music/random"): EndpointPolicy("user"),
     ("GET", "/api/v1/music/recently-added"): EndpointPolicy("user"),
