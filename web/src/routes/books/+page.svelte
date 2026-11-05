@@ -6,17 +6,35 @@
 
 	let { data }: PageProps = $props();
 
+	type Book = BookListResponse['items'][number];
+
+	let initial = $state<BookListResponse | null>(null);
+	let error = $state<string | null>(null);
 	let extraItems = $state<BookListResponse['items']>([]);
 	let total = $state(0);
 	let loadingMore = $state(false);
 
-	let items = $derived([...data.books.items, ...extraItems]);
-	let currentTotal = $derived(total || data.books.total);
+	let items = $derived([...(initial?.items ?? []), ...extraItems]);
+	let currentTotal = $derived(initial ? total || initial.total : 0);
 
+	// The loader returns a promise so navigation is not held up by the request.
 	$effect(() => {
-		const _ = data.books;
-		extraItems = [];
-		total = data.books.total;
+		let cancelled = false;
+		initial = null;
+		error = null;
+		void data.books
+			.then((value) => {
+				if (cancelled) return;
+				initial = value;
+				extraItems = [];
+				total = value.total;
+			})
+			.catch((e) => {
+				if (!cancelled) error = e instanceof Error ? e.message : String(e);
+			});
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	async function loadMore() {
@@ -33,7 +51,7 @@
 		}
 	}
 
-	function authorName(book: (typeof data.books.items)[number]): string {
+	function authorName(book: Book): string {
 		return book.author?.name ?? '';
 	}
 </script>
@@ -44,7 +62,11 @@
 
 <h1>Books</h1>
 
-{#if items.length === 0}
+{#if error}
+	<p class="banner" role="alert">{error}</p>
+{:else if initial === null}
+	<p class="muted" role="status">Loading books…</p>
+{:else if items.length === 0}
 	<p class="muted">No books yet.</p>
 {:else}
 	<ul class="grid">
@@ -153,6 +175,15 @@
 	.load-more:disabled {
 		opacity: 0.6;
 		cursor: default;
+	}
+
+	.banner {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-left: 3px solid var(--danger);
+		border-radius: var(--radius);
+		padding: 0.6rem 1rem;
+		color: var(--muted);
 	}
 
 	.muted {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import MusicTabs from '../../lib/components/MusicTabs.svelte';
 	import Poster from '../../lib/components/Poster.svelte';
+	import type { AlbumListResponse } from '../../lib/api/types';
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import type { PageProps } from './$types';
@@ -10,6 +11,25 @@
 	// Seeded once from the URL; the box keeps whatever the user types even if
 	// the query changes underneath it.
 	let search = $state(untrack(() => data.query));
+	let albums = $state<AlbumListResponse | null>(null);
+	let error = $state<string | null>(null);
+
+	// The loader returns a promise so navigation is not held up by the request.
+	$effect(() => {
+		let cancelled = false;
+		albums = null;
+		error = null;
+		void data.albums
+			.then((value) => {
+				if (!cancelled) albums = value;
+			})
+			.catch((e) => {
+				if (!cancelled) error = e instanceof Error ? e.message : String(e);
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	function submitSearch(event: SubmitEvent): void {
 		event.preventDefault();
@@ -54,11 +74,15 @@
 	</p>
 {/if}
 
-{#if data.albums.items.length === 0}
+{#if error}
+	<p class="banner" role="alert">{error}</p>
+{:else if albums === null}
+	<p class="muted" role="status">Loading albums…</p>
+{:else if albums.items.length === 0}
 	<p class="muted">No albums found.</p>
 {:else}
 	<ul class="grid">
-		{#each data.albums.items as album (album.id)}
+		{#each albums.items as album (album.id)}
 			<li>
 				<article class="album">
 					<a href={`/music/album/${album.id}`} aria-label={album.title}>
@@ -142,6 +166,15 @@
 		color: var(--muted);
 		font-size: 0.75rem;
 		margin: 0;
+	}
+
+	.banner {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-left: 3px solid var(--danger);
+		border-radius: var(--radius);
+		padding: 0.6rem 1rem;
+		color: var(--muted);
 	}
 
 	.muted {
