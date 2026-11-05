@@ -1,14 +1,32 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
+	import { Film, Tv, Music, BookOpen, Folder } from '@lucide/svelte';
 
 	let { data }: PageProps = $props();
 
 	const typeLabel: Record<string, string> = {
 		movie: 'Movies',
+		tv: 'Shows',
 		series: 'Shows',
 		music: 'Music',
 		book: 'Books'
 	};
+
+	function getIcon(type: string) {
+		switch (type) {
+			case 'movie':
+				return Film;
+			case 'tv':
+			case 'series':
+				return Tv;
+			case 'music':
+				return Music;
+			case 'book':
+				return BookOpen;
+			default:
+				return Folder;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -23,9 +41,12 @@
 {:else}
 	<ul class="grid">
 		{#each data.libraries as library (library.id)}
+			{@const Icon = getIcon(library.type)}
 			<li>
 				<a class="library" href={`/library/${library.id}`}>
-					<span class="icon" aria-hidden="true">{typeLabel[library.type] ?? library.type}</span>
+					<div class="icon-wrap" aria-hidden="true">
+						<Icon size={24} />
+					</div>
 					<span class="name">{library.name}</span>
 					<span class="kind">{typeLabel[library.type] ?? library.type}</span>
 				</a>
@@ -60,12 +81,11 @@
 		background: var(--surface-2);
 	}
 
-	.icon {
-		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
+	.icon-wrap {
 		color: var(--accent);
+		display: flex;
+		align-items: center;
+		margin-bottom: 0.25rem;
 	}
 
 	.name {

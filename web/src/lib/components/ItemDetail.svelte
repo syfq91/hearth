@@ -2,6 +2,7 @@
 	import Poster from './Poster.svelte';
 	import { api } from '../api/client';
 	import type { ItemDetail } from '../api/types';
+	import { Play, RotateCcw, Heart, Check, Star } from '@lucide/svelte';
 
 	interface Props {
 		item: ItemDetail;
@@ -48,8 +49,7 @@
 		[
 			item.year,
 			runtimeLabel,
-			item.content_rating,
-			item.rating ? `★ ${item.rating.toFixed(1)}` : null
+			item.content_rating
 		].filter(Boolean)
 	);
 
@@ -71,20 +71,34 @@
 		{#if item.tagline}
 			<p class="tagline">{item.tagline}</p>
 		{/if}
-		{#if meta.length > 0}
-			<p class="meta">{meta.join(' · ')}</p>
+		{#if meta.length > 0 || item.rating}
+			<p class="meta">
+				{#if meta.length > 0}
+					<span>{meta.join(' · ')}</span>
+				{/if}
+				{#if item.rating}
+					{#if meta.length > 0}<span class="dot">·</span>{/if}
+					<span class="rating"><Star size={14} class="star-icon" fill="currentColor" /> {item.rating.toFixed(1)}</span>
+				{/if}
+			</p>
 		{/if}
 
 		<div class="actions">
 			<a class="play" href={`/watch/${item.id}`}>
-				{item.watch_state?.position_ms ? 'Resume' : 'Play'}
+				{#if item.watch_state?.position_ms}
+					<RotateCcw size={16} /> <span>Resume</span>
+				{:else}
+					<Play size={16} /> <span>Play</span>
+				{/if}
 			</a>
-			<button type="button" class="ghost" onclick={setFavorite} disabled={toggling}
-				>{favorite ? '♥ In favorites' : '♡ Favorite'}</button
-			>
-			<button type="button" class="ghost" onclick={setWatched} disabled={toggling}
-				>{watched ? '✓ Watched' : 'Mark watched'}</button
-			>
+			<button type="button" class="ghost" onclick={setFavorite} disabled={toggling}>
+				<Heart size={16} fill={favorite ? 'currentColor' : 'none'} color={favorite ? 'var(--accent)' : 'currentColor'} />
+				<span>{favorite ? 'In favorites' : 'Favorite'}</span>
+			</button>
+			<button type="button" class="ghost" onclick={setWatched} disabled={toggling}>
+				<Check size={16} />
+				<span>{watched ? 'Watched' : 'Mark watched'}</span>
+			</button>
 		</div>
 
 		{#if item.genres.length > 0}
@@ -132,8 +146,20 @@
 	}
 
 	.meta {
+		display: inline-flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.35rem;
 		color: var(--muted);
 		margin: 0 0 1rem;
+	}
+
+	.rating {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		color: #eab308;
+		font-weight: 600;
 	}
 
 	.actions {
@@ -144,6 +170,9 @@
 	}
 
 	.play {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
 		background: var(--accent);
 		color: var(--accent-contrast);
 		font-weight: 600;
@@ -157,6 +186,9 @@
 	}
 
 	.ghost {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
 		background: var(--surface-2);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);

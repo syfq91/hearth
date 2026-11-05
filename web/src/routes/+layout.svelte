@@ -8,6 +8,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
+	import { House, Layers, Music, BookOpen, Search, Shield, Tv as TvIcon, LogOut, User } from '@lucide/svelte';
 
 	let { children }: LayoutProps = $props();
 
@@ -39,13 +40,13 @@
 	<header class="topbar">
 		<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
 		<nav aria-label="Primary">
-			<a href="/" aria-current={isActive('/') ? 'page' : undefined}>Home</a>
-			<a href="/library" aria-current={isActive('/library') ? 'page' : undefined}>Library</a>
-			<a href="/music" aria-current={isActive('/music') ? 'page' : undefined}>Music</a>
-			<a href="/books" aria-current={isActive('/books') ? 'page' : undefined}>Books</a>
-			<a href="/search" aria-current={isActive('/search') ? 'page' : undefined}>Search</a>
+			<a href="/" aria-current={isActive('/') ? 'page' : undefined}><House size={16} /> <span>Home</span></a>
+			<a href="/library" aria-current={isActive('/library') ? 'page' : undefined}><Layers size={16} /> <span>Library</span></a>
+			<a href="/music" aria-current={isActive('/music') ? 'page' : undefined}><Music size={16} /> <span>Music</span></a>
+			<a href="/books" aria-current={isActive('/books') ? 'page' : undefined}><BookOpen size={16} /> <span>Books</span></a>
+			<a href="/search" aria-current={isActive('/search') ? 'page' : undefined}><Search size={16} /> <span>Search</span></a>
 			{#if session.status === 'authenticated' && session.user?.role === 'admin'}
-				<a href="/admin" aria-current={isActive('/admin') ? 'page' : undefined}>Admin</a>
+				<a href="/admin" aria-current={isActive('/admin') ? 'page' : undefined}><Shield size={16} /> <span>Admin</span></a>
 			{/if}
 		</nav>
 		<div class="spacer"></div>
@@ -56,7 +57,7 @@
 			title="10-foot mode: larger text and D-pad navigation"
 			onclick={() => setTvMode(!tv.on)}
 		>
-			TV mode
+			<TvIcon size={16} /> <span>TV mode</span>
 		</button>
 		{#if session.status === 'authenticated' && session.user}
 			<a
@@ -65,10 +66,12 @@
 				title={session.user.role}
 				aria-current={isActive('/profile') ? 'page' : undefined}
 			>
-				{session.user.username}
+				<User size={15} /> <span>{session.user.username}</span>
 				{#if session.user.role === 'admin'}<span class="badge">admin</span>{/if}
 			</a>
-			<button type="button" class="ghost" onclick={signOut}>Sign out</button>
+			<button type="button" class="ghost sign-out-btn" onclick={signOut} title="Sign out">
+				<LogOut size={15} /> <span>Sign out</span>
+			</button>
 		{/if}
 	</header>
 	<main id="main" tabindex="-1">
@@ -134,6 +137,9 @@
 	}
 
 	nav a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
 		color: var(--muted);
 		padding: 0.25rem 0.15rem;
 	}
@@ -148,6 +154,9 @@
 	}
 
 	.user {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
 		color: var(--muted);
 		font-size: 0.9rem;
 	}
@@ -162,6 +171,9 @@
 	}
 
 	.ghost {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
 		background: transparent;
 		border: 1px solid var(--border);
 		border-radius: var(--radius);

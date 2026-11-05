@@ -8,6 +8,7 @@
 		nextTrackSrc
 	} from '../player.svelte';
 	import { withMediaToken } from '../media-token.svelte';
+	import { Play, Pause, SkipBack, SkipForward, Square } from '@lucide/svelte';
 
 	let audio = $state<HTMLAudioElement | null>(null);
 
@@ -190,11 +191,22 @@
 				onclick={() => void playPrevious()}
 				disabled={player.index < 0}
 				aria-label="Previous track"
+				title="Previous track"
 			>
-				⏮
+				<SkipBack size={16} />
 			</button>
-			<button type="button" class="ghost" onclick={togglePlay}>
-				{player.playing ? 'Pause' : 'Play'}
+			<button
+				type="button"
+				class="ghost"
+				onclick={togglePlay}
+				aria-label={player.playing ? 'Pause' : 'Play'}
+				title={player.playing ? 'Pause' : 'Play'}
+			>
+				{#if player.playing}
+					<Pause size={16} />
+				{:else}
+					<Play size={16} />
+				{/if}
 			</button>
 			<button
 				type="button"
@@ -202,10 +214,19 @@
 				onclick={() => void playNext()}
 				disabled={player.index < 0 || player.index + 1 >= player.queue.length}
 				aria-label="Next track"
+				title="Next track"
 			>
-				⏭
+				<SkipForward size={16} />
 			</button>
-			<button type="button" class="ghost" onclick={stop}>Stop</button>
+			<button
+				type="button"
+				class="ghost"
+				onclick={stop}
+				aria-label="Stop playback"
+				title="Stop"
+			>
+				<Square size={16} />
+			</button>
 		</div>
 	</div>
 
@@ -270,6 +291,9 @@
 	}
 
 	.ghost {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		background: var(--surface-2);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);

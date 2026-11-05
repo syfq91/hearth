@@ -3,6 +3,7 @@
 	import { api } from '../../../lib/api/client';
 	import type { EpisodeDetail } from '../../../lib/api/types';
 	import type { PageProps } from './$types';
+	import { Star, Play, Check } from '@lucide/svelte';
 
 	let { data }: PageProps = $props();
 
@@ -65,17 +66,23 @@
 		<div class="info">
 			<h1>{series.title}</h1>
 			<p class="meta">
-				{[
+				{#each [
 					series.year,
 					series.runtime_seconds ? `${Math.round(series.runtime_seconds / 60)} min/ep` : null,
-					series.rating ? `★ ${series.rating.toFixed(1)}` : null,
 					series.total_seasons ? `${series.total_seasons} seasons` : null
-				]
-					.filter(Boolean)
-					.join(' · ')}
+				].filter(Boolean) as item, i}
+					{#if i > 0}<span class="dot">·</span>{/if}
+					<span>{item}</span>
+				{/each}
+				{#if series.rating}
+					<span class="dot">·</span>
+					<span class="rating"><Star size={14} class="star-icon" fill="currentColor" /> {series.rating.toFixed(1)}</span>
+				{/if}
 			</p>
 			<div class="actions">
-				<a class="play" href={`/watch/${series.id}`}>Play</a>
+				<a class="play" href={`/watch/${series.id}`}>
+					<Play size={16} /> <span>Play</span>
+				</a>
 			</div>
 			{#if series.genres.length > 0}
 				<p class="genres">{series.genres.join(' · ')}</p>
@@ -126,7 +133,7 @@
 										.filter(Boolean)
 										.join(' · ')}
 									{#if episode.watch_state?.watched}
-										<span class="watched">✓ Watched</span>
+										<span class="watched"><Check size={13} /> Watched</span>
 									{/if}
 								</p>
 								{#if episode.overview}
@@ -160,8 +167,20 @@
 	}
 
 	.meta {
+		display: inline-flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.35rem;
 		color: var(--muted);
 		margin: 0 0 1rem;
+	}
+
+	.rating {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		color: #eab308;
+		font-weight: 600;
 	}
 
 	.actions {
@@ -169,7 +188,9 @@
 	}
 
 	.play {
-		display: inline-block;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
 		background: var(--accent);
 		color: var(--accent-contrast);
 		font-weight: 600;
@@ -245,6 +266,9 @@
 	}
 
 	.watched {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
 		color: var(--accent);
 		margin-left: 0.5rem;
 	}

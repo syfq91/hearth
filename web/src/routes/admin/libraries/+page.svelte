@@ -4,6 +4,7 @@
 	import type { LibraryDetail } from '../../../lib/api/types';
 	import type { PageProps } from './$types';
 	import FolderBrowserModal from '../../../lib/components/FolderBrowserModal.svelte';
+	import { Folder, FolderPlus, FolderOpen, Pencil, Trash2, RefreshCw, X, Plus } from '@lucide/svelte';
 
 	let { data }: PageProps = $props();
 
@@ -207,14 +208,14 @@
 							browserOpen = true;
 						}}
 					>
-						📁 Browse server folders…
+						<FolderOpen size={16} /> Browse server folders…
 					</button>
 				</div>
 			{:else}
 				<ul class="selected-paths-list">
 					{#each selectedPaths as p (p)}
 						<li class="path-item">
-							<span class="path-text">📁 {p}</span>
+							<span class="path-text"><Folder size={16} /> {p}</span>
 							<button
 								type="button"
 								class="remove-path-btn"
@@ -222,7 +223,7 @@
 								aria-label={`Remove path ${p}`}
 								title="Remove path"
 							>
-								✕
+								<X size={14} />
 							</button>
 						</li>
 					{/each}
@@ -236,14 +237,18 @@
 							browserOpen = true;
 						}}
 					>
-						📁 Add another folder…
+						<FolderPlus size={16} /> Add another folder…
 					</button>
 					<button
 						type="button"
 						class="ghost text-btn"
 						onclick={() => (manualEntry = !manualEntry)}
 					>
-						{manualEntry ? 'Hide manual entry' : '+ Type path manually'}
+						{#if manualEntry}
+							Hide manual entry
+						{:else}
+							<Plus size={14} /> Type path manually
+						{/if}
 					</button>
 				</div>
 			{/if}
@@ -340,7 +345,7 @@
 									aria-label="Cancel editing"
 									title="Cancel"
 								>
-									✕
+									<X size={16} />
 								</button>
 							</div>
 
@@ -372,14 +377,14 @@
 												browserOpen = true;
 											}}
 										>
-											📁 Browse server folders…
+											<FolderOpen size={16} /> Browse server folders…
 										</button>
 									</div>
 								{:else}
 									<ul class="selected-paths-list">
 										{#each editSelectedPaths as p (p)}
 											<li class="path-item">
-												<span class="path-text">📁 {p}</span>
+												<span class="path-text"><Folder size={16} /> {p}</span>
 												<button
 													type="button"
 													class="remove-path-btn"
@@ -387,7 +392,7 @@
 													aria-label={`Remove path ${p}`}
 													title="Remove path"
 												>
-													✕
+													<X size={14} />
 												</button>
 											</li>
 										{/each}
@@ -401,14 +406,18 @@
 												browserOpen = true;
 											}}
 										>
-											📁 Add another folder…
+											<FolderPlus size={16} /> Add another folder…
 										</button>
 										<button
 											type="button"
 											class="ghost text-btn"
 											onclick={() => (editManualEntry = !editManualEntry)}
 										>
-											{editManualEntry ? 'Hide manual entry' : '+ Type path manually'}
+											{#if editManualEntry}
+												Hide manual entry
+											{:else}
+												<Plus size={14} /> Type path manually
+											{/if}
 										</button>
 									</div>
 								{/if}
@@ -468,25 +477,26 @@
 						<div class="actions">
 							<button
 								type="button"
-								class="ghost"
+								class="ghost inline-action"
 								onclick={() => startEdit(library)}
 							>
-								Edit
+								<Pencil size={14} /> Edit
 							</button>
 							<button
 								type="button"
-								class="ghost"
+								class="ghost inline-action"
 								onclick={() => scanLibrary(library.id)}
 								disabled={scanningId === library.id}
 							>
+								<RefreshCw size={14} class={scanningId === library.id ? 'spin' : ''} />
 								{scanningId === library.id ? 'Queuing…' : 'Scan'}
 							</button>
 							<button
 								type="button"
-								class="ghost danger"
+								class="ghost danger inline-action"
 								onclick={() => removeLibrary(library.id, library.name)}
 							>
-								Delete
+								<Trash2 size={14} /> Delete
 							</button>
 						</div>
 					{/if}
@@ -751,6 +761,25 @@
 	.actions {
 		display: flex;
 		gap: 0.5rem;
+	}
+
+	.inline-action {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	:global(.spin) {
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.ghost {

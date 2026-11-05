@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { api } from '../api/client';
 	import type { FilesystemBrowseResponse, FilesystemEntry } from '../api/types';
+	import { Folder, X, ArrowUp, ChevronRight } from '@lucide/svelte';
 
 	interface Props {
 		open: boolean;
@@ -77,7 +78,7 @@
 	<div class="modal-content">
 		<header class="modal-header">
 			<h3>Select Folder</h3>
-			<button type="button" class="close-btn" aria-label="Close" onclick={onclose}>✕</button>
+			<button type="button" class="close-btn" aria-label="Close" onclick={onclose}><X size={18} /></button>
 		</header>
 
 		<!-- Breadcrumb & Nav -->
@@ -89,7 +90,7 @@
 				onclick={() => parentPath && void loadPath(parentPath)}
 				title="Go up to parent folder"
 			>
-				⬆ Up
+				<ArrowUp size={15} /> Up
 			</button>
 			<nav class="breadcrumbs" aria-label="Folder breadcrumbs">
 				<button
@@ -102,7 +103,7 @@
 				</button>
 				{#each breadcrumbs as crumb, i}
 					{#if i > 0 || crumb.name !== 'media'}
-						<span class="separator">/</span>
+						<span class="separator"><ChevronRight size={14} /></span>
 						{#if i === breadcrumbs.length - 1}
 							<span class="crumb-current">{crumb.name}</span>
 						{:else}
@@ -150,7 +151,7 @@
 							tabindex="0"
 						>
 							<div class="folder-info">
-								<span class="folder-icon">📁</span>
+								<span class="folder-icon"><Folder size={18} /></span>
 								<span class="folder-name">{entry.name}</span>
 							</div>
 							<div class="folder-actions">
