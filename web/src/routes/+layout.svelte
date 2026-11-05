@@ -13,6 +13,7 @@
 		Layers,
 		Music,
 		BookOpen,
+		Heart,
 		Search,
 		Shield,
 		Tv as TvIcon,
@@ -92,6 +93,7 @@
 			<a href="/library" aria-current={isActive('/library') ? 'page' : undefined}><Layers size={16} /> <span>Library</span></a>
 			<a href="/music" aria-current={isActive('/music') ? 'page' : undefined}><Music size={16} /> <span>Music</span></a>
 			<a href="/books" aria-current={isActive('/books') ? 'page' : undefined}><BookOpen size={16} /> <span>Books</span></a>
+			<a href="/favorites" aria-current={isActive('/favorites') ? 'page' : undefined}><Heart size={16} /> <span>Favourites</span></a>
 			<a href="/search" aria-current={isActive('/search') ? 'page' : undefined}><Search size={16} /> <span>Search</span></a>
 		</nav>
 		<div class="spacer"></div>
