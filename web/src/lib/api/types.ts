@@ -69,5 +69,7 @@ export type TrackListResponse = S['TrackListResponse'];
 export type GenreSummary = S['GenreSummary'];
 export type GenreListResponse = S['GenreListResponse'];
 export type LibrarySummary = S['LibrarySummary'];
+export type LibraryFolder = S['LibraryFolder'];
+export type LibraryFolderPage = S['LibraryFolderPage'];
 export type FilesystemBrowseResponse = S['FilesystemBrowseResponse'];
 export type FilesystemEntry = S['FilesystemEntry'];

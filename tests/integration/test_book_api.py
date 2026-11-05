@@ -560,3 +560,94 @@ async def test_comic_page_extraction_and_caching(
     resp_token = await api_client.get(f"/api/v1/books/{book_id}/pages/2?token={media_token}")
     assert resp_token.status_code == 200
     assert len(resp_token.content) > 0
+
+
+@pytest.mark.asyncio
+async def test_book_library_folder_browsing(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    """Book libraries expose their on-disk folder tree instead of one flat list."""
+    admin_tokens = await _setup(api_client)
+    headers = _bearer(admin_tokens)
+
+    lib_id = f"lib-{uuid.uuid4().hex[:8]}"
+    root = db_settings.media_dir / f"books_{uuid.uuid4().hex[:8]}"
+    layout = {
+        "Dune/Book One.epub": "Book One",
+        "Dune/Book Two.epub": "Book Two",
+        "Asimov/Foundation.epub": "Foundation",
+        "Loose.epub": "Loose",
+    }
+    now = utcnow()
+
+    async with db_sessionmaker() as session:
+        library = Library(id=lib_id, name=f"Folders {uuid.uuid4().hex[:8]}", type="book")
+        library.paths.append(
+            LibraryPath(id=f"lp-{uuid.uuid4().hex[:8]}", library_id=lib_id, path=str(root))
+        )
+        session.add(library)
+        for relative, title in layout.items():
+            file_path = root / relative
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_bytes(b"book content")
+            item_id = f"book-{uuid.uuid4().hex[:8]}"
+            session.add(
+                MediaItem(
+                    id=item_id,
+                    library_id=lib_id,
+                    type="book",
+                    title=title,
+                    sort_title=title,
+                    added_at=now,
+                )
+            )
+            session.add(
+                MediaFile(
+                    id=f"file-{uuid.uuid4().hex[:8]}",
+                    item_id=item_id,
+                    path=str(file_path),
+                    size_bytes=len(b"book content"),
+                    container="epub",
+                    partial_hash=uuid.uuid4().hex,
+                    mtime=now.timestamp(),
+                )
+            )
+        await session.commit()
+
+    # The root lists one entry per folder that holds books; loose books are not
+    # folders of their own.
+    response = await api_client.get(f"/api/v1/libraries/{lib_id}/folders", headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["path"] == ""
+    assert body["parent"] is None
+    assert [(f["name"], f["path"], f["item_count"]) for f in body["folders"]] == [
+        ("Asimov", "Asimov", 1),
+        ("Dune", "Dune", 2),
+    ]
+
+    # A folder with no nested directories reports its parent for the breadcrumb.
+    response = await api_client.get(
+        f"/api/v1/libraries/{lib_id}/folders?path=Dune", headers=headers
+    )
+    body = response.json()
+    assert body["path"] == "Dune"
+    assert body["parent"] == ""
+    assert body["folders"] == []
+
+    # Books are scoped to the folder being viewed.
+    response = await api_client.get(
+        f"/api/v1/libraries/{lib_id}/items?folder=Dune", headers=headers
+    )
+    assert response.status_code == 200, response.text
+    assert [item["title"] for item in response.json()["items"]] == ["Book One", "Book Two"]
+
+    response = await api_client.get(f"/api/v1/libraries/{lib_id}/items?folder=", headers=headers)
+    assert [item["title"] for item in response.json()["items"]] == ["Loose"]
+
+    # Folder paths cannot escape the library root.
+    response = await api_client.get(f"/api/v1/libraries/{lib_id}/items?folder=..", headers=headers)
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_folder"

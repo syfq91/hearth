@@ -106,6 +106,9 @@ ENDPOINT_POLICIES: dict[tuple[str, str], EndpointPolicy] = {
     ("GET", "/api/v1/libraries/{library_id}"): EndpointPolicy("user", library_protected=True),
     ("PATCH", "/api/v1/libraries/{library_id}"): EndpointPolicy("admin"),
     ("DELETE", "/api/v1/libraries/{library_id}"): EndpointPolicy("admin"),
+    ("GET", "/api/v1/libraries/{library_id}/folders"): EndpointPolicy(
+        "user", library_protected=True
+    ),
     ("GET", "/api/v1/libraries/{library_id}/items"): EndpointPolicy("user", library_protected=True),
     ("POST", "/api/v1/libraries/{library_id}/scan"): EndpointPolicy("admin"),
     # Items & Playback

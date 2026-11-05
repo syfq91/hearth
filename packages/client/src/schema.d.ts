@@ -1474,6 +1474,29 @@ export interface paths {
         patch: operations["update_library_api_v1_libraries__library_id__patch"];
         trace?: never;
     };
+    "/api/v1/libraries/{library_id}/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Library Folders
+         * @description List the immediate subfolders of one directory in a book library.
+         *
+         *     Folder paths are relative to the library root and are derived from the
+         *     files on disk, so they mirror the directory tree the books came from.
+         */
+        get: operations["list_library_folders_api_v1_libraries__library_id__folders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries/{library_id}/items": {
         parameters: {
             query?: never;
@@ -1484,6 +1507,9 @@ export interface paths {
         /**
          * List Library Items
          * @description List a library's movies, sorted and filtered with keyset pagination.
+         *
+         *     Book libraries can scope the list to one folder of their directory tree;
+         *     the parameter is ignored for other library types.
          */
         get: operations["list_library_items_api_v1_libraries__library_id__items_get"];
         put?: never;
@@ -3343,6 +3369,33 @@ export interface components {
             paths: string[];
             /** Type */
             type: string;
+        };
+        /**
+         * LibraryFolder
+         * @description A directory inside a book library and how many books it holds.
+         */
+        LibraryFolder: {
+            /** Item Count */
+            item_count: number;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+        };
+        /**
+         * LibraryFolderPage
+         * @description The subfolders of one directory in a book library.
+         */
+        LibraryFolderPage: {
+            /**
+             * Folders
+             * @default []
+             */
+            folders: components["schemas"]["LibraryFolder"][];
+            /** Parent */
+            parent?: string | null;
+            /** Path */
+            path: string;
         };
         /** LibrarySummary */
         LibrarySummary: {
@@ -7167,6 +7220,39 @@ export interface operations {
             };
         };
     };
+    list_library_folders_api_v1_libraries__library_id__folders_get: {
+        parameters: {
+            query?: {
+                path?: string | null;
+            };
+            header?: never;
+            path: {
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryFolderPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_library_items_api_v1_libraries__library_id__items_get: {
         parameters: {
             query?: {
@@ -7177,6 +7263,8 @@ export interface operations {
                 genre?: string | null;
                 year?: number | null;
                 watched?: boolean | null;
+                /** @description Book libraries only: a folder path from /folders */
+                folder?: string | null;
             };
             header?: never;
             path: {

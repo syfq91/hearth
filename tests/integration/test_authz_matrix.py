@@ -116,6 +116,7 @@ POLICY: dict[tuple[str, str], str] = {
     ("DELETE", "/api/v1/libraries/{library_id}"): "admin",
     ("GET", "/api/v1/libraries/{library_id}"): "auth",
     ("PATCH", "/api/v1/libraries/{library_id}"): "admin",
+    ("GET", "/api/v1/libraries/{library_id}/folders"): "auth",
     ("GET", "/api/v1/libraries/{library_id}/items"): "auth",
     ("POST", "/api/v1/libraries/{library_id}/scan"): "admin",
     ("GET", "/api/v1/metadata/search"): "admin",

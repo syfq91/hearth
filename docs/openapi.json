@@ -3197,6 +3197,63 @@
         "title": "LibraryDetail",
         "type": "object"
       },
+      "LibraryFolder": {
+        "description": "A directory inside a book library and how many books it holds.",
+        "properties": {
+          "item_count": {
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "item_count"
+        ],
+        "title": "LibraryFolder",
+        "type": "object"
+      },
+      "LibraryFolderPage": {
+        "description": "The subfolders of one directory in a book library.",
+        "properties": {
+          "folders": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LibraryFolder"
+            },
+            "title": "Folders",
+            "type": "array"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "LibraryFolderPage",
+        "type": "object"
+      },
       "LibrarySummary": {
         "properties": {
           "id": {
@@ -11412,9 +11469,74 @@
         ]
       }
     },
+    "/api/v1/libraries/{library_id}/folders": {
+      "get": {
+        "description": "List the immediate subfolders of one directory in a book library.\n\nFolder paths are relative to the library root and are derived from the\nfiles on disk, so they mirror the directory tree the books came from.",
+        "operationId": "list_library_folders_api_v1_libraries__library_id__folders_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "library_id",
+            "required": true,
+            "schema": {
+              "title": "Library Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 1024,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryFolderPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Library Folders",
+        "tags": [
+          "items"
+        ]
+      }
+    },
     "/api/v1/libraries/{library_id}/items": {
       "get": {
-        "description": "List a library's movies, sorted and filtered with keyset pagination.",
+        "description": "List a library's movies, sorted and filtered with keyset pagination.\n\nBook libraries can scope the list to one folder of their directory tree;\nthe parameter is ignored for other library types.",
         "operationId": "list_library_items_api_v1_libraries__library_id__items_get",
         "parameters": [
           {
@@ -11540,6 +11662,25 @@
                 }
               ],
               "title": "Watched"
+            }
+          },
+          {
+            "description": "Book libraries only: a folder path from /folders",
+            "in": "query",
+            "name": "folder",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 1024,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Book libraries only: a folder path from /folders",
+              "title": "Folder"
             }
           }
         ],
