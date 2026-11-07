@@ -3382,6 +3382,7 @@ export interface components {
             name: string;
             /** Path */
             path: string;
+            poster?: components["schemas"]["ImageResponse"] | null;
         };
         /**
          * LibraryFolderPage
