@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     transcode_max_sw_sessions: int = 4
     transcode_idle_timeout_seconds: float = 60.0
     transcode_segment_duration_seconds: int = 4
-    transcode_first_segment_timeout_seconds: float = 15.0
+    transcode_first_segment_timeout_seconds: float = 30.0
     transcode_audio_bitrate_kbps: int = 192
     transcode_test_encode_timeout_seconds: float = 5.0
 

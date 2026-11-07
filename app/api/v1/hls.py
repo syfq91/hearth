@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from urllib.parse import quote
 
@@ -118,7 +119,30 @@ async def get_media_playlist(
     raw_content = m3u8_path.read_text(encoding="utf-8")
     token_suffix = f"?token={quote(token, safe='')}" if token else ""
 
-    if token_suffix:
+    if session.duration_seconds > 0:
+        duration = session.duration_seconds
+        seg_dur = settings.transcode_segment_duration_seconds
+        total_segments = max(1, math.ceil(duration / seg_dur))
+        lines = [
+            "#EXTM3U",
+            "#EXT-X-VERSION:7",
+            f"#EXT-X-TARGETDURATION:{seg_dur}",
+            "#EXT-X-MEDIA-SEQUENCE:0",
+            "#EXT-X-PLAYLIST-TYPE:VOD",
+            f'#EXT-X-MAP:URI="init.mp4{token_suffix}"',
+        ]
+        for i in range(total_segments):
+            if i == total_segments - 1:
+                d = duration - i * seg_dur
+                if d <= 0:
+                    d = float(seg_dur)
+            else:
+                d = float(seg_dur)
+            lines.append(f"#EXTINF:{d:.3f},")
+            lines.append(f"seg_{i:03d}.m4s{token_suffix}")
+        lines.append("#EXT-X-ENDLIST")
+        content = "\n".join(lines) + "\n"
+    elif token_suffix:
         # Append token query param to segment and init references
         lines = []
         for line in raw_content.splitlines():
@@ -202,8 +226,13 @@ async def get_media_segment(
         raise ForbiddenError("Session access denied", code="session_access_denied")
 
     session.touch()
+    segment_index = int(segment_file.split(".")[0].split("_")[1])
+    ready = await session.ensure_segment(
+        segment_index,
+        timeout=settings.transcode_first_segment_timeout_seconds,
+    )
     seg_path = session.output_dir / segment_file
-    if not seg_path.exists():
+    if not ready or not seg_path.exists():
         raise NotFoundError("Segment file not found", code="segment_not_found")
 
     return FileResponse(

@@ -158,7 +158,7 @@
 		const dur = player.duration() ?? expectedDuration;
 		const durationMs = dur * 1000;
 		// Near the end the user wants a rewatch prompt, not a jump to credits.
-		if (Number.isFinite(durationMs) && durationMs - startAtMs < 30_000) return;
+		if (Number.isFinite(durationMs) && durationMs > 30_000 && durationMs - startAtMs < 30_000) return;
 		player.currentTime(startAtMs / 1000);
 	}
 
@@ -385,7 +385,8 @@
 			response = await api.post<PlaybackInfoResponse>(`/items/${itemId}/playback-info`, {
 				body: {
 					audio_track_index: audioTrackIndex,
-					subtitle_track_index: embeddedSubtitleIndex
+					subtitle_track_index: embeddedSubtitleIndex,
+					start_time_offset_seconds: startAtMs > 0 ? startAtMs / 1000 : 0
 				}
 			});
 		} catch (e) {
