@@ -10,7 +10,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.db.base import utcnow
-from app.db.models import Author, Book, BookSeries, Library, LibraryPath, MediaFile, MediaItem
+from app.db.models import (
+    Author,
+    Book,
+    BookSeries,
+    Image,
+    Library,
+    LibraryPath,
+    MediaFile,
+    MediaItem,
+)
 
 ADMIN = {"username": "admin", "password": "correct horse"}
 
@@ -614,6 +623,18 @@ async def test_book_library_folder_browsing(
                     mtime=now.timestamp(),
                 )
             )
+            if title == "Book One":
+                session.add(
+                    Image(
+                        id="img-dune-one",
+                        item_id=item_id,
+                        kind="poster",
+                        local_path="dune-one.jpg",
+                        is_primary=True,
+                        width=100,
+                        height=150,
+                    )
+                )
         await session.commit()
 
     # The root lists one entry per folder that holds books; loose books are not
@@ -627,6 +648,9 @@ async def test_book_library_folder_browsing(
         ("Asimov", "Asimov", 1),
         ("Dune", "Dune", 2),
     ]
+    dune_folder = next(f for f in body["folders"] if f["name"] == "Dune")
+    assert dune_folder["poster"] is not None
+    assert dune_folder["poster"]["id"] == "img-dune-one"
 
     # A folder with no nested directories reports its parent for the breadcrumb.
     response = await api_client.get(

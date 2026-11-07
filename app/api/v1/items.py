@@ -163,6 +163,7 @@ class LibraryFolder(BaseModel):
     name: str
     path: str
     item_count: int
+    poster: ImageResponse | None = None
 
 
 class LibraryFolderPage(BaseModel):
@@ -297,7 +298,9 @@ async def list_library_folders(
     current = _clean_folder(path)
     prefix = f"{current}/" if current else ""
     counts: dict[str, int] = {}
-    for item_folders in (await _book_folders(session, library)).values():
+    candidate_items: dict[str, list[str]] = {}
+
+    for item_id, item_folders in (await _book_folders(session, library)).items():
         children: set[str] = set()
         for item_folder in item_folders:
             remainder = item_folder[len(prefix) :] if item_folder.startswith(prefix) else ""
@@ -305,9 +308,37 @@ async def list_library_folders(
                 children.add(remainder.split("/", 1)[0])
         for child in children:
             counts[child] = counts.get(child, 0) + 1
+            candidates = candidate_items.setdefault(child, [])
+            if len(candidates) < 10:
+                candidates.append(item_id)
+
+    all_candidate_ids = {item_id for ids in candidate_items.values() for item_id in ids}
+    posters_by_item: dict[str, ImageResponse] = {}
+    if all_candidate_ids:
+        image_rows = await session.execute(
+            select(ImageModel).where(
+                ImageModel.item_id.in_(all_candidate_ids),
+                ImageModel.kind == "poster",
+            )
+        )
+        for img in image_rows.scalars().all():
+            if img.item_id not in posters_by_item or img.is_primary:
+                posters_by_item[img.item_id] = _image_response(img)
+
+    child_posters: dict[str, ImageResponse | None] = {}
+    for child, item_ids in candidate_items.items():
+        child_posters[child] = next(
+            (posters_by_item[item_id] for item_id in item_ids if item_id in posters_by_item),
+            None,
+        )
 
     folders = [
-        LibraryFolder(name=name, path=f"{prefix}{name}", item_count=count)
+        LibraryFolder(
+            name=name,
+            path=f"{prefix}{name}",
+            item_count=count,
+            poster=child_posters.get(name),
+        )
         for name, count in sorted(counts.items(), key=lambda entry: entry[0].casefold())
     ]
     parent = current.rpartition("/")[0] if current else None
@@ -443,7 +474,10 @@ def _relative_folder(path: Path, roots: list[Path]) -> str | None:
 
 
 async def _book_folders(session: AsyncSession, library: Library) -> dict[str, set[str]]:
-    """Map every book in the library to the folders that hold its files."""
+    """Map every book in the library to the folders that hold its files.
+
+    Keys are ordered by MediaItem.sort_title.asc(), MediaItem.id.asc().
+    """
     rows = await session.execute(
         select(MediaItem.id, MediaFile.path)
         .join(MediaFile, MediaFile.item_id == MediaItem.id)
@@ -452,6 +486,7 @@ async def _book_folders(session: AsyncSession, library: Library) -> dict[str, se
             MediaItem.type == "book",
             MediaFile.missing_since.is_(None),
         )
+        .order_by(MediaItem.sort_title.asc(), MediaItem.id.asc())
     )
     roots = [Path(root.path) for root in library.paths]
     folders: dict[str, set[str]] = {}

@@ -2,6 +2,7 @@
 	import { Folder } from '@lucide/svelte';
 	import { api } from '../../../lib/api/client';
 	import MediaCard from '../../../lib/components/MediaCard.svelte';
+	import Poster from '../../../lib/components/Poster.svelte';
 	import type { ItemPage, LibraryFolderPage } from '../../../lib/api/types';
 	import type { PageProps } from './$types';
 
@@ -217,8 +218,19 @@
 							onclick={() => openFolder(entry.path)}
 							aria-label={`Open folder ${entry.name}`}
 						>
-							<span class="folder-icon" aria-hidden="true"><Folder size={28} /></span>
-							<span class="folder-name">{entry.name}</span>
+							<div class="folder-poster-wrap">
+								{#if entry.poster}
+									<Poster image={entry.poster} alt="" aspect="2 / 3" />
+								{:else}
+									<div class="folder-fallback-poster" aria-hidden="true">
+										<Folder size={36} />
+									</div>
+								{/if}
+								<span class="folder-badge" aria-hidden="true">
+									<Folder size={13} />
+								</span>
+							</div>
+							<span class="folder-name" title={entry.name}>{entry.name}</span>
 							<span class="folder-count">
 								{entry.item_count}
 								{entry.item_count === 1 ? 'book' : 'books'}
@@ -339,8 +351,8 @@
 
 	.folder-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-		gap: 0.75rem;
+		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+		gap: 1.25rem 1rem;
 		list-style: none;
 		padding: 0;
 		margin: 0;
@@ -349,31 +361,63 @@
 	.folder-card {
 		display: flex;
 		flex-direction: column;
-		align-items: flex-start;
-		gap: 0.2rem;
+		gap: 0.4rem;
 		width: 100%;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		padding: 0.9rem 1rem;
+		background: transparent;
+		border: 0;
+		padding: 0;
 		color: inherit;
 		text-align: left;
 		cursor: pointer;
+		position: relative;
 	}
 
-	.folder-card:hover {
+	.folder-card:hover .folder-poster-wrap {
+		filter: brightness(1.08);
+	}
+
+	.folder-poster-wrap {
+		position: relative;
+		width: 100%;
+		border-radius: var(--radius);
+		overflow: hidden;
+		transition: filter 0.15s ease;
+	}
+
+	.folder-fallback-poster {
+		width: 100%;
+		aspect-ratio: 2 / 3;
+		border-radius: var(--radius);
 		background: var(--surface-2);
-		border-color: var(--accent);
+		border: 1px solid var(--border);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--muted);
 	}
 
-	.folder-icon {
+	.folder-badge {
+		position: absolute;
+		top: 0.5rem;
+		right: 0.5rem;
+		background: rgba(22, 27, 34, 0.85);
+		backdrop-filter: blur(4px);
+		border: 1px solid var(--border);
 		color: var(--accent);
+		border-radius: 6px;
+		padding: 0.25rem 0.35rem;
 		display: flex;
-		margin-bottom: 0.2rem;
+		align-items: center;
+		justify-content: center;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+		pointer-events: none;
 	}
 
 	.folder-name {
+		font-size: 0.95rem;
 		font-weight: 600;
+		margin: 0;
+		line-height: 1.3;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -382,7 +426,10 @@
 
 	.folder-count {
 		color: var(--muted);
-		font-size: 0.8rem;
+		font-size: 0.85rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.grid {
