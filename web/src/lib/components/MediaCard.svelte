@@ -6,9 +6,11 @@
 		item: S['ItemSummary'] | S['NextUpEpisode'];
 		/** Heading level for the card title. */
 		level?: 2 | 3 | 4;
+		/** When true, video cards navigate directly to playback. */
+		directPlay?: boolean;
 	}
 
-	let { item, level = 3 }: Props = $props();
+	let { item, level = 3, directPlay = false }: Props = $props();
 
 	// Next Up episodes carry `series_title`; catalog cards carry `type`.
 	const isEpisode = $derived('series_title' in item);
@@ -17,9 +19,14 @@
 		const episode = item as S['NextUpEpisode'];
 		return episode.still ?? episode.series_poster;
 	});
-	const href = $derived.by(() =>
-		isEpisode ? `/watch/${item.id}` : detailHref(item as S['ItemSummary'])
-	);
+	const href = $derived.by(() => {
+		if (isEpisode) return `/watch/${item.id}`;
+		const card = item as S['ItemSummary'];
+		if (directPlay && (card.type === 'movie' || card.type === 'episode' || card.type === 'series')) {
+			return `/watch/${card.id}`;
+		}
+		return detailHref(card);
+	});
 	const subtitle = $derived.by(() => {
 		if (isEpisode) {
 			const episode = item as S['NextUpEpisode'];

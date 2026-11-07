@@ -20,7 +20,7 @@
 		<p class="banner" role="status">Some shelves failed to load: {home.error}</p>
 	{/if}
 
-	<Shelf title="Continue watching" items={home.continueWatching.items} />
+	<Shelf title="Continue watching" items={home.continueWatching.items} directPlay />
 
 	{#if home.continueReading.items.length > 0}
 		<section class="shelf" aria-label="Continue reading">

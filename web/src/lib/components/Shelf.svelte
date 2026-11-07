@@ -9,9 +9,11 @@
 		items: CardItem[];
 		/** Heading level for the shelf title. */
 		level?: 2;
+		/** When true, video cards navigate directly to playback. */
+		directPlay?: boolean;
 	}
 
-	let { title, items, level = 2 }: Props = $props();
+	let { title, items, level = 2, directPlay = false }: Props = $props();
 </script>
 
 <section class="shelf" aria-label={title}>
@@ -21,7 +23,7 @@
 	{:else}
 		<ul class="row">
 			{#each items as entry (entry.id)}
-				<li><MediaCard item={entry} /></li>
+				<li><MediaCard item={entry} {directPlay} /></li>
 			{/each}
 		</ul>
 	{/if}
