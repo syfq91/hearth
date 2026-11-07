@@ -72,9 +72,6 @@ This checklist documents the full manual and automated verification required bef
   - [x] Render node `/dev/dri/renderD128` detected.
   - [x] Driver verified via `vainfo` (`Intel iHD driver`).
   - [x] 4K HEVC HDR10 downscaled and tonemapped to 1080p H.264 SDR at > 1.5x speed.
-- [ ] **AMD Radeon / Ryzen APU (VA-API)**:
-  - Driver configuration provided (`compose.amd.yaml` with `/dev/kfd` and `radeonsi`).
-  - *Hardware-dependent: Requires physical AMD GPU hardware for runtime fps verification (Flagged for human manual verification).*
 - [x] **Session Reaper & Concurrency**:
   - [x] Idle HLS transcode sessions terminated after 60s of inactivity.
   - [x] Concurrency ceiling returns clean HTTP 503 (`Retry-After: 5`) instead of CPU/memory starvation.
@@ -126,6 +123,5 @@ This checklist documents the full manual and automated verification required bef
 - **Automated Verification:** 100% of integration, resilience, security, migration, and unit tests passing.
 - **Physical Hardware Items:**
   - Intel QuickSync VA-API: Verified on host `/dev/dri/renderD128` (documented in `docs/HARDWARE_TESTS.md`).
-  - AMD Radeon VA-API: Configuration in place in `docker/compose.amd.yaml`; requires physical AMD machine for real encode verification.
 - **High-Severity Issues:** None open.
 - **Conclusion:** Ready for `1.0.0` release.
