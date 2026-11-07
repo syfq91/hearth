@@ -289,6 +289,28 @@ def find_artist_artwork(artist_dir: Path | str) -> str | None:
     return None
 
 
+def find_series_artwork(series_dir: Path | str) -> str | None:
+    """Find local sidecar artwork file for a TV series folder."""
+    p = Path(series_dir)
+    candidates = (
+        "poster.jpg",
+        "poster.png",
+        "poster.webp",
+        "poster.jpeg",
+        "folder.jpg",
+        "folder.png",
+        "folder.jpeg",
+        "cover.jpg",
+        "cover.png",
+        "cover.jpeg",
+    )
+    for name in candidates:
+        candidate = p / name
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
 def walk_book_files(
     roots: Sequence[str],
     *,

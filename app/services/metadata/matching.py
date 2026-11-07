@@ -62,7 +62,7 @@ from app.services.metadata.local import (
 from app.services.metadata.musicbrainz import MusicBrainzProvider
 from app.services.metadata.openlibrary import OpenLibraryProvider
 from app.services.metadata.tmdb import TMDBProvider
-from app.services.scanner.walker import find_artist_artwork
+from app.services.scanner.walker import find_artist_artwork, find_series_artwork
 
 logger = logging.getLogger("hearth.metadata.matching")
 
@@ -634,23 +634,21 @@ class MetadataMatcher:
             for file_path in snapshot.file_paths:
                 p = Path(file_path).parent
                 for candidate_dir in (p, p.parent):
-                    nfo = candidate_dir / "tvshow.nfo"
-                    if nfo.is_file():
-                        try:
-                            local_meta = (
-                                self.local_provider.find_series(nfo)
-                                if hasattr(self.local_provider, "find_series")
-                                else None
-                            )
-                        except ProviderError:
-                            local_meta = None
-                        if local_meta is not None:
-                            return await self._apply_series_match(
-                                snapshot,
-                                self.local_provider.name,
-                                str(nfo),
-                                score=1.0,
-                            )
+                    try:
+                        local_meta = (
+                            self.local_provider.find_series(candidate_dir)
+                            if hasattr(self.local_provider, "find_series")
+                            else None
+                        )
+                    except ProviderError:
+                        local_meta = None
+                    if local_meta is not None:
+                        return await self._apply_series_match(
+                            snapshot,
+                            self.local_provider.name,
+                            local_meta.provider_id,
+                            score=1.0,
+                        )
 
         provider = self._tmdb or next(
             (p for p in self.remote_providers if hasattr(p, "search_tv")), None
@@ -665,6 +663,21 @@ class MetadataMatcher:
             return await self._save_failure(snapshot.id, str(exc))
 
         if not candidates:
+            # Fallback: check if local artwork exists before marking unmatched
+            for file_path in snapshot.file_paths:
+                p = Path(file_path).parent
+                for candidate_dir in (p, p.parent):
+                    art_path = find_series_artwork(candidate_dir)
+                    if art_path:
+                        await self._store_images(
+                            snapshot.id,
+                            "local",
+                            [ProviderImage(kind="poster", file_path=art_path, is_primary=True)],
+                        )
+                        break
+                else:
+                    continue
+                break
             return await self._save_unmatched(snapshot.id, "No candidates returned by provider")
 
         scored: list[tuple[float, SearchResult]] = []
@@ -676,6 +689,21 @@ class MetadataMatcher:
         best_score, best_candidate = scored[0]
         if best_score < self.settings.metadata_match_threshold:
             threshold = self.settings.metadata_match_threshold
+            # Fallback: check if local artwork exists
+            for file_path in snapshot.file_paths:
+                p = Path(file_path).parent
+                for candidate_dir in (p, p.parent):
+                    art_path = find_series_artwork(candidate_dir)
+                    if art_path:
+                        await self._store_images(
+                            snapshot.id,
+                            "local",
+                            [ProviderImage(kind="poster", file_path=art_path, is_primary=True)],
+                        )
+                        break
+                else:
+                    continue
+                break
             return await self._save_unmatched(
                 snapshot.id,
                 f"Best candidate {best_candidate.title!r} scored {best_score:.2f} "
@@ -713,27 +741,36 @@ class MetadataMatcher:
             except ProviderError:
                 images = []
 
+        child_images: list[tuple[str, Sequence[ProviderImage]]] = []
         now = self.clock()
         async with self.sessionmaker() as session:
             item = await session.get(MediaItem, snapshot.id)
             if item is None:
                 return MatchResult(item_id=snapshot.id, state="pending", error="Item not found")
 
-            item.title = series_meta.title
-            item.sort_title = sort_title(series_meta.title)
-            item.year = series_meta.year
-            item.overview = series_meta.overview
-            item.rating = series_meta.rating
-            item.provider_ids = dict(series_meta.provider_ids)
+            item.title = series_meta.title or item.title
+            item.sort_title = sort_title(item.title)
+            if series_meta.year is not None:
+                item.year = series_meta.year
+            item.overview = series_meta.overview or item.overview
+            item.rating = series_meta.rating if series_meta.rating is not None else item.rating
+            if series_meta.provider_ids:
+                pids = dict(item.provider_ids or {})
+                pids.update(series_meta.provider_ids)
+                item.provider_ids = pids
             item.match_state = "matched"
             item.matched_at = now
             item.next_match_at = None
             item.match_error = None
             if item.series is not None:
-                item.series.original_title = series_meta.original_title
-                item.series.first_air_date = series_meta.first_air_date
-                item.series.status = series_meta.status
-                item.series.network = series_meta.network
+                if series_meta.original_title:
+                    item.series.original_title = series_meta.original_title
+                if series_meta.first_air_date:
+                    item.series.first_air_date = series_meta.first_air_date
+                if series_meta.status:
+                    item.series.status = series_meta.status
+                if series_meta.network:
+                    item.series.network = series_meta.network
 
             await self._apply_genres(session, item.id, series_meta.genres)
             await self._apply_credits(session, item.id, series_meta.credits)
@@ -757,7 +794,7 @@ class MetadataMatcher:
                         sea_item.match_state = "matched"
                         sea_item.matched_at = now
                         if season_meta.images:
-                            await self._store_images(sea_item.id, provider_name, season_meta.images)
+                            child_images.append((sea_item.id, season_meta.images))
 
                     tmdb_by_num = {
                         ep.episode_number: ep
@@ -804,9 +841,7 @@ class MetadataMatcher:
                                 if ep_meta.credits:
                                     await self._apply_credits(session, ep_item.id, ep_meta.credits)
                                 if ep_meta.images:
-                                    await self._store_images(
-                                        ep_item.id, provider_name, ep_meta.images
-                                    )
+                                    child_images.append((ep_item.id, ep_meta.images))
                             else:
                                 ep_item.match_state = "unmatched"
                 else:
@@ -896,13 +931,13 @@ class MetadataMatcher:
                                             session, ep_item.id, ep_meta.credits
                                         )
                                     if ep_meta.images:
-                                        await self._store_images(
-                                            ep_item.id, provider_name, ep_meta.images
-                                        )
+                                        child_images.append((ep_item.id, ep_meta.images))
 
             await session.commit()
 
         images_stored = await self._store_images(snapshot.id, provider_name, images)
+        for child_item_id, child_img_list in child_images:
+            images_stored += await self._store_images(child_item_id, provider_name, child_img_list)
         return MatchResult(
             item_id=snapshot.id,
             state="matched",

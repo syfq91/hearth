@@ -1508,8 +1508,9 @@ export interface paths {
          * List Library Items
          * @description List a library's movies, sorted and filtered with keyset pagination.
          *
-         *     Book libraries can scope the list to one folder of their directory tree;
-         *     the parameter is ignored for other library types.
+         *     Book libraries keep their directory structure: the list covers one folder
+         *     at a time, defaulting to the library root. ``folder`` is ignored for other
+         *     library types.
          */
         get: operations["list_library_items_api_v1_libraries__library_id__items_get"];
         put?: never;
@@ -7263,7 +7264,7 @@ export interface operations {
                 genre?: string | null;
                 year?: number | null;
                 watched?: boolean | null;
-                /** @description Book libraries only: a folder path from /folders */
+                /** @description Book libraries only: a folder path from /folders (default: library root) */
                 folder?: string | null;
             };
             header?: never;
