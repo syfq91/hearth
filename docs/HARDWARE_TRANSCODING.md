@@ -9,7 +9,6 @@ Hearth supports hardware-accelerated video decoding, scaling, tonemapping, and e
 Hearth's container image includes:
 - `libva2` and standard VA-API runtime libraries
 - `intel-media-va-driver-non-free` (Intel iHD driver for Gen 8+ GPUs)
-- `mesa-va-drivers` (AMD `radeonsi` driver and older Intel `i965` driver)
 - Modern `ffmpeg` compiled with `--enable-vaapi`
 
 ### Hardware Support Matrix
@@ -19,7 +18,9 @@ Hearth's container image includes:
 | **Intel** | Gen 8–11 (Broadwell through Ice Lake) | `iHD` | H.264, HEVC 8/10-bit decode & H.264 encode |
 | **Intel** | Gen 12+ (Tiger Lake, Alder Lake, Raptor Lake, Arc) | `iHD` | H.264, HEVC 10-bit, VP9, AV1 (Gen 12.5+) |
 | **Intel** | Gen 7–7.5 (Haswell, Skylake legacy) | `i965` | H.264 decode/encode |
-| **AMD** | GCN 3rd gen+, RDNA 1/2/3, Ryzen APUs | `radeonsi` | H.264, HEVC decode & H.264 encode |
+
+> [!NOTE]
+> AMD hardware transcoding is not supported. Hosts without a supported Intel GPU fall back automatically to CPU software transcoding (`libx264`).
 
 ---
 
@@ -39,7 +40,7 @@ crw-rw----+ 1 root video  226,   0 Nov  1 10:00 card0
 crw-rw----+ 1 root render 226, 128 Nov  1 10:00 renderD128
 ```
 
-### Step 2: Determine Render and Video Group IDs (GIDs)
+### Step 2: Determine Render Group ID (GID)
 
 Docker containers must run with supplemental groups matching the host render device permissions.
 
@@ -49,9 +50,6 @@ Run the following commands on the host:
 getent group render | cut -d: -f3
 # Or inspect the render node directly
 stat -c '%g' /dev/dri/renderD128
-
-# Get host video group ID (needed especially on AMD)
-getent group video | cut -d: -f3
 ```
 
 - Common render GID on Debian / Ubuntu: `105` or `107`
@@ -60,7 +58,6 @@ getent group video | cut -d: -f3
 Export these in your `.env` file:
 ```bash
 RENDER_GID=105
-VIDEO_GID=44
 RENDER_DEVICE=/dev/dri/renderD128
 ```
 
@@ -77,27 +74,6 @@ docker compose -f docker/compose.yaml up -d
 ```
 
 For older Intel processors (Haswell through Skylake), uncomment `LIBVA_DRIVER_NAME: i965` in `docker/compose.yaml`.
-
-### AMD Radeon Setup
-
-AMD GPUs require passing both `/dev/dri/renderD128` and `/dev/kfd` (Kernel Fusion Driver) and assigning both `render` and `video` groups.
-
-Uncomment the AMD settings in `docker/compose.yaml`:
-```yaml
-  environment:
-    LIBVA_DRIVER_NAME: radeonsi
-  devices:
-    - ${RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
-    - /dev/kfd:/dev/kfd
-  group_add:
-    - ${RENDER_GID:-105}
-    - ${VIDEO_GID:-44}
-```
-
-Then start the stack:
-```bash
-docker compose -f docker/compose.yaml up -d
-```
 
 ### CPU-Only Fallback (No GPU)
 
@@ -162,9 +138,7 @@ Returns:
 
 ### 2. `vaGetDriverNameByIndex() failed`
 - **Cause**: No matching VA-API driver found for your GPU PCI ID, or `LIBVA_DRIVER_NAME` is invalid.
-- **Solution**:
-  - For Intel: Try `LIBVA_DRIVER_NAME=i965` if on an older Gen 7/8 CPU.
-  - For AMD: Ensure `LIBVA_DRIVER_NAME=radeonsi`.
+- **Solution**: For Intel, try `LIBVA_DRIVER_NAME=i965` if on an older Gen 7/8 CPU.
 
 ### 3. `Failed to create VAAPI device: -19 (No such device)`
 - **Cause**: The device `/dev/dri/renderD128` is not passed into the container or does not exist on the host.

@@ -52,9 +52,8 @@ You need Docker with Compose v2 and a folder containing your media.
 > `docker/compose.yaml` before starting, or Docker will fail to find the render
 > device. Hearth then transcodes on the CPU automatically.
 
-> **Using a GPU?** Intel QuickSync works out of the box. AMD Radeon needs a
-> few extra lines in `docker/compose.yaml` — see
-> [Hardware Transcoding](docs/HARDWARE_TRANSCODING.md).
+> **Using a GPU?** Intel QuickSync works out of the box with the default
+> compose configuration — see [Hardware Transcoding](docs/HARDWARE_TRANSCODING.md).
 
 ## Add your library
 
@@ -84,10 +83,8 @@ exact variables.
 
 Hearth probes the GPU at startup and uses VA-API when available:
 
-- **Intel** (8th Gen and newer) works with the default Compose configuration.
-- **AMD** needs `LIBVA_DRIVER_NAME=radeonsi` and the `/dev/kfd` device; the
-  compose file has commented lines ready to enable.
-- **CPU-only** hosts need no configuration beyond removing the device mapping;
+- **Intel** (8th Gen and newer QuickSync) works with the default Compose configuration.
+- **CPU-only** or non-Intel hosts need no configuration beyond removing the device mapping;
   software `libx264` is the automatic fallback.
 
 Drivers, permissions, render GIDs, and verification commands are covered in the

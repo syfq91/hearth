@@ -38,9 +38,9 @@ vainfo: Supported profile and entrypoints
       VAProfileAV1Profile0            :	VAEntrypointEncSlice
 """
 
-SAMPLE_AMD_VAINFO = """
+SAMPLE_LOW_POWER_VAINFO = """
 vainfo: VA-API version: 1.14 (libva 2.12.0)
-vainfo: Driver version: Mesa Gallium driver 22.3.6 for AMD Radeon RX 6600
+vainfo: Driver version: Intel iHD driver - Low Power
 vainfo: Supported profile and entrypoints
       VAProfileMPEG2Simple            :	VAEntrypointVLD
       VAProfileMPEG2Main              :	VAEntrypointVLD
@@ -63,8 +63,8 @@ def test_parse_vainfo_output_intel() -> None:
     assert codecs["mpeg2"] == (True, False)
 
 
-def test_parse_vainfo_output_amd_low_power_entrypoint() -> None:
-    codecs = parse_vainfo_output(SAMPLE_AMD_VAINFO)
+def test_parse_vainfo_output_low_power_entrypoint() -> None:
+    codecs = parse_vainfo_output(SAMPLE_LOW_POWER_VAINFO)
     assert codecs["h264"] == (True, True)
     assert codecs["hevc"] == (True, True)
     assert codecs["vp9"] == (True, False)

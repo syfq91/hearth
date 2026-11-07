@@ -656,21 +656,14 @@
   - Vue 3 + Vite (25/30): calmest, most stable core and smallest mainstream runtime; runner-up, reversal trigger recorded in the decision doc.
   - SolidJS, Angular, Astro, vanilla TS + Web Components: set aside for ecosystem weight, ceremony, or hand-rolled scope reasons documented in `docs/FRONTEND_DECISION.md` §3.
 
+## ADR 064: Remove AMD Hardware Transcoding Support
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:** Initial hardware acceleration support included configuration for AMD Radeon GPUs via VA-API (`radeonsi`), passing `/dev/kfd` alongside `/dev/dri/renderD128` and installing `mesa-va-drivers`. In practice, AMD VA-API transcoding requires additional kernel device nodes, complex supplemental video group permissions, and driver compatibility varies widely across AMD architectures. Hearth prioritizes a clean, predictable, single-node architecture with low maintenance overhead.
+- **Decision:** Drop support and documentation for AMD hardware transcoding (`radeonsi`, `/dev/kfd`, `VIDEO_GID`). Remove `mesa-va-drivers` from the container image. Intel QuickSync (`iHD` / `i965`) remains the only supported hardware acceleration platform; non-Intel hosts automatically fall back to CPU software transcoding (`libx264`).
+- **Alternatives Considered:**
+  - Maintaining untested AMD compose configurations (leads to user confusion and bug reports on unsupported hardware).
+  - Adding AMD ROCm/AMF pipelines (substantially bloats image size and introduces external driver complexities).
 
 

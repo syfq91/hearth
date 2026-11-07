@@ -15,7 +15,6 @@ services:
       TZ: ${TZ:-UTC}
       # Hardware acceleration driver (VA-API):
       # LIBVA_DRIVER_NAME: ${LIBVA_DRIVER_NAME:-iHD} # Intel (8th Gen+ / Coffee Lake and newer uses iHD by default; Haswell through Skylake may use i965)
-      # LIBVA_DRIVER_NAME: radeonsi # AMD Radeon (uses radeonsi)
     volumes:
       - hearth-config:/config
       - ${MEDIA_DIR:-/srv/media}:/media:ro
@@ -24,13 +23,10 @@ services:
       - /tmp:size=64m
     # Hardware acceleration devices:
     # - For CPU-only / hosts without a GPU, comment out the `devices` and `group_add` sections below.
-    # - For AMD GPUs, also uncomment `/dev/kfd` and `VIDEO_GID`.
     devices:
       - ${RENDER_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128
-      # - /dev/kfd:/dev/kfd # AMD ROCm / GPU compute device (uncomment for AMD)
     group_add:
       - ${RENDER_GID:-105} # Host render GID: `getent group render` (default: 105)
-      # - ${VIDEO_GID:-44} # AMD video group GID (uncomment for AMD)
     security_opt:
       - no-new-privileges:true
     cap_drop:

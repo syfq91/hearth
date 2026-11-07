@@ -30,7 +30,7 @@ Target: home server, maximum 15 users, a handful of concurrent streams. Single n
 | Search | SQLite FTS5 |
 | Background jobs | Own `jobs` table plus asyncio worker (no Redis) |
 | Video tooling | ffmpeg and ffprobe, called via `asyncio.create_subprocess_exec` |
-| Hardware transcoding | VAAPI only (Intel iGPU or AMD), software x264 fallback |
+| Hardware transcoding | VAAPI only (Intel QuickSync), software x264 fallback |
 | Packaging | Docker image on Debian 12 slim, docker compose |
 | Package manager | `uv` |
 | Quality tools | Ruff, mypy (strict on `app/`), pytest, pytest-asyncio, httpx |
@@ -96,7 +96,7 @@ hearth/
 - [ ] Implement `app/main.py` with an app factory, `/api/v1/health` (returns version, DB status, ffmpeg presence) and `/api/v1/version`.
 - [ ] Implement `core/config.py` (pydantic-settings), `core/logging.py` (JSON logs, request IDs) and the unified error handler.
 - [ ] Add the Typer CLI with `api`, `worker`, `migrate` and `create-admin` commands (stubs allowed for the last two).
-- [ ] Write the Dockerfile (multi-stage, non-root user, `tini` as init, ffmpeg plus VAAPI drivers `intel-media-va-driver-non-free`, `mesa-va-drivers`, `vainfo`, `libva-drm2`). Write `compose.yaml` with the `/dev/dri` device, `group_add` render GID, read-only media mounts, tmpfs for `/transcode`, and `/config` volume.
+- [ ] Write the Dockerfile (multi-stage, non-root user, `tini` as init, ffmpeg plus VAAPI drivers `intel-media-va-driver-non-free`, `vainfo`, `libva-drm2`). Write `compose.yaml` with the `/dev/dri` device, `group_add` render GID, read-only media mounts, tmpfs for `/transcode`, and `/config` volume.
 - [ ] Add GitHub Actions workflow.
 - [ ] Write `docs/ARCHITECTURE.md` (a copy of the section 2 layout plus a module diagram) and the first `PROGRESS.md`.
 
@@ -354,7 +354,7 @@ Write `docs/FRONTEND_DECISION.md` comparing at least three options (for example 
 - [ ] Resilience: test server restart during playback and scan, a missing or unmounted library path, a full disk for cache, a corrupted media file (an ffprobe failure is recorded and the file is skipped, not retried forever), and SQLite lock contention.
 - [ ] Security review: dependency audit (`pip-audit`), path traversal tests, token scope tests, SSRF review of any URL fetching (image downloads restricted to known provider hosts), default-deny CORS, security headers, secrets never logged.
 - [ ] Observability: optional Prometheus `/metrics` endpoint (off by default), structured logs, an admin log viewer, and clear error messages when ffmpeg or VAAPI fails.
-- [ ] Documentation: README quick start, compose examples for Intel and AMD, a hardware transcoding guide (finding the render GID, verifying with `vainfo`, common errors), reverse proxy examples (Caddy and Traefik with TLS), backup and upgrade guide, and a troubleshooting FAQ.
+- [ ] Documentation: README quick start, compose examples for Intel, a hardware transcoding guide (finding the render GID, verifying with `vainfo`, common errors), reverse proxy examples (Caddy and Traefik with TLS), backup and upgrade guide, and a troubleshooting FAQ.
 - [ ] Release engineering: semantic versioning, multi-arch image build (amd64 at minimum), published image with a tagged release, changelog, and a migration compatibility test from the previous release.
 - [ ] Final acceptance run: fresh install on the real server, a real library of each media type, and a full manual checklist stored in `docs/RELEASE_CHECKLIST.md`.
 
