@@ -148,3 +148,84 @@ async def test_hls_endpoints_full_cycle(
     assert stop_res.status_code == 200
     assert stop_res.json()["stopped"] is True
     assert session_id not in manager.sessions
+
+
+@pytest.mark.asyncio
+async def test_hls_vod_playlist_and_segment_seeking(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    tmp_path: Path,
+) -> None:
+    admin_tokens = await _setup(api_client)
+    manager = get_session_manager(db_settings)
+    session_id = "test_vod_session_456"
+    out_dir = db_settings.transcode_dir / session_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Initial segments written by transcode
+    (out_dir / "init.mp4").write_bytes(b"\x00\x00\x00\x20ftypiso5")
+    (out_dir / "seg_000.m4s").write_bytes(b"\x00\x00\x00\x10moof")
+    (out_dir / "media.m3u8").write_text("#EXTM3U\n", encoding="utf-8")
+
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        target_width=1280,
+        target_height=720,
+        target_bitrate=2_000_000,
+        hwaccel="none",
+    )
+
+    me_res = await api_client.get("/api/v1/auth/me", headers=_bearer(admin_tokens))
+    admin_id = me_res.json()["id"]
+
+    # Session with 14.5s total duration (3 full 4s segments + 1 remaining 2.5s segment = 4 segments)
+    session = TranscodeSession(
+        session_id=session_id,
+        user_id=admin_id,
+        item_id="item_vod",
+        file_id="file_vod",
+        input_path=Path("/media/show.mkv"),
+        output_dir=out_dir,
+        plan=plan,
+        settings=db_settings,
+        duration_seconds=14.5,
+    )
+    manager.sessions[session_id] = session
+
+    keys = load_keys(db_settings)
+    token, _ = create_media_token(
+        user_id=admin_id,
+        token_version=0,
+        settings=db_settings,
+        key=keys.media,
+        item_id="item_vod",
+    )
+    encoded_token = quote(token, safe="")
+
+    # Fetch media playlist - should be full VOD playlist
+    media_res = await api_client.get(f"/api/v1/hls/{session_id}/media.m3u8?token={encoded_token}")
+    assert media_res.status_code == 200
+    media_text = media_res.text
+    assert "#EXT-X-PLAYLIST-TYPE:VOD" in media_text
+    assert "#EXT-X-ENDLIST" in media_text
+    assert f"seg_000.m4s?token={encoded_token}" in media_text
+    assert f"seg_001.m4s?token={encoded_token}" in media_text
+    assert f"seg_002.m4s?token={encoded_token}" in media_text
+    assert f"seg_003.m4s?token={encoded_token}" in media_text
+    assert "#EXTINF:2.500," in media_text
+
+    # Pre-populate seg_002 to simulate seek completion
+    (out_dir / "seg_002.m4s").write_bytes(b"\x00\x00\x00\x10moof_seek")
+
+    # Fetch seeked segment
+    seg_res = await api_client.get(f"/api/v1/hls/{session_id}/seg_002.m4s?token={encoded_token}")
+    assert seg_res.status_code == 200
+    assert seg_res.content == b"\x00\x00\x00\x10moof_seek"
+
+    await manager.stop_all()

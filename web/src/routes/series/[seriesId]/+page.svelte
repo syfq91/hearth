@@ -1,9 +1,9 @@
 <script lang="ts">
 	import Poster from '../../../lib/components/Poster.svelte';
 	import { api } from '../../../lib/api/client';
-	import type { EpisodeDetail } from '../../../lib/api/types';
+	import type { EpisodeDetail, NextUpEpisode } from '../../../lib/api/types';
 	import type { PageProps } from './$types';
-	import { Star, Play, Check } from '@lucide/svelte';
+	import { Star, Play, Check, RotateCcw } from '@lucide/svelte';
 
 	let { data }: PageProps = $props();
 
@@ -13,8 +13,52 @@
 
 	let selectedSeason = $state<string | null>(null);
 	let episodes = $state<EpisodeDetail[]>([]);
+	let nextUp = $state<NextUpEpisode | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
+
+	$effect(() => {
+		const sId = series.id;
+		let cancelled = false;
+		void api
+			.get<NextUpEpisode>(`/series/${sId}/next-up`)
+			.then((res) => {
+				if (!cancelled) nextUp = res;
+			})
+			.catch(() => {
+				if (!cancelled) nextUp = null;
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	const playTarget = $derived.by(() => {
+		if (nextUp) {
+			const pos = nextUp.watch_state?.position_ms ?? 0;
+			return {
+				href: `/watch/${nextUp.id}`,
+				label: pos > 0 ? 'Resume' : 'Play',
+				isResume: pos > 0,
+				sub: `S${nextUp.season_number}:E${nextUp.episode_number}`
+			};
+		}
+		const firstEp = episodes[0];
+		if (firstEp) {
+			return {
+				href: `/watch/${firstEp.id}`,
+				label: 'Play',
+				isResume: false,
+				sub: null
+			};
+		}
+		return {
+			href: `/watch/${series.id}`,
+			label: 'Play',
+			isResume: false,
+			sub: null
+		};
+	});
 
 	// Default to the first season, and re-default if the series changes or
 	// the selected season no longer belongs to it.
@@ -80,8 +124,12 @@
 				{/if}
 			</p>
 			<div class="actions">
-				<a class="play" href={`/watch/${series.id}`}>
-					<Play size={16} /> <span>Play</span>
+				<a class="play" href={playTarget.href}>
+					{#if playTarget.isResume}
+						<RotateCcw size={16} /> <span>Resume {playTarget.sub ? `(${playTarget.sub})` : ''}</span>
+					{:else}
+						<Play size={16} /> <span>Play {playTarget.sub ? `(${playTarget.sub})` : ''}</span>
+					{/if}
 				</a>
 			</div>
 			{#if series.genres.length > 0}
@@ -121,6 +169,16 @@
 						<li class="episode">
 							<a class="still" href={`/watch/${episode.id}`} aria-label={`Play ${episode.title}`}>
 								<Poster image={episode.still} alt="" aspect="16 / 9" width={320} />
+								{#if episode.watch_state?.position_ms && !episode.watch_state?.watched}
+									{@const pos = episode.watch_state.position_ms}
+									{@const dur = (episode.runtime_seconds ?? 0) * 1000}
+									{@const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0}
+									{#if pct > 0}
+										<div class="progress" role="presentation">
+											<span style:width="{pct}%"></span>
+										</div>
+									{/if}
+								{/if}
 							</a>
 							<div class="episode-info">
 								<h3 class="episode-title">
@@ -249,9 +307,25 @@
 	}
 
 	.still {
+		position: relative;
 		display: block;
 		border-radius: var(--radius);
 		overflow: hidden;
+	}
+
+	.progress {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 4px;
+		background: rgba(255, 255, 255, 0.2);
+	}
+
+	.progress span {
+		display: block;
+		height: 100%;
+		background: var(--accent);
 	}
 
 	.episode-title {

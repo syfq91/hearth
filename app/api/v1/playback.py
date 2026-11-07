@@ -343,6 +343,7 @@ async def playback_info(
         input_path=Path(media_file.path),
         plan=plan,
         start_offset=request.start_time_offset_seconds,
+        duration_seconds=media_file.duration_seconds or probe_res.duration_seconds or 0.0,
     )
 
     return PlaybackInfoResponse(

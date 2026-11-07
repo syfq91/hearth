@@ -42,6 +42,7 @@ class TranscodeSession:
         plan: TranscodePlan,
         settings: Settings,
         start_offset: float = 0.0,
+        duration_seconds: float = 0.0,
     ) -> None:
         self.id = session_id
         self.user_id = user_id
@@ -52,6 +53,12 @@ class TranscodeSession:
         self.plan = plan
         self.settings = settings
         self.start_offset = start_offset
+        self.duration_seconds = duration_seconds
+        self.segment_duration = settings.transcode_segment_duration_seconds
+        self._seek_lock = asyncio.Lock()
+        self.current_start_segment = (
+            int(start_offset // self.segment_duration) if self.segment_duration > 0 else 0
+        )
 
         self.created_at = utcnow()
         self.last_activity_at = utcnow()
@@ -80,14 +87,20 @@ class TranscodeSession:
     async def start_process(self) -> None:
         """Build command and launch ffmpeg subprocess."""
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        start_seg = (
+            int(self.start_offset // self.segment_duration) if self.segment_duration > 0 else 0
+        )
+        self.current_start_segment = start_seg
+        cmd_offset = start_seg * self.segment_duration
         self.cmd = build_ffmpeg_hls_command(
             self.plan,
             self.input_path,
             self.output_dir,
             ffmpeg_binary=self.settings.ffmpeg_binary,
             render_device=str(self.settings.render_device),
-            start_offset=self.start_offset,
-            segment_duration=self.settings.transcode_segment_duration_seconds,
+            start_offset=cmd_offset,
+            start_number=start_seg,
+            segment_duration=self.segment_duration,
             audio_bitrate_kbps=self.settings.transcode_audio_bitrate_kbps,
         )
 
@@ -186,17 +199,69 @@ class TranscodeSession:
 
         return m3u8.exists() and init.exists()
 
+    async def ensure_segment(self, segment_index: int, timeout: float = 30.0) -> bool:
+        """Ensure that seg_{segment_index:03d}.m4s exists on disk, seeking if necessary."""
+        seg_file = self.output_dir / f"seg_{segment_index:03d}.m4s"
+        if seg_file.exists() and seg_file.stat().st_size > 0:
+            return True
+
+        async with self._seek_lock:
+            if seg_file.exists() and seg_file.stat().st_size > 0:
+                return True
+
+            latest_seg = -1
+            for p in self.output_dir.glob("seg_*.m4s"):
+                with contextlib.suppress(ValueError, IndexError):
+                    idx = int(p.stem.split("_")[1])
+                    if idx > latest_seg:
+                        latest_seg = idx
+
+            is_running = self.process is not None and self.process.returncode is None
+            near_active = (
+                is_running
+                and self.current_start_segment <= segment_index
+                and (latest_seg == -1 or segment_index <= latest_seg + 3)
+            )
+
+            if not near_active:
+                seek_offset = segment_index * self.segment_duration
+                logger.info(
+                    "seeking transcode session %s to segment %d (offset %.1fs)",
+                    self.id,
+                    segment_index,
+                    seek_offset,
+                )
+                self.start_offset = float(seek_offset)
+                await self._stop_process()
+                await self.start_process()
+
+            start = asyncio.get_running_loop().time()
+            while asyncio.get_running_loop().time() - start < timeout:
+                if seg_file.exists() and seg_file.stat().st_size > 0:
+                    return True
+                if (
+                    self.process
+                    and self.process.returncode is not None
+                    and not self.is_hardware
+                    and self.has_fallen_back
+                ):
+                    return False
+                await asyncio.sleep(0.05)
+
+            return seg_file.exists() and seg_file.stat().st_size > 0
+
     async def seek(self, offset_seconds: float) -> None:
         """Seek to a new offset by restarting ffmpeg with new -ss."""
         logger.info("seeking session %s to %gs", self.id, offset_seconds)
-        self.start_offset = offset_seconds
-        await self._stop_process()
-        # Clean existing segments
-        if self.output_dir.exists():
-            for p in self.output_dir.iterdir():
-                if p.is_file():
-                    p.unlink(missing_ok=True)
-        await self.start_process()
+        async with self._seek_lock:
+            self.start_offset = offset_seconds
+            await self._stop_process()
+            # Clean existing segments
+            if self.output_dir.exists():
+                for p in self.output_dir.iterdir():
+                    if p.is_file():
+                        p.unlink(missing_ok=True)
+            await self.start_process()
 
     async def _stop_process(self) -> None:
         """Terminate the ffmpeg process cleanly."""
@@ -245,6 +310,7 @@ class SessionManager:
         input_path: Path,
         plan: TranscodePlan,
         start_offset: float = 0.0,
+        duration_seconds: float = 0.0,
     ) -> TranscodeSession:
         """Create and start a new transcoding session, respecting concurrency limits."""
         async with self._lock:
@@ -293,6 +359,7 @@ class SessionManager:
                 plan=plan,
                 settings=self.settings,
                 start_offset=start_offset,
+                duration_seconds=duration_seconds,
             )
             self.sessions[session_id] = session
             await session.start_process()

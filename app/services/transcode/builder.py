@@ -19,6 +19,7 @@ def build_ffmpeg_hls_command(
     ffmpeg_binary: str = "ffmpeg",
     render_device: str = "/dev/dri/renderD128",
     start_offset: float = 0.0,
+    start_number: int = 0,
     segment_duration: int = 4,
     audio_bitrate_kbps: int = 192,
 ) -> list[str]:
@@ -29,8 +30,6 @@ def build_ffmpeg_hls_command(
         "-loglevel",
         "warning",
         "-y",
-        "-threads",
-        "1",
     ]
 
     # Hardware acceleration input flags
@@ -163,6 +162,12 @@ def build_ffmpeg_hls_command(
             "fmp4",
             "-hls_time",
             str(segment_duration),
+        ]
+    )
+    if start_number > 0:
+        cmd.extend(["-start_number", str(start_number)])
+    cmd.extend(
+        [
             "-hls_list_size",
             "0",
             "-hls_playlist_type",
