@@ -173,12 +173,19 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 1rem;
+		justify-content: center;
+		height: 100%;
+		flex: 1;
+		min-height: 0;
+		gap: 0.5rem;
+		padding: 0.5rem 0;
 	}
 
 	.page {
 		max-width: 100%;
-		max-height: 74vh;
+		max-height: calc(100vh - 6.5rem);
+		height: auto;
+		width: auto;
 		object-fit: contain;
 		background: #000;
 		border-radius: var(--radius);

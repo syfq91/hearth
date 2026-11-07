@@ -24,6 +24,11 @@
 
 	let { children }: LayoutProps = $props();
 
+	const isFullscreenMedia = $derived(
+		page.url.pathname.startsWith('/watch/') ||
+			/\/books\/[^/]+\/read\/?$/.test(page.url.pathname)
+	);
+
 	let userMenuOpen = $state(false);
 	let userMenuRef = $state<HTMLElement | null>(null);
 
@@ -84,96 +89,100 @@
 	<title>Hearth</title>
 </svelte:head>
 
-<div class="app" use:spatialFocus>
-	<a class="skip-link" href="#main">Skip to content</a>
-	<header class="topbar">
-		<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
-		<nav aria-label="Primary">
-			<a href="/" aria-current={isActive('/') ? 'page' : undefined}><House size={16} /> <span>Home</span></a>
-			<a href="/library" aria-current={isActive('/library') ? 'page' : undefined}><Layers size={16} /> <span>Library</span></a>
-			<a href="/music" aria-current={isActive('/music') ? 'page' : undefined}><Music size={16} /> <span>Music</span></a>
-			<a href="/books" aria-current={isActive('/books') ? 'page' : undefined}><BookOpen size={16} /> <span>Books</span></a>
-			<a href="/favorites" aria-current={isActive('/favorites') ? 'page' : undefined}><Heart size={16} /> <span>Favourites</span></a>
-			<a href="/search" aria-current={isActive('/search') ? 'page' : undefined}><Search size={16} /> <span>Search</span></a>
-		</nav>
-		<div class="spacer"></div>
-		{#if session.status === 'authenticated' && session.user}
-			<div class="user-menu-wrapper" bind:this={userMenuRef}>
-				<button
-					type="button"
-					class="user-btn"
-					onclick={toggleUserMenu}
-					aria-expanded={userMenuOpen}
-					aria-haspopup="menu"
-				>
-					<User size={15} />
-					<span>{session.user.username}</span>
-					<span class="chevron" class:open={userMenuOpen}>
-						<ChevronDown size={14} />
-					</span>
-				</button>
+<div class="app" class:fullscreen-app={isFullscreenMedia} use:spatialFocus>
+	{#if !isFullscreenMedia}
+		<a class="skip-link" href="#main">Skip to content</a>
+		<header class="topbar">
+			<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
+			<nav aria-label="Primary">
+				<a href="/" aria-current={isActive('/') ? 'page' : undefined}><House size={16} /> <span>Home</span></a>
+				<a href="/library" aria-current={isActive('/library') ? 'page' : undefined}><Layers size={16} /> <span>Library</span></a>
+				<a href="/music" aria-current={isActive('/music') ? 'page' : undefined}><Music size={16} /> <span>Music</span></a>
+				<a href="/books" aria-current={isActive('/books') ? 'page' : undefined}><BookOpen size={16} /> <span>Books</span></a>
+				<a href="/favorites" aria-current={isActive('/favorites') ? 'page' : undefined}><Heart size={16} /> <span>Favourites</span></a>
+				<a href="/search" aria-current={isActive('/search') ? 'page' : undefined}><Search size={16} /> <span>Search</span></a>
+			</nav>
+			<div class="spacer"></div>
+			{#if session.status === 'authenticated' && session.user}
+				<div class="user-menu-wrapper" bind:this={userMenuRef}>
+					<button
+						type="button"
+						class="user-btn"
+						onclick={toggleUserMenu}
+						aria-expanded={userMenuOpen}
+						aria-haspopup="menu"
+					>
+						<User size={15} />
+						<span>{session.user.username}</span>
+						<span class="chevron" class:open={userMenuOpen}>
+							<ChevronDown size={14} />
+						</span>
+					</button>
 
-				{#if userMenuOpen}
-					<div class="dropdown-menu" role="menu">
-						<a
-							class="dropdown-item"
-							href="/profile"
-							role="menuitem"
-							onclick={closeUserMenu}
-						>
-							<User size={15} />
-							<span>Profile</span>
-						</a>
-
-						{#if session.user.role === 'admin'}
+					{#if userMenuOpen}
+						<div class="dropdown-menu" role="menu">
 							<a
 								class="dropdown-item"
-								href="/admin"
+								href="/profile"
 								role="menuitem"
-								aria-current={isActive('/admin') ? 'page' : undefined}
 								onclick={closeUserMenu}
 							>
-								<Shield size={15} />
-								<span>Admin</span>
+								<User size={15} />
+								<span>Profile</span>
 							</a>
-						{/if}
 
-						<button
-							type="button"
-							class="dropdown-item"
-							role="menuitem"
-							onclick={() => {
-								setTvMode(!tv.on);
-							}}
-						>
-							<TvIcon size={15} />
-							<span>TV mode</span>
-							<span class="dropdown-item-state">{tv.on ? 'On' : 'Off'}</span>
-						</button>
+							{#if session.user.role === 'admin'}
+								<a
+									class="dropdown-item"
+									href="/admin"
+									role="menuitem"
+									aria-current={isActive('/admin') ? 'page' : undefined}
+									onclick={closeUserMenu}
+								>
+									<Shield size={15} />
+									<span>Admin</span>
+								</a>
+							{/if}
 
-						<div class="dropdown-divider"></div>
+							<button
+								type="button"
+								class="dropdown-item"
+								role="menuitem"
+								onclick={() => {
+									setTvMode(!tv.on);
+								}}
+							>
+								<TvIcon size={15} />
+								<span>TV mode</span>
+								<span class="dropdown-item-state">{tv.on ? 'On' : 'Off'}</span>
+							</button>
 
-						<button
-							type="button"
-							class="dropdown-item danger"
-							role="menuitem"
-							onclick={() => {
-								closeUserMenu();
-								void signOut();
-							}}
-						>
-							<LogOut size={15} />
-							<span>Sign out</span>
-						</button>
-					</div>
-				{/if}
-			</div>
-		{/if}
-	</header>
-	<main id="main" tabindex="-1">
+							<div class="dropdown-divider"></div>
+
+							<button
+								type="button"
+								class="dropdown-item danger"
+								role="menuitem"
+								onclick={() => {
+									closeUserMenu();
+									void signOut();
+								}}
+							>
+								<LogOut size={15} />
+								<span>Sign out</span>
+							</button>
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</header>
+	{/if}
+	<main id="main" tabindex="-1" class:fullscreen-main={isFullscreenMedia}>
 		{@render children()}
 	</main>
-	<AudioBar />
+	{#if !isFullscreenMedia}
+		<AudioBar />
+	{/if}
 </div>
 
 <style>
@@ -181,6 +190,12 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 100vh;
+	}
+
+	.app.fullscreen-app {
+		height: 100vh;
+		min-height: 100vh;
+		overflow: hidden;
 	}
 
 	.topbar {
@@ -354,6 +369,17 @@
 		max-width: 1400px;
 		width: 100%;
 		margin: 0 auto;
+	}
+
+	main.fullscreen-main {
+		padding: 0;
+		max-width: none;
+		width: 100%;
+		height: 100%;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
 	}
 
 	@media (max-width: 720px) {

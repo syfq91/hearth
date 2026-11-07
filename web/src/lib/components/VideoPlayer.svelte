@@ -3,6 +3,7 @@
 	import type Player from 'video.js/dist/types/player';
 	import 'video.js/dist/video-js.css';
 	import JASSUB from 'jassub';
+	import { ArrowLeft } from '@lucide/svelte';
 	import { api } from '../api/client';
 	import type { PlaybackInfoResponse } from '../api/types';
 
@@ -46,6 +47,20 @@
 	let levels = $state<{ index: number; label: string }[]>([]);
 	/** Selected rendition index, or -1 for auto. */
 	let qualityLevel = $state(-1);
+
+	let isUserActive = $state(true);
+	let isPaused = $state(true);
+	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	function triggerActivity(): void {
+		isUserActive = true;
+		if (hideTimeout) clearTimeout(hideTimeout);
+		if (!isPaused) {
+			hideTimeout = setTimeout(() => {
+				isUserActive = false;
+			}, 3000);
+		}
+	}
 
 	/**
 	 * Subtitle choice in the select: `ext:<id>` for a sidecar file the browser
@@ -482,8 +497,24 @@
 		instance.on('canplay', syncDuration);
 		instance.on('loadedmetadata', applyResume);
 		instance.on('canplay', applyResume);
-		instance.on('pause', () => void report('paused'));
+		instance.on('play', () => {
+			isPaused = false;
+			triggerActivity();
+		});
+		instance.on('pause', () => {
+			isPaused = true;
+			isUserActive = true;
+			if (hideTimeout) clearTimeout(hideTimeout);
+			void report('paused');
+		});
+		instance.on('useractive', () => triggerActivity());
+		instance.on('userinactive', () => {
+			if (!isPaused) isUserActive = false;
+		});
 		instance.on('ended', () => {
+			isPaused = true;
+			isUserActive = true;
+			if (hideTimeout) clearTimeout(hideTimeout);
 			void report('stopped');
 			onEnded?.();
 		});
@@ -597,6 +628,7 @@
 	// Unmount cleanup
 	$effect(() => {
 		return () => {
+			if (hideTimeout) clearTimeout(hideTimeout);
 			destroyed = true;
 			expectedDuration = 0;
 			void report('stopped');
@@ -618,6 +650,12 @@
 	const availableEmbeddedSubtitles = $derived(info?.embedded_subtitles ?? []);
 </script>
 
+<svelte:window
+	onpointermove={triggerActivity}
+	onpointerdown={triggerActivity}
+	onkeydown={triggerActivity}
+/>
+
 <div class="player">
 	{#if loadError}
 		<p class="banner" role="alert">{loadError}</p>
@@ -627,8 +665,26 @@
 
 	<div class="video-container" bind:this={containerEl}></div>
 
-	<div class="bar">
-		<h1 class="title">{title}</h1>
+	<div class="top-overlay" class:hidden={!isPaused && !isUserActive && !loading && !loadError}>
+		<div class="top-left">
+			<a
+				href="/"
+				class="back-btn"
+				onclick={(e) => {
+					if (typeof window !== 'undefined' && window.history.length > 1) {
+						e.preventDefault();
+						window.history.back();
+					}
+				}}
+				aria-label="Home"
+				title="Close (Back)"
+			>
+				<ArrowLeft size={22} />
+				<span class="visually-hidden">Home</span>
+			</a>
+			<h1 class="player-title" title={title}>{title}</h1>
+		</div>
+
 		<div class="modes">
 			{#if info}
 				<span class="mode" title={(info.reasons ?? []).join('; ')}>
@@ -685,37 +741,41 @@
 			{/if}
 		</div>
 	</div>
-
-	<p class="hint">Keyboard: space play/pause · ←/→ seek 10s · f fullscreen</p>
 </div>
 
 <style>
 	.player {
+		position: relative;
+		width: 100%;
+		height: 100vh;
+		background: #000;
+		overflow: hidden;
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
 	}
 
 	.video-container {
 		width: 100%;
-		aspect-ratio: 16 / 9;
-		max-height: 72vh;
+		height: 100%;
+		flex: 1;
+		min-height: 0;
 		background: #000;
-		border-radius: var(--radius);
 		overflow: hidden;
 		position: relative;
-		margin: 0 auto;
+		margin: 0;
 	}
 
 	:global(.video-container .video-js) {
-		width: 100%;
-		height: 100%;
-		border-radius: var(--radius);
+		width: 100% !important;
+		height: 100% !important;
 		background-color: #000;
+		border-radius: 0;
 	}
 
 	:global(.video-container .video-js .vjs-tech) {
 		object-fit: contain;
+		width: 100%;
+		height: 100%;
 	}
 
 	:global(.video-container .JASSUB) {
@@ -798,56 +858,141 @@
 		background: rgba(255, 255, 255, 0.3);
 	}
 
-	.bar {
+	.top-overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 10;
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
+		justify-content: space-between;
 		gap: 1rem;
+		padding: 1rem 1.5rem;
+		background: linear-gradient(
+			to bottom,
+			rgba(0, 0, 0, 0.85) 0%,
+			rgba(0, 0, 0, 0.4) 60%,
+			transparent 100%
+		);
+		transition:
+			opacity 0.25s ease,
+			transform 0.25s ease;
 	}
 
-	.title {
-		font-size: 1.2rem;
-		margin: 0;
+	.top-overlay.hidden {
+		opacity: 0;
+		pointer-events: none;
+		transform: translateY(-0.5rem);
+	}
+
+	.top-overlay:hover,
+	.top-overlay:focus-within {
+		opacity: 1 !important;
+		pointer-events: auto !important;
+		transform: none !important;
+	}
+
+	.top-left {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		min-width: 0;
 		flex: 1;
+	}
+
+	.back-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		background: rgba(22, 27, 34, 0.7);
+		border: 1px solid var(--border);
+		color: var(--text);
+		cursor: pointer;
+		text-decoration: none;
+		flex-shrink: 0;
+		backdrop-filter: blur(4px);
+		transition:
+			background 0.15s ease,
+			border-color 0.15s ease,
+			color 0.15s ease;
+	}
+
+	.back-btn:hover {
+		background: var(--surface-2);
+		border-color: var(--accent);
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.player-title {
+		font-size: 1.15rem;
+		font-weight: 600;
+		color: #fff;
+		margin: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 	}
 
 	.modes {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
+		flex-shrink: 0;
 	}
 
 	.mode {
 		font-size: 0.8rem;
 		color: var(--muted);
+		background: rgba(22, 27, 34, 0.75);
 		border: 1px solid var(--border);
 		border-radius: 999px;
-		padding: 0.15rem 0.6rem;
+		padding: 0.2rem 0.65rem;
+		backdrop-filter: blur(4px);
 	}
 
 	select {
-		background: var(--surface-2);
+		background: rgba(22, 27, 34, 0.75);
 		border: 1px solid var(--border);
 		border-radius: 6px;
-		padding: 0.3rem 0.5rem;
+		padding: 0.35rem 0.6rem;
+		color: var(--text);
+		backdrop-filter: blur(4px);
 	}
 
 	.banner {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		z-index: 25;
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-left: 3px solid var(--danger);
+		border-left: 4px solid var(--danger);
 		border-radius: var(--radius);
-		padding: 0.6rem 1rem;
-		color: var(--muted);
+		padding: 1rem 1.5rem;
+		color: var(--text);
+		max-width: min(90vw, 30rem);
+		box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
 	}
 
 	.status {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		z-index: 25;
 		color: var(--muted);
-	}
-
-	.hint {
-		color: var(--muted);
-		font-size: 0.85rem;
-		margin: 0;
+		font-size: 1.1rem;
+		background: rgba(22, 27, 34, 0.8);
+		backdrop-filter: blur(8px);
+		padding: 0.75rem 1.5rem;
+		border-radius: var(--radius);
+		border: 1px solid var(--border);
 	}
 </style>

@@ -81,6 +81,12 @@
 <style>
 	.watch {
 		position: relative;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		background: #000;
+		overflow: hidden;
 	}
 
 	.upnext {

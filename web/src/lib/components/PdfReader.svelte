@@ -138,6 +138,11 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		height: 100%;
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		padding: 1.5rem 1rem;
 		gap: 1rem;
 	}
 
