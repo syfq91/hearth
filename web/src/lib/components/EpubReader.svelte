@@ -108,7 +108,8 @@
 	.epub {
 		width: 100%;
 		height: 100%;
-		min-height: 60vh;
+		min-height: 0;
+		flex: 1;
 		background: var(--bg);
 	}
 
