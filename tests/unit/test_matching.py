@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.db.models import (
+    Episode,
     Genre,
     ItemGenre,
     ItemPerson,
@@ -17,7 +18,12 @@ from app.db.models import (
     MediaItem,
     Movie,
     Person,
+    Season,
+    Series,
     UserItemState,
+)
+from app.db.models import (
+    Image as ImageModel,
 )
 from app.services.media.titles import sort_title
 from app.services.metadata.base import (
@@ -302,3 +308,110 @@ async def test_matched_item_survives_watch_state(
     async with db_sessionmaker() as session:
         state = await session.scalar(select(UserItemState))
         assert state is not None and state.position_ms == 42
+
+
+async def test_series_matching_with_local_nfo_and_artwork(
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    from app.services.images.pipeline import ImagePipeline
+
+    series_dir = tmp_path / "Chernobyl (2019)"
+    season_dir = series_dir / "Season 01"
+    season_dir.mkdir(parents=True)
+
+    tv_nfo = series_dir / "tvshow.nfo"
+    tv_nfo.write_text(
+        "<tvshow><title>Chernobyl</title><year>2019</year></tvshow>", encoding="utf-8"
+    )
+
+    # Valid tiny 1x1 GIF for image pipeline
+    tiny_gif = (
+        b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00"
+        b"!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+    )
+    (series_dir / "poster.jpg").write_bytes(tiny_gif)
+    (series_dir / "fanart.jpg").write_bytes(tiny_gif)
+
+    ep_video = season_dir / "Chernobyl.S01E01.mkv"
+    ep_video.write_bytes(b"ep_video")
+
+    async with db_sessionmaker() as session:
+        lib = Library(id=uuid.uuid4().hex, name="Anime", type="tv")
+        session.add(lib)
+
+        series_id = uuid.uuid4().hex
+        season_id = uuid.uuid4().hex
+        episode_id = uuid.uuid4().hex
+        file_id = uuid.uuid4().hex
+
+        series_item = MediaItem(
+            id=series_id,
+            library_id=lib.id,
+            type="series",
+            title="Chernobyl",
+            sort_title="chernobyl",
+            year=2019,
+            match_state="pending",
+        )
+        series_item.series = Series()
+        session.add(series_item)
+
+        season_item = MediaItem(
+            id=season_id,
+            library_id=lib.id,
+            type="season",
+            title="Season 1",
+            sort_title="season 1",
+            match_state="pending",
+        )
+        season_item.season = Season(series_id=series_id, season_number=1)
+        session.add(season_item)
+
+        file_row = MediaFile(
+            id=file_id,
+            item_id=episode_id,
+            path=str(ep_video),
+            size_bytes=100,
+            mtime=1.0,
+            partial_hash="h",
+        )
+        session.add(file_row)
+
+        ep_item = MediaItem(
+            id=episode_id,
+            library_id=lib.id,
+            type="episode",
+            title="Episode 1",
+            sort_title="episode 1",
+            match_state="pending",
+        )
+        ep_item.episode = Episode(
+            series_id=series_id,
+            season_id=season_id,
+            season_number=1,
+            episode_number=1,
+            file_id=file_id,
+        )
+        session.add(ep_item)
+        await session.commit()
+
+    pipeline = ImagePipeline(db_settings, db_sessionmaker)
+    matcher = MetadataMatcher(
+        db_settings, db_sessionmaker, providers=[LocalProvider()], artwork=pipeline
+    )
+
+    stats = await matcher.match_pending()
+    assert stats.matched == 1
+
+    async with db_sessionmaker() as session:
+        item = await session.get(MediaItem, series_id)
+        assert item is not None
+        assert item.match_state == "matched"
+
+        images = list(
+            await session.scalars(select(ImageModel).where(ImageModel.item_id == series_id))
+        )
+        assert len(images) >= 1
+        assert any(img.kind == "poster" for img in images)

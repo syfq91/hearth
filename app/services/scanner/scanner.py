@@ -50,6 +50,7 @@ from app.services.scanner.walker import (
     ScannedFile,
     find_album_artwork,
     find_artist_artwork,
+    find_series_artwork,
     scope_dirs,
     walk_book_files,
     walk_movie_files,
@@ -823,6 +824,24 @@ class LibraryScanner:
                         session.add(series_item)
                         series_index[s_key] = series_id
                         stats.added_items += 1
+
+                        art_path = find_series_artwork(Path(candidate.path).parent)
+                        if not art_path:
+                            art_path = find_series_artwork(Path(candidate.path).parent.parent)
+                        if art_path:
+                            pending_artworks.append(
+                                (
+                                    series_id,
+                                    "local",
+                                    [
+                                        ProviderImage(
+                                            kind="poster",
+                                            file_path=art_path,
+                                            is_primary=True,
+                                        )
+                                    ],
+                                )
+                            )
 
                     season_id: str | None = None
                     if parsed_ep.season_number is not None:

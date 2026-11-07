@@ -377,6 +377,16 @@ class LocalProvider(MetadataProvider):
                 series_dir = series_dir.parent
         if nfo.is_file():
             return self._parse_tvshow_nfo(nfo, series_dir)
+        images = self._tv_images(None, None, series_dir)
+        if images:
+            return SeriesMetadata(
+                provider=self.name,
+                provider_id=str(series_dir),
+                title=series_dir.name,
+                year=_year_from_date(series_dir.name),
+                images=tuple(images),
+                raw={"dir": str(series_dir)},
+            )
         return None
 
     def find_episode(self, path: Path | str) -> EpisodeMetadata | None:
@@ -588,8 +598,8 @@ class LocalProvider(MetadataProvider):
 
     def _tv_images(
         self,
-        root: ET.Element,
-        nfo: Path,
+        root: ET.Element | None,
+        nfo: Path | None,
         series_dir: Path,
     ) -> list[ProviderImage]:
         folder = series_dir

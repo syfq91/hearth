@@ -245,13 +245,16 @@ class JobWorker:
         tasks: set[asyncio.Task[None]] = set()
         try:
             while not stop.is_set():
-                tasks = {task for task in tasks if not task.done()}
-                if len(tasks) < self.settings.job_worker_concurrency:
-                    job = await self.claim()
-                    if job is not None:
-                        tasks.add(asyncio.create_task(self.execute(job)))
-                        continue
-                wait_for = self.settings.job_poll_interval if not tasks else 0.05
+                try:
+                    tasks = {task for task in tasks if not task.done()}
+                    if len(tasks) < self.settings.job_worker_concurrency:
+                        job = await self.claim()
+                        if job is not None:
+                            tasks.add(asyncio.create_task(self.execute(job)))
+                            continue
+                except Exception:
+                    logger.exception("error in job worker claim loop")
+                wait_for = self.settings.job_poll_interval
                 with contextlib.suppress(TimeoutError):
                     await asyncio.wait_for(stop.wait(), timeout=wait_for)
         finally:
