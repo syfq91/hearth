@@ -8,7 +8,16 @@
 		nextTrackSrc
 	} from '../player.svelte';
 	import { withMediaToken } from '../media-token.svelte';
-	import { Play, Pause, SkipBack, SkipForward, Square } from '@lucide/svelte';
+	import {
+		Play,
+		Pause,
+		SkipBack,
+		SkipForward,
+		Square,
+		Volume2,
+		Volume1,
+		VolumeX
+	} from '@lucide/svelte';
 
 	let audio = $state<HTMLAudioElement | null>(null);
 
@@ -152,6 +161,41 @@
 
 	let currentTime = $state(0);
 	let duration = $state(0);
+	let volume = $state(1);
+	let lastVolume = 1;
+
+	// Load persisted volume on client
+	$effect(() => {
+		if (typeof localStorage !== 'undefined') {
+			const saved = localStorage.getItem('hearth.audio_volume');
+			if (saved !== null) {
+				const parsed = Number.parseFloat(saved);
+				if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 1) {
+					volume = parsed;
+					if (parsed > 0) lastVolume = parsed;
+				}
+			}
+		}
+	});
+
+	// Keep HTMLAudioElement volume in sync and save to localStorage
+	$effect(() => {
+		if (audio) {
+			audio.volume = volume;
+		}
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem('hearth.audio_volume', String(volume));
+		}
+	});
+
+	function toggleMute(): void {
+		if (volume > 0) {
+			lastVolume = volume;
+			volume = 0;
+		} else {
+			volume = lastVolume > 0 ? lastVolume : 1;
+		}
+	}
 </script>
 
 {#if player.track}
@@ -227,6 +271,35 @@
 			>
 				<Square size={16} />
 			</button>
+
+			<div class="volume-control">
+				<button
+					type="button"
+					class="ghost volume-btn"
+					onclick={toggleMute}
+					aria-label={volume === 0 ? 'Unmute' : 'Mute'}
+					title={volume === 0 ? 'Unmute' : 'Mute'}
+				>
+					{#if volume === 0}
+						<VolumeX size={16} />
+					{:else if volume < 0.5}
+						<Volume1 size={16} />
+					{:else}
+						<Volume2 size={16} />
+					{/if}
+				</button>
+				<input
+					type="range"
+					min="0"
+					max="1"
+					step="0.01"
+					bind:value={volume}
+					aria-label="Volume"
+					aria-valuetext={`${Math.round(volume * 100)}%`}
+					title={`Volume: ${Math.round(volume * 100)}%`}
+					class="volume-slider"
+				/>
+			</div>
 		</div>
 	</div>
 
@@ -308,6 +381,62 @@
 	.ghost:disabled {
 		opacity: 0.5;
 		cursor: default;
+	}
+
+	.volume-control {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin-left: 0.25rem;
+	}
+
+	.volume-btn {
+		padding: 0.35rem 0.5rem;
+	}
+
+	.volume-slider {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 5.5rem;
+		height: 0.35rem;
+		border-radius: 999px;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		outline: none;
+		cursor: pointer;
+		accent-color: var(--accent);
+		margin: 0;
+		padding: 0;
+	}
+
+	.volume-slider::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 0.85rem;
+		height: 0.85rem;
+		border-radius: 50%;
+		background: var(--accent);
+		cursor: pointer;
+		border: none;
+		transition: transform 0.1s ease;
+	}
+
+	.volume-slider::-moz-range-thumb {
+		width: 0.85rem;
+		height: 0.85rem;
+		border-radius: 50%;
+		background: var(--accent);
+		cursor: pointer;
+		border: none;
+	}
+
+	.volume-slider::-webkit-slider-thumb:hover {
+		transform: scale(1.15);
+	}
+
+	.volume-slider:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 3px;
 	}
 
 	.error {
