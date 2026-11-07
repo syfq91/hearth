@@ -22,6 +22,7 @@
 	let videoEl = $state<HTMLVideoElement | null>(null);
 	let player: Player | null = null;
 	let jassubInstance: JASSUB | null = null;
+	let hasJassub = $state(false);
 
 	let info = $state<PlaybackInfoResponse | null>(null);
 	let loadError = $state<string | null>(null);
@@ -179,7 +180,10 @@
 
 	function handleKeydown(event: KeyboardEvent): void {
 		// Keys starting inside the control bar buttons or menus are left to Video.js
-		if ((event.target as HTMLElement)?.closest('.vjs-control-bar')) {
+		if (
+			(event.target as HTMLElement)?.closest('.vjs-control-bar') ||
+			(event.target as HTMLElement)?.closest('.vjs-menu')
+		) {
 			return;
 		}
 		switch (event.key) {
@@ -289,6 +293,7 @@
 	}
 
 	async function destroyJassub(): Promise<void> {
+		hasJassub = false;
 		if (jassubInstance) {
 			const instance = jassubInstance;
 			jassubInstance = null;
@@ -313,7 +318,7 @@
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const tracks = player.textTracks() as any;
 			for (let i = 0; i < tracks.length; i += 1) {
-				tracks[i].mode = 'disabled';
+				tracks[i].mode = tracks[i].id === subtitleChoice ? 'showing' : 'disabled';
 			}
 
 			if (!externalId || !videoEl) return;
@@ -338,15 +343,11 @@
 						video: videoEl,
 						subContent
 					});
+					hasJassub = true;
 				}
 			} catch (err) {
 				console.warn('JASSUB initialization failed, falling back to native text track:', err);
-				for (let i = 0; i < tracks.length; i += 1) {
-					const track = tracks[i];
-					if (track.id === externalId) {
-						track.mode = 'showing';
-					}
-				}
+				hasJassub = false;
 			}
 		} finally {
 			syncingTracks = false;
@@ -417,25 +418,49 @@
 			return;
 		}
 
-		// Clear previous remote text tracks
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const remoteTracks = player.remoteTextTracks() as any;
-		while (remoteTracks && remoteTracks.length > 0) {
-			player.removeRemoteTextTrack(remoteTracks[0]);
-		}
+		syncingTracks = true;
+		try {
+			// Clear previous remote text tracks
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const remoteTracks = player.remoteTextTracks() as any;
+			while (remoteTracks && remoteTracks.length > 0) {
+				player.removeRemoteTextTrack(remoteTracks[0]);
+			}
 
-		// Add external subtitles
-		for (const track of response.subtitles ?? []) {
-			player.addRemoteTextTrack(
-				{
-					id: track.id,
-					kind: 'subtitles',
-					src: track.url,
-					srclang: track.language ?? '',
-					label: track.name
-				},
-				false
-			);
+			// Add external subtitles
+			for (const track of response.subtitles ?? []) {
+				player.addRemoteTextTrack(
+					{
+						id: `ext:${track.id}`,
+						kind: 'subtitles',
+						src: track.url,
+						srclang: track.language ?? '',
+						label: track.name || track.language || 'Subtitles'
+					},
+					false
+				);
+			}
+
+			// Add embedded subtitles
+			for (const stream of response.embedded_subtitles ?? []) {
+				player.addRemoteTextTrack(
+					{
+						id: `emb:${stream.index}`,
+						kind: 'subtitles',
+						srclang: stream.language ?? '',
+						label: `${stream.title ?? stream.language ?? 'Subtitle'} (embedded)`
+					},
+					false
+				);
+			}
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const tracks = player.textTracks() as any;
+			for (let i = 0; i < tracks.length; i += 1) {
+				tracks[i].mode = tracks[i].id === subtitleChoice ? 'showing' : 'disabled';
+			}
+		} finally {
+			syncingTracks = false;
 		}
 
 		player.src({
@@ -480,7 +505,8 @@
 				currentTimeDisplay: true,
 				timeDivider: true,
 				durationDisplay: true,
-				remainingTimeDisplay: false
+				remainingTimeDisplay: false,
+				subsCapsButton: true
 			},
 			html5: {
 				vhs: {
@@ -544,8 +570,8 @@
 					break;
 				}
 			}
-			const targetChoice = activeId ? `ext:${activeId}` : '';
-			if (subtitleChoice !== targetChoice && !subtitleChoice.startsWith('emb:')) {
+			const targetChoice = activeId ?? '';
+			if (subtitleChoice !== targetChoice) {
 				subtitleChoice = targetChoice;
 			}
 		});
@@ -585,8 +611,10 @@
 			lastAudioTrack = currentAudio;
 			void startPlayback();
 		} else if (currentSub !== lastSubChoice) {
+			const wasEmbedded = lastSubChoice.startsWith('emb:');
+			const isEmbedded = currentSub.startsWith('emb:');
 			lastSubChoice = currentSub;
-			if (currentSub.startsWith('emb:')) {
+			if (isEmbedded || wasEmbedded) {
 				void startPlayback();
 			} else {
 				void applySubtitleChoice();
@@ -647,8 +675,6 @@
 	});
 
 	const availableAudio = $derived(info?.audio_streams ?? []);
-	const availableSubtitles = $derived(info?.subtitles ?? []);
-	const availableEmbeddedSubtitles = $derived(info?.embedded_subtitles ?? []);
 </script>
 
 <svelte:window
@@ -664,7 +690,7 @@
 		<p class="status" role="status">Preparing playback…</p>
 	{/if}
 
-	<div class="video-container" bind:this={containerEl}></div>
+	<div class="video-container" class:has-jassub={hasJassub} bind:this={containerEl}></div>
 
 	<div class="top-overlay" class:hidden={!isPaused && !isUserActive && !loading && !loadError}>
 		<div class="top-left">
@@ -718,24 +744,6 @@
 						<option value={-1}>Auto quality</option>
 						{#each levels as level (level.index)}
 							<option value={level.index}>{level.label}</option>
-						{/each}
-					</select>
-				</label>
-			{/if}
-			{#if availableSubtitles.length > 0 || availableEmbeddedSubtitles.length > 0}
-				<label>
-					<span class="visually-hidden">Subtitles</span>
-					<select bind:value={subtitleChoice}>
-						<option value="">Subtitles off</option>
-						{#each availableSubtitles as track (track.id)}
-							<option value={`ext:${track.id}`}>
-								{track.name || track.language || 'Subtitles'}
-							</option>
-						{/each}
-						{#each availableEmbeddedSubtitles as stream (stream.index)}
-							<option value={`emb:${stream.index}`}>
-								{stream.title ?? stream.language ?? 'Subtitle'} (embedded)
-							</option>
 						{/each}
 					</select>
 				</label>
@@ -857,6 +865,51 @@
 
 	:global(.video-container .vjs-load-progress) {
 		background: rgba(255, 255, 255, 0.3);
+	}
+
+	:global(.video-container.has-jassub .vjs-text-track-display) {
+		display: none !important;
+	}
+
+	:global(.video-container .vjs-texttrack-settings) {
+		display: none !important;
+	}
+
+	:global(.video-container .vjs-menu-button-popup .vjs-menu) {
+		margin-bottom: 1.5em;
+	}
+
+	:global(.video-container .vjs-menu-content) {
+		background-color: rgba(14, 17, 22, 0.95) !important;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+		padding: 0.25rem 0;
+	}
+
+	:global(.video-container .vjs-menu-item) {
+		text-transform: none !important;
+		font-family: inherit;
+		font-size: 0.875rem;
+		padding: 0.4rem 1rem !important;
+		color: var(--text) !important;
+		display: flex;
+		align-items: center;
+		transition:
+			background-color 0.15s ease,
+			color 0.15s ease;
+	}
+
+	:global(.video-container .vjs-menu-item:hover),
+	:global(.video-container .vjs-menu-item:focus) {
+		background-color: var(--surface-2) !important;
+		color: #fff !important;
+	}
+
+	:global(.video-container .vjs-menu-item.vjs-selected) {
+		background-color: rgba(255, 138, 61, 0.15) !important;
+		color: var(--accent) !important;
+		font-weight: 600;
 	}
 
 	.top-overlay {
