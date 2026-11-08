@@ -5,6 +5,7 @@
 	import JASSUB from 'jassub';
 	import { ArrowLeft } from '@lucide/svelte';
 	import { api } from '../api/client';
+	import { addAudioMenuButton, type AudioMenuHandle } from '../video-audio-menu';
 	import type { PlaybackInfoResponse } from '../api/types';
 
 	interface Props {
@@ -479,6 +480,8 @@
 		void applySubtitleChoice();
 	}
 
+	let audioMenu: AudioMenuHandle | null = null;
+
 	function initPlayer(): void {
 		if (!containerEl || player) return;
 
@@ -516,6 +519,10 @@
 		});
 
 		player = instance;
+
+		audioMenu = addAudioMenuButton(instance, (index) => {
+			audioTrackIndex = index;
+		});
 
 		instance.on('timeupdate', handleTimeUpdate);
 		instance.on('timeupdate', syncDuration);
@@ -670,11 +677,31 @@
 				player.dispose();
 				player = null;
 				videoEl = null;
+				audioMenu = null;
 			}
 		};
 	});
 
 	const availableAudio = $derived(info?.audio_streams ?? []);
+
+	// Keep the control-bar audio menu in sync with the current playback plan.
+	$effect(() => {
+		const choices = availableAudio;
+		const selected = audioTrackIndex;
+		if (!audioMenu) return;
+		audioMenu.setChoices(
+			choices.length > 1
+				? [
+						{ index: null, label: 'Default audio' },
+						...choices.map((track) => ({
+							index: track.index,
+							label: `${track.title ?? track.language ?? 'Audio'} (${track.codec_name ?? '?'})`
+						}))
+					]
+				: [],
+			selected
+		);
+	});
 </script>
 
 <svelte:window
@@ -717,19 +744,6 @@
 				<span class="mode" title={(info.reasons ?? []).join('; ')}>
 					{info.mode.replace('_', ' ')}
 				</span>
-			{/if}
-			{#if availableAudio.length > 1}
-				<label>
-					<span class="visually-hidden">Audio track</span>
-					<select bind:value={audioTrackIndex}>
-						<option value={null}>Default audio</option>
-						{#each availableAudio as track (track.index)}
-							<option value={track.index}>
-								{track.title ?? track.language ?? 'Audio'} ({track.codec_name ?? '?'})
-							</option>
-						{/each}
-					</select>
-				</label>
 			{/if}
 			{#if levels.length > 1}
 				<label>
