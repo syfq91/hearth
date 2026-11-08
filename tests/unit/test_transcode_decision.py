@@ -946,3 +946,30 @@ def test_hdr_tonemapping_flags() -> None:
     plan = evaluate_playback_plan(probe, caps, UserLimits(), _vaapi_caps(), PlaybackOptions())
     assert plan.tonemap_hdr is True
     assert any("tonemap" in r.lower() for r in plan.reasons)
+
+
+def test_subtitle_stream_index_is_relative_to_subtitles() -> None:
+    # Stream 0: video, Stream 1: audio, Stream 2: sub0 (eng), Stream 3: sub1 (jpn)
+    probe = _make_probe(
+        "mkv",
+        "h264",
+        "High",
+        1920,
+        1080,
+        3_000_000,
+        False,
+        "aac",
+        2,
+        [{"codec": "ass", "language": "eng"}, {"codec": "ass", "language": "jpn"}],
+    )
+    # Selecting stream index 3 (the 2nd subtitle stream, relative index 1)
+    plan = evaluate_playback_plan(
+        probe,
+        BUILTIN_PRESETS["chrome"],
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(subtitle_track_index=3),
+    )
+    assert plan.subtitle_action == "burn_in"
+    # ffmpeg :si parameter requires 0-based relative index among subtitle streams
+    assert plan.subtitle_stream_index == 1

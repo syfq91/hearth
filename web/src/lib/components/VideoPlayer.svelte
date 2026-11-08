@@ -43,6 +43,7 @@
 	/** Server-side HLS session for `info`; plain so re-planning cannot loop effects. */
 	let sessionId: string | null = null;
 	let resumeApplied = false;
+	let resumePositionMs = 0;
 	let lastReportedMs = 0;
 	let destroyed = false;
 	let focusTaken = false;
@@ -165,13 +166,15 @@
 	}
 
 	function applyResume(): void {
-		if (resumeApplied || !player || player.isDisposed() || startAtMs <= 0) return;
+		if (resumeApplied || !player || player.isDisposed()) return;
+		const targetMs = resumePositionMs > 0 ? resumePositionMs : startAtMs;
+		if (targetMs <= 0) return;
 		resumeApplied = true;
 		const dur = player.duration() ?? expectedDuration;
 		const durationMs = dur * 1000;
 		// Near the end the user wants a rewatch prompt, not a jump to credits.
-		if (Number.isFinite(durationMs) && durationMs > 30_000 && durationMs - startAtMs < 30_000) return;
-		player.currentTime(startAtMs / 1000);
+		if (resumePositionMs <= 0 && Number.isFinite(durationMs) && durationMs > 30_000 && durationMs - targetMs < 30_000) return;
+		player.currentTime(targetMs / 1000);
 	}
 
 	function togglePlay(): void {
@@ -392,13 +395,21 @@
 			? Number.parseInt(subtitleChoice.slice('emb:'.length), 10)
 			: null;
 
+		const cur = player && !player.isDisposed() ? player.currentTime() ?? 0 : 0;
+		if (cur > 0) {
+			resumePositionMs = Math.floor(cur * 1000);
+		} else if (startAtMs > 0) {
+			resumePositionMs = startAtMs;
+		}
+		const offsetSeconds = resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
+
 		let response: PlaybackInfoResponse;
 		try {
 			response = await api.post<PlaybackInfoResponse>(`/items/${itemId}/playback-info`, {
 				body: {
 					audio_track_index: audioTrackIndex,
 					subtitle_track_index: embeddedSubtitleIndex,
-					start_time_offset_seconds: startAtMs > 0 ? startAtMs / 1000 : 0
+					start_time_offset_seconds: offsetSeconds
 				}
 			});
 		} catch (e) {
@@ -421,6 +432,32 @@
 		qualityLevel = -1;
 
 		await destroyJassub();
+
+		syncingTracks = true;
+		try {
+			// Clear previous remote text tracks
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const remoteTracks = player.remoteTextTracks() as any;
+			while (remoteTracks && remoteTracks.length > 0) {
+				player.removeRemoteTextTrack(remoteTracks[0]);
+			}
+
+			// Add external subtitles as remote text tracks
+			for (const track of response.subtitles ?? []) {
+				player.addRemoteTextTrack(
+					{
+						id: `ext:${track.id}`,
+						kind: 'subtitles',
+						src: track.url,
+						srclang: track.language ?? '',
+						label: track.name || track.language || 'Subtitles'
+					},
+					false
+				);
+			}
+		} finally {
+			syncingTracks = false;
+		}
 
 		const source = response.mode === 'direct_play' ? response.url : response.hls_url;
 		if (!source) {
@@ -573,6 +610,7 @@
 			audioTrackIndex = null;
 			lastSubChoice = '';
 			subtitleChoice = '';
+			resumePositionMs = 0;
 			void startPlayback();
 		} else if (currentAudio !== lastAudioTrack) {
 			lastAudioTrack = currentAudio;

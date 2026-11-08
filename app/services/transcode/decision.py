@@ -103,11 +103,16 @@ def evaluate_playback_plan(
 
     # 2. Resolve Subtitle Stream
     sub_stream: ProbeStream | None = None
+    sub_stream_index: int | None = None
     if opts.subtitle_track_index is not None:
+        sub_counter = 0
         for s in file_streams.streams:
-            if s.index == opts.subtitle_track_index and s.codec_type == "subtitle":
-                sub_stream = s
-                break
+            if s.codec_type == "subtitle":
+                if s.index == opts.subtitle_track_index:
+                    sub_stream = s
+                    sub_stream_index = sub_counter
+                    break
+                sub_counter += 1
 
     # 3. Check Subtitle compatibility
     subtitle_action: SubtitleAction = "none"
@@ -115,7 +120,7 @@ def evaluate_playback_plan(
     sub_forces_burn_in = False
 
     if sub_stream is not None:
-        subtitle_index = sub_stream.index
+        subtitle_index = sub_stream_index
         c_name = (sub_stream.codec_name or "").lower()
         if c_name in ("hdmv_pgs_subtitle", "dvd_subtitle", "vobsub", "pgs", "xsub"):
             subtitle_action = "burn_in"

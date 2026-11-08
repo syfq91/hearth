@@ -33,11 +33,15 @@ function registerComponent(): void {
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	class AudioMenuChoiceItem extends MenuItemBase {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		constructor(menuPlayer: any, options: any) {
 			super(menuPlayer, options);
-			this.on('click', () => {
-				options.onSelect?.(options.trackIndex);
-			});
+		}
+
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		handleClick(event: any) {
+			super.handleClick(event);
+			this.options_.onSelect?.(this.options_.trackIndex);
 		}
 	}
 
@@ -129,11 +133,15 @@ function registerSubtitleComponent(): void {
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	class SubtitleMenuChoiceItem extends MenuItemBase {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		constructor(menuPlayer: any, options: any) {
 			super(menuPlayer, options);
-			this.on('click', () => {
-				options.onSelect?.(options.choiceId);
-			});
+		}
+
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		handleClick(event: any) {
+			super.handleClick(event);
+			this.options_.onSelect?.(this.options_.choiceId);
 		}
 	}
 
