@@ -3,7 +3,7 @@
 	import type Player from 'video.js/dist/types/player';
 	import 'video.js/dist/video-js.css';
 	import JASSUB from 'jassub';
-	import { ArrowLeft } from '@lucide/svelte';
+	import { ArrowLeft, Info } from '@lucide/svelte';
 	import { api } from '../api/client';
 	import { addAudioMenuButton, type AudioMenuHandle } from '../video-audio-menu';
 	import type { PlaybackInfoResponse } from '../api/types';
@@ -52,6 +52,8 @@
 
 	let isUserActive = $state(true);
 	let isPaused = $state(true);
+	/** Whether the direct/transcode badge is shown (toggled by the info button). */
+	let showModeBadge = $state(false);
 	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	function triggerActivity(): void {
@@ -741,9 +743,22 @@
 
 		<div class="modes">
 			{#if info}
-				<span class="mode" title={(info.reasons ?? []).join('; ')}>
-					{info.mode.replace('_', ' ')}
-				</span>
+				<button
+					type="button"
+					class="info-btn"
+					class:active={showModeBadge}
+					aria-pressed={showModeBadge}
+					aria-label="Playback details"
+					title="Playback details"
+					onclick={() => (showModeBadge = !showModeBadge)}
+				>
+					<Info size={18} />
+				</button>
+				{#if showModeBadge}
+					<span class="mode" role="status" title={(info.reasons ?? []).join('; ')}>
+						{info.mode.replace('_', ' ')}
+					</span>
+				{/if}
 			{/if}
 			{#if levels.length > 1}
 				<label>
@@ -1016,6 +1031,37 @@
 		align-items: center;
 		gap: 0.75rem;
 		flex-shrink: 0;
+	}
+
+	.info-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 50%;
+		background: rgba(22, 27, 34, 0.75);
+		border: 1px solid var(--border);
+		color: var(--text);
+		cursor: pointer;
+		backdrop-filter: blur(4px);
+		transition:
+			background 0.15s ease,
+			border-color 0.15s ease,
+			color 0.15s ease;
+	}
+
+	.info-btn:hover,
+	.info-btn:focus-visible {
+		background: var(--surface-2);
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.info-btn.active {
+		background: rgba(255, 138, 61, 0.15);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.mode {
