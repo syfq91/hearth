@@ -133,6 +133,7 @@ class PlaybackInfoResponse(BaseModel):
     session_id: str | None = None
     file: PlaybackFileResponse
     subtitles: list[SubtitleResponse] = Field(default_factory=list)
+    video_stream: ProbeStream | None = None
     audio_streams: list[ProbeStream] = Field(default_factory=list)
     embedded_subtitles: list[ProbeStream] = Field(default_factory=list)
     reasons: list[str] = Field(default_factory=list)
@@ -327,6 +328,7 @@ async def playback_info(
             url=f"/api/v1/stream/{media_file.id}?token={encoded_token}",
             file=file_resp,
             subtitles=subtitles,
+            video_stream=probe_res.primary_video,
             audio_streams=audio_streams,
             embedded_subtitles=embedded_subtitles,
             reasons=plan.reasons,
@@ -352,6 +354,7 @@ async def playback_info(
         session_id=transcode_session.id,
         file=file_resp,
         subtitles=subtitles,
+        video_stream=probe_res.primary_video,
         audio_streams=audio_streams,
         embedded_subtitles=embedded_subtitles,
         reasons=plan.reasons,

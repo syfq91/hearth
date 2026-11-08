@@ -4247,6 +4247,16 @@
               }
             ],
             "title": "Url"
+          },
+          "video_stream": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProbeStream"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

@@ -3,12 +3,14 @@
 	import type Player from 'video.js/dist/types/player';
 	import 'video.js/dist/video-js.css';
 	import JASSUB from 'jassub';
-	import { ArrowLeft, Info } from '@lucide/svelte';
+	import { ArrowLeft } from '@lucide/svelte';
 	import { api } from '../api/client';
 	import {
 		addAudioMenuButton,
+		addInfoButton,
 		addSubtitleMenuButton,
 		type AudioMenuHandle,
+		type InfoButtonHandle,
 		type SubtitleMenuChoice,
 		type SubtitleMenuHandle
 	} from '../video-audio-menu';
@@ -445,6 +447,7 @@
 
 	let audioMenu: AudioMenuHandle | null = null;
 	let subtitleMenu: SubtitleMenuHandle | null = null;
+	let infoButton: InfoButtonHandle | null = null;
 
 	function initPlayer(): void {
 		if (!containerEl || player) return;
@@ -490,6 +493,10 @@
 
 		subtitleMenu = addSubtitleMenuButton(instance, (choiceId) => {
 			subtitleChoice = choiceId;
+		});
+
+		infoButton = addInfoButton(instance, () => {
+			showModeBadge = !showModeBadge;
 		});
 
 		instance.on('timeupdate', handleTimeUpdate);
@@ -632,6 +639,7 @@
 				videoEl = null;
 				audioMenu = null;
 				subtitleMenu = null;
+				infoButton = null;
 			}
 		};
 	});
@@ -639,6 +647,48 @@
 	const availableAudio = $derived(info?.audio_streams ?? []);
 	const availableSubtitles = $derived(info?.subtitles ?? []);
 	const availableEmbeddedSubtitles = $derived(info?.embedded_subtitles ?? []);
+
+	// Keep the control-bar info button state in sync with showModeBadge.
+	$effect(() => {
+		const active = showModeBadge;
+		if (!infoButton) return;
+		infoButton.setActive(active);
+	});
+
+	function getPlaybackDetails(): string {
+		if (!info) return '';
+		const vStream = info.video_stream;
+		const vSrcRaw = vStream?.codec_name ?? 'video';
+		const vSrc = vSrcRaw === 'hevc' ? 'x265' : vSrcRaw;
+
+		const activeAudio =
+			(audioTrackIndex !== null
+				? (info.audio_streams ?? []).find((s) => s.index === audioTrackIndex)
+				: null) ??
+			(info.audio_streams ?? []).find((s) => s.is_default) ??
+			info.audio_streams?.[0];
+		const aSrc = activeAudio?.codec_name ?? 'audio';
+
+		if (info.mode === 'direct_play') {
+			return `${vSrc} · ${aSrc} (direct play)`;
+		}
+
+		const plan = info.plan;
+		const vAction = plan?.video_action ?? 'transcode';
+		let vDst = plan?.video_codec ?? 'transcode';
+		if (vDst === 'libx264') vDst = 'x264';
+		else if (vDst === 'h264_vaapi') vDst = 'vaapi_h264';
+		else if (vDst === 'hevc_vaapi') vDst = 'vaapi_hevc';
+		else if (vDst === 'h264_qsv') vDst = 'qsv_x264';
+
+		const aAction = plan?.audio_action ?? 'transcode';
+		const aDst = plan?.audio_codec ?? 'aac';
+
+		const vPart = vAction === 'copy' ? `${vSrc} > copy` : `${vSrc} > ${vDst}`;
+		const aPart = aAction === 'copy' ? `${aSrc} > ${aSrc}` : `${aSrc} > ${aDst}`;
+
+		return `${vPart}  ${aPart}`;
+	}
 
 	// Keep the control-bar audio menu in sync with the current playback plan.
 	$effect(() => {
@@ -723,24 +773,6 @@
 		</div>
 
 		<div class="modes">
-			{#if info}
-				<button
-					type="button"
-					class="info-btn"
-					class:active={showModeBadge}
-					aria-pressed={showModeBadge}
-					aria-label="Playback details"
-					title="Playback details"
-					onclick={() => (showModeBadge = !showModeBadge)}
-				>
-					<Info size={18} />
-				</button>
-				{#if showModeBadge}
-					<span class="mode" role="status" title={(info.reasons ?? []).join('; ')}>
-						{info.mode.replace('_', ' ')}
-					</span>
-				{/if}
-			{/if}
 			{#if levels.length > 1}
 				<label>
 					<span class="visually-hidden">Quality</span>
@@ -760,6 +792,17 @@
 			{/if}
 		</div>
 	</div>
+
+	{#if showModeBadge && info}
+		<div
+			class="mode-badge-popup"
+			class:hidden={!isPaused && !isUserActive && !loading && !loadError}
+			role="status"
+			title={(info.reasons ?? []).join('\n')}
+		>
+			<span class="mode-text">{getPlaybackDetails()}</span>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -1043,45 +1086,48 @@
 		flex-shrink: 0;
 	}
 
-	.info-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: 50%;
-		background: rgba(22, 27, 34, 0.75);
-		border: 1px solid var(--border);
-		color: var(--text);
+	:global(.video-container .vjs-control-bar .vjs-info-control) {
 		cursor: pointer;
-		backdrop-filter: blur(4px);
-		transition:
-			background 0.15s ease,
-			border-color 0.15s ease,
-			color 0.15s ease;
 	}
 
-	.info-btn:hover,
-	.info-btn:focus-visible {
-		background: var(--surface-2);
-		border-color: var(--accent);
+	:global(.video-container .vjs-control-bar .vjs-info-control.vjs-info-active) {
+		color: var(--accent) !important;
+	}
+
+	:global(.video-container .vjs-control-bar .vjs-info-control:hover) {
 		color: var(--accent);
 	}
 
-	.info-btn.active {
-		background: rgba(255, 138, 61, 0.15);
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-
-	.mode {
-		font-size: 0.8rem;
-		color: var(--muted);
-		background: rgba(22, 27, 34, 0.75);
+	.mode-badge-popup {
+		position: absolute;
+		bottom: 6.75em;
+		right: 1.5rem;
+		z-index: 15;
+		font-size: 0.825rem;
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		font-weight: 500;
+		letter-spacing: 0.02em;
+		color: #fff;
+		background: rgba(14, 17, 22, 0.9);
 		border: 1px solid var(--border);
 		border-radius: 999px;
-		padding: 0.2rem 0.65rem;
-		backdrop-filter: blur(4px);
+		padding: 0.35rem 0.85rem;
+		backdrop-filter: blur(8px);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+		pointer-events: auto;
+		transition:
+			opacity 0.25s ease,
+			transform 0.25s ease;
+	}
+
+	.mode-badge-popup.hidden {
+		opacity: 0;
+		pointer-events: none;
+		transform: translateY(0.5rem);
+	}
+
+	.mode-text {
+		white-space: nowrap;
 	}
 
 	select {

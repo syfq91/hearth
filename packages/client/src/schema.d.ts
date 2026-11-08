@@ -3738,6 +3738,7 @@ export interface components {
             subtitles?: components["schemas"]["SubtitleResponse"][];
             /** Url */
             url?: string | null;
+            video_stream?: components["schemas"]["ProbeStream"] | null;
         };
         /**
          * PlaylistDetail

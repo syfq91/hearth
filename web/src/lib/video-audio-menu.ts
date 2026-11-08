@@ -204,3 +204,75 @@ export function addSubtitleMenuButton(
 
 	return button;
 }
+
+const INFO_COMPONENT_NAME = 'InfoButton';
+
+export interface InfoButtonHandle {
+	el(): Element;
+	setActive(active: boolean): void;
+}
+
+function registerInfoComponent(): void {
+	if (videojs.getComponent(INFO_COMPONENT_NAME)) return;
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const ButtonBase = videojs.getComponent('Button') as any;
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	class InfoButton extends ButtonBase {
+		constructor(menuPlayer: any, options: any) {
+			super(menuPlayer, options);
+			this.controlText('Playback details');
+			this.addClass('vjs-info-control');
+
+			const iconSpan = document.createElement('span');
+			iconSpan.className = 'vjs-icon-placeholder';
+			iconSpan.innerHTML = `
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="vjs-svg-icon">
+					<circle cx="12" cy="12" r="10"></circle>
+					<path d="M12 16v-4"></path>
+					<path d="M12 8h.01"></path>
+				</svg>
+			`;
+			this.el().appendChild(iconSpan);
+		}
+
+		handleClick(): void {
+			this.options_.onClick?.();
+		}
+
+		setActive(active: boolean): void {
+			if (active) {
+				this.addClass('vjs-info-active');
+			} else {
+				this.removeClass('vjs-info-active');
+			}
+		}
+	}
+
+	videojs.registerComponent(
+		INFO_COMPONENT_NAME,
+		InfoButton as unknown as Parameters<typeof videojs.registerComponent>[1]
+	);
+}
+
+/**
+ * Add an info button to a player's control bar just before fullscreen.
+ */
+export function addInfoButton(
+	player: Player,
+	onClick: () => void
+): InfoButtonHandle {
+	registerInfoComponent();
+	const controlBar = (player as unknown as { controlBar: ControlBarHandle }).controlBar;
+	const button = controlBar.addChild(INFO_COMPONENT_NAME, {
+		onClick
+	}) as unknown as InfoButtonHandle;
+
+	const fullscreen = controlBar.getChild('fullscreenToggle');
+	if (fullscreen) {
+		controlBar.el().insertBefore(button.el(), fullscreen.el());
+	}
+
+	return button;
+}
