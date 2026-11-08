@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Job
 from app.services.jobs.types import JobCancelled, JobContext
+from app.services.metadata.credentials import apply_credential_overrides
 from app.services.metadata.factory import build_metadata_matcher
 from app.services.metadata.matching import MetadataMatcher
 from app.services.scanner.scanner import LibraryScanner, ScanCancelled
@@ -70,6 +71,10 @@ async def scan_library_job(context: JobContext) -> dict[str, Any]:
             raise ValueError("scan.library targets must be a list of paths")
         targets = [str(target) for target in raw_targets]
 
+    # The worker is a separate process from the API, so pick up credentials an
+    # administrator saved after startup before building providers.
+    async with context.sessionmaker() as session:
+        await apply_credential_overrides(context.settings, session)
     matcher = build_metadata_matcher(context.settings, context.sessionmaker)
     scanner = build_scanner(context, matcher)
     try:

@@ -3642,6 +3642,102 @@
         "title": "MediaTokenResponse",
         "type": "object"
       },
+      "MetadataProviderStatus": {
+        "additionalProperties": false,
+        "description": "Non-secret view of one online metadata provider's configuration.",
+        "properties": {
+          "api_key_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Field"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "docs_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Docs Url"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "key_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Hint"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "requires_api_key": {
+            "title": "Requires Api Key",
+            "type": "boolean"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "description",
+          "requires_api_key",
+          "configured",
+          "enabled",
+          "source"
+        ],
+        "title": "MetadataProviderStatus",
+        "type": "object"
+      },
+      "MetadataSettingsResponse": {
+        "additionalProperties": false,
+        "description": "Online metadata provider credentials and availability.",
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataProviderStatus"
+            },
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "providers"
+        ],
+        "title": "MetadataSettingsResponse",
+        "type": "object"
+      },
       "MusicMostPlayedResponse": {
         "properties": {
           "albums": {
@@ -6322,6 +6418,38 @@
         "title": "UpdateCollectionRequest",
         "type": "object"
       },
+      "UpdateMetadataSettingsRequest": {
+        "additionalProperties": false,
+        "description": "Update provider API keys.\n\nOmitted fields are left unchanged. An empty string removes the stored\noverride, so the provider has no key configured.",
+        "properties": {
+          "google_books_api_key": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Google Books Api Key"
+          },
+          "tmdb_api_key": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Api Key"
+          }
+        },
+        "title": "UpdateMetadataSettingsRequest",
+        "type": "object"
+      },
       "UpdatePlaylistRequest": {
         "additionalProperties": false,
         "description": "Update playlist metadata.",
@@ -7454,6 +7582,78 @@
           }
         ],
         "summary": "List Admin Logs",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/metadata/settings": {
+      "get": {
+        "description": "Return configured online metadata providers without exposing API keys.",
+        "operationId": "get_metadata_settings_api_v1_admin_metadata_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Metadata Settings",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "description": "Persist API keys for online metadata providers.\n\nValues are applied to the live settings object immediately and stored in the\n``settings`` table so the worker picks them up on its next scan.",
+        "operationId": "update_metadata_settings_api_v1_admin_metadata_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMetadataSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Metadata Settings",
         "tags": [
           "admin"
         ]

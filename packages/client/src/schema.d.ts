@@ -204,6 +204,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/metadata/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Metadata Settings
+         * @description Return configured online metadata providers without exposing API keys.
+         */
+        get: operations["get_metadata_settings_api_v1_admin_metadata_settings_get"];
+        /**
+         * Update Metadata Settings
+         * @description Persist API keys for online metadata providers.
+         *
+         *     Values are applied to the live settings object immediately and stored in the
+         *     ``settings`` table so the worker picks them up on its next scan.
+         */
+        put: operations["update_metadata_settings_api_v1_admin_metadata_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/restore": {
         parameters: {
             query?: never;
@@ -3519,6 +3546,40 @@ export interface components {
             /** Token */
             token: string;
         };
+        /**
+         * MetadataProviderStatus
+         * @description Non-secret view of one online metadata provider's configuration.
+         */
+        MetadataProviderStatus: {
+            /** Api Key Field */
+            api_key_field?: string | null;
+            /** Configured */
+            configured: boolean;
+            /** Description */
+            description: string;
+            /** Docs Url */
+            docs_url?: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Key Hint */
+            key_hint?: string | null;
+            /** Label */
+            label: string;
+            /** Name */
+            name: string;
+            /** Requires Api Key */
+            requires_api_key: boolean;
+            /** Source */
+            source: string;
+        };
+        /**
+         * MetadataSettingsResponse
+         * @description Online metadata provider credentials and availability.
+         */
+        MetadataSettingsResponse: {
+            /** Providers */
+            providers: components["schemas"]["MetadataProviderStatus"][];
+        };
         /** MusicMostPlayedResponse */
         MusicMostPlayedResponse: {
             /** Albums */
@@ -4500,6 +4561,19 @@ export interface components {
             tmdb_id?: number | null;
         };
         /**
+         * UpdateMetadataSettingsRequest
+         * @description Update provider API keys.
+         *
+         *     Omitted fields are left unchanged. An empty string removes the stored
+         *     override, so the provider has no key configured.
+         */
+        UpdateMetadataSettingsRequest: {
+            /** Google Books Api Key */
+            google_books_api_key?: string | null;
+            /** Tmdb Api Key */
+            tmdb_api_key?: string | null;
+        };
+        /**
          * UpdatePlaylistRequest
          * @description Update playlist metadata.
          */
@@ -4990,6 +5064,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LogEntryResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_metadata_settings_api_v1_admin_metadata_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataSettingsResponse"];
+                };
+            };
+        };
+    };
+    update_metadata_settings_api_v1_admin_metadata_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMetadataSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataSettingsResponse"];
                 };
             };
             /** @description Validation Error */

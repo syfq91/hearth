@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
-	import { LayoutDashboard, FolderTree, Users, FileQuestion, Cpu } from '@lucide/svelte';
+	import { LayoutDashboard, FolderTree, Users, FileQuestion, Cpu, KeyRound } from '@lucide/svelte';
 
 	let { children }: LayoutProps = $props();
 
@@ -29,6 +29,9 @@
 	</a>
 	<a href="/admin/unmatched" aria-current={isActive('/admin/unmatched') ? 'page' : undefined}>
 		<FileQuestion size={15} /> <span>Unmatched</span>
+	</a>
+	<a href="/admin/metadata" aria-current={isActive('/admin/metadata') ? 'page' : undefined}>
+		<KeyRound size={15} /> <span>Metadata</span>
 	</a>
 	<a
 		href="/admin/transcoding"

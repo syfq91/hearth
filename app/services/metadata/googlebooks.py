@@ -70,6 +70,9 @@ class GoogleBooksProvider(MetadataProvider):
                 q += f"+inauthor:{author}"
 
         params = {"q": q, "maxResults": "10"}
+        api_key = self.settings.google_books_api_key
+        if api_key:
+            params["key"] = api_key
         try:
             res = await self._client.get(f"{self.base_url}/volumes", params=params)
             if res.status_code != 200:
@@ -115,8 +118,11 @@ class GoogleBooksProvider(MetadataProvider):
         if not self.enabled:
             return None
 
+        params = {}
+        if self.settings.google_books_api_key:
+            params["key"] = self.settings.google_books_api_key
         try:
-            res = await self._client.get(f"{self.base_url}/volumes/{book_id}")
+            res = await self._client.get(f"{self.base_url}/volumes/{book_id}", params=params)
             if res.status_code == 404:
                 return None
             if res.status_code != 200:

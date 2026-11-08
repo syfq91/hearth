@@ -65,12 +65,19 @@ without it, existing sessions and media URLs become invalid after a restore.
 | `HEARTH_MUSICBRAINZ_ENABLED` | `true` | Artist and album metadata from MusicBrainz |
 | `HEARTH_OPENLIBRARY_ENABLED` | `true` | Primary book metadata provider |
 | `HEARTH_GOOGLE_BOOKS_ENABLED` | `true` | Book metadata fallback |
+| `HEARTH_GOOGLE_BOOKS_API_KEY` | unset | Optional Google Books API key; raises the anonymous request quota |
 | `HEARTH_LISTENBRAINZ_ENABLED` | `true` | ListenBrainz scrobbling support |
 
 Local `.nfo` files, `metadata.opf` files, embedded tags, and sidecar artwork are
 always preferred over online providers. Artwork downloads are restricted to an
 allowlist (`HEARTH_IMAGE_ALLOWED_HOSTS`) and capped by size; see
 `app/core/config.py` for the image and provider timeouts.
+
+The **Admin → Metadata** tab can store TMDB and Google Books API keys in the
+database. A value saved there overrides the corresponding `HEARTH_*` variable
+and is picked up by the worker on its next scan, so a restart is not required.
+Clearing a key in the UI removes it entirely rather than falling back to the
+environment. MusicBrainz and Open Library do not require API keys.
 
 ## Playback and transcoding
 

@@ -46,6 +46,8 @@ POLICY: dict[tuple[str, str], str] = {
     ("POST", "/api/v1/admin/libraries/scan"): "admin",
     ("POST", "/api/v1/admin/libraries/{library_id}/scan"): "admin",
     ("GET", "/api/v1/admin/logs"): "admin",
+    ("GET", "/api/v1/admin/metadata/settings"): "admin",
+    ("PUT", "/api/v1/admin/metadata/settings"): "admin",
     ("POST", "/api/v1/admin/restore"): "admin",
     ("GET", "/api/v1/admin/system/info"): "admin",
     ("GET", "/api/v1/admin/transcoding/capabilities"): "admin",

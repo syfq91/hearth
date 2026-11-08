@@ -135,6 +135,7 @@ class Settings(BaseSettings):
     openlibrary_base_url: str = "https://openlibrary.org"
     openlibrary_covers_base_url: str = "https://covers.openlibrary.org"
     google_books_enabled: bool = True
+    google_books_api_key: str | None = None
     google_books_base_url: str = "https://www.googleapis.com/books/v1"
 
     # Images

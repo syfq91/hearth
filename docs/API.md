@@ -321,6 +321,7 @@ When `method` is `transcode_hls` or `remux_hls`:
 | | `/api/v1/admin/backup` | POST | Admin | Create online SQLite backup archive |
 | | `/api/v1/admin/restore` | POST | Admin | Restore database from backup archive |
 | | `/api/v1/admin/logs` | GET | Admin | Tail structured server logs |
+| | `/api/v1/admin/metadata/settings` | GET, PUT | Admin | Read or update online metadata provider API keys |
 | | `/api/v1/admin/transcoding/capabilities` | GET | Admin | Inspect hardware VAAPI capabilities |
 | | `/api/v1/admin/transcoding/sessions` | GET | Admin | Inspect active transcoding sessions |
 

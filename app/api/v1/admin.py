@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.api.v1.jobs import JobResponse, cancel_job
+from app.core.config import Settings
 from app.core.deps import RequireAdmin, SettingsDep
 from app.core.errors import ForbiddenError, NotFoundError, ValidationError
 from app.core.logging import get_recent_logs
@@ -26,6 +27,13 @@ from app.db.session import SessionDep
 from app.services.audit import record_audit
 from app.services.backup import create_backup, restore_backup
 from app.services.media.titles import sort_title
+from app.services.metadata.credentials import (
+    PROVIDER_CREDENTIALS,
+    load_credential_overrides,
+    mask_credential,
+    resolve_credential,
+    save_credential_overrides,
+)
 from app.services.scanner.jobs import enqueue_scan
 from app.services.transcode.capabilities import (
     ServerTranscodeCapabilities,
@@ -194,6 +202,44 @@ class TranscodeStopResponse(BaseModel):
 
     status: str
     session_id: str
+
+
+class MetadataProviderStatus(BaseModel):
+    """Non-secret view of one online metadata provider's configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    label: str
+    description: str
+    requires_api_key: bool
+    configured: bool
+    enabled: bool
+    api_key_field: str | None = None
+    key_hint: str | None = None
+    source: str
+    docs_url: str | None = None
+
+
+class MetadataSettingsResponse(BaseModel):
+    """Online metadata provider credentials and availability."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    providers: list[MetadataProviderStatus]
+
+
+class UpdateMetadataSettingsRequest(BaseModel):
+    """Update provider API keys.
+
+    Omitted fields are left unchanged. An empty string removes the stored
+    override, so the provider has no key configured.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    tmdb_api_key: str | None = Field(default=None, max_length=512)
+    google_books_api_key: str | None = Field(default=None, max_length=512)
 
 
 @router.get("/audit", response_model=list[AuditEntry])
@@ -501,6 +547,88 @@ async def update_transcode_settings(
         audio_bitrate_kbps=settings.transcode_audio_bitrate_kbps,
         default_max_bitrate=getattr(settings, "default_max_bitrate", None),
     )
+
+
+# ------------------------------------------------------------- metadata credentials
+
+
+def _metadata_settings_response(
+    settings: Settings,
+    overrides: dict[str, str | None],
+) -> MetadataSettingsResponse:
+    providers: list[MetadataProviderStatus] = []
+    for credential in PROVIDER_CREDENTIALS:
+        value, source = resolve_credential(settings, overrides, credential)
+        if credential.enabled_attr is not None:
+            enabled = bool(getattr(settings, credential.enabled_attr, False))
+        else:
+            enabled = bool(value)
+        providers.append(
+            MetadataProviderStatus(
+                name=credential.name,
+                label=credential.label,
+                description=credential.description,
+                requires_api_key=credential.requires_api_key,
+                configured=bool(value),
+                enabled=enabled,
+                api_key_field=credential.settings_attr,
+                key_hint=mask_credential(value),
+                source=source,
+                docs_url=credential.docs_url,
+            )
+        )
+    return MetadataSettingsResponse(providers=providers)
+
+
+@router.get("/metadata/settings", response_model=MetadataSettingsResponse)
+async def get_metadata_settings(
+    _actor: RequireAdmin,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> MetadataSettingsResponse:
+    """Return configured online metadata providers without exposing API keys."""
+    overrides = await load_credential_overrides(session)
+    return _metadata_settings_response(settings, overrides)
+
+
+@router.put("/metadata/settings", response_model=MetadataSettingsResponse)
+async def update_metadata_settings(
+    body: UpdateMetadataSettingsRequest,
+    actor: RequireAdmin,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> MetadataSettingsResponse:
+    """Persist API keys for online metadata providers.
+
+    Values are applied to the live settings object immediately and stored in the
+    ``settings`` table so the worker picks them up on its next scan.
+    """
+    changes: dict[str, str | None] = {}
+    for attr, raw in body.model_dump(exclude_unset=True).items():
+        if raw is None:
+            continue
+        value = raw.strip()
+        changes[attr] = value or None
+
+    if not changes:
+        raise ValidationError("No metadata credentials supplied", code="no_changes")
+
+    await save_credential_overrides(session, changes)
+    for attr, value in changes.items():
+        setattr(settings, attr, value)
+
+    record_audit(
+        session,
+        actor_id=actor.id,
+        action="metadata.settings_updated",
+        target_type="system",
+        target_id="metadata",
+        details={"fields": sorted(changes)},
+    )
+    await session.commit()
+
+    overrides = await load_credential_overrides(session)
+    return _metadata_settings_response(settings, overrides)
 
 
 # ------------------------------------------------------------- transcode diagnostics

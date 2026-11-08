@@ -667,3 +667,18 @@
   - Adding AMD ROCm/AMF pipelines (substantially bloats image size and introduces external driver complexities).
 
 
+## ADR 065: Database-Overridden Metadata Provider API Keys
+
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:** Online metadata providers are configured through environment variables, which forces operators to edit Compose files and restart both the API and worker to change a TMDB or Google Books key. The admin UI already exposes runtime transcoding settings, and the `settings` key/value table exists for forward-compatible runtime configuration.
+- **Decision:**
+  - Add `GET` and `PUT /api/v1/admin/metadata/settings`, restricted to administrators, that list every online metadata provider with a non-secret status (`configured`, masked hint, source, availability) and accept API keys for TMDB and Google Books.
+  - Persist overrides in the existing `settings` table under a `metadata.` prefix, JSON-encoded so an explicit `null` can mean "cleared" rather than "fall back to the environment".
+  - Apply stored overrides onto the shared `Settings` object at API startup and again before each scan job builds its metadata matcher. The API applies a saved value immediately, and the separate worker process picks it up on the next scan without a restart.
+  - Never return raw keys: responses only expose whether a key is configured and the last four characters.
+- **Alternatives Considered:**
+  - Editing the Compose environment and restarting both processes (poor operator experience, requires host access).
+  - Storing keys in a new dedicated table or secrets file (duplicates the existing `settings` table and complicates backup/restore).
+  - Keeping keys only in process memory (lost on restart, and the worker would still miss updates from the API process).
+

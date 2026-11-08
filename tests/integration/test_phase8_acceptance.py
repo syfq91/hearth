@@ -70,6 +70,8 @@ ENDPOINT_POLICIES: dict[tuple[str, str], EndpointPolicy] = {
     ("POST", "/api/v1/admin/restore"): EndpointPolicy("admin"),
     ("GET", "/api/v1/admin/system/info"): EndpointPolicy("admin"),
     ("GET", "/api/v1/admin/logs"): EndpointPolicy("admin"),
+    ("GET", "/api/v1/admin/metadata/settings"): EndpointPolicy("admin"),
+    ("PUT", "/api/v1/admin/metadata/settings"): EndpointPolicy("admin"),
     ("GET", "/api/v1/admin/filesystem"): EndpointPolicy("admin"),
     ("GET", "/api/v1/admin/unmatched"): EndpointPolicy("admin"),
     ("POST", "/api/v1/admin/items/{item_id}/rematch"): EndpointPolicy("admin"),

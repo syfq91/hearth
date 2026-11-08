@@ -177,6 +177,62 @@ async def test_admin_transcode_settings(
 
 
 @pytest.mark.asyncio
+async def test_admin_metadata_credentials(
+    api_client: httpx.AsyncClient,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from app.db.models import Setting
+
+    admin_tokens = await _setup(api_client)
+    admin_hdr = _bearer(admin_tokens)
+
+    # 1. Every online provider is listed without leaking a key.
+    res = await api_client.get("/api/v1/admin/metadata/settings", headers=admin_hdr)
+    assert res.status_code == 200
+    providers = {entry["name"]: entry for entry in res.json()["providers"]}
+    assert set(providers) == {"tmdb", "musicbrainz", "openlibrary", "googlebooks"}
+    assert providers["tmdb"]["requires_api_key"] is True
+    assert providers["tmdb"]["configured"] is False
+    assert providers["musicbrainz"]["requires_api_key"] is False
+
+    # 2. Saving a key persists it and returns only a masked hint.
+    secret = "abcdef0123456789"
+    put_res = await api_client.put(
+        "/api/v1/admin/metadata/settings",
+        headers=admin_hdr,
+        json={"tmdb_api_key": secret, "google_books_api_key": "  "},
+    )
+    assert put_res.status_code == 200
+    updated = {entry["name"]: entry for entry in put_res.json()["providers"]}
+    assert updated["tmdb"]["configured"] is True
+    assert updated["tmdb"]["source"] == "database"
+    assert updated["tmdb"]["key_hint"] == "••••6789"
+    assert secret not in put_res.text
+    assert updated["googlebooks"]["configured"] is False
+
+    async with db_sessionmaker() as session:
+        row = await session.get(Setting, "metadata.tmdb_api_key")
+        assert row is not None
+        assert secret in row.value
+        cleared = await session.get(Setting, "metadata.google_books_api_key")
+        assert cleared is not None and cleared.value == "null"
+
+    # 3. The value survives a fresh read and can be cleared with an empty string.
+    get_res = await api_client.get("/api/v1/admin/metadata/settings", headers=admin_hdr)
+    assert {e["name"]: e for e in get_res.json()["providers"]}["tmdb"]["configured"] is True
+
+    clear_res = await api_client.put(
+        "/api/v1/admin/metadata/settings",
+        headers=admin_hdr,
+        json={"tmdb_api_key": ""},
+    )
+    assert clear_res.status_code == 200
+    cleared_tmdb = {e["name"]: e for e in clear_res.json()["providers"]}["tmdb"]
+    assert cleared_tmdb["configured"] is False
+    assert cleared_tmdb["key_hint"] is None
+
+
+@pytest.mark.asyncio
 async def test_admin_browse_filesystem(
     api_client: httpx.AsyncClient,
     tmp_path: pytest.TempPathFactory,

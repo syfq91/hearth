@@ -31,6 +31,8 @@ def db_settings(tmp_path: Path) -> Settings:
         secret_key="test-secret-key",
         job_poll_interval=0.05,
         embed_worker=False,
+        tmdb_api_key=None,
+        google_books_api_key=None,
     )
 
 
