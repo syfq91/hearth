@@ -821,6 +821,9 @@
 	}
 
 	:global(.video-container .vjs-control-bar) {
+		/* Video.js defaults to 3em; double it so the bar is easier to tap. */
+		height: 6em;
+		align-items: center;
 		background-color: rgba(14, 17, 22, 0.85);
 		backdrop-filter: blur(8px);
 		z-index: 2;
@@ -876,7 +879,8 @@
 	}
 
 	:global(.video-container .vjs-menu-button-popup .vjs-menu) {
-		margin-bottom: 1.5em;
+		/* Clear the doubled (6em) control bar. */
+		margin-bottom: 6em;
 	}
 
 	:global(.video-container .vjs-menu-content) {
