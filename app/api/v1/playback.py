@@ -351,7 +351,7 @@ async def playback_info(
         hls_url=f"/api/v1/hls/{transcode_session.id}/master.m3u8?token={encoded_token}",
         session_id=transcode_session.id,
         file=file_resp,
-        subtitles=subtitles if plan.subtitle_action == "sidecar_vtt" else [],
+        subtitles=subtitles,
         audio_streams=audio_streams,
         embedded_subtitles=embedded_subtitles,
         reasons=plan.reasons,

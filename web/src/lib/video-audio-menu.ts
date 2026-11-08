@@ -100,6 +100,106 @@ export function addAudioMenuButton(
 	const subsCaps = controlBar.getChild('subsCapsButton');
 	if (subsCaps) {
 		controlBar.el().insertBefore(button.el(), subsCaps.el());
+	} else {
+		const fullscreen = controlBar.getChild('fullscreenToggle');
+		if (fullscreen) {
+			controlBar.el().insertBefore(button.el(), fullscreen.el());
+		}
+	}
+
+	return button;
+}
+
+export type SubtitleMenuChoice = { id: string; label: string };
+
+export interface SubtitleMenuHandle {
+	el(): Element;
+	setChoices(choices: SubtitleMenuChoice[], selectedId: string): void;
+}
+
+const SUBTITLE_COMPONENT_NAME = 'SubtitleMenuButton';
+
+function registerSubtitleComponent(): void {
+	if (videojs.getComponent(SUBTITLE_COMPONENT_NAME)) return;
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const MenuButtonBase = videojs.getComponent('MenuButton') as any;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const MenuItemBase = videojs.getComponent('MenuItem') as any;
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	class SubtitleMenuChoiceItem extends MenuItemBase {
+		constructor(menuPlayer: any, options: any) {
+			super(menuPlayer, options);
+			this.on('click', () => {
+				options.onSelect?.(options.choiceId);
+			});
+		}
+	}
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	class SubtitleMenuButton extends MenuButtonBase {
+		constructor(menuPlayer: any, options: any) {
+			super(menuPlayer, options);
+			this.controlText('Subtitles');
+			// Reuses the built-in subtitles/CC icon from video-js.css
+			this.addClass('vjs-subs-caps-button');
+		}
+
+		createItems(): unknown[] {
+			const choices = (this.options_.choices ?? []) as SubtitleMenuChoice[];
+			if (choices.length === 0) return [];
+			const selected = (this.options_.selectedId ?? '') as string;
+			return choices.map(
+				(choice) =>
+					new SubtitleMenuChoiceItem(this.player_, {
+						label: choice.label,
+						choiceId: choice.id,
+						onSelect: this.options_.onSelect,
+						selected: choice.id === selected,
+						selectable: true,
+						multiSelectable: false
+					})
+			);
+		}
+
+		setChoices(choices: SubtitleMenuChoice[], selectedId: string): void {
+			this.options_.choices = choices;
+			this.options_.selectedId = selectedId;
+			if (choices.length <= 1) {
+				this.hide();
+			} else {
+				this.show();
+			}
+			this.update();
+		}
+	}
+
+	videojs.registerComponent(
+		SUBTITLE_COMPONENT_NAME,
+		SubtitleMenuButton as unknown as Parameters<typeof videojs.registerComponent>[1]
+	);
+}
+
+/**
+ * Add the subtitle track menu to a player's control bar, just before
+ * fullscreen, and return a handle for updating its choices.
+ */
+export function addSubtitleMenuButton(
+	player: Player,
+	onSelect: (id: string) => void
+): SubtitleMenuHandle {
+	registerSubtitleComponent();
+	const controlBar = (player as unknown as { controlBar: ControlBarHandle }).controlBar;
+	const button = controlBar.addChild(SUBTITLE_COMPONENT_NAME, {
+		choices: [],
+		selectedId: '',
+		onSelect
+	}) as unknown as SubtitleMenuHandle;
+
+	const fullscreen = controlBar.getChild('fullscreenToggle');
+	if (fullscreen) {
+		controlBar.el().insertBefore(button.el(), fullscreen.el());
 	}
 
 	return button;

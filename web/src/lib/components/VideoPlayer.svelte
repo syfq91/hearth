@@ -5,7 +5,13 @@
 	import JASSUB from 'jassub';
 	import { ArrowLeft, Info } from '@lucide/svelte';
 	import { api } from '../api/client';
-	import { addAudioMenuButton, type AudioMenuHandle } from '../video-audio-menu';
+	import {
+		addAudioMenuButton,
+		addSubtitleMenuButton,
+		type AudioMenuHandle,
+		type SubtitleMenuChoice,
+		type SubtitleMenuHandle
+	} from '../video-audio-menu';
 	import type { PlaybackInfoResponse } from '../api/types';
 
 	interface Props {
@@ -421,51 +427,6 @@
 			return;
 		}
 
-		syncingTracks = true;
-		try {
-			// Clear previous remote text tracks
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const remoteTracks = player.remoteTextTracks() as any;
-			while (remoteTracks && remoteTracks.length > 0) {
-				player.removeRemoteTextTrack(remoteTracks[0]);
-			}
-
-			// Add external subtitles
-			for (const track of response.subtitles ?? []) {
-				player.addRemoteTextTrack(
-					{
-						id: `ext:${track.id}`,
-						kind: 'subtitles',
-						src: track.url,
-						srclang: track.language ?? '',
-						label: track.name || track.language || 'Subtitles'
-					},
-					false
-				);
-			}
-
-			// Add embedded subtitles
-			for (const stream of response.embedded_subtitles ?? []) {
-				player.addRemoteTextTrack(
-					{
-						id: `emb:${stream.index}`,
-						kind: 'subtitles',
-						srclang: stream.language ?? '',
-						label: `${stream.title ?? stream.language ?? 'Subtitle'} (embedded)`
-					},
-					false
-				);
-			}
-
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const tracks = player.textTracks() as any;
-			for (let i = 0; i < tracks.length; i += 1) {
-				tracks[i].mode = tracks[i].id === subtitleChoice ? 'showing' : 'disabled';
-			}
-		} finally {
-			syncingTracks = false;
-		}
-
 		player.src({
 			src: source,
 			type: getSourceType(response.mode, source)
@@ -483,6 +444,7 @@
 	}
 
 	let audioMenu: AudioMenuHandle | null = null;
+	let subtitleMenu: SubtitleMenuHandle | null = null;
 
 	function initPlayer(): void {
 		if (!containerEl || player) return;
@@ -511,7 +473,7 @@
 				timeDivider: true,
 				durationDisplay: true,
 				remainingTimeDisplay: false,
-				subsCapsButton: true
+				subsCapsButton: false
 			},
 			html5: {
 				vhs: {
@@ -524,6 +486,10 @@
 
 		audioMenu = addAudioMenuButton(instance, (index) => {
 			audioTrackIndex = index;
+		});
+
+		subtitleMenu = addSubtitleMenuButton(instance, (choiceId) => {
+			subtitleChoice = choiceId;
 		});
 
 		instance.on('timeupdate', handleTimeUpdate);
@@ -568,22 +534,7 @@
 			ql.on('removequalitylevel', updateQualityLevels);
 		}
 
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const textTracks = instance.textTracks() as any;
-		textTracks?.on('change', () => {
-			if (syncingTracks) return;
-			let activeId: string | null = null;
-			for (let i = 0; i < textTracks.length; i += 1) {
-				if (textTracks[i].mode === 'showing') {
-					activeId = textTracks[i].id;
-					break;
-				}
-			}
-			const targetChoice = activeId ?? '';
-			if (subtitleChoice !== targetChoice) {
-				subtitleChoice = targetChoice;
-			}
-		});
+
 
 		if (!focusTaken) {
 			focusTaken = true;
@@ -680,11 +631,14 @@
 				player = null;
 				videoEl = null;
 				audioMenu = null;
+				subtitleMenu = null;
 			}
 		};
 	});
 
 	const availableAudio = $derived(info?.audio_streams ?? []);
+	const availableSubtitles = $derived(info?.subtitles ?? []);
+	const availableEmbeddedSubtitles = $derived(info?.embedded_subtitles ?? []);
 
 	// Keep the control-bar audio menu in sync with the current playback plan.
 	$effect(() => {
@@ -703,6 +657,33 @@
 				: [],
 			selected
 		);
+	});
+
+	// Keep the control-bar subtitle menu in sync with available subtitles.
+	$effect(() => {
+		const extSubs = availableSubtitles;
+		const embSubs = availableEmbeddedSubtitles;
+		const currentSelected = subtitleChoice;
+		if (!subtitleMenu) return;
+
+		if (extSubs.length === 0 && embSubs.length === 0) {
+			subtitleMenu.setChoices([], '');
+			return;
+		}
+
+		const choices: SubtitleMenuChoice[] = [
+			{ id: '', label: 'Off' },
+			...extSubs.map((track) => ({
+				id: `ext:${track.id}`,
+				label: track.name || track.language || 'Subtitles'
+			})),
+			...embSubs.map((stream) => ({
+				id: `emb:${stream.index}`,
+				label: `${stream.title ?? stream.language ?? 'Subtitle'} (embedded)`
+			}))
+		];
+
+		subtitleMenu.setChoices(choices, currentSelected);
 	});
 </script>
 
