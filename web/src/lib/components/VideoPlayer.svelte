@@ -858,6 +858,35 @@
 		z-index: 2;
 	}
 
+	:global(.video-container .vjs-control-bar .vjs-control .vjs-button) {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	:global(.video-container .vjs-control-bar .vjs-button > .vjs-icon-placeholder:before) {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		line-height: 1;
+	}
+
+	:global(.video-container .vjs-control-bar .vjs-playback-rate .vjs-playback-rate-value) {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		line-height: 1;
+	}
+
+	:global(.video-container .vjs-control-bar .vjs-volume-panel) {
+		display: flex;
+		align-items: center;
+	}
+
+	:global(.video-container .vjs-control-bar .vjs-volume-control) {
+		align-items: center;
+	}
+
 	:global(.video-container .video-js:not(.vjs-live) .vjs-current-time),
 	:global(.video-container .video-js:not(.vjs-live) .vjs-time-divider),
 	:global(.video-container .video-js:not(.vjs-live) .vjs-duration) {
