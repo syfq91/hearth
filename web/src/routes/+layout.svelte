@@ -437,11 +437,13 @@
 	}
 
 	.topbar {
+		height: 60px;
+		box-sizing: border-box;
 		display: flex;
 		flex-wrap: nowrap;
 		align-items: center;
-		gap: 0.75rem 1rem;
-		padding: 0.75rem 1.25rem;
+		gap: 1rem;
+		padding: 0 1.25rem;
 		background: var(--surface);
 		border-bottom: 1px solid var(--border);
 		position: sticky;
@@ -726,7 +728,8 @@
 
 	@media (max-width: 720px) {
 		.topbar {
-			padding: 0.6rem 0.75rem;
+			height: 60px;
+			padding: 0 0.75rem;
 			gap: 0.5rem;
 		}
 
@@ -742,7 +745,8 @@
 
 	@media (max-width: 600px) {
 		.topbar {
-			padding: 0.5rem 0.6rem;
+			height: 60px;
+			padding: 0 0.6rem;
 			gap: 0.35rem;
 		}
 

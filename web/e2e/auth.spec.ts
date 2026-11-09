@@ -40,7 +40,7 @@ test('sign in and out through the UI', async ({ page, request }) => {
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
 	await expect(page).toHaveURL(/\/$/);
-	await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeAttached();
 	// The topbar shows the signed-in user with their role badge.
 	await expect(page.getByRole('link', { name: new RegExp(ADMIN_USERNAME) })).toBeVisible();
 

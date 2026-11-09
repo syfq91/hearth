@@ -89,7 +89,7 @@
 	<title>Home · Hearth</title>
 </svelte:head>
 
-<h1>Home</h1>
+<h1 class="visually-hidden">Home</h1>
 
 {#await data.home}
 	<p class="muted" role="status">Loading…</p>

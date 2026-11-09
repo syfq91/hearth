@@ -32,7 +32,7 @@ test('first-time user sets up Hearth and watches a video', async ({ page, reques
 	await page.locator('input[name="confirm"]').fill(ADMIN_PASSWORD);
 	await page.getByRole('button', { name: 'Create admin account' }).click();
 	await expect(page).toHaveURL(/\/$/);
-	await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeAttached();
 
 	// 3. The empty home page points at library setup.
 	await page.getByRole('link', { name: 'Set up libraries' }).click();
