@@ -18,6 +18,8 @@
 			('series_title' in item && typeof item.series_title === 'string' && item.series_title.length > 0)
 	);
 
+	const episodeCount = $derived('episode_count' in item ? item.episode_count : null);
+
 	const seriesTitle = $derived.by(() => {
 		if ('series_title' in item && item.series_title) return item.series_title;
 		return null;
@@ -51,11 +53,15 @@
 	});
 
 	const poster = $derived.by(() => {
+		if ('series_poster' in item && item.series_poster) return item.series_poster;
 		if (!isEpisode) return (item as S['ItemSummary']).poster;
 		if ('still' in item && item.still) return item.still;
-		if ('series_poster' in item && item.series_poster) return item.series_poster;
 		return (item as S['ItemSummary']).poster;
 	});
+
+	const aspect = $derived(
+		poster?.kind === 'still' || poster?.kind === 'thumbnail' ? '16 / 9' : '2 / 3'
+	);
 
 	const posterHref = $derived.by(() => {
 		if (isEpisode) return `/watch/${item.id}`;
@@ -67,6 +73,9 @@
 	});
 
 	const subtitle = $derived.by(() => {
+		if (episodeCount != null && episodeCount > 1) {
+			return `${episodeCount} new episodes`;
+		}
 		if (isEpisode) return null;
 		const card = item as S['ItemSummary'];
 		// Remove "movie" and "episode" label on the card
@@ -103,7 +112,12 @@
 		href={posterHref}
 		aria-label={isEpisode ? (seriesTitle ? `Play ${seriesTitle}` : `Play ${item.title}`) : item.title}
 	>
-		<Poster image={poster} alt="" aspect={isEpisode ? '16 / 9' : '2 / 3'} />
+		<Poster image={poster} alt="" {aspect} />
+		{#if episodeCount != null && episodeCount > 1}
+			<div class="badge" aria-label="{episodeCount} new episodes">
+				{episodeCount}
+			</div>
+		{/if}
 		{#if percent > 0 && !watched}
 			<div class="progress" role="presentation">
 				<span style:width="{percent}%"></span>
@@ -149,6 +163,24 @@
 	.link:hover {
 		text-decoration: none;
 		filter: brightness(1.08);
+	}
+
+	.badge {
+		position: absolute;
+		top: 0.4rem;
+		right: 0.4rem;
+		background: var(--accent);
+		color: var(--accent-contrast);
+		font-size: 0.75rem;
+		font-weight: 700;
+		min-width: 1.35rem;
+		height: 1.35rem;
+		line-height: 1.35rem;
+		padding: 0 0.35rem;
+		border-radius: 999px;
+		text-align: center;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+		z-index: 2;
 	}
 
 	.text-link {
