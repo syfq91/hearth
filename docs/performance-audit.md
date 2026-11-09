@@ -220,9 +220,11 @@ runs without WAL until the next migration.
 
 ## 2. API & Route Layer
 
-### 2.1 🟠 Home Page Triggers a Waterfall of API Calls
+### 2.1 🟠 Home Page Triggers a Waterfall of API Calls — [RESOLVED]
 
-**Location:** [`web/src/routes/+page.ts` L31–L49](file:///home/syafiq/code/hearth/web/src/routes/+page.ts#L31-L49)
+**Location:** [`web/src/routes/+page.ts` L31–L49](file:///home/syafiq/code/hearth/web/src/routes/+page.ts#L31-L49), [`app/api/v1/home.py`](file:///home/syafiq/code/hearth/app/api/v1/home.py)
+
+*Status: Resolved — added composite `GET /api/v1/home` endpoint returning `continue_watching`, `continue_reading`, `next_up`, `recent_libraries`, and `recent_albums` in a single response, reducing home page network requests from 5+N to 1.*
 
 The home page load function fires 5 parallel API calls:
 
@@ -492,7 +494,9 @@ on the player page, ensure it's behind a dynamic `import()`.
 
 ---
 
-### 4.4 🔵 Home Page Makes 5+N API Calls (Waterfall)
+### 4.4 🔵 Home Page Makes 5+N API Calls (Waterfall) — [RESOLVED]
+
+*Status: Resolved — resolved by §2.1 composite `/home` endpoint and `web/src/routes/+page.ts` single-flight fetch.*
 
 See §2.1 — the frontend issue mirrors the backend recommendation. From the
 client's perspective:
@@ -583,7 +587,7 @@ the connection pragmas for future-proofing.
 | 1.6 | 🟡 Medium | API | Per-card `session.get()` in recently-added loop | ✅ Resolved |
 | 1.7 | 🔵 Low | API | `_book_folders()` materializes all books in memory | Medium |
 | 1.8 | ⚪ Info | DB | WAL set only in migration | None |
-| 2.1 | 🟠 High | API+FE | Home page = 5+N HTTP requests | Medium |
+| 2.1 | 🟠 High | API+FE | Home page = 5+N HTTP requests | ✅ Resolved |
 | 2.2 | 🟡 Medium | API | `BaseHTTPMiddleware` for all middleware | ✅ Resolved |
 | 2.3 | 🟡 Medium | API | ETag via JSON + SHA-256 per request | ✅ Resolved |
 | 2.4 | 🔵 Low | API | ImagePipeline created per request | ✅ Resolved |
@@ -595,7 +599,7 @@ the connection pragmas for future-proofing.
 | 4.1 | 🟡 Medium | FE | 720 KB reader chunk | Medium |
 | 4.2 | 🟡 Medium | FE | Duplicate lucide icon packages | ✅ Resolved |
 | 4.3 | 🟡 Medium | FE | 464 KB shared chunk | Easy |
-| 4.4 | 🔵 Low | FE | Home page waterfall (mirrors 2.1) | — |
+| 4.4 | 🔵 Low | FE | Home page waterfall (mirrors 2.1) | ✅ Resolved |
 | 4.5 | 🔵 Low | FE | No cache headers on JSON responses | ✅ Resolved |
 | 4.6 | ⚪ Info | FE | ES2019 target includes polyfills | None |
 | 5.1 | 🔵 Low | Infra | Python healthcheck startup cost | None |

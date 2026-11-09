@@ -451,7 +451,35 @@ async def test_favorites_are_per_user_and_ordered_by_recent_change(
     assert await _titles(bob_response) == ["First"]
 
 
+async def test_home_overview_returns_composite_shelves(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    library_a = await _library(db_settings, db_sessionmaker, "Movies", library_type="movie")
+    alice = await _add_user(api_client, admin, "alice", [library_a])
+    alice_id = await _user_id(db_sessionmaker, "alice")
+
+    item1 = await _item(db_sessionmaker, library_a, title="Movie 1", added_at=NOW)
+    await _state(db_sessionmaker, alice_id, item1, position_ms=1000, last_played_at=NOW)
+
+    response = await api_client.get("/api/v1/home", headers=_bearer(alice))
+    assert response.status_code == 200
+    data = response.json()
+    assert "continue_watching" in data
+    assert "continue_reading" in data
+    assert "next_up" in data
+    assert "recent_libraries" in data
+    assert "recent_albums" in data
+    assert len(data["continue_watching"]["items"]) == 1
+    assert data["continue_watching"]["items"][0]["title"] == "Movie 1"
+    assert len(data["recent_libraries"]) == 1
+    assert data["recent_libraries"][0]["library"]["name"].startswith("Movies")
+    assert len(data["recent_libraries"][0]["shelf"]["items"]) == 1
+
+
 async def test_home_shelves_require_authentication(api_client: httpx.AsyncClient) -> None:
-    for path in ("continue-watching", "continue-reading", "recently-added", "favorites"):
-        response = await api_client.get(f"/api/v1/home/{path}")
+    for path in ("", "continue-watching", "continue-reading", "recently-added", "favorites"):
+        response = await api_client.get(f"/api/v1/home/{path}".rstrip("/"))
         assert response.status_code == 401

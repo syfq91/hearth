@@ -1129,6 +1129,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Home Overview
+         * @description Return all home shelves in a single composite response.
+         */
+        get: operations["home_overview_api_v1_home_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/home/continue-reading": {
         parameters: {
             query?: never;
@@ -3147,6 +3167,19 @@ export interface components {
             version: string;
         };
         /**
+         * HomeOverview
+         * @description Composite response containing all home shelves.
+         */
+        HomeOverview: {
+            continue_reading: components["schemas"]["BookShelf"];
+            continue_watching: components["schemas"]["HomeShelf"];
+            next_up: components["schemas"]["NextUpShelf"];
+            /** Recent Albums */
+            recent_albums: components["schemas"]["AlbumSummary"][];
+            /** Recent Libraries */
+            recent_libraries: components["schemas"]["LibraryShelf"][];
+        };
+        /**
          * HomeShelf
          * @description A short, ordered list of items for a home row.
          */
@@ -3451,6 +3484,14 @@ export interface components {
             parent?: string | null;
             /** Path */
             path: string;
+        };
+        /**
+         * LibraryShelf
+         * @description A shelf of recently added items for a specific library.
+         */
+        LibraryShelf: {
+            library: components["schemas"]["LibrarySummary"];
+            shelf: components["schemas"]["HomeShelf"];
         };
         /** LibrarySummary */
         LibrarySummary: {
@@ -6686,6 +6727,37 @@ export interface operations {
                 };
                 content: {
                     "video/iso.segment": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    home_overview_api_v1_home_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeOverview"];
                 };
             };
             /** @description Validation Error */

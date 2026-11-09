@@ -410,11 +410,13 @@ credits chapter. See §4 for the full watch-state contract.
 ### 8.5 Home shelves
 
 ```bash
+curl "$BASE/api/v1/home?limit=20"                      -H "Authorization: Bearer $TOKEN"
 curl "$BASE/api/v1/home/continue-watching?limit=20" -H "Authorization: Bearer $TOKEN"
 curl "$BASE/api/v1/home/continue-reading?limit=20"  -H "Authorization: Bearer $TOKEN"
 curl "$BASE/api/v1/home/recently-added?limit=20"    -H "Authorization: Bearer $TOKEN"
 curl "$BASE/api/v1/home/favorites?limit=20"         -H "Authorization: Bearer $TOKEN"
 ```
 
-Each shelf returns `{"items": [...], "has_more": bool}`. `continue-watching`
+The composite `GET /api/v1/home` returns all shelves in a single response (`continue_watching`, `continue_reading`, `next_up`, `recent_libraries`, `recent_albums`) to eliminate client request waterfalls.
+Individual shelves return `{"items": [...], "has_more": bool}`. `continue-watching`
 and `continue-reading` are per user and ordered by most recent activity.

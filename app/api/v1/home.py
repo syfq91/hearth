@@ -15,6 +15,9 @@ from app.api.v1.items import (
     watch_state_response,
     watch_states,
 )
+from app.api.v1.libraries import LibrarySummary, list_libraries
+from app.api.v1.music import AlbumSummary, recently_added_albums
+from app.api.v1.shows import NextUpShelf, list_next_up
 from app.core.deps import RequireUser, require_library_access
 from app.db.models import (
     Book,
@@ -46,6 +49,52 @@ class BookShelf(BaseModel):
 
     items: list[BookListItem]
     has_more: bool = False
+
+
+class LibraryShelf(BaseModel):
+    """A shelf of recently added items for a specific library."""
+
+    library: LibrarySummary
+    shelf: HomeShelf
+
+
+class HomeOverview(BaseModel):
+    """Composite response containing all home shelves."""
+
+    continue_watching: HomeShelf
+    continue_reading: BookShelf
+    next_up: NextUpShelf
+    recent_libraries: list[LibraryShelf]
+    recent_albums: list[AlbumSummary]
+
+
+@router.get("/home", response_model=HomeOverview)
+async def home_overview(
+    user: RequireUser,
+    session: SessionDep,
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
+) -> HomeOverview:
+    """Return all home shelves in a single composite response."""
+    cw = await continue_watching(user=user, session=session, limit=limit)
+    cr = await continue_reading(user=user, session=session, limit=limit)
+    nu = await list_next_up(user=user, session=session, limit=limit)
+    ra = await recently_added_albums(user=user, session=session, limit=limit)
+    libs = await list_libraries(user=user, session=session)
+
+    recent_libs: list[LibraryShelf] = []
+    for lib in libs:
+        if lib.type != "music":
+            shelf = await recently_added(user=user, session=session, library_id=lib.id, limit=limit)
+            if shelf.items:
+                recent_libs.append(LibraryShelf(library=lib, shelf=shelf))
+
+    return HomeOverview(
+        continue_watching=cw,
+        continue_reading=cr,
+        next_up=nu,
+        recent_libraries=recent_libs,
+        recent_albums=ra,
+    )
 
 
 @router.get("/home/continue-watching")
@@ -294,4 +343,4 @@ def _restrict_to_accessible_libraries(query: Any, user: User) -> Any:
     return query.where(MediaItem.library_id.in_(grant))
 
 
-__all__ = ["BookShelf", "HomeShelf", "router"]
+__all__ = ["BookShelf", "HomeOverview", "HomeShelf", "LibraryShelf", "router"]

@@ -2528,6 +2528,43 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "HomeOverview": {
+        "description": "Composite response containing all home shelves.",
+        "properties": {
+          "continue_reading": {
+            "$ref": "#/components/schemas/BookShelf"
+          },
+          "continue_watching": {
+            "$ref": "#/components/schemas/HomeShelf"
+          },
+          "next_up": {
+            "$ref": "#/components/schemas/NextUpShelf"
+          },
+          "recent_albums": {
+            "items": {
+              "$ref": "#/components/schemas/AlbumSummary"
+            },
+            "title": "Recent Albums",
+            "type": "array"
+          },
+          "recent_libraries": {
+            "items": {
+              "$ref": "#/components/schemas/LibraryShelf"
+            },
+            "title": "Recent Libraries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "continue_watching",
+          "continue_reading",
+          "next_up",
+          "recent_libraries",
+          "recent_albums"
+        ],
+        "title": "HomeOverview",
+        "type": "object"
+      },
       "HomeShelf": {
         "description": "A short, ordered list of items for a home row.",
         "properties": {
@@ -3414,6 +3451,23 @@
           "path"
         ],
         "title": "LibraryFolderPage",
+        "type": "object"
+      },
+      "LibraryShelf": {
+        "description": "A shelf of recently added items for a specific library.",
+        "properties": {
+          "library": {
+            "$ref": "#/components/schemas/LibrarySummary"
+          },
+          "shelf": {
+            "$ref": "#/components/schemas/HomeShelf"
+          }
+        },
+        "required": [
+          "library",
+          "shelf"
+        ],
+        "title": "LibraryShelf",
         "type": "object"
       },
       "LibrarySummary": {
@@ -10699,6 +10753,57 @@
         "summary": "Get Media Segment",
         "tags": [
           "hls"
+        ]
+      }
+    },
+    "/api/v1/home": {
+      "get": {
+        "description": "Return all home shelves in a single composite response.",
+        "operationId": "home_overview_api_v1_home_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Home Overview",
+        "tags": [
+          "home"
         ]
       }
     },
