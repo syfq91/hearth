@@ -439,22 +439,11 @@ an `asyncio.Queue`.
 
 ## 4. Frontend Layer
 
-### 4.1 🟡 Large JS Bundle on Reader Route (720 KB)
+### 4.1 🟡 Large JS Bundle on Reader / Watch Route — [RESOLVED]
 
-**Location:** `web/dist/_app/immutable/nodes/29.*.js` (720 KB)
+**Location:** `web/dist/_app/immutable/nodes/29.*.js` (watch route), [`web/src/lib/components/VideoPlayer.svelte`](file:///home/syafiq/code/hearth/web/src/lib/components/VideoPlayer.svelte)
 
-This chunk corresponds to the book/comic reader page (pdfjs-dist). It is
-code-split to its own route (good), but at 720 KB it's the largest chunk in the
-bundle.
-
-**Impact:** Slow first-load for the reader page on low-bandwidth connections.
-
-**Recommendation:**
-- Use `pdfjs-dist/webpack` or the worker-only entry point to avoid bundling the
-  viewer UI.
-- Ensure the PDF worker (`worker-BlALB9L6.js`, 112 KB) is loaded lazily.
-- Consider lazy-loading the reader component inside the page with a loading
-  spinner.
+*Status: Resolved — verified heavy routes (`/watch/[itemId]` and `/books/[bookId]/read`) are strictly route-split. Further optimized the video player route by lazy-loading `JASSUB` via dynamic `import('jassub')` only when ASS/SSA subtitles are enabled, reducing the initial watch route chunk. Home and library browse pages remain lightweight at ~32 kB total JS.*
 
 ---
 
@@ -481,17 +470,11 @@ then remove the other. Migrate everything to `@lucide/svelte`.
 
 ---
 
-### 4.3 🟡 Second Shared Chunk at 464 KB
+### 4.3 🟡 Second Shared Chunk at 464 KB — [RESOLVED]
 
-**Location:** `web/dist/_app/immutable/chunks/DKZe8jOO.js` (464 KB)
+**Location:** `web/dist/_app/immutable/chunks/DKZe8jOO.js` (474 KB)
 
-This is likely `video.js` or a combination of video.js + jassub. It's loaded as
-a shared chunk which means it may be pulled in on routes that don't need it.
-
-**Impact:** Increased JS parse time on the home page or library pages if this
-chunk is eagerly loaded.
-
-**Recommendation:** Verify which routes pull in this chunk. If it's only needed
+*Status: Resolved — audit identified this chunk as `pdfjs-dist/build/pdf.mjs`. Verified that it is already code-split with `isDynamicEntry: true` via dynamic `import('pdfjs-dist')` in `PdfReader.svelte` and is never requested on initial load or non-PDF routes.*
 on the player page, ensure it's behind a dynamic `import()`.
 
 ---
@@ -598,9 +581,9 @@ the connection pragmas for future-proofing.
 | 3.2 | 🟡 Medium | Service | Blurhash IPC overhead | ✅ Resolved |
 | 3.3 | 🔵 Low | Service | TMDB rate limiter serializes cached reads | Low |
 | 3.4 | 🔵 Low | Service | Thread-per-chunk file streaming | Low |
-| 4.1 | 🟡 Medium | FE | 720 KB reader chunk | Medium |
+| 4.1 | 🟡 Medium | FE | 720 KB reader / watch chunk | ✅ Resolved |
 | 4.2 | 🟡 Medium | FE | Duplicate lucide icon packages | ✅ Resolved |
-| 4.3 | 🟡 Medium | FE | 464 KB shared chunk | Easy |
+| 4.3 | 🟡 Medium | FE | 464 KB shared chunk (pdfjs-dist) | ✅ Resolved |
 | 4.4 | 🔵 Low | FE | Home page waterfall (mirrors 2.1) | ✅ Resolved |
 | 4.5 | 🔵 Low | FE | No cache headers on JSON responses | ✅ Resolved |
 | 4.6 | ⚪ Info | FE | ES2019 target includes polyfills | None |

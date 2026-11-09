@@ -2,7 +2,7 @@
 	import videojs from 'video.js';
 	import type Player from 'video.js/dist/types/player';
 	import 'video.js/dist/video-js.css';
-	import JASSUB from 'jassub';
+	import type JASSUB from 'jassub';
 	import { ArrowLeft } from '@lucide/svelte';
 	import { api } from '../api/client';
 	import {
@@ -353,7 +353,8 @@
 				const subContent = toAss(text);
 
 				if (subtitleChoice === `ext:${externalId}` && videoEl) {
-					jassubInstance = new JASSUB({
+					const { default: JASSUBConstructor } = await import('jassub');
+					jassubInstance = new JASSUBConstructor({
 						video: videoEl,
 						subContent
 					});
