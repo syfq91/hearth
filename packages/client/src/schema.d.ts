@@ -3197,6 +3197,8 @@ export interface components {
             content_rating?: string | null;
             /** Edition */
             edition?: string | null;
+            /** Episode Number */
+            episode_number?: number | null;
             /**
              * Files
              * @default []
@@ -3241,6 +3243,12 @@ export interface components {
             release_date?: string | null;
             /** Runtime Seconds */
             runtime_seconds?: number | null;
+            /** Season Number */
+            season_number?: number | null;
+            /** Series Id */
+            series_id?: string | null;
+            /** Series Title */
+            series_title?: string | null;
             /** Sort Title */
             sort_title: string;
             /** Tagline */
@@ -3284,6 +3292,8 @@ export interface components {
             backdrop?: components["schemas"]["ImageResponse"] | null;
             /** Content Rating */
             content_rating?: string | null;
+            /** Episode Number */
+            episode_number?: number | null;
             /**
              * Genres
              * @default []
@@ -3300,6 +3310,12 @@ export interface components {
             rating?: number | null;
             /** Runtime Seconds */
             runtime_seconds?: number | null;
+            /** Season Number */
+            season_number?: number | null;
+            /** Series Id */
+            series_id?: string | null;
+            /** Series Title */
+            series_title?: string | null;
             /** Sort Title */
             sort_title: string;
             /** Title */
@@ -4153,6 +4169,8 @@ export interface components {
             backdrop?: components["schemas"]["ImageResponse"] | null;
             /** Content Rating */
             content_rating?: string | null;
+            /** Episode Number */
+            episode_number?: number | null;
             /**
              * Genres
              * @default []
@@ -4190,11 +4208,17 @@ export interface components {
             rating?: number | null;
             /** Runtime Seconds */
             runtime_seconds?: number | null;
+            /** Season Number */
+            season_number?: number | null;
             /**
              * Seasons
              * @default []
              */
             seasons: components["schemas"]["SeasonSummary"][];
+            /** Series Id */
+            series_id?: string | null;
+            /** Series Title */
+            series_title?: string | null;
             /** Sort Title */
             sort_title: string;
             /** Status */

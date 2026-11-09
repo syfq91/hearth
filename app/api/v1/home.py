@@ -13,8 +13,10 @@ from app.core.deps import RequireUser, require_library_access
 from app.db.models import (
     Book,
     BookProgress,
+    Episode,
     LibraryAccess,
     MediaItem,
+    Series,
     User,
     UserItemState,
 )
@@ -57,7 +59,11 @@ async def continue_watching(
             UserItemState.last_played_at.is_not(None),
         )
         .order_by(UserItemState.last_played_at.desc(), MediaItem.id.desc())
-        .options(selectinload(MediaItem.images), selectinload(MediaItem.genres))
+        .options(
+            selectinload(MediaItem.images),
+            selectinload(MediaItem.genres),
+            selectinload(MediaItem.episode).selectinload(Episode.series).selectinload(Series.item),
+        )
     )
     query = _restrict_to_accessible_libraries(query, user)
     rows = (await session.execute(query.limit(limit + 1))).all()
@@ -112,8 +118,13 @@ async def recently_added(
 
     query = (
         select(MediaItem)
+        .where(MediaItem.type != "season")
         .order_by(MediaItem.added_at.desc(), MediaItem.id.desc())
-        .options(selectinload(MediaItem.images), selectinload(MediaItem.genres))
+        .options(
+            selectinload(MediaItem.images),
+            selectinload(MediaItem.genres),
+            selectinload(MediaItem.episode).selectinload(Episode.series).selectinload(Series.item),
+        )
     )
     if library_id is not None:
         query = query.where(MediaItem.library_id == library_id)
@@ -143,7 +154,11 @@ async def favorites(
             UserItemState.favorite.is_(True),
         )
         .order_by(UserItemState.updated_at.desc(), MediaItem.id.desc())
-        .options(selectinload(MediaItem.images), selectinload(MediaItem.genres))
+        .options(
+            selectinload(MediaItem.images),
+            selectinload(MediaItem.genres),
+            selectinload(MediaItem.episode).selectinload(Episode.series).selectinload(Series.item),
+        )
     )
     query = _restrict_to_accessible_libraries(query, user)
     rows = (await session.execute(query.limit(limit + 1))).all()

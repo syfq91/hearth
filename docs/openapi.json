@@ -2640,6 +2640,17 @@
             ],
             "title": "Edition"
           },
+          "episode_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Number"
+          },
           "files": {
             "default": [],
             "items": {
@@ -2764,6 +2775,39 @@
             ],
             "title": "Runtime Seconds"
           },
+          "season_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Number"
+          },
+          "series_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Id"
+          },
+          "series_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Title"
+          },
           "sort_title": {
             "title": "Sort Title",
             "type": "string"
@@ -2876,6 +2920,17 @@
             ],
             "title": "Content Rating"
           },
+          "episode_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Number"
+          },
           "genres": {
             "default": [],
             "items": {
@@ -2934,6 +2989,39 @@
               }
             ],
             "title": "Runtime Seconds"
+          },
+          "season_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Number"
+          },
+          "series_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Id"
+          },
+          "series_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Title"
           },
           "sort_title": {
             "title": "Sort Title",
@@ -5261,6 +5349,17 @@
             ],
             "title": "Content Rating"
           },
+          "episode_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Number"
+          },
           "genres": {
             "default": [],
             "items": {
@@ -5366,6 +5465,17 @@
             ],
             "title": "Runtime Seconds"
           },
+          "season_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Number"
+          },
           "seasons": {
             "default": [],
             "items": {
@@ -5373,6 +5483,28 @@
             },
             "title": "Seasons",
             "type": "array"
+          },
+          "series_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Id"
+          },
+          "series_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Title"
           },
           "sort_title": {
             "title": "Sort Title",
