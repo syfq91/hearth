@@ -135,8 +135,10 @@ class ItemSummary(BaseModel):
     watch_state: WatchStateResponse
     series_id: str | None = None
     series_title: str | None = None
+    series_poster: ImageResponse | None = None
     season_number: int | None = None
     episode_number: int | None = None
+    episode_count: int | None = None
 
 
 class ItemDetail(ItemSummary):
@@ -658,9 +660,14 @@ def _primary_image(item: MediaItem, kind: str) -> ImageResponse | None:
     return None
 
 
-def item_summary(item: MediaItem, state: UserItemState | None) -> ItemSummary:
+def item_summary(
+    item: MediaItem,
+    state: UserItemState | None,
+    episode_count: int | None = None,
+) -> ItemSummary:
     series_id: str | None = None
     series_title: str | None = None
+    series_poster: ImageResponse | None = None
     season_number: int | None = None
     episode_number: int | None = None
     if item.type == "episode":
@@ -672,6 +679,7 @@ def item_summary(item: MediaItem, state: UserItemState | None) -> ItemSummary:
             series = getattr(ep, "series", None)
             if series is not None and getattr(series, "item", None) is not None:
                 series_title = series.item.title
+                series_poster = _primary_image(series.item, "poster")
 
     return ItemSummary(
         id=item.id,
@@ -691,8 +699,10 @@ def item_summary(item: MediaItem, state: UserItemState | None) -> ItemSummary:
         watch_state=watch_state_response(state),
         series_id=series_id,
         series_title=series_title,
+        series_poster=series_poster,
         season_number=season_number,
         episode_number=episode_number,
+        episode_count=episode_count,
     )
 
 

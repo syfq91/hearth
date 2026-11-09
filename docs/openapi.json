@@ -2640,6 +2640,17 @@
             ],
             "title": "Edition"
           },
+          "episode_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Count"
+          },
           "episode_number": {
             "anyOf": [
               {
@@ -2797,6 +2808,16 @@
             ],
             "title": "Series Id"
           },
+          "series_poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "series_title": {
             "anyOf": [
               {
@@ -2920,6 +2941,17 @@
             ],
             "title": "Content Rating"
           },
+          "episode_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Count"
+          },
           "episode_number": {
             "anyOf": [
               {
@@ -3011,6 +3043,16 @@
               }
             ],
             "title": "Series Id"
+          },
+          "series_poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "series_title": {
             "anyOf": [
@@ -5349,6 +5391,17 @@
             ],
             "title": "Content Rating"
           },
+          "episode_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Count"
+          },
           "episode_number": {
             "anyOf": [
               {
@@ -5494,6 +5547,16 @@
               }
             ],
             "title": "Series Id"
+          },
+          "series_poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "series_title": {
             "anyOf": [

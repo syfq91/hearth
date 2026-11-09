@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.books import BookListItem, _to_book_list_item
-from app.api.v1.items import ItemSummary, item_summary, watch_states
+from app.api.v1.items import ItemSummary, _primary_image, item_summary, watch_states
 from app.core.deps import RequireUser, require_library_access
 from app.db.models import (
     Book,
@@ -123,19 +123,78 @@ async def recently_added(
         .options(
             selectinload(MediaItem.images),
             selectinload(MediaItem.genres),
-            selectinload(MediaItem.episode).selectinload(Episode.series).selectinload(Series.item),
+            selectinload(MediaItem.episode)
+            .selectinload(Episode.series)
+            .selectinload(Series.item)
+            .selectinload(MediaItem.images),
+            selectinload(MediaItem.episode)
+            .selectinload(Episode.series)
+            .selectinload(Series.item)
+            .selectinload(MediaItem.genres),
         )
     )
     if library_id is not None:
         query = query.where(MediaItem.library_id == library_id)
     else:
         query = _restrict_to_accessible_libraries(query, user)
-    rows = list(await session.scalars(query.limit(limit + 1)))
-    page = rows[:limit]
-    states = await watch_states(session, user.id, [item.id for item in page])
+
+    fetch_limit = min(limit * 5, 200)
+    raw_rows = list(await session.scalars(query.limit(fetch_limit + 1)))
+
+    grouped_cards: list[tuple[MediaItem, int | None]] = []
+    seen_series: dict[str, int] = {}
+
+    for item in raw_rows:
+        if item.type == "episode":
+            ep = getattr(item, "episode", None)
+            if ep is not None:
+                sid = ep.series_id
+                if sid in seen_series:
+                    idx = seen_series[sid]
+                    curr_item, count = grouped_cards[idx]
+                    grouped_cards[idx] = (curr_item, (count or 1) + 1)
+                else:
+                    seen_series[sid] = len(grouped_cards)
+                    grouped_cards.append((item, 1))
+        elif item.type == "series":
+            sid = item.id
+            if sid in seen_series:
+                idx = seen_series[sid]
+                curr_item, count = grouped_cards[idx]
+                grouped_cards[idx] = (item, count)
+            else:
+                seen_series[sid] = len(grouped_cards)
+                grouped_cards.append((item, None))
+        else:
+            grouped_cards.append((item, None))
+
+    page_cards = grouped_cards[:limit]
+    states = await watch_states(session, user.id, [item.id for item, _ in page_cards])
+
+    items: list[ItemSummary] = []
+    for item, ep_count in page_cards:
+        summary = item_summary(item, states.get(item.id), episode_count=ep_count)
+        if ep_count is not None and ep_count > 1 and item.type == "episode":
+            ep = getattr(item, "episode", None)
+            if ep is not None:
+                series = getattr(ep, "series", None)
+                if series is not None:
+                    series_item = getattr(series, "item", None)
+                    if series_item is not None:
+                        summary.id = series_item.id
+                        summary.type = "series"
+                        summary.title = series_item.title
+                        summary.sort_title = series_item.sort_title
+                        summary.year = series_item.year
+                        summary.poster = _primary_image(series_item, "poster") or summary.poster
+                        summary.genres = sorted(g.name for g in series_item.genres)
+        elif item.type == "episode" and summary.series_poster:
+            summary.poster = summary.series_poster
+        items.append(summary)
+
     return HomeShelf(
-        items=[item_summary(item, states.get(item.id)) for item in page],
-        has_more=len(rows) > limit,
+        items=items,
+        has_more=len(grouped_cards) > limit or len(raw_rows) > fetch_limit,
     )
 
 

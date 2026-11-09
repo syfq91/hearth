@@ -3197,6 +3197,8 @@ export interface components {
             content_rating?: string | null;
             /** Edition */
             edition?: string | null;
+            /** Episode Count */
+            episode_count?: number | null;
             /** Episode Number */
             episode_number?: number | null;
             /**
@@ -3247,6 +3249,7 @@ export interface components {
             season_number?: number | null;
             /** Series Id */
             series_id?: string | null;
+            series_poster?: components["schemas"]["ImageResponse"] | null;
             /** Series Title */
             series_title?: string | null;
             /** Sort Title */
@@ -3292,6 +3295,8 @@ export interface components {
             backdrop?: components["schemas"]["ImageResponse"] | null;
             /** Content Rating */
             content_rating?: string | null;
+            /** Episode Count */
+            episode_count?: number | null;
             /** Episode Number */
             episode_number?: number | null;
             /**
@@ -3314,6 +3319,7 @@ export interface components {
             season_number?: number | null;
             /** Series Id */
             series_id?: string | null;
+            series_poster?: components["schemas"]["ImageResponse"] | null;
             /** Series Title */
             series_title?: string | null;
             /** Sort Title */
@@ -4169,6 +4175,8 @@ export interface components {
             backdrop?: components["schemas"]["ImageResponse"] | null;
             /** Content Rating */
             content_rating?: string | null;
+            /** Episode Count */
+            episode_count?: number | null;
             /** Episode Number */
             episode_number?: number | null;
             /**
@@ -4217,6 +4225,7 @@ export interface components {
             seasons: components["schemas"]["SeasonSummary"][];
             /** Series Id */
             series_id?: string | null;
+            series_poster?: components["schemas"]["ImageResponse"] | null;
             /** Series Title */
             series_title?: string | null;
             /** Sort Title */
