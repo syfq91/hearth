@@ -13,6 +13,8 @@ Read these before making non-trivial changes:
 - `docs/API.md` — HTTP conventions, auth, playback contract.
 - `docs/DECISIONS.md` — ADRs; check before re-litigating a design choice.
 - `docs/PROGRESS.md` — phase history, not a current TODO list.
+- `docs/PERFORMANCE_AUDIT.md` — performance benchmarks and optimization log.
+- `docs/PLAN.md` — phased implementation plan.
 
 ## Stack
 

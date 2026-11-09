@@ -72,9 +72,18 @@ dmypy.json
 /config/
 /transcode/
 /media/
+.dev-data/
+.dev-transcode/
 *.log
 sqlite.db
 sqlite.db-*
+
+# Stitch local capture scripts and ephemeral screen extractions
+.stitch/*.sh
+.stitch/*.ts
+.stitch/admin-*.html
+.stitch/books*.html
+.stitch/music.html
 
 # Development scratch
 scratch/

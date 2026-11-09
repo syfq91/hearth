@@ -115,6 +115,8 @@ Drivers, permissions, render GIDs, and verification commands are covered in the
 | [Development](docs/DEVELOPMENT.md) | Running from source, tests, generated artifacts |
 | [Architecture](docs/ARCHITECTURE.md) | Runtime topology and module layout |
 | [Decisions](docs/DECISIONS.md) | Architecture decision records |
+| [Performance Audit](docs/PERFORMANCE_AUDIT.md) | Codebase performance review, benchmarks, and resolutions |
+| [Implementation Plan](docs/PLAN.md) | Phased architecture and agent implementation plan |
 | [Changelog](CHANGELOG.md) | Release history |
 | [Attribution](docs/ATTRIBUTION.md) | TMDB and third-party notices |
 

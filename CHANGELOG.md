@@ -10,11 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Composite `GET /api/v1/home` endpoint returning continue watching, continue reading, next up, recent libraries, and recent albums in a single round-trip.
+- Configurable SQLite connection pool parameters (`HEARTH_DB_POOL_SIZE` and `HEARTH_DB_MAX_OVERFLOW`).
+- Composite database indexes for continue-watching, continue-reading, and favorites.
+- Dedicated [`docs/PERFORMANCE_AUDIT.md`](docs/PERFORMANCE_AUDIT.md) performance review and resolutions log.
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
+
+### Changed
+- Converted HTTP middlewares (`RequestSizeLimitMiddleware`, `RequestIDMiddleware`, `SecurityHeadersMiddleware`) to pure ASGI middleware to remove context-switch and streaming wrapper overhead.
+- Optimized `GET /items/{id}` ETags to derive from item and watch state timestamps, short-circuiting 304 Not Modified responses before model detail generation.
+- Optimized `GET /home/recently-added` to evaluate deduplicated lightweight scalar tuples before loading full ORM models and selectin relationships.
+- Reused application-state `ImagePipeline` singleton across image requests and moved blurhash computation to a worker thread to eliminate IPC overhead.
+- Scoped book folder discovery queries to the active directory prefix.
+- Updated web client home page to fetch all shelves in a single request, eliminating client-side API waterfalls.
+- Dynamically split `JASSUB` in the video player route, loading WebAssembly assets only when ASS/SSA subtitles are rendered.
 
 ### Removed
 - Removed AMD hardware transcoding support and `mesa-va-drivers` from the container image; VA-API hardware acceleration is dedicated to Intel QuickSync, with automatic fallback to CPU software transcoding (`libx264`).
 - Removed AMD compose device (`/dev/kfd`) and `VIDEO_GID` configurations from `docker/compose.yaml`.
+- Removed duplicate legacy `lucide-svelte` dependency from the web client in favor of `@lucide/svelte`.
 
 ## [1.0.0] - 2026-11-03
 
