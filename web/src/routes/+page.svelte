@@ -8,6 +8,10 @@
 
 	let { data }: PageProps = $props();
 
+	const musicLibrary = $derived(data.libraries?.find((l) => l.type === 'music'));
+	const musicTitle = $derived(musicLibrary ? `New in ${musicLibrary.name}` : 'New in Music');
+	const musicHref = $derived(musicLibrary ? `/library/${musicLibrary.id}` : '/music');
+
 	let readingRowEl = $state<HTMLElement | null>(null);
 	let canReadingScrollLeft = $state(false);
 	let canReadingScrollRight = $state(false);
@@ -169,9 +173,11 @@
 	<Shelf title="Next up" items={home.nextUp.items} />
 
 	{#if home.recentAlbums.length > 0}
-		<section class="shelf" aria-label="Recently added albums">
+		<section class="shelf" aria-label={musicTitle}>
 			<div class="shelf-header">
-				<h2 class="heading">Recently added albums</h2>
+				<h2 class="heading">
+					<a class="heading-link" href={musicHref}>{musicTitle}</a>
+				</h2>
 				{#if albumHasOverflow}
 					<div class="scroll-arrows">
 						<button
@@ -179,7 +185,7 @@
 							class="scroll-btn"
 							onclick={() => scrollRow(albumRowEl, 'left')}
 							disabled={!canAlbumScrollLeft}
-							aria-label="Scroll Recently added albums left"
+							aria-label={`Scroll ${musicTitle} left`}
 							title="Scroll left"
 						>
 							<ChevronLeft size={18} />
@@ -189,7 +195,7 @@
 							class="scroll-btn"
 							onclick={() => scrollRow(albumRowEl, 'right')}
 							disabled={!canAlbumScrollRight}
-							aria-label="Scroll Recently added albums right"
+							aria-label={`Scroll ${musicTitle} right`}
 							title="Scroll right"
 						>
 							<ChevronRight size={18} />
@@ -259,6 +265,19 @@
 	.heading {
 		font-size: 1.1rem;
 		margin: 0;
+	}
+
+	.heading-link {
+		color: inherit;
+		text-decoration: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.heading-link:hover {
+		color: var(--accent);
+		text-decoration: underline;
 	}
 
 	.scroll-arrows {
