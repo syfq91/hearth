@@ -370,9 +370,11 @@ already supports concurrency.
 
 ---
 
-### 3.2 🟡 Image Blurhash Computation in Process Pool
+### 3.2 🟡 Image Blurhash Computation in Process Pool — [RESOLVED]
 
 **Location:** [`app/services/images/pipeline.py` L127–L142](file:///home/syafiq/code/hearth/app/services/images/pipeline.py#L127-L142)
+
+*Status: Resolved — inspect and thumbnail/blurhash computation runs via thread pool, eliminating IPC serialization overhead while reserving the process pool for high-res variant rendering.*
 
 The `_inspect_image` function opens the image, thumbnails to 32×32, and
 computes the blurhash. This runs in a `ProcessPoolExecutor`. Process pools have
@@ -581,7 +583,7 @@ the connection pragmas for future-proofing.
 | 2.4 | 🔵 Low | API | ImagePipeline created per request | ✅ Resolved |
 | 2.5 | 🔵 Low | API | Person search uses ILIKE | Low |
 | 3.1 | 🟡 Medium | Service | Scanner hashes sequentially | ✅ Resolved |
-| 3.2 | 🟡 Medium | Service | Blurhash IPC overhead | Easy |
+| 3.2 | 🟡 Medium | Service | Blurhash IPC overhead | ✅ Resolved |
 | 3.3 | 🔵 Low | Service | TMDB rate limiter serializes cached reads | Low |
 | 3.4 | 🔵 Low | Service | Thread-per-chunk file streaming | Low |
 | 4.1 | 🟡 Medium | FE | 720 KB reader chunk | Medium |

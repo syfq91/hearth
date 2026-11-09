@@ -259,11 +259,10 @@ class ImagePipeline:
         destination = self._original_path(item_id, image_id, extension)
         await asyncio.to_thread(_write_bytes, destination, data)
         try:
-            width, height, blurhash_value, _ = await _run_in_pool(
+            width, height, blurhash_value, _ = await asyncio.to_thread(
                 _inspect_image,
                 str(destination),
                 self.settings.image_blurhash_components,
-                max_workers=self.settings.image_process_workers,
             )
         except Exception:
             await asyncio.to_thread(destination.unlink, True)
