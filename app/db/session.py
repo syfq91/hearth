@@ -26,6 +26,7 @@ def _apply_sqlite_pragmas(dbapi_connection: Any, _connection_record: Any) -> Non
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
         cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA mmap_size=268435456")
     finally:
         cursor.close()
 

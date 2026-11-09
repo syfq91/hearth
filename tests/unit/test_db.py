@@ -68,6 +68,7 @@ async def test_sqlite_pragmas_are_applied(settings: Settings) -> None:
             foreign_keys = await connection.scalar(text("PRAGMA foreign_keys"))
             busy_timeout = await connection.scalar(text("PRAGMA busy_timeout"))
             synchronous = await connection.scalar(text("PRAGMA synchronous"))
+            mmap_size = await connection.scalar(text("PRAGMA mmap_size"))
     finally:
         await engine.dispose()
 
@@ -75,6 +76,7 @@ async def test_sqlite_pragmas_are_applied(settings: Settings) -> None:
     assert foreign_keys == 1
     assert busy_timeout == 5000
     assert synchronous == 1
+    assert mmap_size == 268435456
 
 
 async def test_sessionmaker_returns_working_sessions(settings: Settings) -> None:

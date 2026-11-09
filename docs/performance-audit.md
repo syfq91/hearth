@@ -545,7 +545,9 @@ adding `curl`. Acceptable as-is.
 
 ---
 
-### 5.2 ⚪ No `mmap_size` Pragma for Large Databases
+### 5.2 ⚪ No `mmap_size` Pragma for Large Databases — [RESOLVED]
+
+*Status: Resolved — added `PRAGMA mmap_size=268435456` (256 MiB memory-mapped I/O) to connection pragmas.*
 
 SQLite can memory-map the database file for faster reads. The current pragmas
 set `foreign_keys`, `busy_timeout`, and `synchronous` but not `mmap_size`.
@@ -587,7 +589,7 @@ the connection pragmas for future-proofing.
 | 4.5 | 🔵 Low | FE | No cache headers on JSON responses | Easy |
 | 4.6 | ⚪ Info | FE | ES2019 target includes polyfills | None |
 | 5.1 | 🔵 Low | Infra | Python healthcheck startup cost | None |
-| 5.2 | ⚪ Info | Infra | No mmap_size pragma | Trivial |
+| 5.2 | ⚪ Info | Infra | No mmap_size pragma | ✅ Resolved |
 
 ---
 
