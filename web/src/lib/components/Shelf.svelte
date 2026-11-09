@@ -11,13 +11,21 @@
 		level?: 2;
 		/** When true, video cards navigate directly to playback. */
 		directPlay?: boolean;
+		/** Optional destination link for the shelf heading. */
+		href?: string;
 	}
 
-	let { title, items, level = 2, directPlay = false }: Props = $props();
+	let { title, items, level = 2, directPlay = false, href }: Props = $props();
 </script>
 
 <section class="shelf" aria-label={title}>
-	<svelte:element this={`h${level}`} class="heading">{title}</svelte:element>
+	<svelte:element this={`h${level}`} class="heading">
+		{#if href}
+			<a class="heading-link" {href}>{title}</a>
+		{:else}
+			{title}
+		{/if}
+	</svelte:element>
 	{#if items.length === 0}
 		<p class="empty">Nothing here yet.</p>
 	{:else}
@@ -37,6 +45,19 @@
 	.heading {
 		font-size: 1.1rem;
 		margin-bottom: 0.75rem;
+	}
+
+	.heading-link {
+		color: inherit;
+		text-decoration: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.heading-link:hover {
+		color: var(--accent);
+		text-decoration: underline;
 	}
 
 	.row {

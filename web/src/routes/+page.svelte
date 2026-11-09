@@ -79,7 +79,11 @@
 	{/if}
 
 	{#each home.recentLibraries as entry (entry.library.id)}
-		<Shelf title={`Recently added in ${entry.library.name}`} items={entry.shelf.items} />
+		<Shelf
+			title={`New in ${entry.library.name}`}
+			items={entry.shelf.items}
+			href={`/library/${entry.library.id}`}
+		/>
 	{/each}
 
 	{#if home.recentAlbums.length === 0 && home.continueWatching.items.length === 0 && home.continueReading.items.length === 0 && home.nextUp.items.length === 0 && home.recentLibraries.length === 0 && !home.error}
