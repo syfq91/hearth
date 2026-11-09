@@ -40,8 +40,8 @@ def build_engine(settings: Settings) -> AsyncEngine:
         settings.database_url,
         future=True,
         pool_pre_ping=False,
-        pool_size=50,
-        max_overflow=50,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
         connect_args={"timeout": BUSY_TIMEOUT_MS / 1000},
     )
     event.listen(engine.sync_engine, "connect", _apply_sqlite_pragmas)

@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     transcode_dir: Path = Path("/transcode")
     media_dir: Path = Path("/media")
     db_path: Path = Path("/config/hearth.db")
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
 
     # Hardware devices
     render_device: Path = Path("/dev/dri/renderD128")

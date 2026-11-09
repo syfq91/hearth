@@ -20,6 +20,8 @@ documents the settings most operators touch.
 | `HEARTH_LOG_LEVEL` | `INFO` | Log verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `HEARTH_DATA_DIR` | `/config` | Persistent application data (database, artwork cache, secret) |
 | `HEARTH_DB_PATH` | `/config/hearth.db` | SQLite database file |
+| `HEARTH_DB_POOL_SIZE` | `5` | SQLite async connection pool size |
+| `HEARTH_DB_MAX_OVERFLOW` | `10` | Maximum overflow connections above pool size |
 | `HEARTH_MEDIA_DIR` | `/media` | Root that library paths are validated against |
 | `HEARTH_TRANSCODE_DIR` | `/transcode` | Scratch space for transcoding sessions (tmpfs in Compose) |
 | `HEARTH_EMBED_WORKER` | `false` | Run the background worker inside the API process; Compose sets `true` |

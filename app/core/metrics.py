@@ -70,7 +70,7 @@ def generate_prometheus_metrics(settings: Settings) -> str:
     # Database pool size
     lines.append("# HELP hearth_database_pool_size Configured database connection pool size")
     lines.append("# TYPE hearth_database_pool_size gauge")
-    pool_size = getattr(settings, "db_pool_size", 50)
+    pool_size = settings.db_pool_size
     lines.append(f"hearth_database_pool_size {pool_size}")
 
     # HTTP Requests Total
