@@ -72,14 +72,36 @@
 		return detailHref(card);
 	});
 
+	function extractVolume(title: string): string | null {
+		const match = title.match(/\b(?:vol(?:ume)?\.?|v)\s*(\d+(?:\.\d+)?)\b/i);
+		if (match) {
+			const num = match[1].replace(/^0+/, '') || match[1];
+			return `Vol. ${num}`;
+		}
+		return null;
+	}
+
 	const subtitle = $derived.by(() => {
 		if (episodeCount != null && episodeCount > 1) {
 			return `${episodeCount} new episodes`;
 		}
 		if (isEpisode) return null;
 		const card = item as S['ItemSummary'];
-		// Remove "movie" and "episode" label on the card
-		const typeLabel = card.type === 'movie' || card.type === 'episode' ? null : card.type;
+
+		if (card.type === 'book') {
+			// First row for the book title.
+			// Second row for the volume if available, year if volume not available, empty if all not available.
+			const vol = ('volume' in card && card.volume ? String(card.volume) : null) || extractVolume(card.title ?? '');
+			if (vol) return vol;
+			if (card.year) return String(card.year);
+			return null;
+		}
+
+		// Remove "movie", "episode", and "series" label on the card
+		const typeLabel =
+			card.type === 'movie' || card.type === 'episode' || card.type === 'series'
+				? null
+				: card.type;
 		return [card.year, typeLabel].filter(Boolean).join(' · ');
 	});
 

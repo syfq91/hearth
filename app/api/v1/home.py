@@ -62,6 +62,7 @@ async def continue_watching(
         .options(
             selectinload(MediaItem.images),
             selectinload(MediaItem.genres),
+            selectinload(MediaItem.book),
             selectinload(MediaItem.episode).selectinload(Episode.series).selectinload(Series.item),
         )
     )
@@ -123,6 +124,7 @@ async def recently_added(
         .options(
             selectinload(MediaItem.images),
             selectinload(MediaItem.genres),
+            selectinload(MediaItem.book),
             selectinload(MediaItem.episode)
             .selectinload(Episode.series)
             .selectinload(Series.item)
@@ -216,6 +218,7 @@ async def favorites(
         .options(
             selectinload(MediaItem.images),
             selectinload(MediaItem.genres),
+            selectinload(MediaItem.book),
             selectinload(MediaItem.episode).selectinload(Episode.series).selectinload(Series.item),
         )
     )

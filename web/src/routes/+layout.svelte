@@ -20,7 +20,8 @@
 		Search,
 		Shield,
 		LogOut,
-		User
+		User,
+		ChevronDown
 	} from '@lucide/svelte';
 
 	let { data, children }: LayoutProps = $props();
@@ -58,38 +59,129 @@
 		}
 	}
 
+	interface LibraryGroup {
+		type: string;
+		label: string;
+		icon: typeof Film;
+		libraries: LibrarySummary[];
+	}
+
+	const groupedLibraries = $derived.by(() => {
+		const groups: Record<string, LibrarySummary[]> = {};
+		for (const lib of userLibraries) {
+			const t = lib.type === 'series' ? 'tv' : lib.type;
+			if (!groups[t]) groups[t] = [];
+			groups[t].push(lib);
+		}
+		const order = [
+			{ type: 'movie', label: 'Movies', icon: Film },
+			{ type: 'tv', label: 'Shows', icon: TvIcon },
+			{ type: 'music', label: 'Music', icon: Music },
+			{ type: 'book', label: 'Books', icon: BookOpen }
+		];
+		const result: LibraryGroup[] = [];
+		for (const def of order) {
+			if (groups[def.type] && groups[def.type].length > 0) {
+				result.push({
+					...def,
+					libraries: groups[def.type]
+				});
+			}
+		}
+		for (const [t, libs] of Object.entries(groups)) {
+			if (!order.some((o) => o.type === t)) {
+				result.push({
+					type: t,
+					label: t.charAt(0).toUpperCase() + t.slice(1),
+					icon: Folder,
+					libraries: libs
+				});
+			}
+		}
+		return result;
+	});
+
 	const isFullscreenMedia = $derived(
 		page.url.pathname.startsWith('/watch/') ||
 			/\/books\/[^/]+\/read\/?$/.test(page.url.pathname)
 	);
 
+	let topbarRef = $state<HTMLElement | null>(null);
+	let navRef = $state<HTMLElement | null>(null);
+	let isCombined = $state(false);
+	let minUncombinedWidth = $state(0);
+
+	function updateHeaderMode() {
+		if (typeof window === 'undefined') return;
+		if (window.innerWidth < 1080 && userLibraries.length > 3) {
+			isCombined = true;
+			return;
+		}
+		if (!topbarRef || !navRef) return;
+		if (!isCombined) {
+			if (navRef.scrollWidth > navRef.clientWidth + 2) {
+				minUncombinedWidth = Math.max(minUncombinedWidth, window.innerWidth + 20);
+				isCombined = true;
+			}
+		} else {
+			if (minUncombinedWidth > 0 && window.innerWidth >= minUncombinedWidth) {
+				isCombined = false;
+			}
+		}
+	}
+
+	$effect(() => {
+		const _ = userLibraries;
+		updateHeaderMode();
+		window.addEventListener('resize', updateHeaderMode);
+		const ro = topbarRef ? new ResizeObserver(updateHeaderMode) : null;
+		if (topbarRef && ro) ro.observe(topbarRef);
+		return () => {
+			window.removeEventListener('resize', updateHeaderMode);
+			if (ro) ro.disconnect();
+		};
+	});
+
 	let userMenuOpen = $state(false);
 	let userMenuRef = $state<HTMLElement | null>(null);
+	let openLibDropdown = $state<string | null>(null);
 
 	function toggleUserMenu() {
 		userMenuOpen = !userMenuOpen;
+		if (userMenuOpen) openLibDropdown = null;
 	}
 
 	function closeUserMenu() {
 		userMenuOpen = false;
 	}
 
+	function toggleLibDropdown(type: string) {
+		openLibDropdown = openLibDropdown === type ? null : type;
+		if (openLibDropdown) userMenuOpen = false;
+	}
+
 	$effect(() => {
-		// Close menu on route navigation
+		// Close menus on route navigation
 		const _ = page.url.pathname;
 		userMenuOpen = false;
+		openLibDropdown = null;
 	});
 
 	$effect(() => {
-		if (!userMenuOpen) return;
+		if (!userMenuOpen && !openLibDropdown) return;
 		function handleOutside(event: MouseEvent) {
-			if (userMenuRef && !userMenuRef.contains(event.target as Node)) {
+			const target = event.target as Node;
+			if (userMenuRef && !userMenuRef.contains(target)) {
 				userMenuOpen = false;
+			}
+			if (navRef && !navRef.contains(target)) {
+				openLibDropdown = null;
 			}
 		}
 		function handleKeydown(event: KeyboardEvent) {
 			if (event.key === 'Escape') {
 				userMenuOpen = false;
+				openLibDropdown = null;
 			}
 		}
 		window.addEventListener('click', handleOutside);
@@ -102,6 +194,10 @@
 
 	function isActive(path: string): boolean {
 		return path === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(path);
+	}
+
+	function isGroupActive(group: LibraryGroup): boolean {
+		return group.libraries.some((lib) => isActive(`/library/${lib.id}`));
 	}
 
 	async function signOut() {
@@ -126,19 +222,61 @@
 <div class="app" class:fullscreen-app={isFullscreenMedia} use:spatialFocus>
 	{#if !isFullscreenMedia}
 		<a class="skip-link" href="#main">Skip to content</a>
-		<header class="topbar">
+		<header class="topbar" bind:this={topbarRef}>
 			<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
-			<nav aria-label="Primary">
-				{#each userLibraries as lib (lib.id)}
-					{@const Icon = getLibraryIcon(lib.type)}
-					<a
-						href={`/library/${lib.id}`}
-						aria-current={isActive(`/library/${lib.id}`) ? 'page' : undefined}
-					>
-						<Icon size={16} />
-						<span>{lib.name}</span>
-					</a>
-				{/each}
+			<nav aria-label="Primary" bind:this={navRef}>
+				{#if isCombined}
+					{#each groupedLibraries as group (group.type)}
+						{@const Icon = group.icon}
+						{@const active = isGroupActive(group)}
+						{@const open = openLibDropdown === group.type}
+						<div class="lib-dropdown-wrapper">
+							<button
+								type="button"
+								class="nav-dropdown-btn"
+								class:active
+								aria-expanded={open}
+								aria-haspopup="menu"
+								onclick={(e) => {
+									e.stopPropagation();
+									toggleLibDropdown(group.type);
+								}}
+							>
+								<Icon size={16} />
+								<span>{group.label}</span>
+								<span class="chevron"><ChevronDown size={14} /></span>
+							</button>
+							{#if open}
+								<div class="dropdown-menu lib-menu" role="menu">
+									{#each group.libraries as lib (lib.id)}
+										<a
+											class="dropdown-item"
+											href={`/library/${lib.id}`}
+											role="menuitem"
+											aria-current={isActive(`/library/${lib.id}`) ? 'page' : undefined}
+											onclick={() => {
+												openLibDropdown = null;
+											}}
+										>
+											<span>{lib.name}</span>
+										</a>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{/each}
+				{:else}
+					{#each userLibraries as lib (lib.id)}
+						{@const Icon = getLibraryIcon(lib.type)}
+						<a
+							href={`/library/${lib.id}`}
+							aria-current={isActive(`/library/${lib.id}`) ? 'page' : undefined}
+						>
+							<Icon size={16} />
+							<span>{lib.name}</span>
+						</a>
+					{/each}
+				{/if}
 				<a href="/favorites" aria-current={isActive('/favorites') ? 'page' : undefined}>
 					<Heart size={16} />
 					<span>Favourites</span>
@@ -258,18 +396,20 @@
 
 	.topbar {
 		display: flex;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		align-items: center;
-		gap: 0.6rem 1rem;
+		gap: 0.75rem 1rem;
 		padding: 0.75rem 1.25rem;
 		background: var(--surface);
 		border-bottom: 1px solid var(--border);
 		position: sticky;
 		top: 0;
 		z-index: 10;
+		min-width: 0;
 	}
 
 	.brand {
+		flex-shrink: 0;
 		font-weight: 700;
 		font-size: 1.15rem;
 		letter-spacing: 0.02em;
@@ -284,6 +424,7 @@
 
 	.spacer {
 		flex: 1;
+		min-width: 0.5rem;
 	}
 
 	/* Skip link: first in the tab order, visible only once focused. */
@@ -306,10 +447,11 @@
 
 	nav {
 		display: flex;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		align-items: center;
-		gap: 0.85rem;
+		gap: 0.6rem;
 		font-size: 0.95rem;
+		min-width: 0;
 	}
 
 	nav a {
@@ -317,11 +459,15 @@
 		align-items: center;
 		gap: 0.4rem;
 		color: var(--muted);
-		padding: 0.25rem 0.25rem;
+		padding: 0.25rem 0.35rem;
 		text-decoration: none;
 		font-weight: 500;
 		border-radius: var(--radius);
-		transition: color 0.15s ease;
+		white-space: nowrap;
+		flex-shrink: 0;
+		transition:
+			color 0.15s ease,
+			background 0.15s ease;
 	}
 
 	nav a:hover {
@@ -333,10 +479,63 @@
 		font-weight: 600;
 	}
 
+	.lib-dropdown-wrapper {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		flex-shrink: 0;
+	}
+
+	.nav-dropdown-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		color: var(--muted);
+		background: transparent;
+		border: 1px solid transparent;
+		padding: 0.25rem 0.45rem;
+		border-radius: var(--radius);
+		font-size: 0.95rem;
+		font-weight: 500;
+		cursor: pointer;
+		white-space: nowrap;
+		transition:
+			color 0.15s ease,
+			background 0.15s ease,
+			border-color 0.15s ease;
+	}
+
+	.nav-dropdown-btn:hover,
+	.nav-dropdown-btn[aria-expanded='true'] {
+		color: var(--text);
+		background: var(--surface-2);
+		border-color: var(--border);
+	}
+
+	.nav-dropdown-btn.active {
+		color: var(--text);
+		font-weight: 600;
+	}
+
+	.chevron {
+		display: inline-flex;
+		align-items: center;
+		color: var(--muted);
+		opacity: 0.7;
+	}
+
+	.lib-menu {
+		min-width: 170px;
+		left: 0;
+		right: auto;
+	}
+
 	.topbar-actions {
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
+		flex-shrink: 0;
+		margin-left: auto;
 	}
 
 	.icon-btn {
@@ -351,7 +550,10 @@
 		border: 1px solid transparent;
 		cursor: pointer;
 		text-decoration: none;
-		transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+		transition:
+			background 0.15s ease,
+			color 0.15s ease,
+			border-color 0.15s ease;
 	}
 
 	.icon-btn:hover,
@@ -428,6 +630,11 @@
 		background: var(--surface-2);
 	}
 
+	.dropdown-item[aria-current='page'] {
+		color: var(--accent);
+		font-weight: 600;
+	}
+
 	.dropdown-item-state {
 		margin-left: auto;
 		color: var(--muted);
@@ -475,15 +682,42 @@
 	@media (max-width: 720px) {
 		.topbar {
 			padding: 0.6rem 0.75rem;
+			gap: 0.5rem;
 		}
 
 		nav {
-			gap: 0.6rem;
+			gap: 0.4rem;
 			font-size: 0.9rem;
 		}
 
 		main {
 			padding: 0.75rem;
+		}
+	}
+
+	@media (max-width: 600px) {
+		.topbar {
+			padding: 0.5rem 0.6rem;
+			gap: 0.35rem;
+		}
+
+		nav {
+			gap: 0.25rem;
+			font-size: 0.85rem;
+		}
+
+		.nav-dropdown-btn span,
+		nav a span {
+			display: none;
+		}
+
+		.chevron {
+			display: none;
+		}
+
+		.nav-dropdown-btn,
+		nav a {
+			padding: 0.35rem;
 		}
 	}
 </style>

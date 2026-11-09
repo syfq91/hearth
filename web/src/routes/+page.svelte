@@ -2,9 +2,73 @@
 	import Shelf from '../lib/components/Shelf.svelte';
 	import Poster from '../lib/components/Poster.svelte';
 	import BookCover from '../lib/components/BookCover.svelte';
+	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+
+	let readingRowEl = $state<HTMLElement | null>(null);
+	let canReadingScrollLeft = $state(false);
+	let canReadingScrollRight = $state(false);
+	let readingHasOverflow = $state(false);
+
+	let albumRowEl = $state<HTMLElement | null>(null);
+	let canAlbumScrollLeft = $state(false);
+	let canAlbumScrollRight = $state(false);
+	let albumHasOverflow = $state(false);
+
+	function updateReadingScroll() {
+		if (!readingRowEl) return;
+		const { scrollLeft, scrollWidth, clientWidth } = readingRowEl;
+		readingHasOverflow = scrollWidth > clientWidth + 4;
+		canReadingScrollLeft = scrollLeft > 4;
+		canReadingScrollRight = scrollLeft + clientWidth < scrollWidth - 4;
+	}
+
+	function updateAlbumScroll() {
+		if (!albumRowEl) return;
+		const { scrollLeft, scrollWidth, clientWidth } = albumRowEl;
+		albumHasOverflow = scrollWidth > clientWidth + 4;
+		canAlbumScrollLeft = scrollLeft > 4;
+		canAlbumScrollRight = scrollLeft + clientWidth < scrollWidth - 4;
+	}
+
+	function scrollRow(el: HTMLElement | null, direction: 'left' | 'right') {
+		if (!el) return;
+		const distance = el.clientWidth * 0.75;
+		el.scrollBy({
+			left: direction === 'left' ? -distance : distance,
+			behavior: 'smooth'
+		});
+	}
+
+	$effect(() => {
+		if (readingRowEl) {
+			const el = readingRowEl;
+			updateReadingScroll();
+			el.addEventListener('scroll', updateReadingScroll, { passive: true });
+			const ro = new ResizeObserver(updateReadingScroll);
+			ro.observe(el);
+			return () => {
+				el.removeEventListener('scroll', updateReadingScroll);
+				ro.disconnect();
+			};
+		}
+	});
+
+	$effect(() => {
+		if (albumRowEl) {
+			const el = albumRowEl;
+			updateAlbumScroll();
+			el.addEventListener('scroll', updateAlbumScroll, { passive: true });
+			const ro = new ResizeObserver(updateAlbumScroll);
+			ro.observe(el);
+			return () => {
+				el.removeEventListener('scroll', updateAlbumScroll);
+				ro.disconnect();
+			};
+		}
+	});
 </script>
 
 <svelte:head>
@@ -24,8 +88,34 @@
 
 	{#if home.continueReading.items.length > 0}
 		<section class="shelf" aria-label="Continue reading">
-			<h2 class="heading">Continue reading</h2>
-			<ul class="row">
+			<div class="shelf-header">
+				<h2 class="heading">Continue reading</h2>
+				{#if readingHasOverflow}
+					<div class="scroll-arrows">
+						<button
+							type="button"
+							class="scroll-btn"
+							onclick={() => scrollRow(readingRowEl, 'left')}
+							disabled={!canReadingScrollLeft}
+							aria-label="Scroll Continue reading left"
+							title="Scroll left"
+						>
+							<ChevronLeft size={18} />
+						</button>
+						<button
+							type="button"
+							class="scroll-btn"
+							onclick={() => scrollRow(readingRowEl, 'right')}
+							disabled={!canReadingScrollRight}
+							aria-label="Scroll Continue reading right"
+							title="Scroll right"
+						>
+							<ChevronRight size={18} />
+						</button>
+					</div>
+				{/if}
+			</div>
+			<ul class="row" bind:this={readingRowEl}>
 				{#each home.continueReading.items as book (book.id)}
 					<li>
 						<article class="book">
@@ -51,16 +141,42 @@
 						</article>
 					</li>
 				{/each}
-		</ul>
-	</section>
-{/if}
+			</ul>
+		</section>
+	{/if}
 
 	<Shelf title="Next up" items={home.nextUp.items} />
 
 	{#if home.recentAlbums.length > 0}
 		<section class="shelf" aria-label="Recently added albums">
-			<h2 class="heading">Recently added albums</h2>
-			<ul class="row">
+			<div class="shelf-header">
+				<h2 class="heading">Recently added albums</h2>
+				{#if albumHasOverflow}
+					<div class="scroll-arrows">
+						<button
+							type="button"
+							class="scroll-btn"
+							onclick={() => scrollRow(albumRowEl, 'left')}
+							disabled={!canAlbumScrollLeft}
+							aria-label="Scroll Recently added albums left"
+							title="Scroll left"
+						>
+							<ChevronLeft size={18} />
+						</button>
+						<button
+							type="button"
+							class="scroll-btn"
+							onclick={() => scrollRow(albumRowEl, 'right')}
+							disabled={!canAlbumScrollRight}
+							aria-label="Scroll Recently added albums right"
+							title="Scroll right"
+						>
+							<ChevronRight size={18} />
+						</button>
+					</div>
+				{/if}
+			</div>
+			<ul class="row" bind:this={albumRowEl}>
 				{#each home.recentAlbums as album (album.id)}
 					<li>
 						<article class="album">
@@ -111,9 +227,53 @@
 		margin-bottom: 2rem;
 	}
 
+	.shelf-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 0.75rem;
+		gap: 0.5rem;
+	}
+
 	.heading {
 		font-size: 1.1rem;
-		margin-bottom: 0.75rem;
+		margin: 0;
+	}
+
+	.scroll-arrows {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.scroll-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.85rem;
+		height: 1.85rem;
+		padding: 0;
+		border-radius: var(--radius);
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		color: var(--text);
+		cursor: pointer;
+		transition:
+			background 0.15s ease,
+			opacity 0.15s ease,
+			color 0.15s ease,
+			border-color 0.15s ease;
+	}
+
+	.scroll-btn:hover:not(:disabled) {
+		background: var(--accent);
+		color: var(--accent-contrast);
+		border-color: var(--accent);
+	}
+
+	.scroll-btn:disabled {
+		opacity: 0.3;
+		cursor: default;
 	}
 
 	.row {
@@ -136,11 +296,20 @@
 		width: 100%;
 	}
 
-	.progress {
-		height: 3px;
-		background: var(--surface-2);
-		border-radius: 2px;
+	.cover-link {
+		position: relative;
+		display: block;
+		border-radius: var(--radius);
 		overflow: hidden;
+	}
+
+	.progress {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 4px;
+		background: rgba(255, 255, 255, 0.2);
 	}
 
 	.progress span {
@@ -158,34 +327,6 @@
 		white-space: nowrap;
 	}
 
-	.cover-link {
-		position: relative;
-		display: block;
-		border-radius: var(--radius);
-		overflow: hidden;
-	}
-
-	.cover-link:hover {
-		text-decoration: none;
-		filter: brightness(1.08);
-	}
-
-	.cover-link .progress {
-		position: absolute;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		height: 4px;
-		background: rgba(255, 255, 255, 0.2);
-		border-radius: 0;
-	}
-
-	.cover-link .progress span {
-		display: block;
-		height: 100%;
-		background: var(--accent);
-	}
-
 	.subtitle {
 		font-size: 0.8rem;
 		color: var(--muted);
@@ -197,25 +338,18 @@
 
 	.empty-state {
 		text-align: center;
-		padding: 3rem 0;
-	}
-
-	.muted {
+		padding: 3rem 1rem;
 		color: var(--muted);
 	}
 
 	.button {
 		display: inline-block;
 		margin-top: 1rem;
+		padding: 0.5rem 1rem;
 		background: var(--accent);
 		color: var(--accent-contrast);
-		font-weight: 600;
 		border-radius: var(--radius);
-		padding: 0.6rem 1.2rem;
-	}
-
-	.button:hover {
 		text-decoration: none;
-		filter: brightness(1.05);
+		font-weight: 500;
 	}
 </style>

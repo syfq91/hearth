@@ -139,6 +139,7 @@ class ItemSummary(BaseModel):
     season_number: int | None = None
     episode_number: int | None = None
     episode_count: int | None = None
+    volume: str | None = None
 
 
 class ItemDetail(ItemSummary):
@@ -670,6 +671,7 @@ def item_summary(
     series_poster: ImageResponse | None = None
     season_number: int | None = None
     episode_number: int | None = None
+    volume: str | None = None
     if item.type == "episode":
         ep = getattr(item, "episode", None)
         if ep is not None:
@@ -680,6 +682,11 @@ def item_summary(
             if series is not None and getattr(series, "item", None) is not None:
                 series_title = series.item.title
                 series_poster = _primary_image(series.item, "poster")
+    elif item.type == "book":
+        book = getattr(item, "book", None)
+        if book is not None and book.series_index is not None:
+            idx = book.series_index
+            volume = f"Vol. {int(idx)}" if idx == int(idx) else f"Vol. {idx}"
 
     return ItemSummary(
         id=item.id,
@@ -703,6 +710,7 @@ def item_summary(
         season_number=season_number,
         episode_number=episode_number,
         episode_count=episode_count,
+        volume=volume,
     )
 
 

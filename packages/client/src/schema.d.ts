@@ -3263,6 +3263,8 @@ export interface components {
              * @default movie
              */
             type: string;
+            /** Volume */
+            volume?: string | null;
             watch_state: components["schemas"]["WatchStateResponse"];
             /** Year */
             year?: number | null;
@@ -3331,6 +3333,8 @@ export interface components {
              * @default movie
              */
             type: string;
+            /** Volume */
+            volume?: string | null;
             watch_state: components["schemas"]["WatchStateResponse"];
             /** Year */
             year?: number | null;
@@ -4249,6 +4253,8 @@ export interface components {
              * @default movie
              */
             type: string;
+            /** Volume */
+            volume?: string | null;
             watch_state: components["schemas"]["WatchStateResponse"];
             /** Year */
             year?: number | null;

@@ -2853,6 +2853,17 @@
             "title": "Type",
             "type": "string"
           },
+          "volume": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume"
+          },
           "watch_state": {
             "$ref": "#/components/schemas/WatchStateResponse"
           },
@@ -3077,6 +3088,17 @@
             "default": "movie",
             "title": "Type",
             "type": "string"
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume"
           },
           "watch_state": {
             "$ref": "#/components/schemas/WatchStateResponse"
@@ -5602,6 +5624,17 @@
             "default": "movie",
             "title": "Type",
             "type": "string"
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume"
           },
           "watch_state": {
             "$ref": "#/components/schemas/WatchStateResponse"
