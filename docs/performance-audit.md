@@ -247,9 +247,11 @@ session and avoid per-request overhead.
 
 ---
 
-### 2.2 🟡 `BaseHTTPMiddleware` for All Three Middleware Classes
+### 2.2 🟡 `BaseHTTPMiddleware` for All Three Middleware Classes — [RESOLVED]
 
 **Location:** [`app/core/middleware.py` L22, L47, L92](file:///home/syafiq/code/hearth/app/core/middleware.py#L22-L92)
+
+*Status: Resolved — converted RequestSizeLimitMiddleware, RequestIDMiddleware, and SecurityHeadersMiddleware to pure ASGI middleware, eliminating BaseHTTPMiddleware context switching and streaming wrapper overhead.*
 
 All three middleware classes inherit from `BaseHTTPMiddleware`. This Starlette
 class wraps each request in a `StreamingResponse` wrapper and cannot pass
@@ -570,7 +572,7 @@ the connection pragmas for future-proofing.
 | 1.7 | 🔵 Low | API | `_book_folders()` materializes all books in memory | Medium |
 | 1.8 | ⚪ Info | DB | WAL set only in migration | None |
 | 2.1 | 🟠 High | API+FE | Home page = 5+N HTTP requests | Medium |
-| 2.2 | 🟡 Medium | API | `BaseHTTPMiddleware` for all middleware | Easy |
+| 2.2 | 🟡 Medium | API | `BaseHTTPMiddleware` for all middleware | ✅ Resolved |
 | 2.3 | 🟡 Medium | API | ETag via JSON + SHA-256 per request | ✅ Resolved |
 | 2.4 | 🔵 Low | API | ImagePipeline created per request | ✅ Resolved |
 | 2.5 | 🔵 Low | API | Person search uses ILIKE | Low |
