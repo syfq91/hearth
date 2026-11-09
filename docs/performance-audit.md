@@ -104,9 +104,11 @@ size only helps if using a thread-per-connection driver.
 
 ---
 
-### 1.4 🟡 Missing Composite Index on `user_item_state`
+### 1.4 🟡 Missing Composite Index on `user_item_state` — [RESOLVED]
 
-**Location:** [`app/db/models.py` L599–L621](file:///home/syafiq/code/hearth/app/db/models.py#L599-L621)
+**Location:** [`app/db/models.py` L599–L621](file:///home/syafiq/code/hearth/app/db/models.py#L599-L621), migration `0009_state_and_progress_indexes`
+
+*Status: Resolved — added `ix_user_item_state_continue` (user_id, played, last_played_at), `ix_user_item_state_favorite` (user_id, favorite, updated_at), and `ix_book_progress_continue` (user_id, completed, updated_at).*
 
 The `user_item_state` table uses a composite primary key `(user_id, item_id)`.
 The home shelves query:
@@ -554,7 +556,7 @@ the connection pragmas for future-proofing.
 | 1.1 | 🟠 High | DB | `MediaItem` selectin over-fetching (10 relations) | Open |
 | 1.2 | 🟠 High | DB | Recursive selectin cascade on Series/Season/Episode | Open |
 | 1.3 | 🟡 Medium | DB | Pool size 50+50 for SQLite | ✅ Resolved |
-| 1.4 | 🟡 Medium | DB | Missing index on `user_item_state` for continue-watching | Open |
+| 1.4 | 🟡 Medium | DB | Missing index on `user_item_state` for continue-watching | ✅ Resolved |
 | 1.5 | 🟡 Medium | API | `recently-added` fetches 5× then discards | Medium |
 | 1.6 | 🟡 Medium | API | Per-card `session.get()` in recently-added loop | Easy |
 | 1.7 | 🔵 Low | API | `_book_folders()` materializes all books in memory | Medium |

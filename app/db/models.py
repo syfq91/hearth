@@ -604,7 +604,11 @@ class UserItemState(Base):
     """
 
     __tablename__ = "user_item_state"
-    __table_args__ = (CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 10", name="rating"),)
+    __table_args__ = (
+        CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 10", name="rating"),
+        Index("ix_user_item_state_continue", "user_id", "played", "last_played_at"),
+        Index("ix_user_item_state_favorite", "user_id", "favorite", "updated_at"),
+    )
 
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
@@ -770,6 +774,7 @@ class BookProgress(Base):
     __tablename__ = "book_progress"
     __table_args__ = (
         CheckConstraint("percentage >= 0.0 AND percentage <= 100.0", name="percentage_bounds"),
+        Index("ix_book_progress_continue", "user_id", "completed", "updated_at"),
     )
 
     user_id: Mapped[str] = mapped_column(
