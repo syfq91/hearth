@@ -396,6 +396,21 @@ async def get_item(
             UserItemState.item_id == item.id,
         )
     )
+
+    item_ts = (
+        int(item.updated_at.timestamp() * 1000)
+        if item.updated_at
+        else (int(item.added_at.timestamp() * 1000) if item.added_at else 0)
+    )
+    state_ts = int(state.updated_at.timestamp() * 1000) if (state and state.updated_at) else 0
+    fields_token = fields.strip() if fields else ""
+    etag_raw = f"{item.id}:{item_ts}:{state_ts}:{fields_token}"
+    etag = f'"{hashlib.sha256(etag_raw.encode("ascii")).hexdigest()[:16]}"'
+
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match and (if_none_match == "*" or if_none_match.strip('"') == etag.strip('"')):
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+
     people = await _people(session, item.id)
     summary = item_summary(item, state)
     movie = item.movie
@@ -438,13 +453,6 @@ async def get_item(
     )
 
     data = detail.model_dump(mode="json")
-    raw = json.dumps(data, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    etag = f'"{hashlib.sha256(raw).hexdigest()[:16]}"'
-
-    if_none_match = request.headers.get("if-none-match")
-    if if_none_match and (if_none_match == "*" or if_none_match.strip('"') == etag.strip('"')):
-        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
-
     if fields is not None:
         wanted = {f.strip() for f in fields.split(",") if f.strip()}
         if wanted:

@@ -283,9 +283,11 @@ class SecurityHeadersMiddleware:
 
 ---
 
-### 2.3 🟡 ETag Computation via JSON Serialization + SHA-256
+### 2.3 🟡 ETag Computation via JSON Serialization + SHA-256 — [RESOLVED]
 
 **Location:** [`app/api/v1/items.py` L440–L442](file:///home/syafiq/code/hearth/app/api/v1/items.py#L440-L442)
+
+*Status: Resolved — computed ETag from item and state timestamps, short-circuiting 304 responses before object detail building and eliminating redundant JSON dumps.*
 
 ```python
 data = detail.model_dump(mode="json")
@@ -569,7 +571,7 @@ the connection pragmas for future-proofing.
 | 1.8 | ⚪ Info | DB | WAL set only in migration | None |
 | 2.1 | 🟠 High | API+FE | Home page = 5+N HTTP requests | Medium |
 | 2.2 | 🟡 Medium | API | `BaseHTTPMiddleware` for all middleware | Easy |
-| 2.3 | 🟡 Medium | API | ETag via JSON + SHA-256 per request | Easy |
+| 2.3 | 🟡 Medium | API | ETag via JSON + SHA-256 per request | ✅ Resolved |
 | 2.4 | 🔵 Low | API | ImagePipeline created per request | ✅ Resolved |
 | 2.5 | 🔵 Low | API | Person search uses ILIKE | Low |
 | 3.1 | 🟡 Medium | Service | Scanner hashes sequentially | Easy |
