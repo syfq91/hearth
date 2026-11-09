@@ -78,9 +78,11 @@
 		</section>
 	{/if}
 
-	<Shelf title="Recently added" items={home.recentlyAdded.items} />
+	{#each home.recentLibraries as entry (entry.library.id)}
+		<Shelf title={`Recently added in ${entry.library.name}`} items={entry.shelf.items} />
+	{/each}
 
-	{#if home.recentAlbums.length === 0 && home.continueWatching.items.length === 0 && home.continueReading.items.length === 0 && home.nextUp.items.length === 0 && home.recentlyAdded.items.length === 0 && !home.error}
+	{#if home.recentAlbums.length === 0 && home.continueWatching.items.length === 0 && home.continueReading.items.length === 0 && home.nextUp.items.length === 0 && home.recentLibraries.length === 0 && !home.error}
 		<div class="empty-state">
 			<p>Nothing here yet.</p>
 			<p class="muted">Add a library from the admin area to get started.</p>
