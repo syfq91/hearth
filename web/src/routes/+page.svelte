@@ -27,30 +27,30 @@
 			<h2 class="heading">Continue reading</h2>
 			<ul class="row">
 				{#each home.continueReading.items as book (book.id)}
-				<li>
-					<article class="book">
-						<a href={`/books/${book.id}`} aria-label={book.title}>
-							<BookCover coverImageId={book.cover_image_id} alt="" />
-						</a>
-						<h3 class="title">{book.title}</h3>
-						{#if book.author}
-							<p class="subtitle">{book.author.name}</p>
-						{/if}
-						{#if book.progress}
-							<div
-								class="progress"
-								role="progressbar"
-								aria-valuenow={Math.round(book.progress.percentage)}
-								aria-valuemin="0"
-								aria-valuemax="100"
-								aria-label="Reading progress"
-							>
-								<span style:width="{book.progress.percentage}%"></span>
-							</div>
-						{/if}
-					</article>
-				</li>
-			{/each}
+					<li>
+						<article class="book">
+							<a class="cover-link" href={`/books/${book.id}`} aria-label={book.title}>
+								<BookCover coverImageId={book.cover_image_id} alt="" />
+								{#if book.progress && book.progress.percentage > 0}
+									<div
+										class="progress"
+										role="progressbar"
+										aria-valuenow={Math.round(book.progress.percentage)}
+										aria-valuemin="0"
+										aria-valuemax="100"
+										aria-label="Reading progress"
+									>
+										<span style:width="{book.progress.percentage}%"></span>
+									</div>
+								{/if}
+							</a>
+							<h3 class="title">{book.title}</h3>
+							{#if book.author}
+								<p class="subtitle">{book.author.name}</p>
+							{/if}
+						</article>
+					</li>
+				{/each}
 		</ul>
 	</section>
 {/if}
@@ -152,10 +152,41 @@
 		white-space: nowrap;
 	}
 
+	.cover-link {
+		position: relative;
+		display: block;
+		border-radius: var(--radius);
+		overflow: hidden;
+	}
+
+	.cover-link:hover {
+		text-decoration: none;
+		filter: brightness(1.08);
+	}
+
+	.cover-link .progress {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 4px;
+		background: rgba(255, 255, 255, 0.2);
+		border-radius: 0;
+	}
+
+	.cover-link .progress span {
+		display: block;
+		height: 100%;
+		background: var(--accent);
+	}
+
 	.subtitle {
 		font-size: 0.8rem;
 		color: var(--muted);
 		margin: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.empty-state {
