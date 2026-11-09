@@ -329,9 +329,11 @@ and inject it as a dependency.
 
 ---
 
-### 2.5 🔵 Person Search Uses `LIKE '%token%'` Without FTS
+### 2.5 🔵 Person Search Uses `LIKE '%token%'` Without FTS — [RESOLVED]
 
-**Location:** [`app/api/v1/search.py` L183](file:///home/syafiq/code/hearth/app/api/v1/search.py#L183)
+**Location:** [`app/api/v1/search.py` L173–L190](file:///home/syafiq/code/hearth/app/api/v1/search.py#L173-L190)
+
+*Status: Resolved — replaced `JOIN ItemPerson JOIN MediaItem` with `DISTINCT` by correlated `EXISTS` subquery, avoiding full table joins and in-memory deduplication across credits.*
 
 ```python
 person_query = person_query.where(Person.name.ilike(f"%{t}%"))
@@ -581,7 +583,7 @@ the connection pragmas for future-proofing.
 | 2.2 | 🟡 Medium | API | `BaseHTTPMiddleware` for all middleware | ✅ Resolved |
 | 2.3 | 🟡 Medium | API | ETag via JSON + SHA-256 per request | ✅ Resolved |
 | 2.4 | 🔵 Low | API | ImagePipeline created per request | ✅ Resolved |
-| 2.5 | 🔵 Low | API | Person search uses ILIKE | Low |
+| 2.5 | 🔵 Low | API | Person search uses ILIKE | ✅ Resolved |
 | 3.1 | 🟡 Medium | Service | Scanner hashes sequentially | ✅ Resolved |
 | 3.2 | 🟡 Medium | Service | Blurhash IPC overhead | ✅ Resolved |
 | 3.3 | 🔵 Low | Service | TMDB rate limiter serializes cached reads | Low |

@@ -170,14 +170,23 @@ async def search(
     # 2. Search people credits
     people: list[SearchPersonResult] = []
     if type in ("all", "person") and tokens:
-        person_query = (
-            select(Person.id, Person.name)
-            .distinct()
-            .join(ItemPerson, ItemPerson.person_id == Person.id)
-            .join(MediaItem, MediaItem.id == ItemPerson.item_id)
-        )
+        person_query = select(Person.id, Person.name)
         if library_ids is not None:
-            person_query = person_query.where(MediaItem.library_id.in_(library_ids))
+            has_accessible_item = (
+                select(1)
+                .select_from(ItemPerson)
+                .join(MediaItem, MediaItem.id == ItemPerson.item_id)
+                .where(
+                    ItemPerson.person_id == Person.id,
+                    MediaItem.library_id.in_(library_ids),
+                )
+            )
+            person_query = person_query.where(has_accessible_item.exists())
+        else:
+            has_any_item = (
+                select(1).select_from(ItemPerson).where(ItemPerson.person_id == Person.id)
+            )
+            person_query = person_query.where(has_any_item.exists())
 
         for t in tokens:
             person_query = person_query.where(Person.name.ilike(f"%{t}%"))
