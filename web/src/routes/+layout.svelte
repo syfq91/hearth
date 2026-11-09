@@ -92,103 +92,134 @@
 <div class="app" class:fullscreen-app={isFullscreenMedia} use:spatialFocus>
 	{#if !isFullscreenMedia}
 		<a class="skip-link" href="#main">Skip to content</a>
-		<header class="topbar">
-			<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
-			<nav aria-label="Primary">
-				<a href="/" aria-current={isActive('/') ? 'page' : undefined}><House size={16} /> <span>Home</span></a>
-				<a href="/library" aria-current={isActive('/library') ? 'page' : undefined}><Layers size={16} /> <span>Library</span></a>
-				<a href="/music" aria-current={isActive('/music') ? 'page' : undefined}><Music size={16} /> <span>Music</span></a>
-				<a href="/books" aria-current={isActive('/books') ? 'page' : undefined}><BookOpen size={16} /> <span>Books</span></a>
-				<a href="/favorites" aria-current={isActive('/favorites') ? 'page' : undefined}><Heart size={16} /> <span>Favourites</span></a>
-				<a href="/search" aria-current={isActive('/search') ? 'page' : undefined}><Search size={16} /> <span>Search</span></a>
+		<aside class="sidebar">
+			<div class="sidebar-header">
+				<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
+			</div>
+			<nav class="sidebar-nav" aria-label="Primary">
+				<a href="/" aria-current={isActive('/') ? 'page' : undefined}>
+					<House size={18} />
+					<span>Home</span>
+				</a>
+				<a href="/library" aria-current={isActive('/library') ? 'page' : undefined}>
+					<Layers size={18} />
+					<span>Library</span>
+				</a>
+				<a href="/music" aria-current={isActive('/music') ? 'page' : undefined}>
+					<Music size={18} />
+					<span>Music</span>
+				</a>
+				<a href="/books" aria-current={isActive('/books') ? 'page' : undefined}>
+					<BookOpen size={18} />
+					<span>Books</span>
+				</a>
+				<a href="/favorites" aria-current={isActive('/favorites') ? 'page' : undefined}>
+					<Heart size={18} />
+					<span>Favourites</span>
+				</a>
 			</nav>
-			<div class="spacer"></div>
-			{#if session.status === 'authenticated' && session.user}
-				<div class="user-menu-wrapper" bind:this={userMenuRef}>
-					<button
-						type="button"
-						class="user-btn"
-						onclick={toggleUserMenu}
-						aria-expanded={userMenuOpen}
-						aria-haspopup="menu"
-					>
-						<User size={15} />
-						<span>{session.user.username}</span>
-						<span class="chevron" class:open={userMenuOpen}>
-							<ChevronDown size={14} />
-						</span>
-					</button>
+		</aside>
+		<div class="content-wrapper">
+			<header class="topbar">
+				<div class="spacer"></div>
+				<a
+					href="/search"
+					class="search-btn"
+					aria-current={isActive('/search') ? 'page' : undefined}
+					aria-label="Search"
+				>
+					<Search size={16} />
+					<span>Search</span>
+				</a>
+				{#if session.status === 'authenticated' && session.user}
+					<div class="user-menu-wrapper" bind:this={userMenuRef}>
+						<button
+							type="button"
+							class="user-btn"
+							onclick={toggleUserMenu}
+							aria-expanded={userMenuOpen}
+							aria-haspopup="menu"
+						>
+							<User size={15} />
+							<span>{session.user.username}</span>
+							<span class="chevron" class:open={userMenuOpen}>
+								<ChevronDown size={14} />
+							</span>
+						</button>
 
-					{#if userMenuOpen}
-						<div class="dropdown-menu" role="menu">
-							<a
-								class="dropdown-item"
-								href="/profile"
-								role="menuitem"
-								onclick={closeUserMenu}
-							>
-								<User size={15} />
-								<span>Profile</span>
-							</a>
-
-							{#if session.user.role === 'admin'}
+						{#if userMenuOpen}
+							<div class="dropdown-menu" role="menu">
 								<a
 									class="dropdown-item"
-									href="/admin"
+									href="/profile"
 									role="menuitem"
-									aria-current={isActive('/admin') ? 'page' : undefined}
 									onclick={closeUserMenu}
 								>
-									<Shield size={15} />
-									<span>Admin</span>
+									<User size={15} />
+									<span>Profile</span>
 								</a>
-							{/if}
 
-							<button
-								type="button"
-								class="dropdown-item"
-								role="menuitem"
-								onclick={() => {
-									setTvMode(!tv.on);
-								}}
-							>
-								<TvIcon size={15} />
-								<span>TV mode</span>
-								<span class="dropdown-item-state">{tv.on ? 'On' : 'Off'}</span>
-							</button>
+								{#if session.user.role === 'admin'}
+									<a
+										class="dropdown-item"
+										href="/admin"
+										role="menuitem"
+										aria-current={isActive('/admin') ? 'page' : undefined}
+										onclick={closeUserMenu}
+									>
+										<Shield size={15} />
+										<span>Admin</span>
+									</a>
+								{/if}
 
-							<div class="dropdown-divider"></div>
+								<button
+									type="button"
+									class="dropdown-item"
+									role="menuitem"
+									onclick={() => {
+										setTvMode(!tv.on);
+									}}
+								>
+									<TvIcon size={15} />
+									<span>TV mode</span>
+									<span class="dropdown-item-state">{tv.on ? 'On' : 'Off'}</span>
+								</button>
 
-							<button
-								type="button"
-								class="dropdown-item danger"
-								role="menuitem"
-								onclick={() => {
-									closeUserMenu();
-									void signOut();
-								}}
-							>
-								<LogOut size={15} />
-								<span>Sign out</span>
-							</button>
-						</div>
-					{/if}
-				</div>
-			{/if}
-		</header>
-	{/if}
-	<main id="main" tabindex="-1" class:fullscreen-main={isFullscreenMedia}>
-		{@render children()}
-	</main>
-	{#if !isFullscreenMedia}
+								<div class="dropdown-divider"></div>
+
+								<button
+									type="button"
+									class="dropdown-item danger"
+									role="menuitem"
+									onclick={() => {
+										closeUserMenu();
+										void signOut();
+									}}
+								>
+									<LogOut size={15} />
+									<span>Sign out</span>
+								</button>
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</header>
+			<main id="main" tabindex="-1">
+				{@render children()}
+			</main>
+		</div>
 		<AudioBar />
+	{:else}
+		<main id="main" tabindex="-1" class="fullscreen-main">
+			{@render children()}
+		</main>
 	{/if}
 </div>
 
 <style>
 	.app {
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
 		min-height: 100vh;
 	}
 
@@ -196,14 +227,80 @@
 		height: 100vh;
 		min-height: 100vh;
 		overflow: hidden;
+		flex-direction: column;
+	}
+
+	.sidebar {
+		width: 220px;
+		flex-shrink: 0;
+		background: var(--surface);
+		border-right: 1px solid var(--border);
+		display: flex;
+		flex-direction: column;
+		position: sticky;
+		top: 0;
+		height: 100vh;
+		box-sizing: border-box;
+		padding: 1.25rem 0.85rem;
+		z-index: 10;
+		overflow-y: auto;
+	}
+
+	.sidebar-header {
+		padding: 0 0.5rem 1.25rem;
+	}
+
+	.brand {
+		font-weight: 700;
+		font-size: 1.25rem;
+		letter-spacing: 0.02em;
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.sidebar-nav {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+
+	.sidebar-nav a {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		color: var(--muted);
+		padding: 0.55rem 0.75rem;
+		border-radius: var(--radius);
+		font-size: 0.95rem;
+		font-weight: 500;
+		text-decoration: none;
+		transition: background 0.15s ease, color 0.15s ease;
+	}
+
+	.sidebar-nav a:hover {
+		background: var(--surface-2);
+		color: var(--text);
+	}
+
+	.sidebar-nav a[aria-current='page'] {
+		background: var(--surface-2);
+		color: var(--accent);
+		font-weight: 600;
+	}
+
+	.content-wrapper {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-width: 0;
+		min-height: 100vh;
 	}
 
 	.topbar {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.6rem 1rem;
-		padding: 0.75rem 1.25rem;
+		gap: 0.75rem;
+		padding: 0.75rem 1.5rem;
 		background: var(--surface);
 		border-bottom: 1px solid var(--border);
 		position: sticky;
@@ -211,11 +308,31 @@
 		z-index: 10;
 	}
 
-	.brand {
-		font-weight: 700;
-		font-size: 1.15rem;
-		letter-spacing: 0.02em;
+	.search-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		color: var(--muted);
+		padding: 0.35rem 0.65rem;
+		border-radius: var(--radius);
+		font-size: 0.9rem;
+		font-weight: 500;
+		text-decoration: none;
+		border: 1px solid transparent;
+		transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+	}
+
+	.search-btn:hover {
+		background: var(--surface-2);
+		color: var(--text);
+		border-color: var(--border);
+	}
+
+	.search-btn[aria-current='page'] {
+		background: var(--surface-2);
 		color: var(--accent);
+		border-color: var(--border);
+		font-weight: 600;
 	}
 
 	.spacer {
@@ -238,30 +355,6 @@
 
 	.skip-link:focus {
 		top: 0.75rem;
-	}
-
-	nav {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.9rem;
-		font-size: 0.95rem;
-	}
-
-	nav a {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		color: var(--muted);
-		padding: 0.25rem 0.15rem;
-	}
-
-	nav a:hover {
-		color: var(--text);
-	}
-
-	nav a[aria-current='page'] {
-		color: var(--text);
-		font-weight: 600;
 	}
 
 	.user-menu-wrapper {
@@ -365,10 +458,11 @@
 
 	main {
 		flex: 1;
-		padding: 1.25rem;
+		padding: 1.5rem;
 		max-width: 1400px;
 		width: 100%;
 		margin: 0 auto;
+		box-sizing: border-box;
 	}
 
 	main.fullscreen-main {
@@ -382,14 +476,43 @@
 		overflow: hidden;
 	}
 
-	@media (max-width: 720px) {
-		.topbar {
-			padding: 0.6rem 0.75rem;
+	@media (max-width: 768px) {
+		.app {
+			flex-direction: column;
 		}
 
-		nav {
-			gap: 0.6rem;
-			font-size: 0.9rem;
+		.sidebar {
+			width: 100%;
+			height: auto;
+			position: relative;
+			border-right: none;
+			border-bottom: 1px solid var(--border);
+			padding: 0.6rem 0.75rem;
+			flex-direction: row;
+			align-items: center;
+			justify-content: space-between;
+			flex-wrap: wrap;
+			gap: 0.5rem;
+		}
+
+		.sidebar-header {
+			padding: 0 0.5rem;
+		}
+
+		.sidebar-nav {
+			flex-direction: row;
+			flex-wrap: wrap;
+			gap: 0.25rem;
+		}
+
+		.sidebar-nav a {
+			padding: 0.35rem 0.5rem;
+			font-size: 0.85rem;
+			gap: 0.4rem;
+		}
+
+		.topbar {
+			padding: 0.6rem 0.75rem;
 		}
 
 		main {
