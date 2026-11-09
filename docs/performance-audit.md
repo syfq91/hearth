@@ -503,7 +503,9 @@ client's perspective:
 
 ---
 
-### 4.5 🔵 No HTTP Cache Headers on API Responses
+### 4.5 🔵 No HTTP Cache Headers on API Responses — [RESOLVED]
+
+*Status: Resolved — attached `Cache-Control: private, no-cache` with `ETag` to item responses so browsers store representations and validate with 304.*
 
 The API sets `Cache-Control` on images (24h immutable) and streams (no-cache),
 but JSON API responses (shelves, items, search) have no cache headers. The
@@ -592,7 +594,7 @@ the connection pragmas for future-proofing.
 | 4.2 | 🟡 Medium | FE | Duplicate lucide icon packages | ✅ Resolved |
 | 4.3 | 🟡 Medium | FE | 464 KB shared chunk | Easy |
 | 4.4 | 🔵 Low | FE | Home page waterfall (mirrors 2.1) | — |
-| 4.5 | 🔵 Low | FE | No cache headers on JSON responses | Easy |
+| 4.5 | 🔵 Low | FE | No cache headers on JSON responses | ✅ Resolved |
 | 4.6 | ⚪ Info | FE | ES2019 target includes polyfills | None |
 | 5.1 | 🔵 Low | Infra | Python healthcheck startup cost | None |
 | 5.2 | ⚪ Info | Infra | No mmap_size pragma | ✅ Resolved |

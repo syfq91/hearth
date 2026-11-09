@@ -459,9 +459,15 @@ async def get_item(
             wanted.add("id")
             wanted.add("type")
             filtered = {k: v for k, v in data.items() if k in wanted}
-            return JSONResponse(content=filtered, headers={"ETag": etag})
+            return JSONResponse(
+                content=filtered,
+                headers={"ETag": etag, "Cache-Control": "private, no-cache"},
+            )
 
-    return JSONResponse(content=data, headers={"ETag": etag})
+    return JSONResponse(
+        content=data,
+        headers={"ETag": etag, "Cache-Control": "private, no-cache"},
+    )
 
 
 # ------------------------------------------------------------------- helpers
