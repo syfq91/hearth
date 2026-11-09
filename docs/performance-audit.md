@@ -438,9 +438,11 @@ bundle.
 
 ---
 
-### 4.2 🟡 Both `@lucide/svelte` and `lucide-svelte` Are Dependencies
+### 4.2 🟡 Both `@lucide/svelte` and `lucide-svelte` Are Dependencies — [RESOLVED]
 
 **Location:** [`web/package.json` L31, L35](file:///home/syafiq/code/hearth/web/package.json#L31-L35)
+
+*Status: Resolved — removed legacy `lucide-svelte` package; all imports use `@lucide/svelte`.*
 
 ```json
 "@lucide/svelte": "^1.68.0",
@@ -571,7 +573,7 @@ the connection pragmas for future-proofing.
 | 3.3 | 🔵 Low | Service | TMDB rate limiter serializes cached reads | Low |
 | 3.4 | 🔵 Low | Service | Thread-per-chunk file streaming | Low |
 | 4.1 | 🟡 Medium | FE | 720 KB reader chunk | Medium |
-| 4.2 | 🟡 Medium | FE | Duplicate lucide icon packages | Easy |
+| 4.2 | 🟡 Medium | FE | Duplicate lucide icon packages | ✅ Resolved |
 | 4.3 | 🟡 Medium | FE | 464 KB shared chunk | Easy |
 | 4.4 | 🔵 Low | FE | Home page waterfall (mirrors 2.1) | — |
 | 4.5 | 🔵 Low | FE | No cache headers on JSON responses | Easy |

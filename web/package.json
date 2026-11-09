@@ -32,7 +32,6 @@
 		"@sveltejs/adapter-static": "^4.0.0",
 		"foliate-js": "^1.0.1",
 		"jassub": "^2.5.26",
-		"lucide-svelte": "^1.0.1",
 		"pdfjs-dist": "^6.4.299",
 		"video.js": "^8.24.2"
 	}
