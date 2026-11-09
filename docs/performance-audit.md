@@ -135,9 +135,11 @@ Index("ix_user_item_state_fav", "user_id", "favorite")
 
 ---
 
-### 1.5 🟡 `recently-added` Fetches 5× the Limit Then Discards
+### 1.5 🟡 `recently-added` Fetches 5× the Limit Then Discards — [RESOLVED]
 
 **Location:** [`app/api/v1/home.py` L149](file:///home/syafiq/code/hearth/app/api/v1/home.py#L149)
+
+*Status: Resolved — the endpoint first executes a lightweight scalar tuple query `(MediaItem.id, MediaItem.type, Episode.series_id)` with `outerjoin(Episode)` to perform episode deduplication, and only fetches full ORM objects and selectin relationships for the target page slice.*
 
 ```python
 fetch_limit = min(limit * 5, 200)
@@ -577,7 +579,7 @@ the connection pragmas for future-proofing.
 | 1.2 | 🟠 High | DB | Recursive selectin cascade on Series/Season/Episode | Open |
 | 1.3 | 🟡 Medium | DB | Pool size 50+50 for SQLite | ✅ Resolved |
 | 1.4 | 🟡 Medium | DB | Missing index on `user_item_state` for continue-watching | ✅ Resolved |
-| 1.5 | 🟡 Medium | API | `recently-added` fetches 5× then discards | Medium |
+| 1.5 | 🟡 Medium | API | `recently-added` fetches 5× then discards | ✅ Resolved |
 | 1.6 | 🟡 Medium | API | Per-card `session.get()` in recently-added loop | ✅ Resolved |
 | 1.7 | 🔵 Low | API | `_book_folders()` materializes all books in memory | Medium |
 | 1.8 | ⚪ Info | DB | WAL set only in migration | None |

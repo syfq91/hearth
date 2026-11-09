@@ -123,10 +123,56 @@ async def recently_added(
     if library_id is not None:
         await require_library_access(library_id, user, session)
 
-    query = (
-        select(MediaItem)
+    id_query = (
+        select(MediaItem.id, MediaItem.type, Episode.series_id)
+        .outerjoin(Episode, Episode.item_id == MediaItem.id)
         .where(MediaItem.type != "season")
         .order_by(MediaItem.added_at.desc(), MediaItem.id.desc())
+    )
+    if library_id is not None:
+        id_query = id_query.where(MediaItem.library_id == library_id)
+    else:
+        id_query = _restrict_to_accessible_libraries(id_query, user)
+
+    fetch_limit = min(limit * 5, 200)
+    raw_rows = (await session.execute(id_query.limit(fetch_limit + 1))).all()
+
+    grouped_cards: list[tuple[str, int | None]] = []
+    seen_series: dict[str, int] = {}
+
+    for item_id, item_type, series_id in raw_rows:
+        if item_type == "episode":
+            sid = series_id
+            if sid:
+                if sid in seen_series:
+                    idx = seen_series[sid]
+                    curr_id, count = grouped_cards[idx]
+                    grouped_cards[idx] = (curr_id, (count or 1) + 1)
+                else:
+                    seen_series[sid] = len(grouped_cards)
+                    grouped_cards.append((item_id, 1))
+            else:
+                grouped_cards.append((item_id, 1))
+        elif item_type == "series":
+            sid = item_id
+            if sid in seen_series:
+                idx = seen_series[sid]
+                curr_id, count = grouped_cards[idx]
+                grouped_cards[idx] = (item_id, count)
+            else:
+                seen_series[sid] = len(grouped_cards)
+                grouped_cards.append((item_id, None))
+        else:
+            grouped_cards.append((item_id, None))
+
+    page_card_ids = grouped_cards[:limit]
+    if not page_card_ids:
+        return HomeShelf(items=[], has_more=False)
+
+    selected_ids = [item_id for item_id, _ in page_card_ids]
+    items_query = (
+        select(MediaItem)
+        .where(MediaItem.id.in_(selected_ids))
         .options(
             selectinload(MediaItem.images),
             selectinload(MediaItem.genres),
@@ -141,42 +187,11 @@ async def recently_added(
             .selectinload(MediaItem.genres),
         )
     )
-    if library_id is not None:
-        query = query.where(MediaItem.library_id == library_id)
-    else:
-        query = _restrict_to_accessible_libraries(query, user)
+    loaded_map = {item.id: item for item in (await session.scalars(items_query)).all()}
+    page_cards = [
+        (loaded_map[item_id], count) for item_id, count in page_card_ids if item_id in loaded_map
+    ]
 
-    fetch_limit = min(limit * 5, 200)
-    raw_rows = list(await session.scalars(query.limit(fetch_limit + 1)))
-
-    grouped_cards: list[tuple[MediaItem, int | None]] = []
-    seen_series: dict[str, int] = {}
-
-    for item in raw_rows:
-        if item.type == "episode":
-            ep = getattr(item, "episode", None)
-            if ep is not None:
-                sid = ep.series_id
-                if sid in seen_series:
-                    idx = seen_series[sid]
-                    curr_item, count = grouped_cards[idx]
-                    grouped_cards[idx] = (curr_item, (count or 1) + 1)
-                else:
-                    seen_series[sid] = len(grouped_cards)
-                    grouped_cards.append((item, 1))
-        elif item.type == "series":
-            sid = item.id
-            if sid in seen_series:
-                idx = seen_series[sid]
-                curr_item, count = grouped_cards[idx]
-                grouped_cards[idx] = (item, count)
-            else:
-                seen_series[sid] = len(grouped_cards)
-                grouped_cards.append((item, None))
-        else:
-            grouped_cards.append((item, None))
-
-    page_cards = grouped_cards[:limit]
     states = await watch_states(session, user.id, [item.id for item, _ in page_cards])
 
     book_ids = [item.id for item, _ in page_cards if item.type == "book"]

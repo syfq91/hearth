@@ -342,6 +342,75 @@ async def test_recently_added_orders_and_filters_by_library(
     assert await _titles(admin_response) == ["Hidden", "Second", "First"]
 
 
+async def test_recently_added_groups_episodes_by_series(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from app.db.models import Episode, Season, Series
+
+    admin = await _setup(api_client)
+    tv_lib = await _library(db_settings, db_sessionmaker, "TV", library_type="tv")
+
+    async with db_sessionmaker() as session:
+        series_item = MediaItem(
+            library_id=tv_lib,
+            type="series",
+            title="Great Show",
+            sort_title="great show",
+            year=2020,
+            added_at=NOW - timedelta(days=5),
+            runtime_seconds=0,
+            match_state="matched",
+        )
+        series_item.series = Series()
+        session.add(series_item)
+        await session.flush()
+
+        season_item = MediaItem(
+            library_id=tv_lib,
+            type="season",
+            title="Season 1",
+            sort_title="season 1",
+            year=2020,
+            added_at=NOW - timedelta(days=5),
+            runtime_seconds=0,
+            match_state="matched",
+        )
+        season_item.season = Season(series_id=series_item.id, season_number=1)
+        session.add(season_item)
+        await session.flush()
+
+        for ep_num in [1, 2, 3]:
+            ep_item = MediaItem(
+                library_id=tv_lib,
+                type="episode",
+                title=f"Episode {ep_num}",
+                sort_title=f"episode {ep_num}",
+                year=2020,
+                added_at=NOW - timedelta(minutes=10 - ep_num),
+                runtime_seconds=1800,
+                match_state="matched",
+            )
+            ep_item.episode = Episode(
+                series_id=series_item.id,
+                season_id=season_item.id,
+                season_number=1,
+                episode_number=ep_num,
+            )
+            session.add(ep_item)
+        await session.commit()
+
+    res = await api_client.get("/api/v1/home/recently-added", headers=_bearer(admin))
+    assert res.status_code == 200
+    items = res.json()["items"]
+    # 3 episodes should be grouped into a single card for the series
+    assert len(items) == 1
+    assert items[0]["title"] == "Great Show"
+    assert items[0]["type"] == "series"
+    assert items[0]["episode_count"] == 3
+
+
 async def test_favorites_are_per_user_and_ordered_by_recent_change(
     api_client: httpx.AsyncClient,
     db_settings: Settings,
