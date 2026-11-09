@@ -180,9 +180,11 @@ response, it fires N individual SELECT queries.
 
 ---
 
-### 1.7 🔵 `_book_folders()` Loads All Book Files into Memory
+### 1.7 🔵 `_book_folders()` Loads All Book Files into Memory — [RESOLVED]
 
 **Location:** [`app/api/v1/items.py` L483–L504](file:///home/syafiq/code/hearth/app/api/v1/items.py#L483-L504)
+
+*Status: Resolved — `_book_folders()` accepts a folder filter parameter and filters `MediaFile.path` with SQL LIKE expressions across library roots, avoiding full-table file materialization when browsing subfolders.*
 
 ```python
 rows = await session.execute(
@@ -585,7 +587,7 @@ the connection pragmas for future-proofing.
 | 1.4 | 🟡 Medium | DB | Missing index on `user_item_state` for continue-watching | ✅ Resolved |
 | 1.5 | 🟡 Medium | API | `recently-added` fetches 5× then discards | ✅ Resolved |
 | 1.6 | 🟡 Medium | API | Per-card `session.get()` in recently-added loop | ✅ Resolved |
-| 1.7 | 🔵 Low | API | `_book_folders()` materializes all books in memory | Medium |
+| 1.7 | 🔵 Low | API | `_book_folders()` materializes all books in memory | ✅ Resolved |
 | 1.8 | ⚪ Info | DB | WAL set only in migration | None |
 | 2.1 | 🟠 High | API+FE | Home page = 5+N HTTP requests | ✅ Resolved |
 | 2.2 | 🟡 Medium | API | `BaseHTTPMiddleware` for all middleware | ✅ Resolved |

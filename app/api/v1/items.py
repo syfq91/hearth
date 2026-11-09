@@ -307,7 +307,7 @@ async def list_library_folders(
     counts: dict[str, int] = {}
     candidate_items: dict[str, list[str]] = {}
 
-    for item_id, item_folders in (await _book_folders(session, library)).items():
+    for item_id, item_folders in (await _book_folders(session, library, folder=current)).items():
         children: set[str] = set()
         for item_folder in item_folders:
             remainder = item_folder[len(prefix) :] if item_folder.startswith(prefix) else ""
@@ -494,12 +494,14 @@ def _relative_folder(path: Path, roots: list[Path]) -> str | None:
     return None
 
 
-async def _book_folders(session: AsyncSession, library: Library) -> dict[str, set[str]]:
-    """Map every book in the library to the folders that hold its files.
+async def _book_folders(
+    session: AsyncSession, library: Library, folder: str = ""
+) -> dict[str, set[str]]:
+    """Map books in ``folder`` (or the whole library if empty) to the folders that hold their files.
 
     Keys are ordered by MediaItem.sort_title.asc(), MediaItem.id.asc().
     """
-    rows = await session.execute(
+    stmt = (
         select(MediaItem.id, MediaFile.path)
         .join(MediaFile, MediaFile.item_id == MediaItem.id)
         .where(
@@ -507,14 +509,23 @@ async def _book_folders(session: AsyncSession, library: Library) -> dict[str, se
             MediaItem.type == "book",
             MediaFile.missing_since.is_(None),
         )
-        .order_by(MediaItem.sort_title.asc(), MediaItem.id.asc())
     )
+    if folder:
+        conditions = []
+        for root in library.paths:
+            base = _escape_like(str(Path(root.path) / folder))
+            conditions.append(MediaFile.path.like(f"{base}/%", escape="\\"))
+        if conditions:
+            stmt = stmt.where(or_(*conditions))
+
+    stmt = stmt.order_by(MediaItem.sort_title.asc(), MediaItem.id.asc())
+    rows = await session.execute(stmt)
     roots = [Path(root.path) for root in library.paths]
     folders: dict[str, set[str]] = {}
     for item_id, file_path in rows.all():
-        folder = _relative_folder(Path(file_path), roots)
-        if folder is not None:
-            folders.setdefault(item_id, set()).add(folder)
+        folder_rel = _relative_folder(Path(file_path), roots)
+        if folder_rel is not None:
+            folders.setdefault(item_id, set()).add(folder_rel)
     return folders
 
 
