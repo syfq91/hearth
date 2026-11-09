@@ -233,6 +233,17 @@ async def test_tv_library_browse_and_series_seasons_episodes_detail(
     assert ep_data["episode_number"] == 1
     assert len(ep_data["files"]) == 1
 
+    # 7. Episode detail via generic items endpoint
+    item_resp = await api_client.get(f"/api/v1/items/{ids['s1e1']}", headers=headers)
+    assert item_resp.status_code == 200, item_resp.text
+    item_data = item_resp.json()
+    assert item_data["id"] == ids["s1e1"]
+    assert item_data["type"] == "episode"
+    assert item_data["series_title"] == "The Wire"
+    assert item_data["series_id"] == ids["series"]
+    assert item_data["library_id"] == lib_id
+    assert len(item_data["files"]) == 1
+
 
 async def test_next_up_progression_across_seasons_and_out_of_order(
     api_client: httpx.AsyncClient,

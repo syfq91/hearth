@@ -10,7 +10,15 @@ from sqlalchemy.orm import selectinload
 
 from app.api.v1.items import ItemSummary, item_summary, watch_states
 from app.core.deps import RequireUser
-from app.db.models import ItemPerson, LibraryAccess, MediaItem, Person, UserItemState
+from app.db.models import (
+    Episode,
+    ItemPerson,
+    LibraryAccess,
+    MediaItem,
+    Person,
+    Series,
+    UserItemState,
+)
 from app.db.session import SessionDep
 from app.services.ratings import is_rating_permitted
 
@@ -137,7 +145,14 @@ async def search(
         loaded_items = await session.scalars(
             select(MediaItem)
             .where(MediaItem.id.in_(item_ids))
-            .options(selectinload(MediaItem.images), selectinload(MediaItem.genres))
+            .options(
+                selectinload(MediaItem.images),
+                selectinload(MediaItem.genres),
+                selectinload(MediaItem.episode)
+                .selectinload(Episode.series)
+                .selectinload(Series.item)
+                .selectinload(MediaItem.images),
+            )
         )
         items_by_id = {item.id: item for item in loaded_items.all()}
         states = await watch_states(session, user.id, list(items_by_id.keys()))

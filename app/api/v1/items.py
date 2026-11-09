@@ -12,7 +12,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, inspect, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
@@ -31,6 +31,7 @@ from app.db.models import (
     MediaFile,
     MediaItem,
     Person,
+    Series,
     UserItemState,
 )
 from app.db.models import (
@@ -122,6 +123,7 @@ class ItemSummary(BaseModel):
     type: str = "movie"
     title: str
     sort_title: str
+    library_id: str | None = None
     year: int | None = None
     overview: str | None = None
     rating: float | None = None
@@ -261,7 +263,14 @@ async def list_library_items(
         query = query.order_by(key_expression.asc(), MediaItem.id.asc())
     else:
         query = query.order_by(key_expression.desc(), MediaItem.id.desc())
-    query = query.options(selectinload(MediaItem.images), selectinload(MediaItem.genres))
+    query = query.options(
+        selectinload(MediaItem.images),
+        selectinload(MediaItem.genres),
+        selectinload(MediaItem.episode)
+        .selectinload(Episode.series)
+        .selectinload(Series.item)
+        .selectinload(MediaItem.images),
+    )
     rows = list(await session.scalars(query.limit(limit + 1)))
 
     has_more = len(rows) > limit
@@ -377,8 +386,14 @@ async def get_item(
             selectinload(MediaItem.movie),
             selectinload(MediaItem.series),
             selectinload(MediaItem.episode).selectinload(Episode.file),
+            selectinload(MediaItem.episode)
+            .selectinload(Episode.series)
+            .selectinload(Series.item)
+            .selectinload(MediaItem.images),
+            selectinload(MediaItem.book),
             selectinload(MediaItem.files),
             selectinload(MediaItem.images),
+            selectinload(MediaItem.genres),
         )
         .where(MediaItem.id == item_id)
     )
@@ -686,6 +701,16 @@ def _primary_image(item: MediaItem, kind: str) -> ImageResponse | None:
     return None
 
 
+def _is_loaded(instance: object, attr: str) -> bool:
+    try:
+        insp = inspect(instance)
+        if insp is None or not hasattr(insp, "unloaded"):
+            return True
+        return attr not in insp.unloaded
+    except Exception:
+        return True
+
+
 def item_summary(
     item: MediaItem,
     state: UserItemState | None,
@@ -703,10 +728,12 @@ def item_summary(
             series_id = ep.series_id
             season_number = ep.season_number
             episode_number = ep.episode_number
-            series = getattr(ep, "series", None)
-            if series is not None and getattr(series, "item", None) is not None:
-                series_title = series.item.title
-                series_poster = _primary_image(series.item, "poster")
+            series = getattr(ep, "series", None) if _is_loaded(ep, "series") else None
+            if series is not None:
+                series_item = getattr(series, "item", None) if _is_loaded(series, "item") else None
+                if series_item is not None:
+                    series_title = series_item.title
+                    series_poster = _primary_image(series_item, "poster")
     elif item.type == "book":
         book = getattr(item, "book", None)
         if book is not None and book.series_index is not None:
@@ -716,6 +743,7 @@ def item_summary(
     return ItemSummary(
         id=item.id,
         type=item.type,
+        library_id=item.library_id,
         title=item.title,
         sort_title=item.sort_title,
         year=item.year,

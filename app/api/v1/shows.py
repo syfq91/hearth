@@ -57,6 +57,7 @@ class EpisodeSummary(BaseModel):
     """Catalog card for an episode."""
 
     id: str
+    library_id: str | None = None
     series_id: str
     season_id: str | None = None
     season_number: int | None = None
@@ -625,6 +626,7 @@ def _build_episode_summary(episode: Episode, state: UserItemState | None) -> Epi
 
     return EpisodeSummary(
         id=episode.item_id,
+        library_id=item.library_id if item else None,
         series_id=episode.series_id,
         season_id=episode.season_id,
         season_number=episode.season_number,

@@ -3001,6 +3001,8 @@ export interface components {
              * @default []
              */
             images: components["schemas"]["ImageResponse"][];
+            /** Library Id */
+            library_id?: string | null;
             /** Overview */
             overview?: string | null;
             /**
@@ -3050,6 +3052,8 @@ export interface components {
             files: components["schemas"]["MediaFileResponse"][];
             /** Id */
             id: string;
+            /** Library Id */
+            library_id?: string | null;
             /** Overview */
             overview?: string | null;
             /** Rating */
@@ -3251,6 +3255,8 @@ export interface components {
              * @default []
              */
             images: components["schemas"]["ImageResponse"][];
+            /** Library Id */
+            library_id?: string | null;
             /** Match State */
             match_state: string;
             /** Original Title */
@@ -3341,6 +3347,8 @@ export interface components {
             genres: string[];
             /** Id */
             id: string;
+            /** Library Id */
+            library_id?: string | null;
             /** Match State */
             match_state: string;
             /** Overview */
@@ -3686,6 +3694,8 @@ export interface components {
             files: components["schemas"]["MediaFileResponse"][];
             /** Id */
             id: string;
+            /** Library Id */
+            library_id?: string | null;
             /** Overview */
             overview?: string | null;
             /** Rating */
@@ -4236,6 +4246,8 @@ export interface components {
              * @default []
              */
             images: components["schemas"]["ImageResponse"][];
+            /** Library Id */
+            library_id?: string | null;
             /** Match State */
             match_state: string;
             /** Network */

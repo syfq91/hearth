@@ -2077,6 +2077,17 @@
             "title": "Images",
             "type": "array"
           },
+          "library_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Id"
+          },
           "overview": {
             "anyOf": [
               {
@@ -2231,6 +2242,17 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "library_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Id"
           },
           "overview": {
             "anyOf": [
@@ -2727,6 +2749,17 @@
             "title": "Images",
             "type": "array"
           },
+          "library_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Id"
+          },
           "match_state": {
             "title": "Match State",
             "type": "string"
@@ -3022,6 +3055,17 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "library_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Id"
           },
           "match_state": {
             "title": "Match State",
@@ -4060,6 +4104,17 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "library_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Id"
           },
           "overview": {
             "anyOf": [
@@ -5508,6 +5563,17 @@
             },
             "title": "Images",
             "type": "array"
+          },
+          "library_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Id"
           },
           "match_state": {
             "title": "Match State",
