@@ -111,20 +111,16 @@
 	let isCombined = $state(false);
 	let minUncombinedWidth = $state(0);
 
-	function updateHeaderMode() {
+	function checkHeaderWidth() {
 		if (typeof window === 'undefined') return;
-		if (window.innerWidth < 1080 && userLibraries.length > 3) {
-			isCombined = true;
-			return;
-		}
 		if (!topbarRef || !navRef) return;
 		if (!isCombined) {
 			if (navRef.scrollWidth > navRef.clientWidth + 2) {
-				minUncombinedWidth = Math.max(minUncombinedWidth, window.innerWidth + 20);
+				minUncombinedWidth = topbarRef.clientWidth + (navRef.scrollWidth - navRef.clientWidth) + 16;
 				isCombined = true;
 			}
 		} else {
-			if (minUncombinedWidth > 0 && window.innerWidth >= minUncombinedWidth) {
+			if (minUncombinedWidth > 0 && topbarRef.clientWidth >= minUncombinedWidth + 10) {
 				isCombined = false;
 			}
 		}
@@ -132,13 +128,25 @@
 
 	$effect(() => {
 		const _ = userLibraries;
-		updateHeaderMode();
-		window.addEventListener('resize', updateHeaderMode);
-		const ro = topbarRef ? new ResizeObserver(updateHeaderMode) : null;
-		if (topbarRef && ro) ro.observe(topbarRef);
+		minUncombinedWidth = 0;
+		isCombined = false;
+		if (typeof window !== 'undefined') {
+			requestAnimationFrame(() => {
+				checkHeaderWidth();
+			});
+		}
+	});
+
+	$effect(() => {
+		if (!topbarRef) return;
+		const ro = new ResizeObserver(() => {
+			checkHeaderWidth();
+		});
+		ro.observe(topbarRef);
+		window.addEventListener('resize', checkHeaderWidth);
 		return () => {
-			window.removeEventListener('resize', updateHeaderMode);
-			if (ro) ro.disconnect();
+			ro.disconnect();
+			window.removeEventListener('resize', checkHeaderWidth);
 		};
 	});
 
@@ -230,40 +238,51 @@
 						{@const Icon = group.icon}
 						{@const active = isGroupActive(group)}
 						{@const open = openLibDropdown === group.type}
-						<div class="lib-dropdown-wrapper">
-							<button
-								type="button"
-								class="nav-dropdown-btn"
-								class:active
-								aria-expanded={open}
-								aria-haspopup="menu"
-								onclick={(e) => {
-									e.stopPropagation();
-									toggleLibDropdown(group.type);
-								}}
+						{#if group.libraries.length === 1}
+							{@const lib = group.libraries[0]}
+							<a
+								href={`/library/${lib.id}`}
+								aria-current={isActive(`/library/${lib.id}`) ? 'page' : undefined}
 							>
 								<Icon size={16} />
-								<span>{group.label}</span>
-								<span class="chevron"><ChevronDown size={14} /></span>
-							</button>
-							{#if open}
-								<div class="dropdown-menu lib-menu" role="menu">
-									{#each group.libraries as lib (lib.id)}
-										<a
-											class="dropdown-item"
-											href={`/library/${lib.id}`}
-											role="menuitem"
-											aria-current={isActive(`/library/${lib.id}`) ? 'page' : undefined}
-											onclick={() => {
-												openLibDropdown = null;
-											}}
-										>
-											<span>{lib.name}</span>
-										</a>
-									{/each}
-								</div>
-							{/if}
-						</div>
+								<span>{lib.name}</span>
+							</a>
+						{:else}
+							<div class="lib-dropdown-wrapper">
+								<button
+									type="button"
+									class="nav-dropdown-btn"
+									class:active
+									aria-expanded={open}
+									aria-haspopup="menu"
+									onclick={(e) => {
+										e.stopPropagation();
+										toggleLibDropdown(group.type);
+									}}
+								>
+									<Icon size={16} />
+									<span>{group.label}</span>
+									<span class="chevron"><ChevronDown size={14} /></span>
+								</button>
+								{#if open}
+									<div class="dropdown-menu lib-menu" role="menu">
+										{#each group.libraries as lib (lib.id)}
+											<a
+												class="dropdown-item"
+												href={`/library/${lib.id}`}
+												role="menuitem"
+												aria-current={isActive(`/library/${lib.id}`) ? 'page' : undefined}
+												onclick={() => {
+													openLibDropdown = null;
+												}}
+											>
+												<span>{lib.name}</span>
+											</a>
+										{/each}
+									</div>
+								{/if}
+							</div>
+						{/if}
 					{/each}
 				{:else}
 					{#each userLibraries as lib (lib.id)}
