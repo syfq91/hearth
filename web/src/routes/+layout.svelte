@@ -2,6 +2,8 @@
 	import '../app.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import { logout, session } from '../lib/auth.svelte';
+	import { api } from '../lib/api/client';
+	import type { LibrarySummary } from '../lib/api/types';
 	import { setTvMode, tv } from '../lib/tv.svelte';
 	import { spatialFocus } from '../lib/actions/spatial-focus';
 	import AudioBar from '../lib/components/AudioBar.svelte';
@@ -9,20 +11,52 @@
 	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
 	import {
-		House,
-		Layers,
+		Film,
+		Tv as TvIcon,
 		Music,
 		BookOpen,
+		Folder,
 		Heart,
 		Search,
 		Shield,
-		Tv as TvIcon,
 		LogOut,
-		User,
-		ChevronDown
+		User
 	} from '@lucide/svelte';
 
-	let { children }: LayoutProps = $props();
+	let { data, children }: LayoutProps = $props();
+
+	let userLibraries = $state<LibrarySummary[]>([]);
+
+	$effect(() => {
+		if (data.libraries && data.libraries.length > 0) {
+			userLibraries = data.libraries;
+		} else if (session.status === 'authenticated') {
+			void api
+				.get<LibrarySummary[]>('/libraries')
+				.then((libs) => {
+					userLibraries = libs;
+				})
+				.catch(() => {});
+		} else {
+			userLibraries = [];
+		}
+	});
+
+	function getLibraryIcon(type: string) {
+		switch (type) {
+			case 'movie':
+				return Film;
+			case 'tv':
+			case 'series':
+				return TvIcon;
+			case 'music':
+				return Music;
+			case 'book':
+				return BookOpen;
+			default:
+				return Folder;
+		}
+	}
 
 	const isFullscreenMedia = $derived(
 		page.url.pathname.startsWith('/watch/') ||
@@ -92,63 +126,58 @@
 <div class="app" class:fullscreen-app={isFullscreenMedia} use:spatialFocus>
 	{#if !isFullscreenMedia}
 		<a class="skip-link" href="#main">Skip to content</a>
-		<aside class="sidebar">
-			<div class="sidebar-header">
-				<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
-			</div>
-			<nav class="sidebar-nav" aria-label="Primary">
-				<a href="/" aria-current={isActive('/') ? 'page' : undefined}>
-					<House size={18} />
-					<span>Home</span>
-				</a>
-				<a href="/library" aria-current={isActive('/library') ? 'page' : undefined}>
-					<Layers size={18} />
-					<span>Library</span>
-				</a>
-				<a href="/music" aria-current={isActive('/music') ? 'page' : undefined}>
-					<Music size={18} />
-					<span>Music</span>
-				</a>
-				<a href="/books" aria-current={isActive('/books') ? 'page' : undefined}>
-					<BookOpen size={18} />
-					<span>Books</span>
-				</a>
+		<header class="topbar">
+			<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
+			<nav aria-label="Primary">
+				{#each userLibraries as lib (lib.id)}
+					{@const Icon = getLibraryIcon(lib.type)}
+					<a
+						href={`/library/${lib.id}`}
+						aria-current={isActive(`/library/${lib.id}`) ? 'page' : undefined}
+					>
+						<Icon size={16} />
+						<span>{lib.name}</span>
+					</a>
+				{/each}
 				<a href="/favorites" aria-current={isActive('/favorites') ? 'page' : undefined}>
-					<Heart size={18} />
+					<Heart size={16} />
 					<span>Favourites</span>
 				</a>
 			</nav>
-		</aside>
-		<div class="content-wrapper">
-			<header class="topbar">
-				<div class="spacer"></div>
+			<div class="spacer"></div>
+			<div class="topbar-actions">
 				<a
 					href="/search"
-					class="search-btn"
+					class="icon-btn"
 					aria-current={isActive('/search') ? 'page' : undefined}
 					aria-label="Search"
+					title="Search"
 				>
-					<Search size={16} />
-					<span>Search</span>
+					<Search size={18} />
 				</a>
 				{#if session.status === 'authenticated' && session.user}
 					<div class="user-menu-wrapper" bind:this={userMenuRef}>
 						<button
 							type="button"
-							class="user-btn"
+							class="icon-btn"
 							onclick={toggleUserMenu}
 							aria-expanded={userMenuOpen}
 							aria-haspopup="menu"
+							aria-label={session.user.username}
+							title={session.user.username}
 						>
-							<User size={15} />
-							<span>{session.user.username}</span>
-							<span class="chevron" class:open={userMenuOpen}>
-								<ChevronDown size={14} />
-							</span>
+							<User size={18} />
 						</button>
 
 						{#if userMenuOpen}
 							<div class="dropdown-menu" role="menu">
+								<div class="user-dropdown-header">
+									<span class="user-dropdown-name">{session.user.username}</span>
+									<span class="user-dropdown-role">{session.user.role}</span>
+								</div>
+
+								<div class="dropdown-divider"></div>
+
 								<a
 									class="dropdown-item"
 									href="/profile"
@@ -203,23 +232,21 @@
 						{/if}
 					</div>
 				{/if}
-			</header>
-			<main id="main" tabindex="-1">
-				{@render children()}
-			</main>
-		</div>
+			</div>
+		</header>
+	{/if}
+	<main id="main" tabindex="-1" class:fullscreen-main={isFullscreenMedia}>
+		{@render children()}
+	</main>
+	{#if !isFullscreenMedia}
 		<AudioBar />
-	{:else}
-		<main id="main" tabindex="-1" class="fullscreen-main">
-			{@render children()}
-		</main>
 	{/if}
 </div>
 
 <style>
 	.app {
 		display: flex;
-		flex-direction: row;
+		flex-direction: column;
 		min-height: 100vh;
 	}
 
@@ -227,80 +254,14 @@
 		height: 100vh;
 		min-height: 100vh;
 		overflow: hidden;
-		flex-direction: column;
-	}
-
-	.sidebar {
-		width: 220px;
-		flex-shrink: 0;
-		background: var(--surface);
-		border-right: 1px solid var(--border);
-		display: flex;
-		flex-direction: column;
-		position: sticky;
-		top: 0;
-		height: 100vh;
-		box-sizing: border-box;
-		padding: 1.25rem 0.85rem;
-		z-index: 10;
-		overflow-y: auto;
-	}
-
-	.sidebar-header {
-		padding: 0 0.5rem 1.25rem;
-	}
-
-	.brand {
-		font-weight: 700;
-		font-size: 1.25rem;
-		letter-spacing: 0.02em;
-		color: var(--accent);
-		text-decoration: none;
-	}
-
-	.sidebar-nav {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-	}
-
-	.sidebar-nav a {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		color: var(--muted);
-		padding: 0.55rem 0.75rem;
-		border-radius: var(--radius);
-		font-size: 0.95rem;
-		font-weight: 500;
-		text-decoration: none;
-		transition: background 0.15s ease, color 0.15s ease;
-	}
-
-	.sidebar-nav a:hover {
-		background: var(--surface-2);
-		color: var(--text);
-	}
-
-	.sidebar-nav a[aria-current='page'] {
-		background: var(--surface-2);
-		color: var(--accent);
-		font-weight: 600;
-	}
-
-	.content-wrapper {
-		display: flex;
-		flex-direction: column;
-		flex: 1;
-		min-width: 0;
-		min-height: 100vh;
 	}
 
 	.topbar {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.75rem 1.5rem;
+		gap: 0.6rem 1rem;
+		padding: 0.75rem 1.25rem;
 		background: var(--surface);
 		border-bottom: 1px solid var(--border);
 		position: sticky;
@@ -308,31 +269,17 @@
 		z-index: 10;
 	}
 
-	.search-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.45rem;
-		color: var(--muted);
-		padding: 0.35rem 0.65rem;
-		border-radius: var(--radius);
-		font-size: 0.9rem;
-		font-weight: 500;
-		text-decoration: none;
-		border: 1px solid transparent;
-		transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-	}
-
-	.search-btn:hover {
-		background: var(--surface-2);
-		color: var(--text);
-		border-color: var(--border);
-	}
-
-	.search-btn[aria-current='page'] {
-		background: var(--surface-2);
+	.brand {
+		font-weight: 700;
+		font-size: 1.15rem;
+		letter-spacing: 0.02em;
 		color: var(--accent);
-		border-color: var(--border);
-		font-weight: 600;
+		text-decoration: none;
+		margin-right: 0.5rem;
+	}
+
+	.brand:hover {
+		filter: brightness(1.1);
 	}
 
 	.spacer {
@@ -357,42 +304,73 @@
 		top: 0.75rem;
 	}
 
+	nav {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.85rem;
+		font-size: 0.95rem;
+	}
+
+	nav a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		color: var(--muted);
+		padding: 0.25rem 0.25rem;
+		text-decoration: none;
+		font-weight: 500;
+		border-radius: var(--radius);
+		transition: color 0.15s ease;
+	}
+
+	nav a:hover {
+		color: var(--text);
+	}
+
+	nav a[aria-current='page'] {
+		color: var(--text);
+		font-weight: 600;
+	}
+
+	.topbar-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: var(--radius);
+		color: var(--muted);
+		background: transparent;
+		border: 1px solid transparent;
+		cursor: pointer;
+		text-decoration: none;
+		transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+	}
+
+	.icon-btn:hover,
+	.icon-btn[aria-expanded='true'] {
+		background: var(--surface-2);
+		color: var(--text);
+		border-color: var(--border);
+	}
+
+	.icon-btn[aria-current='page'] {
+		background: var(--surface-2);
+		color: var(--accent);
+		border-color: var(--border);
+	}
+
 	.user-menu-wrapper {
 		position: relative;
 		display: inline-flex;
 		align-items: center;
-	}
-
-	.user-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.45rem;
-		background: transparent;
-		border: 1px solid transparent;
-		border-radius: var(--radius);
-		padding: 0.35rem 0.65rem;
-		color: var(--text);
-		font-size: 0.9rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background 0.15s ease, border-color 0.15s ease;
-	}
-
-	.user-btn:hover,
-	.user-btn[aria-expanded='true'] {
-		background: var(--surface-2);
-		border-color: var(--border);
-	}
-
-	.chevron {
-		display: inline-flex;
-		align-items: center;
-		color: var(--muted);
-		transition: transform 0.2s ease;
-	}
-
-	.chevron.open {
-		transform: rotate(180deg);
 	}
 
 	.dropdown-menu {
@@ -409,6 +387,24 @@
 		flex-direction: column;
 		gap: 0.15rem;
 		z-index: 100;
+	}
+
+	.user-dropdown-header {
+		display: flex;
+		flex-direction: column;
+		padding: 0.4rem 0.65rem 0.3rem;
+	}
+
+	.user-dropdown-name {
+		font-weight: 600;
+		font-size: 0.9rem;
+		color: var(--text);
+	}
+
+	.user-dropdown-role {
+		font-size: 0.75rem;
+		color: var(--muted);
+		text-transform: capitalize;
 	}
 
 	.dropdown-item {
@@ -458,7 +454,7 @@
 
 	main {
 		flex: 1;
-		padding: 1.5rem;
+		padding: 1.25rem;
 		max-width: 1400px;
 		width: 100%;
 		margin: 0 auto;
@@ -476,43 +472,14 @@
 		overflow: hidden;
 	}
 
-	@media (max-width: 768px) {
-		.app {
-			flex-direction: column;
-		}
-
-		.sidebar {
-			width: 100%;
-			height: auto;
-			position: relative;
-			border-right: none;
-			border-bottom: 1px solid var(--border);
-			padding: 0.6rem 0.75rem;
-			flex-direction: row;
-			align-items: center;
-			justify-content: space-between;
-			flex-wrap: wrap;
-			gap: 0.5rem;
-		}
-
-		.sidebar-header {
-			padding: 0 0.5rem;
-		}
-
-		.sidebar-nav {
-			flex-direction: row;
-			flex-wrap: wrap;
-			gap: 0.25rem;
-		}
-
-		.sidebar-nav a {
-			padding: 0.35rem 0.5rem;
-			font-size: 0.85rem;
-			gap: 0.4rem;
-		}
-
+	@media (max-width: 720px) {
 		.topbar {
 			padding: 0.6rem 0.75rem;
+		}
+
+		nav {
+			gap: 0.6rem;
+			font-size: 0.9rem;
 		}
 
 		main {

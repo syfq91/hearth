@@ -1,4 +1,6 @@
 import { bootstrap, session } from '../lib/auth.svelte';
+import { api } from '../lib/api/client';
+import type { LibrarySummary } from '../lib/api/types';
 import { redirect } from '@sveltejs/kit';
 import type { LayoutLoad } from './$types';
 
@@ -27,5 +29,15 @@ export const load: LayoutLoad = async ({ url }) => {
 	) {
 		throw redirect(307, '/');
 	}
-	return { auth: session.status };
+
+	let libraries: LibrarySummary[] = [];
+	if (session.status === 'authenticated' && !isPublic) {
+		try {
+			libraries = await api.get<LibrarySummary[]>('/libraries');
+		} catch {
+			libraries = [];
+		}
+	}
+
+	return { auth: session.status, libraries };
 };
