@@ -22,11 +22,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install uv and Python 3.12
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10
         with:
           version: "0.10.7"
           python-version: "3.12"
           enable-cache: true
+          # Fetch uv from the Astral mirror instead of GitHub Releases,
+          # which intermittently returns 504. v10 also runs on Node 24,
+          # removing the punycode deprecation warning from v6.
+          download-from-astral-mirror: true
 
       - name: Install ffmpeg
         # The runner image no longer ships ffmpeg; the integration suite
@@ -158,11 +162,15 @@ jobs:
           test "$(docker exec hearth-ci id -g)" = "1000"
 
       - name: Install uv and Python 3.12
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10
         with:
           version: "0.10.7"
           python-version: "3.12"
           enable-cache: true
+          # Fetch uv from the Astral mirror instead of GitHub Releases,
+          # which intermittently returns 504. v10 also runs on Node 24,
+          # removing the punycode deprecation warning from v6.
+          download-from-astral-mirror: true
 
       - name: Install locked dependencies
         run: uv sync --locked
