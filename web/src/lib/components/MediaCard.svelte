@@ -12,14 +12,52 @@
 
 	let { item, level = 3, directPlay = false }: Props = $props();
 
-	// Next Up episodes carry `series_title`; catalog cards carry `type`.
-	const isEpisode = $derived('series_title' in item);
+	// An item is an episode if it's typed 'episode' or has NextUp's series_title
+	const isEpisode = $derived(
+		('type' in item && item.type === 'episode') ||
+			('series_title' in item && typeof item.series_title === 'string' && item.series_title.length > 0)
+	);
+
+	const seriesTitle = $derived.by(() => {
+		if ('series_title' in item && item.series_title) return item.series_title;
+		return null;
+	});
+
+	const seriesId = $derived.by(() => {
+		if ('series_id' in item && item.series_id) return item.series_id;
+		return null;
+	});
+
+	const seasonNumber = $derived('season_number' in item ? item.season_number : null);
+	const episodeNumber = $derived('episode_number' in item ? item.episode_number : null);
+
+	const episodeLabel = $derived.by(() => {
+		let num = '';
+		if (seasonNumber != null && episodeNumber != null) {
+			num = `S${seasonNumber}E${episodeNumber}`;
+		} else if (episodeNumber != null) {
+			num = `Episode ${episodeNumber}`;
+		}
+		const epTitle = (item.title ?? '').trim();
+		if (
+			num &&
+			epTitle &&
+			epTitle.toLowerCase() !== num.toLowerCase() &&
+			epTitle.toLowerCase() !== `episode ${episodeNumber}`
+		) {
+			return `${num} · ${epTitle}`;
+		}
+		return num || epTitle || 'Episode';
+	});
+
 	const poster = $derived.by(() => {
 		if (!isEpisode) return (item as S['ItemSummary']).poster;
-		const episode = item as S['NextUpEpisode'];
-		return episode.still ?? episode.series_poster;
+		if ('still' in item && item.still) return item.still;
+		if ('series_poster' in item && item.series_poster) return item.series_poster;
+		return (item as S['ItemSummary']).poster;
 	});
-	const href = $derived.by(() => {
+
+	const posterHref = $derived.by(() => {
 		if (isEpisode) return `/watch/${item.id}`;
 		const card = item as S['ItemSummary'];
 		if (directPlay && (card.type === 'movie' || card.type === 'episode' || card.type === 'series')) {
@@ -27,13 +65,13 @@
 		}
 		return detailHref(card);
 	});
+
 	const subtitle = $derived.by(() => {
-		if (isEpisode) {
-			const episode = item as S['NextUpEpisode'];
-			return `${episode.series_title} · S${episode.season_number ?? '?'}E${episode.episode_number ?? '?'}`;
-		}
+		if (isEpisode) return null;
 		const card = item as S['ItemSummary'];
-		return [card.year, card.type].filter(Boolean).join(' · ');
+		// Remove "movie" and "episode" label on the card
+		const typeLabel = card.type === 'movie' || card.type === 'episode' ? null : card.type;
+		return [card.year, typeLabel].filter(Boolean).join(' · ');
 	});
 
 	const position = $derived(item.watch_state?.position_ms ?? 0);
@@ -46,7 +84,7 @@
 			case 'series':
 				return `/series/${card.id}`;
 			case 'episode':
-				return `/watch/${card.id}`;
+				return `/episodes/${card.id}`;
 			case 'music':
 			case 'album':
 			case 'track':
@@ -60,7 +98,11 @@
 </script>
 
 <article class="card">
-	<a class="link" href={href} aria-label={item.title}>
+	<a
+		class="link"
+		href={posterHref}
+		aria-label={isEpisode ? (seriesTitle ? `Play ${seriesTitle}` : `Play ${item.title}`) : item.title}
+	>
 		<Poster image={poster} alt="" aspect={isEpisode ? '16 / 9' : '2 / 3'} />
 		{#if percent > 0 && !watched}
 			<div class="progress" role="presentation">
@@ -68,9 +110,24 @@
 			</div>
 		{/if}
 	</a>
-	<svelte:element this={`h${level}`} class="title">{item.title}</svelte:element>
-	{#if subtitle}
-		<p class="subtitle">{subtitle}</p>
+	{#if isEpisode}
+		<svelte:element this={`h${level}`} class="title">
+			{#if seriesId}
+				<a class="text-link" href={`/series/${seriesId}`}>{seriesTitle ?? item.title}</a>
+			{:else}
+				<a class="text-link" href={`/episodes/${item.id}`}>{seriesTitle ?? item.title}</a>
+			{/if}
+		</svelte:element>
+		<p class="subtitle">
+			<a class="text-link" href={`/episodes/${item.id}`}>{episodeLabel}</a>
+		</p>
+	{:else}
+		<svelte:element this={`h${level}`} class="title">
+			<a class="text-link" href={detailHref(item as S['ItemSummary'])}>{item.title}</a>
+		</svelte:element>
+		{#if subtitle}
+			<p class="subtitle">{subtitle}</p>
+		{/if}
 	{/if}
 </article>
 
@@ -92,6 +149,26 @@
 	.link:hover {
 		text-decoration: none;
 		filter: brightness(1.08);
+	}
+
+	.text-link {
+		color: inherit;
+		text-decoration: none;
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.text-link:hover {
+		color: var(--accent);
+		text-decoration: underline;
+	}
+
+	.text-link:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+		border-radius: 2px;
 	}
 
 	.progress {
