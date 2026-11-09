@@ -30,6 +30,7 @@
 	"dependencies": {
 		"@lucide/svelte": "^1.68.0",
 		"@sveltejs/adapter-static": "^4.0.0",
+		"fast-blurhash": "^1.2.0",
 		"foliate-js": "^1.0.1",
 		"jassub": "^2.5.26",
 		"pdfjs-dist": "^6.4.299",
