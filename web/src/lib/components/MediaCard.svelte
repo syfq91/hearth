@@ -127,12 +127,25 @@
 				return `/movies/${card.id}`;
 		}
 	}
+
+	const libraryId = $derived.by(() => {
+		if ('library_id' in item && typeof item.library_id === 'string' && item.library_id) {
+			return item.library_id;
+		}
+		return null;
+	});
+
+	function withLib(url: string): string {
+		if (!libraryId) return url;
+		const sep = url.includes('?') ? '&' : '?';
+		return `${url}${sep}lib=${encodeURIComponent(libraryId)}`;
+	}
 </script>
 
 <article class="card">
 	<a
 		class="link"
-		href={posterHref}
+		href={withLib(posterHref)}
 		aria-label={isEpisode ? (seriesTitle ? `Play ${seriesTitle}` : `Play ${item.title}`) : item.title}
 	>
 		<Poster image={poster} alt="" {aspect} />
@@ -154,17 +167,17 @@
 	{#if isEpisode}
 		<svelte:element this={`h${level}`} class="title">
 			{#if seriesId}
-				<a class="text-link" href={`/series/${seriesId}`}>{seriesTitle ?? item.title}</a>
+				<a class="text-link" href={withLib(`/series/${seriesId}`)}>{seriesTitle ?? item.title}</a>
 			{:else}
-				<a class="text-link" href={`/episodes/${item.id}`}>{seriesTitle ?? item.title}</a>
+				<a class="text-link" href={withLib(`/episodes/${item.id}`)}>{seriesTitle ?? item.title}</a>
 			{/if}
 		</svelte:element>
 		<p class="subtitle">
-			<a class="text-link" href={`/episodes/${item.id}`}>{episodeLabel}</a>
+			<a class="text-link" href={withLib(`/episodes/${item.id}`)}>{episodeLabel}</a>
 		</p>
 	{:else}
 		<svelte:element this={`h${level}`} class="title">
-			<a class="text-link" href={detailHref(item as S['ItemSummary'])}>{item.title}</a>
+			<a class="text-link" href={withLib(detailHref(item as S['ItemSummary']))}>{item.title}</a>
 		</svelte:element>
 		{#if subtitle}
 			<p class="subtitle">{subtitle}</p>
