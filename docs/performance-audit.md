@@ -350,9 +350,11 @@ the cost since the people table is typically small and the query is limited.
 
 ## 3. Services Layer
 
-### 3.1 🟡 Scanner Probes Files Sequentially
+### 3.1 🟡 Scanner Probes Files Sequentially — [RESOLVED]
 
-**Location:** [`app/services/scanner/scanner.py` L200–L265](file:///home/syafiq/code/hearth/app/services/scanner/scanner.py#L200-L265)
+**Location:** [`app/services/scanner/scanner.py` L592–L616](file:///home/syafiq/code/hearth/app/services/scanner/scanner.py#L592-L616)
+
+*Status: Resolved — file hashing already uses bounded concurrency via `asyncio.gather` and `asyncio.Semaphore(ffprobe_concurrency)`. Added cooperative cancellation checks inside the hashing tasks.*
 
 The scanner probes files (ffprobe) using a concurrency semaphore
 (`ffprobe_concurrency` = 4 by default), which is good. However, the hashing
@@ -578,7 +580,7 @@ the connection pragmas for future-proofing.
 | 2.3 | 🟡 Medium | API | ETag via JSON + SHA-256 per request | ✅ Resolved |
 | 2.4 | 🔵 Low | API | ImagePipeline created per request | ✅ Resolved |
 | 2.5 | 🔵 Low | API | Person search uses ILIKE | Low |
-| 3.1 | 🟡 Medium | Service | Scanner hashes sequentially | Easy |
+| 3.1 | 🟡 Medium | Service | Scanner hashes sequentially | ✅ Resolved |
 | 3.2 | 🟡 Medium | Service | Blurhash IPC overhead | Easy |
 | 3.3 | 🔵 Low | Service | TMDB rate limiter serializes cached reads | Low |
 | 3.4 | 🔵 Low | Service | Thread-per-chunk file streaming | Low |

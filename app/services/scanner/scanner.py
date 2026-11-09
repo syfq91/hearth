@@ -599,6 +599,7 @@ class LibraryScanner:
 
         async def one(candidate: ScannedFile) -> tuple[str, str | None]:
             async with semaphore:
+                await self._check_cancel(is_cancelled)
                 try:
                     return candidate.path, await asyncio.to_thread(
                         self.hash_file, Path(candidate.path)
