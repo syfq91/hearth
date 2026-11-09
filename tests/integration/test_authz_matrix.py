@@ -97,6 +97,7 @@ POLICY: dict[tuple[str, str], str] = {
     ("GET", "/api/v1/hls/{session_id}/media.m3u8"): "media",
     ("POST", "/api/v1/hls/{session_id}/stop"): "media",
     ("GET", "/api/v1/hls/{session_id}/{segment_file}"): "media",
+    ("GET", "/api/v1/home"): "auth",
     ("GET", "/api/v1/home/continue-reading"): "auth",
     ("GET", "/api/v1/home/continue-watching"): "auth",
     ("GET", "/api/v1/home/favorites"): "auth",

@@ -179,6 +179,7 @@ ENDPOINT_POLICIES: dict[tuple[str, str], EndpointPolicy] = {
     ("GET", "/api/v1/book-series"): EndpointPolicy("user"),
     ("GET", "/api/v1/book-series/{series_id}"): EndpointPolicy("user"),
     # Home
+    ("GET", "/api/v1/home"): EndpointPolicy("user"),
     ("GET", "/api/v1/home/continue-reading"): EndpointPolicy("user"),
     ("GET", "/api/v1/home/continue-watching"): EndpointPolicy("user"),
     ("GET", "/api/v1/home/recently-added"): EndpointPolicy("user"),
