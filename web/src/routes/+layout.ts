@@ -31,13 +31,19 @@ export const load: LayoutLoad = async ({ url }) => {
 	}
 
 	let libraries: LibrarySummary[] = [];
+	let hasFavorites = false;
 	if (session.status === 'authenticated' && !isPublic) {
-		try {
-			libraries = await api.get<LibrarySummary[]>('/libraries');
-		} catch {
-			libraries = [];
+		const [libsResult, favsResult] = await Promise.allSettled([
+			api.get<LibrarySummary[]>('/libraries'),
+			api.get<{ items: unknown[] }>('/home/favorites', { query: { limit: 1 } })
+		]);
+		if (libsResult.status === 'fulfilled') {
+			libraries = libsResult.value;
+		}
+		if (favsResult.status === 'fulfilled') {
+			hasFavorites = favsResult.value.items.length > 0;
 		}
 	}
 
-	return { auth: session.status, libraries };
+	return { auth: session.status, libraries, hasFavorites };
 };

@@ -8,7 +8,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.books import BookListItem, _to_book_list_item
-from app.api.v1.items import ItemSummary, _primary_image, item_summary, watch_states
+from app.api.v1.items import (
+    ItemSummary,
+    _primary_image,
+    item_summary,
+    watch_state_response,
+    watch_states,
+)
 from app.core.deps import RequireUser, require_library_access
 from app.db.models import (
     Book,
@@ -173,6 +179,25 @@ async def recently_added(
     page_cards = grouped_cards[:limit]
     states = await watch_states(session, user.id, [item.id for item, _ in page_cards])
 
+    book_ids = [item.id for item, _ in page_cards if item.type == "book"]
+    if book_ids:
+        book_progs = await session.scalars(
+            select(BookProgress).where(
+                BookProgress.user_id == user.id,
+                BookProgress.book_id.in_(book_ids),
+            )
+        )
+        for bp in book_progs:
+            if bp.completed:
+                if bp.book_id in states:
+                    states[bp.book_id].played = True
+                else:
+                    states[bp.book_id] = UserItemState(
+                        user_id=user.id,
+                        item_id=bp.book_id,
+                        played=True,
+                    )
+
     items: list[ItemSummary] = []
     for item, ep_count in page_cards:
         summary = item_summary(item, states.get(item.id), episode_count=ep_count)
@@ -190,6 +215,12 @@ async def recently_added(
                         summary.year = series_item.year
                         summary.poster = _primary_image(series_item, "poster") or summary.poster
                         summary.genres = sorted(g.name for g in series_item.genres)
+                        series_state = await session.get(UserItemState, (user.id, series_item.id))
+                        summary.watch_state = (
+                            watch_state_response(series_state)
+                            if series_state
+                            else summary.watch_state
+                        )
         elif item.type == "episode" and summary.series_poster:
             summary.poster = summary.series_poster
         items.append(summary)

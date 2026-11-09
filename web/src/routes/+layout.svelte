@@ -27,6 +27,7 @@
 	let { data, children }: LayoutProps = $props();
 
 	let userLibraries = $state<LibrarySummary[]>([]);
+	let hasFavorites = $state(false);
 
 	$effect(() => {
 		if (data.libraries && data.libraries.length > 0) {
@@ -40,6 +41,19 @@
 				.catch(() => {});
 		} else {
 			userLibraries = [];
+		}
+
+		if (typeof data.hasFavorites === 'boolean') {
+			hasFavorites = data.hasFavorites;
+		} else if (session.status === 'authenticated') {
+			void api
+				.get<{ items: unknown[] }>('/home/favorites', { query: { limit: 1 } })
+				.then((res) => {
+					hasFavorites = res.items.length > 0;
+				})
+				.catch(() => {});
+		} else {
+			hasFavorites = false;
 		}
 	});
 
@@ -114,13 +128,20 @@
 	function checkHeaderWidth() {
 		if (typeof window === 'undefined') return;
 		if (!topbarRef || !navRef) return;
+
+		const brandEl = topbarRef.querySelector('.brand') as HTMLElement | null;
+		const actionsEl = topbarRef.querySelector('.topbar-actions') as HTMLElement | null;
+		const brandW = brandEl ? brandEl.offsetWidth : 80;
+		const actionsW = actionsEl ? actionsEl.offsetWidth : 80;
+		const availableForNav = Math.max(0, topbarRef.clientWidth - brandW - actionsW - 64);
+
 		if (!isCombined) {
-			if (navRef.scrollWidth > navRef.clientWidth + 2) {
-				minUncombinedWidth = topbarRef.clientWidth + (navRef.scrollWidth - navRef.clientWidth) + 16;
+			if (navRef.scrollWidth > availableForNav) {
+				minUncombinedWidth = topbarRef.clientWidth + (navRef.scrollWidth - availableForNav) + 20;
 				isCombined = true;
 			}
 		} else {
-			if (minUncombinedWidth > 0 && topbarRef.clientWidth >= minUncombinedWidth + 10) {
+			if (minUncombinedWidth > 0 && topbarRef.clientWidth >= minUncombinedWidth + 15) {
 				isCombined = false;
 			}
 		}
@@ -296,10 +317,12 @@
 						</a>
 					{/each}
 				{/if}
-				<a href="/favorites" aria-current={isActive('/favorites') ? 'page' : undefined}>
-					<Heart size={16} />
-					<span>Favourites</span>
-				</a>
+				{#if hasFavorites}
+					<a href="/favorites" aria-current={isActive('/favorites') ? 'page' : undefined}>
+						<Heart size={16} />
+						<span>Favourites</span>
+					</a>
+				{/if}
 			</nav>
 			<div class="spacer"></div>
 			<div class="topbar-actions">
@@ -555,6 +578,9 @@
 		gap: 0.4rem;
 		flex-shrink: 0;
 		margin-left: auto;
+		background: var(--surface);
+		position: relative;
+		z-index: 5;
 	}
 
 	.icon-btn {

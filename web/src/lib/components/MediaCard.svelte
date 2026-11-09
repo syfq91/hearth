@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Poster from './Poster.svelte';
 	import type { S } from '../api/types';
+	import { Check } from '@lucide/svelte';
 
 	interface Props {
 		item: S['ItemSummary'] | S['NextUpEpisode'];
@@ -135,7 +136,11 @@
 		aria-label={isEpisode ? (seriesTitle ? `Play ${seriesTitle}` : `Play ${item.title}`) : item.title}
 	>
 		<Poster image={poster} alt="" {aspect} />
-		{#if episodeCount != null && episodeCount > 1}
+		{#if watched}
+			<div class="badge checkmark-badge" aria-label="Completed">
+				<Check size={13} strokeWidth={2.8} />
+			</div>
+		{:else if episodeCount != null && episodeCount > 1}
 			<div class="badge" aria-label="{episodeCount} new episodes">
 				{episodeCount}
 			</div>
@@ -200,9 +205,19 @@
 		line-height: 1.35rem;
 		padding: 0 0.35rem;
 		border-radius: 999px;
-		text-align: center;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 		z-index: 2;
+	}
+
+	.checkmark-badge {
+		background: #16a34a;
+		color: #ffffff;
+		width: 1.35rem;
+		height: 1.35rem;
+		padding: 0;
 	}
 
 	.text-link {

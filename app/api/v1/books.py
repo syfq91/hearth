@@ -29,6 +29,7 @@ from app.db.models import (
     MediaFile,
     MediaItem,
     User,
+    UserItemState,
 )
 from app.db.session import SessionDep
 from app.services.media.books import extract_comic_page
@@ -706,6 +707,19 @@ async def record_reading_progress(
         prog.device_name = body.device_name
         prog.completed = is_completed
         prog.updated_at = now
+
+    user_state = await session.get(UserItemState, (user.id, book_id))
+    if user_state is None:
+        user_state = UserItemState(
+            user_id=user.id,
+            item_id=book_id,
+            played=is_completed,
+            last_played_at=now,
+        )
+        session.add(user_state)
+    else:
+        user_state.played = is_completed
+        user_state.last_played_at = now
 
     await session.commit()
     return BookProgressResponse(

@@ -2,8 +2,9 @@
 	import Shelf from '../lib/components/Shelf.svelte';
 	import Poster from '../lib/components/Poster.svelte';
 	import BookCover from '../lib/components/BookCover.svelte';
-	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
+	import { Check, ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import type { PageProps } from './$types';
+	import type { BookShelf } from '../lib/api/types';
 
 	let { data }: PageProps = $props();
 
@@ -40,6 +41,19 @@
 			left: direction === 'left' ? -distance : distance,
 			behavior: 'smooth'
 		});
+	}
+
+	function getBookVolume(book: BookShelf['items'][number]): string | null {
+		if (book.series?.index != null) {
+			const idx = book.series.index;
+			return `Vol. ${idx}`;
+		}
+		const match = book.title.match(/\b(?:vol(?:ume)?\.?|v)\s*(\d+(?:\.\d+)?)\b/i);
+		if (match) {
+			const num = match[1].replace(/^0+/, '') || match[1];
+			return `Vol. ${num}`;
+		}
+		return null;
 	}
 
 	$effect(() => {
@@ -117,11 +131,16 @@
 			</div>
 			<ul class="row" bind:this={readingRowEl}>
 				{#each home.continueReading.items as book (book.id)}
+					{@const volume = getBookVolume(book)}
 					<li>
 						<article class="book">
 							<a class="cover-link" href={`/books/${book.id}`} aria-label={book.title}>
 								<BookCover coverImageId={book.cover_image_id} alt="" />
-								{#if book.progress && book.progress.percentage > 0}
+								{#if book.progress?.completed}
+									<div class="badge checkmark-badge" aria-label="Completed">
+										<Check size={13} strokeWidth={2.8} />
+									</div>
+								{:else if book.progress && book.progress.percentage > 0}
 									<div
 										class="progress"
 										role="progressbar"
@@ -135,7 +154,9 @@
 								{/if}
 							</a>
 							<h3 class="title">{book.title}</h3>
-							{#if book.author}
+							{#if volume}
+								<p class="subtitle">{volume}</p>
+							{:else if book.author}
 								<p class="subtitle">{book.author.name}</p>
 							{/if}
 						</article>
@@ -301,6 +322,36 @@
 		display: block;
 		border-radius: var(--radius);
 		overflow: hidden;
+	}
+
+	.badge {
+		position: absolute;
+		top: 0.4rem;
+		right: 0.4rem;
+		background: var(--surface-2);
+		color: var(--text);
+		border: 1px solid var(--border);
+		font-size: 0.72rem;
+		font-weight: 700;
+		min-width: 1.35rem;
+		height: 1.35rem;
+		line-height: 1.35rem;
+		padding: 0 0.35rem;
+		border-radius: 999px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+		z-index: 2;
+	}
+
+	.checkmark-badge {
+		background: #16a34a;
+		color: #ffffff;
+		border-color: #16a34a;
+		width: 1.35rem;
+		height: 1.35rem;
+		padding: 0;
 	}
 
 	.progress {
