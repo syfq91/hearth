@@ -1,7 +1,7 @@
 """Shared FastAPI dependencies."""
 
 from dataclasses import dataclass
-from typing import Annotated, cast
+from typing import Annotated, Any, cast
 
 from fastapi import Depends, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -41,6 +41,20 @@ def get_sessionmaker(request: Request) -> async_sessionmaker[AsyncSession]:
 
 
 SessionmakerDep = Annotated[async_sessionmaker[AsyncSession], Depends(get_sessionmaker)]
+
+
+def get_image_pipeline(request: Request) -> Any:
+    """Return the shared ImagePipeline singleton."""
+    pipeline = getattr(request.app.state, "image_pipeline", None)
+    if pipeline is None:
+        from app.services.images.pipeline import ImagePipeline
+
+        pipeline = ImagePipeline(request.app.state.settings, request.app.state.sessionmaker)
+        request.app.state.image_pipeline = pipeline
+    return pipeline
+
+
+ImagePipelineDep = Annotated[Any, Depends(get_image_pipeline)]
 
 
 def client_ip(request: Request, settings: Settings) -> str:

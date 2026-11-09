@@ -304,9 +304,11 @@ support for list endpoints.
 
 ---
 
-### 2.4 🔵 Image Pipeline Instantiated Per Request
+### 2.4 🔵 Image Pipeline Instantiated Per Request — [RESOLVED]
 
 **Location:** [`app/api/v1/images.py` L68](file:///home/syafiq/code/hearth/app/api/v1/images.py#L68)
+
+*Status: Resolved — ImagePipeline is now initialized once on application state and injected via `ImagePipelineDep`.*
 
 ```python
 pipeline = ImagePipeline(settings, sessionmaker)
@@ -568,7 +570,7 @@ the connection pragmas for future-proofing.
 | 2.1 | 🟠 High | API+FE | Home page = 5+N HTTP requests | Medium |
 | 2.2 | 🟡 Medium | API | `BaseHTTPMiddleware` for all middleware | Easy |
 | 2.3 | 🟡 Medium | API | ETag via JSON + SHA-256 per request | Easy |
-| 2.4 | 🔵 Low | API | ImagePipeline created per request | Easy |
+| 2.4 | 🔵 Low | API | ImagePipeline created per request | ✅ Resolved |
 | 2.5 | 🔵 Low | API | Person search uses ILIKE | Low |
 | 3.1 | 🟡 Medium | Service | Scanner hashes sequentially | Easy |
 | 3.2 | 🟡 Medium | Service | Blurhash IPC overhead | Easy |

@@ -113,6 +113,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await asyncio.gather(*worker_tasks, return_exceptions=True)
             logger.info("embedded worker stopped")
 
+        pipeline = getattr(app.state, "image_pipeline", None)
+        if pipeline is not None:
+            await pipeline.close()
         await get_session_manager(resolved).stop_all()
         await engine.dispose()
 
@@ -129,6 +132,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         limit=resolved.login_rate_limit_attempts,
         window_seconds=resolved.login_rate_limit_window_seconds,
     )
+    from app.services.images.pipeline import ImagePipeline
+
+    image_pipeline = ImagePipeline(resolved, sessionmaker)
+    application.state.image_pipeline = image_pipeline
 
     if resolved.cors_origins:
         from fastapi.middleware.cors import CORSMiddleware

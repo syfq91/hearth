@@ -7,8 +7,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse
 
 from app.core.deps import (
-    SessionmakerDep,
-    SettingsDep,
+    ImagePipelineDep,
     ViewerDep,
     user_can_access_library,
 )
@@ -16,7 +15,6 @@ from app.core.errors import NotFoundError
 from app.db.models import Image as ImageModel
 from app.db.models import MediaItem
 from app.db.session import SessionDep
-from app.services.images.pipeline import ImagePipeline
 
 router = APIRouter(prefix="/images", tags=["images"])
 
@@ -44,8 +42,7 @@ _MEDIA_TYPES = {
 async def get_image(
     image_id: str,
     viewer: ViewerDep,
-    settings: SettingsDep,
-    sessionmaker: SessionmakerDep,
+    pipeline: ImagePipelineDep,
     session: SessionDep,
     width: Annotated[int, Query(ge=16, le=4096)] = 400,
     image_format: Annotated[Literal["webp", "jpeg", "png"], Query(alias="format")] = "webp",
@@ -65,7 +62,6 @@ async def get_image(
     if not original.is_file():
         raise NotFoundError("Artwork not found", code="image_not_found")
 
-    pipeline = ImagePipeline(settings, sessionmaker)
     variant = await pipeline.ensure_variant(
         image.id, image.local_path, width=width, image_format=image_format
     )
