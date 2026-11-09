@@ -158,9 +158,11 @@ MediaItems by ID.
 
 ---
 
-### 1.6 🟡 Per-Card `session.get()` in `recently-added` Loop
+### 1.6 🟡 Per-Card `session.get()` in `recently-added` Loop — [RESOLVED]
 
 **Location:** [`app/api/v1/home.py` L218](file:///home/syafiq/code/hearth/app/api/v1/home.py#L218)
+
+*Status: Resolved — grouped series item IDs are now batched into a single `watch_states()` query ahead of time.*
 
 ```python
 series_state = await session.get(UserItemState, (user.id, series_item.id))
@@ -560,7 +562,7 @@ the connection pragmas for future-proofing.
 | 1.3 | 🟡 Medium | DB | Pool size 50+50 for SQLite | ✅ Resolved |
 | 1.4 | 🟡 Medium | DB | Missing index on `user_item_state` for continue-watching | ✅ Resolved |
 | 1.5 | 🟡 Medium | API | `recently-added` fetches 5× then discards | Medium |
-| 1.6 | 🟡 Medium | API | Per-card `session.get()` in recently-added loop | Easy |
+| 1.6 | 🟡 Medium | API | Per-card `session.get()` in recently-added loop | ✅ Resolved |
 | 1.7 | 🔵 Low | API | `_book_folders()` materializes all books in memory | Medium |
 | 1.8 | ⚪ Info | DB | WAL set only in migration | None |
 | 2.1 | 🟠 High | API+FE | Home page = 5+N HTTP requests | Medium |

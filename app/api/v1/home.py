@@ -198,6 +198,16 @@ async def recently_added(
                         played=True,
                     )
 
+    series_item_ids: list[str] = []
+    for item, ep_count in page_cards:
+        if ep_count is not None and ep_count > 1 and item.type == "episode":
+            ep = getattr(item, "episode", None)
+            if ep is not None:
+                series = getattr(ep, "series", None)
+                if series is not None and getattr(series, "item", None) is not None:
+                    series_item_ids.append(series.item.id)
+    series_states = await watch_states(session, user.id, series_item_ids) if series_item_ids else {}
+
     items: list[ItemSummary] = []
     for item, ep_count in page_cards:
         summary = item_summary(item, states.get(item.id), episode_count=ep_count)
@@ -215,7 +225,7 @@ async def recently_added(
                         summary.year = series_item.year
                         summary.poster = _primary_image(series_item, "poster") or summary.poster
                         summary.genres = sorted(g.name for g in series_item.genres)
-                        series_state = await session.get(UserItemState, (user.id, series_item.id))
+                        series_state = series_states.get(series_item.id)
                         summary.watch_state = (
                             watch_state_response(series_state)
                             if series_state
