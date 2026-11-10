@@ -9,14 +9,22 @@
 		level?: 2 | 3 | 4;
 		/** When true, video cards navigate directly to playback. */
 		directPlay?: boolean;
+		/** Optional override for aspect ratio. */
+		aspect?: string;
 	}
 
-	let { item, level = 3, directPlay = false }: Props = $props();
+	let { item, level = 3, directPlay = false, aspect: propAspect }: Props = $props();
 
 	// An item is an episode if it's typed 'episode' or has NextUp's series_title
 	const isEpisode = $derived(
 		('type' in item && item.type === 'episode') ||
 			('series_title' in item && typeof item.series_title === 'string' && item.series_title.length > 0)
+	);
+
+	const isMusic = $derived(
+		!isEpisode &&
+			'type' in item &&
+			(item.type === 'album' || item.type === 'artist' || item.type === 'track' || item.type === 'music')
 	);
 
 	const episodeCount = $derived('episode_count' in item ? item.episode_count : null);
@@ -61,7 +69,12 @@
 	});
 
 	const aspect = $derived(
-		poster?.kind === 'still' || poster?.kind === 'thumbnail' ? '16 / 9' : '2 / 3'
+		propAspect ??
+			(isMusic
+				? '1 / 1'
+				: poster?.kind === 'still' || poster?.kind === 'thumbnail'
+					? '16 / 9'
+					: '2 / 3')
 	);
 
 	const posterHref = $derived.by(() => {

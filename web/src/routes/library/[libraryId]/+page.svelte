@@ -11,6 +11,7 @@
 	// Book libraries keep their on-disk directory tree: the grid shows one
 	// folder at a time, starting at the library root.
 	const isBook = $derived(data.library.type === 'book');
+	const isMusic = $derived(data.library.type === 'music');
 	let folder = $state('');
 	let folders = $state<LibraryFolderPage['folders']>([]);
 	let foldersLoading = $state(false);
@@ -254,9 +255,9 @@
 		{#if isBook}
 			<h2 class="section-title">Books</h2>
 		{/if}
-		<ul class="grid">
+		<ul class="grid" class:music-grid={isMusic}>
 			{#each items as item (item.id)}
-				<li><MediaCard item={item} /></li>
+				<li><MediaCard item={item} aspect={isMusic ? '1 / 1' : undefined} /></li>
 			{/each}
 		</ul>
 		{#if nextCursor}
@@ -439,6 +440,10 @@
 		list-style: none;
 		padding: 0;
 		margin: 0;
+	}
+
+	.grid.music-grid {
+		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 	}
 
 	.more {
