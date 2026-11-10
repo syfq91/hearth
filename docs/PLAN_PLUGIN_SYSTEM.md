@@ -73,6 +73,22 @@ flowchart TD
 | **Extension Discovery**| MEF / Dependency Injection container | `PluginManager` using Python dynamic module import (`importlib`) |
 | **Admin UI** | Dashboard -> Plugins (Catalog, Installed) | Admin -> Plugins (`/admin/plugins`) |
 
+### 2.2 Agreed Architectural Decisions
+
+1. **Plugin Storage Directory Layout**:
+   - **Built-in Plugins**: `/app/plugins` (shipped within repository and Docker image).
+   - **User / Custom Plugins**: `/config/plugins` (mapped to `HEARTH_DATA_DIR/plugins` on the persistent writable volume).
+2. **Metadata Provider Priority & Ordering (Per-Library)**:
+   - Jellyfin-style per-library configuration. Each library stores its prioritized list of active metadata providers.
+   - During scanning and matching, `MetadataMatcher` consults the library's specific provider priority order, with unconfigured libraries falling back to the server-wide default order.
+3. **Admin UI Navigation (Unified)**:
+   - `/admin/metadata` is fully superseded by `/admin/plugins`.
+   - The admin sidebar replaces "Metadata" with "Plugins", presenting a unified dashboard for all installed plugins (metadata providers, notification dispatchers, API adapters, scrobblers).
+4. **Third-Party Plugin Dependency Strategy (Option 4A - Shared Runtime & Vendoring)**:
+   - Plugins run within Hearth's shared Python runtime (`httpx`, `pydantic`, `sqlalchemy`, `pillow`, `uvloop`, stdlib).
+   - Any third-party pure-Python dependencies can be vendored directly in `plugins/<plugin_id>/vendor/` and are automatically prepended to `sys.path` upon plugin load.
+   - Preserves Hearth's read-only root filesystem security guarantee and ensures zero startup latency without requiring `pip` or compilation toolchains at runtime.
+
 ---
 
 ## 3. Detailed Specifications
@@ -299,7 +315,7 @@ flowchart LR
   - Remove direct hardcoded imports of `TMDBProvider`, `MusicBrainzProvider`, `OpenLibraryProvider`, `GoogleBooksProvider`.
   - Pass `MetadataRegistry` (or `PluginManager`) to `MetadataMatcher`.
   - Replace hardcoded `self._tmdb`, `self._musicbrainz`, etc., with dynamic queries to `registry.get_providers_for(...)`.
-  - Allow library-level or server-level provider priority order.
+  - Prioritize providers using library-level configuration (e.g., Manga vs. Novels having distinct provider priorities), falling back to server default.
 
 ### Phase 3: Move Online Metadata Providers to Standalone Plugins
 - **Directory Structure**:
@@ -352,8 +368,8 @@ flowchart LR
     - Generates settings forms based on the plugin's configuration schema (API key inputs, language dropdowns, checkboxes).
     - Secret masking: Shows masked hints (e.g. `••••••••abcd`) and allows updating or clearing.
 - **Navigation Update**:
-  - Add "Plugins" under Server Management in `web/src/routes/admin/+layout.svelte`.
-  - Add a notice or link in `/admin/metadata` pointing to the new Plugins management view.
+  - Replace "Metadata" with "Plugins" in `web/src/routes/admin/+layout.svelte` pointing to `/admin/plugins`.
+  - Add redirect from `/admin/metadata` to `/admin/plugins`.
 
 ### Phase 6: Testing, Documentation & ADR
 - **Unit & Integration Tests**:
