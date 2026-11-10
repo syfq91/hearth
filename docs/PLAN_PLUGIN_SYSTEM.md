@@ -296,7 +296,7 @@ flowchart LR
     P5 --> P6[Phase 6: Testing & Docs]
 ```
 
-### Phase 1: Core Plugin Subsystem
+### Phase 1: Core Plugin Subsystem [Completed]
 - **Create `app/core/plugins/`**:
   - `manifest.py`: Pydantic model for `plugin.json` (validates metadata, author, capabilities, config schema).
   - `base.py`: `BasePlugin`, `PluginContext`, `PluginStatus` enum (`ACTIVE`, `DISABLED`, `FAILED`, `CONFIG_REQUIRED`).
@@ -306,16 +306,20 @@ flowchart LR
   - Store plugin configuration and enabled state in existing SQLite `settings` table with key `plugin.<plugin_id>`.
   - Sensitive configuration values (marked with `"secret": true` in the schema) are masked when retrieved for the UI and decrypted/stored safely.
 
-### Phase 2: Metadata Registry & Decouple `MetadataMatcher`
+### Phase 2: Metadata Registry & Decouple `MetadataMatcher` [Completed]
 - **Create `app/services/metadata/registry.py`**:
   - `MetadataRegistry`: Holds active metadata providers mapped by media type (`movie`, `series`, `artist`, `album`, `book`).
   - `LocalProvider` is registered as the default local fallback.
-  - Methods: `get_providers_for(media_type: str) -> list[MetadataProvider]`.
+  - Methods: `get_providers_for(media_type: str, library_id: str | None = None, priority_order: Sequence[str] | None = None) -> list[MetadataProvider]`.
+  - Library-level priority persistence (`load_library_provider_order`, `save_library_provider_order`) with registry cache priming.
 - **Refactor `app/services/metadata/matching.py`**:
   - Remove direct hardcoded imports of `TMDBProvider`, `MusicBrainzProvider`, `OpenLibraryProvider`, `GoogleBooksProvider`.
-  - Pass `MetadataRegistry` (or `PluginManager`) to `MetadataMatcher`.
+  - Pass `MetadataRegistry` to `MetadataMatcher`.
   - Replace hardcoded `self._tmdb`, `self._musicbrainz`, etc., with dynamic queries to `registry.get_providers_for(...)`.
   - Prioritize providers using library-level configuration (e.g., Manga vs. Novels having distinct provider priorities), falling back to server default.
+- **Factory & Endpoint Decoupling**:
+  - Refactored `build_metadata_matcher` in `app/services/metadata/factory.py` to register providers in `MetadataRegistry`.
+  - Updated `/api/v1/metadata/search` endpoint in `app/api/v1/metadata.py` to use `registry.get_providers_for(media_type)`.
 
 ### Phase 3: Move Online Metadata Providers to Standalone Plugins
 - **Directory Structure**:
