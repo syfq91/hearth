@@ -1,0 +1,37 @@
+{
+  "id": "org.hearth.plugins.tmdb",
+  "name": "TheMovieDb",
+  "version": "1.0.0",
+  "description": "Fetches movie and TV series metadata, artwork, and cast from TheMovieDb (TMDB).",
+  "author": "Hearth Team",
+  "category": "Metadata",
+  "min_hearth_version": "1.0.0",
+  "entrypoint": "plugin:TMDBPlugin",
+  "capabilities": [
+    "metadata.movie",
+    "metadata.series"
+  ],
+  "config_schema": {
+    "title": "TMDBConfig",
+    "type": "object",
+    "properties": {
+      "api_key": {
+        "title": "API Key",
+        "type": "string",
+        "description": "TMDB v3 API Key or v4 Read Access Token",
+        "secret": true
+      },
+      "include_adult": {
+        "title": "Include Adult",
+        "type": "boolean",
+        "default": false
+      },
+      "preferred_language": {
+        "title": "Preferred Language",
+        "type": "string",
+        "default": "en-US"
+      }
+    },
+    "required": ["api_key"]
+  }
+}
