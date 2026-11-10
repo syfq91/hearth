@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from app.api.v1.jobs import JobResponse, cancel_job
 from app.core.config import Settings
-from app.core.deps import RequireAdmin, SettingsDep
+from app.core.deps import PluginManagerDep, RequireAdmin, SettingsDep
 from app.core.errors import ForbiddenError, NotFoundError, ValidationError
 from app.core.logging import get_recent_logs
 from app.db.base import utcnow
@@ -611,6 +611,7 @@ async def update_metadata_settings(
     actor: RequireAdmin,
     settings: SettingsDep,
     session: SessionDep,
+    plugin_manager: PluginManagerDep,
 ) -> MetadataSettingsResponse:
     """Persist API keys for online metadata providers.
 
@@ -630,6 +631,20 @@ async def update_metadata_settings(
     await save_credential_overrides(session, changes)
     for attr, value in changes.items():
         setattr(settings, attr, value)
+
+    # Sync with standalone plugins if active
+    if "tmdb_api_key" in changes and plugin_manager.get_plugin("org.hearth.plugins.tmdb"):
+        await plugin_manager.configure_plugin(
+            "org.hearth.plugins.tmdb",
+            {"api_key": changes["tmdb_api_key"] or ""},
+        )
+    if "google_books_api_key" in changes and plugin_manager.get_plugin(
+        "org.hearth.plugins.googlebooks"
+    ):
+        await plugin_manager.configure_plugin(
+            "org.hearth.plugins.googlebooks",
+            {"api_key": changes["google_books_api_key"] or ""},
+        )
 
     record_audit(
         session,
