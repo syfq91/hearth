@@ -622,3 +622,241 @@ the connection pragmas for future-proofing.
 10. Lazy-load video.js and pdfjs-dist (§4.1, §4.3)
 11. Add cache headers to JSON API responses (§4.5)
 12. Parallelize scanner hashing (§3.1)
+
+---
+
+## 7. Re-audit — 2026-11-09
+
+**Date:** 2026-11-09
+**Auditor:** Automated codebase review (re-audit)
+**Scope:** Backend (Python/FastAPI), frontend (SvelteKit/Svelte 5), database (SQLite), infrastructure (Docker)
+**Method:** Source audit of hot paths plus verification of §§1–5 claims against the current tree. All `file:line` below were verified in the current tree.
+
+**Verdict on prior audit:** §§1–5 were largely accurate. Verified as-designed / resolved: middleware is pure ASGI (§2.2 held), pool is 5+10 (§1.3 held), user-item-state/book-progress indexes exist (§1.4 held), probe/hash phases run in parallel (`scanner.py:592-644`, §3.1 held), TMDB throttle is bypassed on cache hits (`tmdb.py:602-604` — prior §3.3 overstated the cached-read cost). The remaining gaps are new issues in high-traffic routes and long-running services the prior pass did not measure.
+
+**Top 5 to address first:**
+
+1. `/home` runs shelves sequentially and `next-up` is N+1 — `app/api/v1/home.py:78-89`, `app/api/v1/shows.py:421-466`
+2. Scanner does blocking tag/book/guessit parsing inside one long DB transaction — `app/services/scanner/scanner.py:701-1465`
+3. `/health` spawns 2 subprocesses per call, uncached — `app/api/v1/system.py:74-81`, `app/core/system.py:76-140`
+4. Argon2id verify/hash blocks the event loop — `app/core/passwords.py:12`
+5. Collection auto-collect loads every movie ORM object to filter JSON in Python — `app/api/v1/collections.py:147-152`
+
+### 7.1 🟠 N+1 + unbounded loop in `GET /shows/next-up`
+
+**Location:** [`app/api/v1/shows.py` L398-466](file:///home/syafiq/code/hearth/app/api/v1/shows.py#L398-L466)
+
+`active_series_rows` is unbounded (no `LIMIT`). Per active series the loop does `session.get(MediaItem)` (which fires 11 `lazy="selectin"` relations), one `Episode` query, one `watch_states()` call, and one `MediaItem.title` scalar — 300–400 sequential round-trips for 50–100 active series, on every `/home` load. `mark_series_watched` / `mark_season_watched` (`shows.py:489-529, 550-569`) share the per-episode `_load_state` loop pattern.
+
+**Impact:** Hottest read path on the home page dominates DB time for TV-heavy libraries.
+**Recommendation:** `LIMIT` active series to `limit`; push `library_id` into SQL; batch-load `MediaItem WHERE id IN (...)`, `Episode WHERE series_id IN (...)`, states, and season titles in 3–4 queries; group in Python.
+
+### 7.2 🟠 Sequential waterfall inside composite `GET /home`
+
+**Location:** [`app/api/v1/home.py` L71-97](file:///home/syafiq/code/hearth/app/api/v1/home.py#L71-L97)
+
+`home_overview` awaits `continue_watching`, `continue_reading`, `list_next_up`, `recently_added_albums`, `list_libraries`, then loops per-library `recently_added` — sum of latencies (est. 200–600 ms). The composite endpoint fixed the HTTP waterfall (§2.1) but not the internal one.
+
+**Impact:** Every home-page load pays the sum of shelf latencies.
+**Recommendation:** Run shelves concurrently with per-shelf sessions from `sessionmaker` via `asyncio.gather` (a single `AsyncSession` is not safe to share concurrently).
+
+### 7.3 🟠 Unbounded full-table load in collection auto-collect
+
+**Location:** [`app/api/v1/collections.py` L147-152](file:///home/syafiq/code/hearth/app/api/v1/collections.py#L147-L152)
+
+```python
+all_movies = await session.scalars(select(MediaItem).where(MediaItem.type == "movie"))
+for m in all_movies.all():
+    c_id = (m.provider_ids or {}).get("tmdb_collection_id") or (m.provider_ids or {}).get(
+        "collection_id"
+    )
+```
+
+Loads every movie ORM object (+11 `selectin` tables each, including large `streams_json`) into memory to filter JSON in Python. 10k movies = seconds, high RSS, possible OOM.
+
+**Impact:** Admin-only but unbounded; risk grows linearly with library size.
+**Recommendation:** `select(MediaItem.id, MediaItem.provider_ids)` scalar projection, or SQL `func.json_extract(MediaItem.provider_ids, "$.tmdb_collection_id") == str(tmdb_id)`.
+
+### 7.4 🟡 `/health` spawns subprocesses on every call, uncached
+
+**Location:** [`app/api/v1/system.py` L74-81](file:///home/syafiq/code/hearth/app/api/v1/system.py#L74-L81), [`app/core/system.py` L76-140](file:///home/syafiq/code/hearth/app/core/system.py#L76-L140)
+
+Each call runs `ffmpeg -version` and `vainfo` (5 s timeout each) plus a SQLite read-only check, with no cache — unlike `probe_transcode_capabilities` which is cached (`capabilities.py:154-167`). Docker `HEALTHCHECK` plus any unauthenticated caller triggers 2 subprocess spawns per request (10–50 ms typical, up to 5 s if `vainfo` hangs).
+
+**Impact:** Wasteful subprocess overhead; worst case hangs the health endpoint.
+**Recommendation:** 30–60 s TTL cache (module-level, modelled on `capabilities.py`).
+
+### 7.5 🟡 Argon2id hashing blocks the event loop
+
+**Location:** [`app/core/passwords.py` L12](file:///home/syafiq/code/hearth/app/core/passwords.py#L12), used in `auth.py:226,230`, `users.py:166,328`
+
+`verify_password` / `hash_password` are synchronous Argon2id (≈30–80 ms CPU) called directly in async login/reset/create paths. `_dummy_hash()` (`auth.py:90-93`) also blocks on first unknown-user login.
+
+**Impact:** Each login blocks the single event loop for all concurrent requests/streams.
+**Recommendation:** `await asyncio.to_thread(verify_password, ...)` / `await asyncio.to_thread(hash_password, ...)`.
+
+### 7.6 🟡 Global playback lock serializes all writes
+
+**Location:** [`app/api/v1/playback.py` L161,380,524](file:///home/syafiq/code/hearth/app/api/v1/playback.py#L161)
+
+One module-level `asyncio.Lock()` guards all users/items, held across DB reads + commit. Rationale (WAL snapshot visibility) is documented; scope is over-broad. Marking a 200-episode series watched = 200 sequential `get`s under the lock.
+
+**Impact:** Head-of-line blocking on the hottest write path (progress/favorite/rating reports).
+**Recommendation:** Per-`(user_id, item_id)` lock, or atomic upsert (`INSERT ... ON CONFLICT(user_id, item_id) DO UPDATE`); batch-load states for bulk updates.
+
+### 7.7 🟡 Per-request matcher/provider/httpx construction + sequential fan-out
+
+**Location:** [`app/api/v1/metadata.py` L22-26,73,106](file:///home/syafiq/code/hearth/app/api/v1/metadata.py#L22-L26), [`matching.py` L186-195](file:///home/syafiq/code/hearth/app/services/metadata/matching.py#L186-L195)
+
+Every admin metadata search builds a new `ImagePipeline` plus ~5 `httpx.AsyncClient`s (no TLS/connection reuse), then calls providers sequentially.
+
+**Impact:** Sum of external latencies (0.2–2 s) per search, no connection reuse.
+**Recommendation:** Singleton matcher/clients on `app.state` (as `ImagePipeline` already is for `/images`); `asyncio.gather` provider searches.
+
+### 7.8 🔴 Scanner: blocking parse work inside one long DB transaction
+
+**Location:** [`app/services/scanner/scanner.py` L701-1465](file:///home/syafiq/code/hearth/app/services/scanner/scanner.py#L701-L1465), e.g. L720, L771, L808, L962, L1176
+
+`_write_changes` runs `read_audio_tags` (`mutagen.File` — opens + parses whole file), `read_book_metadata` (EPUB zip/xml + PDF render at scale 2.0), and `guessit` parsing synchronously on the event loop while holding the single SQLite writer lock. Hash/probe phases are parallel (§3.1 held), but tag/book parsing is not. Holds the writer lock for minutes on 5k-file scans, starves progress, causes `database is locked`.
+
+**Impact:** First scans and large rescans block the worker and contend with API writes.
+**Recommendation:** Collect `tags`/`tag_data`/`parsed` in the hash/probe phase via `asyncio.to_thread` + `Semaphore` + `gather`, then apply in `_write_changes`; write in batches of ~500 (`flush`, not one `commit`).
+
+### 7.9 🔵 Scanner `_is_cancelled` does a DB session per file
+
+**Location:** [`app/services/scanner/scanner.py` L602,629](file:///home/syafiq/code/hearth/app/services/scanner/scanner.py#L602), [`worker.py` L137-139](file:///home/syafiq/code/hearth/app/services/jobs/worker.py#L137-L139)
+
+Each file opens a session + `SELECT Job.cancel_requested`. 5k files = 5k sessions while holding the probe/hash semaphore.
+
+**Impact:** Dominates hash/probe wall-time at scale.
+**Recommendation:** Cache cancel flag (poll ≤1/sec via `time.monotonic()`) or check every 100 files; pass an `asyncio.Event`.
+
+### 7.10 🟠 Serial metadata matching; rate-limit lock held across sleep
+
+**Location:** [`app/services/metadata/matching.py` L257,511,782,873](file:///home/syafiq/code/hearth/app/services/metadata/matching.py#L257), [`musicbrainz.py` L344-353](file:///home/syafiq/code/hearth/app/services/metadata/musicbrainz.py#L344-L353), [`tmdb.py` L666-673](file:///home/syafiq/code/hearth/app/services/metadata/tmdb.py#L666-L673)
+
+`match_pending` loops items serially; top-3 candidate details and season fetches are sequential. MusicBrainz 1 req/s and TMDB 0.05 s throttles hold `_rate_lock` across `sleep`, imposing a hard floor (100 artists+albums ≈ 200 s).
+
+**Impact:** First-scan matching for 100 movies ≈ 500 serial HTTP round-trips (60–120 s); music >200 s.
+**Recommendation:** Bounded `Semaphore(2-4)` + `gather` for items/candidates/seasons; shrink the lock critical section (compute wait outside lock, sleep, then set `_last_request`).
+
+### 7.11 🟡 OpenLibrary/GoogleBooks have no cache or throttle
+
+**Location:** [`app/services/metadata/openlibrary.py` L56-163](file:///home/syafiq/code/hearth/app/services/metadata/openlibrary.py#L56-L163), [`googlebooks.py` L55-170](file:///home/syafiq/code/hearth/app/services/metadata/googlebooks.py#L55-L170)
+
+Every `search_book` / `fetch_book_details` hits the network with no `ProviderCache` and no `_throttle` (unlike TMDB/MusicBrainz), with a hard-coded 10 s timeout.
+
+**Impact:** Rescans re-hammer externals; unbounded concurrency risk if 7.10 is parallelized; no `429` handling.
+**Recommendation:** Copy the TMDB cache pattern (`_cache_get`/`_cache_set`) + token-bucket throttle.
+
+### 7.12 🟡 Image pipeline: serial artwork, memory blow-up, render race
+
+**Location:** [`app/services/images/pipeline.py` L218,322-341,408-416](file:///home/syafiq/code/hearth/app/services/images/pipeline.py#L218)
+
+- `store_for_item:218` downloads artwork serially (TMDB returns 8 images → ~2 s/item).
+- `_download:408` `b"".join(chunks)` holds up to `image_max_download_bytes` (20 MB) × concurrency in RAM; `_read_local:430` `read_bytes()` same.
+- `ensure_variant:322` `is_file()` check → render has a TOCTOU: concurrent thumbnail requests all render the same target (`LANCZOS` + `optimize=True` + `WEBP method=4` — most expensive Pillow settings).
+- `_get_pool:71-80` singleton ignores `max_workers` after first call; `_render_variant:332` still uses the process pool (inspect was moved to threads — §3.2 partially held).
+
+**Impact:** Slow artwork during scans; memory spikes; wasted CPU on duplicate renders.
+**Recommendation:** `gather` downloads with `Semaphore(4)`; stream to temp file (`shutil.copyfileobj`) not `bytes.join`; per-`(image_id,width,fmt)` `asyncio.Lock`; `method=2` for on-demand variants; thread pool for small widths.
+
+### 7.13 🟡 Polling churn: worker idle poll, SSE, transcode loops
+
+**Location:** [`worker.py` L247-259](file:///home/syafiq/code/hearth/app/services/jobs/worker.py#L247-L259), [`config.py` L75](file:///home/syafiq/code/hearth/app/core/config.py#L75), [`events.py` L129-149](file:///home/syafiq/code/hearth/app/api/v1/events.py#L129-L149), [`transcode/session.py` L181-449](file:///home/syafiq/code/hearth/app/services/transcode/session.py#L181-L449)
+
+- Worker polls `GROUP BY` + `claim()` every 1 s idle (86k/day); slots-full sleeps full 1 s → new job latency up to 1 s.
+- SSE polls `SELECT ... WHERE updated_at > since LIMIT 100` every 1 s per client with `sleep(min(0.1, ...))` (10 wakeups/s/client); `jobs.updated_at` has no index → full scan per poll.
+- Transcode `wait_for_first_segment` / `ensure_segment` poll with `sleep(0.1/0.05)` + `glob` per call; `create_session` holds `_lock` across ffmpeg spawn; `capabilities.py:218` runs 4 test encodes serially (≤20 s) under `_cache_lock`.
+
+**Impact:** Idle CPU/DB load; SSE scales poorly; first-playback decisions can block ~20 s.
+**Recommendation:** Idle backoff 1s→2s→5s (reset on claim); SSE poll 2–3 s + `Index(ix_jobs_updated_at)`; reserve transcode slot under lock but spawn outside; `asyncio.Event` on first segment; `gather` test encodes (VAAPI handles 4 concurrent).
+
+### 7.14 🟡 NFO/metadata helper loops: O(n²) scans, per-file stats
+
+**Location:** [`app/services/metadata/local.py` L335](file:///home/syafiq/code/hearth/app/services/metadata/local.py#L335), [`_match_series:634`, `_local_details:481`](file:///home/syafiq/code/hearth/app/services/metadata/matching.py#L634)
+
+`sorted(series_dir.glob("**/*.nfo"))` per `fetch_tv_season` walks the tree once per season; per-file `find_series`/`find_movie` re-opens NFO XML for up to 5 files sharing one parent dir; `_first_existing` does 24 `is_file()` stats per lookup.
+
+**Impact:** Slow series matching for large shows.
+**Recommendation:** Resolve series dir once per snapshot; hoist glob to a single `find_series`+episodes batch; cache parsed NFO → metadata.
+
+### 7.15 🟡 Large lists: unbounded details, double-count, `ORDER BY random()`
+
+| Location | Issue | Fix |
+|---|---|---|
+| `books.py:809-822,918-931`, `music.py:346-352` | Author/artist detail loads all rows (500 books / 200 albums), no limit | Add `limit` (default 100–200, max 500) + pagination |
+| `music.py:270,507,668`, `books.py:301-313` | `count()` over filtered subquery, then page query — 2× cost | `func.count() OVER ()` window or approximate totals |
+| `music.py:758,785` | `ORDER BY random()` full scan + sort per `/music/random` call | `count()` then `OFFSET random()*count LIMIT n` |
+| `playlists.py:398-438`, `collections.py:334-375` | Unbounded `MediaItem.id.in_(item_ids)` + full ORM load, no pagination (1,000-track playlist = 1,000 summaries; SQLite variable limit risk) | Paginate detail or lightweight projection; chunk `IN` clauses |
+
+### 7.16 🟡 Missing indexes + incomplete SQLite pragmas
+
+**Location:** [`app/db/models.py` L148-212](file:///home/syafiq/code/hearth/app/db/models.py#L148-L212), [`app/db/session.py` L22-31](file:///home/syafiq/code/hearth/app/db/session.py#L22-L31)
+
+- `audit_log` `ORDER BY created_at DESC` (`admin.py:253`) — only `(actor_id, action)` indexed.
+- `jobs` `ORDER BY created_at DESC` (`jobs.py:115`) — only `(status, run_after)` indexed.
+- `media_items` sort by `year`/`rating` (`items.py:552-561`) — only `(library_id, sort_title)` / `(library_id, added_at)` indexed.
+- `session.py` pragmas set `foreign_keys`, `busy_timeout`, `synchronous`, `mmap_size` but no `cache_size` (default −2000 = 2 MB page cache/connection) and no per-connection `journal_mode=WAL`.
+
+**Impact:** Full scans + sorts on admin/jobs/list paths; repeated shelf/search queries re-read pages from disk.
+**Recommendation:** `Index(created_at)` on `audit_log`/`jobs`; `(library_id, year)` / `(library_id, rating)`; `PRAGMA cache_size=-64000` (64 MB), `temp_store=MEMORY`, `journal_mode=WAL` in `_apply_sqlite_pragmas`.
+
+### 7.17 🟡 Frontend: duplicated initial-load cost on key routes
+
+| # | Location | Issue |
+|---|---|---|
+| 7.17.1 🔴 | `VideoPlayer.svelte:2-4`, `watch/[itemId]/+page.svelte:2` | Static `video.js` (+CSS, VHS, HLS) = watch node **705 KB / 210 KB gz** before first frame; `jassub` is already dynamic. Fix: `await import('video.js')` in `initPlayer()`, lazy CSS, `manualChunks.vendorVideo` (`vite.config.ts` currently has none). |
+| 7.17.2 🔴 | `books/[bookId]/read/+page.svelte:2-4`, `PdfReader.svelte:91` | All 3 readers statically imported → EPUB/CBZ downloads **464 KB pdfjs + worker**. Fix: `import()` gated on `format` (`isComic/isPdf/isEpub` at `+page.svelte:35-37`). |
+| 7.17.3 🔴 | `PdfReader.svelte:53-87,99-105` | Renders **all** pages upfront (no windowing/yield vs `ComicReader.svelte:31`), `arrayBuffer()` waits for full download, all canvases at DPR 2 retained → OOM on 500p PDFs. Fix: ±5 page window via existing `IntersectionObserver`, `getDocument({url})` range streaming. |
+| 7.17.4 🟠 | `+page.ts:41`, `+page.svelte:101,133,201,218`, `Shelf.svelte:98` | Home renders 100+ `MediaCard`s; each mounts `Poster.svelte:37` async token chain; offscreen shelves stay mounted. Fix: `limit=8` + “show more on arrow”, `content-visibility:auto`, mount shelves on intersection. |
+| 7.17.5 🟡 | `api/client.ts:185-204` | No cache/dedup/ETag/cancellation; `AbortSignal` param exists but zero callers pass it; layout refetches libraries when empty (`+layout.ts:36` vs `+layout.svelte:32`); `ComicReader.svelte:62` prefetch serial. Fix: 30 s URL-keyed cache + inflight map (reuse single-flight at `client.ts:110`/`media-token.svelte.ts:22`), abort in `$effect` cleanup, `If-None-Match`/304. |
+| 7.17.6 🟡 | `books/[id]/read/+page.ts:6,10`, `watch/[id]/+page.ts:6`, `next-episode.ts:26`, `series/[id]/+page.svelte:20-34` | Sequential waterfalls on independent fetches (2–3 RTT blocking playback/book open). Fix: `Promise.all`, backend single endpoint for next-episode, include S1 episodes in series detail. |
+| 7.17.7 🟡 | `Poster.svelte:74-83`, `BookCover.svelte:31`, `ComicReader.svelte:146`, `library/[id]/+page.svelte:42-47`, `AudioBar.svelte:56,182` | Images: all `lazy` even first row (hurts LCP), no `srcset`/`fetchpriority`, fixed widths mismatch grid. Library filters refetch per keystroke (no debounce); audio prewarms next track when paused; `localStorage` per slider tick. Fix: `srcset`+DPR sizing, `fetchpriority="high"` first shelf, 250 ms debounce, `preload='metadata'`, 300 ms debounce. |
+
+### 7.18 ⚪ Verified as-designed (no change)
+
+- `models.py:235-289` — `lazy="selectin"` on `MediaItem` is an intentional async-safety contract; mitigate at route level (scalar projections as `home.py:175-239` already does for `recently-added`) rather than flipping to `lazy="raise"`.
+- `streaming.py:147-158` — per-chunk `to_thread` ≈ 100–200 ms/GB spread; negligible vs network.
+- `deps.py:88-111` — per-request auth tax (JWT + user reload + library check) is intentional for immediate revocation; optional per-request grant caching only.
+- Home single `/home` call + `{#await}` skeleton, single-flight media-token/refresh, Poster blurhash LRU, `pdfjs`/`jassub` dynamic imports where effective — keep.
+
+### 7.19 Summary table (2026 re-audit)
+
+| # | Severity | Area | Finding | Status |
+|---|---|---|---|---|
+| 7.1 | 🟠 High | API | N+1 + unbounded loop in `next-up` | Open |
+| 7.2 | 🟠 High | API | Sequential shelves in composite `/home` | Open |
+| 7.3 | 🟠 High | API | Unbounded full-table load in collection auto-collect | Open |
+| 7.4 | 🟡 Medium | API | Uncached subprocess probes on `/health` | Open |
+| 7.5 | 🟡 Medium | API | Argon2id blocks event loop | Open |
+| 7.6 | 🟡 Medium | API | Global playback lock serializes all writes | Open |
+| 7.7 | 🟡 Medium | API | Per-request matcher/httpx construction, sequential providers | Open |
+| 7.8 | 🔴 Critical | Service | Scanner blocking parse inside one long DB transaction | Open |
+| 7.9 | 🔵 Low | Service | `_is_cancelled` DB session per file | Open |
+| 7.10 | 🟠 High | Service | Serial metadata matching; lock held across `sleep` | Open |
+| 7.11 | 🟡 Medium | Service | OpenLibrary/GoogleBooks have no cache/throttle | Open |
+| 7.12 | 🟡 Medium | Service | Image pipeline serial, memory-heavy, render race | Open |
+| 7.13 | 🟡 Medium | Service | Polling churn: worker/SSE/transcode; missing `jobs.updated_at` index | Open |
+| 7.14 | 🟡 Medium | Service | NFO O(n²) scans, per-file stat loops | Open |
+| 7.15 | 🟡 Medium | API | Unbounded details, double-count, `ORDER BY random()` | Open |
+| 7.16 | 🟡 Medium | DB | Missing indexes; incomplete SQLite pragmas | Open |
+| 7.17 | 🔴–🟡 | FE | Large bundles, full-book PDF render, home card overload, no cache/dedup, waterfalls | Open |
+| 7.18 | ⚪ Info | — | Verified as-designed | No action |
+
+### 7.20 Recommended priority order (2026)
+
+**Phase 1 — Quick wins (< 1 day)**
+1. `/health` TTL cache (§7.4); Argon2 → `to_thread` (§7.5); collection scalar query (§7.3)
+2. `jobs.updated_at` / `audit_log.created_at` indexes + `cache_size`/`temp_store` pragmas (§7.16)
+3. `ORDER BY random()` → offset; `count() OVER ()`; limits on author/artist detail (§7.15)
+4. FE: `Promise.all` independent loaders, debounce library filters, `content-visibility`, image `fetchpriority`/`srcset` (§7.17)
+
+**Phase 2 — Medium effort (1–3 days)**
+5. `home_overview` parallel sessions; `list_next_up` batching (§7.1–7.2)
+6. Scanner: phase-split writes, cancel-flag cache, batch commits (§7.8–7.9)
+7. Metadata: bounded `gather`, singleton clients, book-provider cache (§7.7, §7.10–7.11)
+8. FE: dynamic `video.js`/readers, PdfReader windowing, API cache + abort (§7.17)
+
+**Phase 3 — Verification**
+9. `EXPLAIN QUERY PLAN` on shelf/search/next-up paths; `cProfile`/wall-time on first scan; bundle analyzer before/after; load-test via `scripts/` before claiming gains.
