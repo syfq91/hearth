@@ -78,3 +78,9 @@ export type LibraryFolder = S['LibraryFolder'];
 export type LibraryFolderPage = S['LibraryFolderPage'];
 export type FilesystemBrowseResponse = S['FilesystemBrowseResponse'];
 export type FilesystemEntry = S['FilesystemEntry'];
+export type PluginSummary = S['PluginSummary'];
+export type PluginDetail = S['PluginDetail'];
+export type PluginStatus = S['PluginStatus'];
+export type PluginConfigResponse = S['PluginConfigResponse'];
+export type UpdatePluginConfigRequest = S['UpdatePluginConfigRequest'];
+
