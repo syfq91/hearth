@@ -1,0 +1,30 @@
+{
+  "id": "org.hearth.plugins.musicbrainz",
+  "name": "MusicBrainz",
+  "version": "1.0.0",
+  "description": "Fetches artist and release group metadata from MusicBrainz and Cover Art Archive.",
+  "author": "Hearth Team",
+  "category": "Metadata",
+  "min_hearth_version": "1.0.0",
+  "entrypoint": "plugin:MusicBrainzPlugin",
+  "capabilities": [
+    "metadata.music"
+  ],
+  "config_schema": {
+    "title": "MusicBrainzConfig",
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "title": "Enabled",
+        "type": "boolean",
+        "default": true
+      },
+      "rate_limit_seconds": {
+        "title": "Rate Limit (seconds)",
+        "type": "number",
+        "default": 1.0,
+        "description": "Minimum seconds between consecutive outbound requests"
+      }
+    }
+  }
+}
