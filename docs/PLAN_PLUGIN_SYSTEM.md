@@ -350,7 +350,7 @@ flowchart LR
   - Provided lightweight backward-compatible adapter classes in `app/services/metadata/` to preserve all existing test suites and imports.
   - Added unit test suite in `tests/unit/test_metadata_plugins.py` verifying discovery, schema parsing, typed configs, and registry registration.
 
-### Phase 4: API Endpoints & Client Sync
+### Phase 4: API Endpoints & Client Sync [Completed]
 - **Implement `app/api/v1/plugins.py`**:
   - `GET /api/v1/plugins`: List all discovered plugins, versions, categories, capabilities, status, and whether configuration is valid.
   - `GET /api/v1/plugins/{plugin_id}`: Detailed manifest and JSON schema for settings.
@@ -360,9 +360,9 @@ flowchart LR
   - `POST /api/v1/plugins/{plugin_id}/disable`: Disable plugin and unregister from active registry.
   - `POST /api/v1/plugins/reload`: Rescan plugin directories from disk.
 - **Backward-Compatible Compatibility Layer**:
-  - Adapt existing `/api/v1/admin/metadata/settings` to delegate to the new plugin configuration manager, ensuring no breakages for existing automation scripts.
+  - Adapted existing `/api/v1/admin/metadata/settings` to delegate to the new plugin configuration manager, ensuring no breakages for existing automation scripts.
 - **Client Synchronization**:
-  - Run `export_openapi.py` and `generate_client.py` to update `docs/openapi.json` and `packages/client/src/schema.d.ts`.
+  - Ran `export_openapi.py` and `generate_client.py` updating `docs/openapi.json` and `packages/client/src/schema.d.ts`.
 
 ### Phase 5: Web UI Admin Experience (`/admin/plugins`)
 - **New Admin Route `web/src/routes/admin/plugins/`**:

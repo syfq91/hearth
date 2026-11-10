@@ -324,6 +324,12 @@ When `method` is `transcode_hls` or `remux_hls`:
 | | `/api/v1/admin/metadata/settings` | GET, PUT | Admin | Read or update online metadata provider API keys |
 | | `/api/v1/admin/transcoding/capabilities` | GET | Admin | Inspect hardware VAAPI capabilities |
 | | `/api/v1/admin/transcoding/sessions` | GET | Admin | Inspect active transcoding sessions |
+| **Plugins** | `/api/v1/plugins` | GET | Admin | List discovered plugins and their status |
+| | `/api/v1/plugins/{plugin_id}` | GET | Admin | Detailed manifest and masked configuration |
+| | `/api/v1/plugins/{plugin_id}/config` | GET, PUT | Admin | Read or update configuration with secret masking |
+| | `/api/v1/plugins/{plugin_id}/enable` | POST | Admin | Enable plugin |
+| | `/api/v1/plugins/{plugin_id}/disable` | POST | Admin | Disable plugin and unload resources |
+| | `/api/v1/plugins/reload` | POST | Admin | Rescan plugin directories from disk |
 
 ---
 
