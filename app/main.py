@@ -64,6 +64,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         get_session_manager(resolved).startup_sweep()
         with contextlib.suppress(Exception):
             await probe_transcode_capabilities(resolved)
+
+        from app.core.plugins.manager import PluginManager
+
+        plugin_manager = PluginManager(resolved, sessionmaker)
+        app.state.plugin_manager = plugin_manager
+        with contextlib.suppress(Exception):
+            await plugin_manager.discover_and_load()
+
         # Mounted at startup, after every application route exists, so the SPA
         # fallback can never shadow an API route (see app/core/spa.py).
         _mount_web_ui(app)
@@ -116,6 +124,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         pipeline = getattr(app.state, "image_pipeline", None)
         if pipeline is not None:
             await pipeline.close()
+        await plugin_manager.dispose_all()
         await get_session_manager(resolved).stop_all()
         await engine.dispose()
 

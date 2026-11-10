@@ -57,6 +57,20 @@ def get_image_pipeline(request: Request) -> Any:
 ImagePipelineDep = Annotated[Any, Depends(get_image_pipeline)]
 
 
+def get_plugin_manager(request: Request) -> Any:
+    """Return the shared PluginManager singleton."""
+    manager = getattr(request.app.state, "plugin_manager", None)
+    if manager is None:
+        from app.core.plugins.manager import PluginManager
+
+        manager = PluginManager(request.app.state.settings, request.app.state.sessionmaker)
+        request.app.state.plugin_manager = manager
+    return manager
+
+
+PluginManagerDep = Annotated[Any, Depends(get_plugin_manager)]
+
+
 def client_ip(request: Request, settings: Settings) -> str:
     """Return the caller IP, honoring proxy headers only when configured.
 
