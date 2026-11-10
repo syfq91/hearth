@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
-from app.core.plugins.base import MetadataPlugin, PluginContext
+from app.core.plugins.base import MetadataPlugin, PluginContext, PluginStatus
 from app.core.plugins.manifest import PluginManifest
 from app.services.metadata.base import (
     AlbumMetadata,
@@ -53,6 +53,8 @@ class MusicBrainzPlugin(MetadataPlugin[MusicBrainzConfig]):
 
     @property
     def enabled(self) -> bool:
+        if self.status != PluginStatus.ACTIVE:
+            return False
         if self.config is not None:
             return self.config.enabled
         return self.context.settings.musicbrainz_enabled
@@ -123,6 +125,15 @@ class MusicBrainzPlugin(MetadataPlugin[MusicBrainzConfig]):
                 provider_name=self.name,
             )
         return self._mb_client
+
+    async def search(self, query: str, year: int | None = None) -> list[SearchResult]:
+        return []
+
+    async def fetch_details(self, provider_id: str) -> Any | None:
+        return None
+
+    async def fetch_images(self, provider_id: str) -> list[ProviderImage]:
+        return []
 
     async def search_artist(self, query: str) -> list[SearchResult]:
         return await self._ensure_client().search_artist(query)

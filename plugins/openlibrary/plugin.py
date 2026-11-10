@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
-from app.core.plugins.base import MetadataPlugin, PluginContext
+from app.core.plugins.base import MetadataPlugin, PluginContext, PluginStatus
 from app.core.plugins.manifest import PluginManifest
 from app.services.metadata.base import (
     BookMetadata,
@@ -54,6 +54,8 @@ class OpenLibraryPlugin(MetadataPlugin[OpenLibraryConfig]):
 
     @property
     def enabled(self) -> bool:
+        if self.status != PluginStatus.ACTIVE:
+            return False
         if self.config is not None:
             return self.config.enabled
         return self.context.settings.openlibrary_enabled

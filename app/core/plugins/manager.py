@@ -123,15 +123,6 @@ class PluginManager:
                 )
                 continue
 
-            # Check if required configuration is missing
-            if manifest.config_schema and isinstance(manifest.config_schema, dict):
-                required_fields = manifest.config_schema.get("required", [])
-                if any(
-                    not config.get(field) or str(config.get(field, "")).strip() == ""
-                    for field in required_fields
-                ):
-                    plugin.status = PluginStatus.CONFIG_REQUIRED
-
             # Apply stored configuration
             try:
                 plugin.apply_configuration(config)
@@ -143,6 +134,21 @@ class PluginManager:
                 plugin.status = PluginStatus.FAILED
                 plugin.error_message = f"Configuration error: {exc}"
                 continue
+
+            # Check if required configuration is missing
+            if manifest.config_schema and isinstance(manifest.config_schema, dict):
+                required_fields = manifest.config_schema.get("required", [])
+                active_config: dict[str, Any] = {}
+                if plugin.config is not None and hasattr(plugin.config, "model_dump"):
+                    active_config = plugin.config.model_dump()
+                else:
+                    active_config = config
+
+                if any(
+                    not active_config.get(field) or str(active_config.get(field, "")).strip() == ""
+                    for field in required_fields
+                ):
+                    plugin.status = PluginStatus.CONFIG_REQUIRED
 
             # If still active, run async initialize hook
             if plugin.status == PluginStatus.ACTIVE:

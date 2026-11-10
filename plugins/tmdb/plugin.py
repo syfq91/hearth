@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
-from app.core.plugins.base import MetadataPlugin, PluginContext
+from app.core.plugins.base import MetadataPlugin, PluginContext, PluginStatus
 from app.core.plugins.manifest import PluginManifest
 from app.services.metadata.base import (
     EpisodeMetadata,
@@ -59,6 +59,8 @@ class TMDBPlugin(MetadataPlugin[TMDBConfig]):
 
     @property
     def enabled(self) -> bool:
+        if self.status != PluginStatus.ACTIVE:
+            return False
         if self.config is not None and self.config.api_key:
             return True
         return bool(self.context.settings.tmdb_api_key)
