@@ -22,6 +22,7 @@ RUN uv sync --locked --no-dev --no-install-project
 # Project layer: install the application itself (non-editable, no source tree
 # is required at runtime).
 COPY app ./app
+COPY plugins ./plugins
 RUN uv sync --locked --no-dev --no-editable
 
 # --- Web: build the SvelteKit SPA ------------------------------------------
@@ -44,6 +45,7 @@ FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app" \
     HOME=/tmp
 
 # Bookworm ships the Intel non-free driver outside main; enable the components
