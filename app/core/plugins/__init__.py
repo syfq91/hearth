@@ -10,6 +10,7 @@ from app.core.plugins.base import (
     ScrobblerPlugin,
     ServerEvent,
 )
+from app.core.plugins.manager import PluginManager
 from app.core.plugins.manifest import (
     ManifestError,
     PluginCapability,
@@ -35,6 +36,7 @@ __all__ = [
     "PersistedPluginState",
     "PluginCapability",
     "PluginContext",
+    "PluginManager",
     "PluginManifest",
     "PluginStatus",
     "ScrobblerPlugin",
