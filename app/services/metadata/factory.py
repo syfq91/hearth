@@ -10,12 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings
 from app.services.images.pipeline import ImagePipeline
 from app.services.metadata.matching import MetadataMatcher
+from app.services.metadata.registry import MetadataRegistry
 
 
 def build_metadata_matcher(
     settings: Settings,
     sessionmaker: async_sessionmaker[AsyncSession],
+    registry: MetadataRegistry | None = None,
 ) -> MetadataMatcher:
     """Build a matcher whose artwork callback is the shared image pipeline."""
     artwork = ImagePipeline(settings, sessionmaker)
-    return MetadataMatcher(settings, sessionmaker, artwork=artwork)
+    return MetadataMatcher(settings, sessionmaker, artwork=artwork, registry=registry)

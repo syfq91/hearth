@@ -72,7 +72,7 @@ async def search_metadata(
 
     matcher = build_matcher(settings, sessionmaker)
     try:
-        if provider is not None and provider not in {p.name for p in matcher.providers}:
+        if provider is not None and matcher.get_provider(provider) is None:
             raise ValidationError(
                 f"Unknown metadata provider {provider!r}", code="unknown_provider"
             )
