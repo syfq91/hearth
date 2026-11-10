@@ -682,3 +682,36 @@
   - Storing keys in a new dedicated table or secrets file (duplicates the existing `settings` table and complicates backup/restore).
   - Keeping keys only in process memory (lost on restart, and the worker would still miss updates from the API process).
 
+
+## ADR 066: Jellyfin-Style Plugin System and Metadata Provider Decoupling
+
+- **Date:** 2026-11-10
+- **Status:** Accepted
+- **Context:**
+  Hearth was originally built with online metadata providers (TMDB, MusicBrainz, Open Library, Google Books) hardcoded directly into `app/services/metadata/`. This tightly coupled external APIs and schema details to core server logic, preventing modular extensions such as custom scrobblers, notification services, alternative metadata sources, or API adapters (Subsonic / Jellyfin shims). Additionally, operators needed a clean, extensible way to configure external services without touching core server code.
+- **Decision:**
+  - Implement a Jellyfin-inspired, modular plugin architecture in `app/core/plugins/` consisting of:
+    1. **Manifest Contract (`plugin.json`)**: Validated via Pydantic (`PluginManifest`), specifying unique reverse-DNS ID, semantic versioning, author, capabilities, entrypoint, and a JSON schema for configuration (`config_schema`).
+    2. **Storage Layout**:
+       - Built-in plugins located in `plugins/` (`/app/plugins/` in container).
+       - Custom user plugins mounted in `/config/plugins/` (mapped to `HEARTH_DATA_DIR/plugins`).
+    3. **Lifecycle & Dependency Injection**:
+       - `BasePlugin` base class with typed configuration (`BaseModel`), initialized with `PluginContext` (settings, sessionmaker, logger, data_dir).
+       - Safe dynamic loading via `importlib` with fault isolation; failing plugins enter `FAILED` status without degrading the server or other plugins.
+       - Option 4A vendoring support: plugins can bundle pure-Python dependencies in `<plugin_dir>/vendor/`, automatically injected into `sys.path`.
+    4. **Decoupled Metadata Registry & Library Priorities**:
+       - Replaced hardcoded provider branches with a dynamic `MetadataRegistry` mapping providers by media type (`movie`, `series`, `artist`, `album`, `book`).
+       - Supported per-library provider priority ordering persisted in the `settings` table (`library.<id>.metadata_providers`), allowing distinct prioritization across different libraries.
+       - Built-in `LocalProvider` remains in core as the non-removable local baseline.
+    5. **Configuration Storage & Secret Masking**:
+       - Persist enabled state and configuration in SQLite `settings` table under `plugin.<id>`.
+       - Sensitive properties marked `"secret": true` in the schema are masked in API responses (`…tail` or `****`) and preserved on partial updates.
+    6. **Unified Management API & UI**:
+       - Expose `/api/v1/plugins` endpoints for discovery, detail, configuration, hot-reload, and runtime enable/disable.
+       - Supersede the legacy `/admin/metadata` UI with a unified `/admin/plugins` dashboard with schema-driven configuration modals, while maintaining backwards compatibility for existing `/api/v1/admin/metadata/settings` endpoints.
+- **Alternatives Considered:**
+  - Subprocess or RPC-based plugin isolation (gRPC/IPC): Rejected due to excessive latency, serialization overhead, and complexity for a single-node media server.
+  - Runtime `pip install` inside containers: Rejected because Hearth enforces a read-only root filesystem and dropped privileges; runtime package installations introduce non-deterministic network dependencies and startup delays.
+  - Keeping online metadata providers hardcoded in core: Rejected because it prevents community extensibility and clutters the core codebase with third-party API quirks.
+
+
