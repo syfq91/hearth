@@ -190,10 +190,9 @@ class TranscodeSession:
             if (
                 self.process
                 and self.process.returncode is not None
-                and not self.is_hardware
-                and self.has_fallen_back
+                and (not self.is_hardware or self.has_fallen_back)
             ):
-                # Died even after fallback
+                # Died even after fallback (or died during software transcode)
                 return False
             await asyncio.sleep(0.1)
 
@@ -242,8 +241,7 @@ class TranscodeSession:
                 if (
                     self.process
                     and self.process.returncode is not None
-                    and not self.is_hardware
-                    and self.has_fallen_back
+                    and (not self.is_hardware or self.has_fallen_back)
                 ):
                     return False
                 await asyncio.sleep(0.05)

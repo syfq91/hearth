@@ -156,6 +156,38 @@ def test_builder_vaapi_burn_in_subtitles(tmp_path: Path) -> None:
     assert "scale_vaapi" in vf
 
 
+def test_builder_burn_in_subtitles_complex_filename(tmp_path: Path) -> None:
+    import os
+
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="h264_vaapi",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="burn_in",
+        subtitle_stream_index=0,
+        hwaccel="vaapi",
+    )
+    complex_file = Path(
+        "/media/anime/A Certain Dark Side's Item (2026)"
+        "/Season 01/A Certain Dark Item - S01E05 - Infiltration [1080p HDTV].mkv"
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        complex_file,
+        tmp_path,
+        render_device="/dev/dri/renderD128",
+    )
+    vf = cmd[cmd.index("-vf") + 1]
+    assert "subtitles=" in vf
+    sub_symlink = tmp_path / "sub_source.mkv"
+    assert sub_symlink.is_symlink()
+    assert os.readlink(sub_symlink) == str(complex_file)
+    assert f"subtitles='{sub_symlink}':si=0" in vf
+
+
 def test_builder_software_x264_fallback(tmp_path: Path) -> None:
     plan = TranscodePlan(
         mode="transcode_hls",

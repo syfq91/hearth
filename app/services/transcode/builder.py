@@ -6,9 +6,31 @@ and remuxing pipelines.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 from app.services.transcode.decision import TranscodePlan
+
+
+def _resolve_subtitle_source_path(input_path: Path, output_dir: Path) -> str:
+    """Resolve a safe path for FFmpeg's subtitles filter.
+
+    FFmpeg's filtergraph and libass parsers execute multiple uncoordinated
+    escaping passes on filter arguments, making complex paths (containing
+    quotes, brackets, colons, or commas) fragile or impossible to parse.
+    Creating a clean symlink inside the session output directory bypasses all
+    escaping bugs.
+    """
+    sub_symlink = output_dir / f"sub_source{input_path.suffix or '.mkv'}"
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if sub_symlink.is_symlink() or sub_symlink.exists():
+            with contextlib.suppress(OSError):
+                sub_symlink.unlink()
+        sub_symlink.symlink_to(input_path)
+        return str(sub_symlink)
+    except OSError:
+        return str(input_path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
 def build_ffmpeg_hls_command(
@@ -64,11 +86,9 @@ def build_ffmpeg_hls_command(
     elif plan.hwaccel == "vaapi":
         filters: list[str] = []
         if plan.subtitle_action == "burn_in" and plan.subtitle_stream_index is not None:
-            escaped_sub = (
-                str(input_path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
-            )
+            sub_path = _resolve_subtitle_source_path(input_path, output_dir)
             filters.append(
-                f"hwdownload,format=nv12,subtitles='{escaped_sub}':si={plan.subtitle_stream_index},hwupload"
+                f"hwdownload,format=nv12,subtitles='{sub_path}':si={plan.subtitle_stream_index},hwupload"
             )
             if plan.target_width and plan.target_height:
                 filters.append(
@@ -109,10 +129,8 @@ def build_ffmpeg_hls_command(
         # Software fallback
         sw_filters: list[str] = []
         if plan.subtitle_action == "burn_in" and plan.subtitle_stream_index is not None:
-            escaped_sub = (
-                str(input_path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
-            )
-            sw_filters.append(f"subtitles='{escaped_sub}':si={plan.subtitle_stream_index}")
+            sub_path = _resolve_subtitle_source_path(input_path, output_dir)
+            sw_filters.append(f"subtitles='{sub_path}':si={plan.subtitle_stream_index}")
         if plan.target_width and plan.target_height:
             sw_filters.append(f"scale={plan.target_width}:{plan.target_height}")
         if plan.tonemap_hdr:

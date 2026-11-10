@@ -387,7 +387,6 @@
 
 		const previousSession = sessionId;
 		sessionId = null;
-		info = null;
 		if (previousSession) {
 			void api.post(`/hls/${previousSession}/stop`).catch(() => {});
 		}
@@ -612,6 +611,7 @@
 			lastSubChoice = '';
 			subtitleChoice = '';
 			resumePositionMs = 0;
+			info = null;
 			void startPlayback();
 		} else if (currentAudio !== lastAudioTrack) {
 			lastAudioTrack = currentAudio;
