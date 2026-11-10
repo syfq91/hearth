@@ -59,9 +59,7 @@ class PluginManifest(BaseModel):
     @classmethod
     def _validate_id(cls, v: str) -> str:
         if not _ID_PATTERN.match(v):
-            raise ValueError(
-                f"Plugin ID {v!r} must be 3-64 characters matching [a-zA-Z0-9_.-]"
-            )
+            raise ValueError(f"Plugin ID {v!r} must be 3-64 characters matching [a-zA-Z0-9_.-]")
         return v
 
     @field_validator("version")
@@ -80,9 +78,7 @@ class PluginManifest(BaseModel):
             )
         module_part, class_part = v.split(":", 1)
         if not module_part.strip() or not class_part.strip():
-            raise ValueError(
-                f"Entrypoint {v!r} must contain both a module name and a class name"
-            )
+            raise ValueError(f"Entrypoint {v!r} must contain both a module name and a class name")
         return v
 
 
