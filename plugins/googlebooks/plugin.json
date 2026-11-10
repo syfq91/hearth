@@ -1,0 +1,31 @@
+{
+  "id": "org.hearth.plugins.googlebooks",
+  "name": "Google Books",
+  "version": "1.0.0",
+  "description": "Fetches book metadata, covers, and author details from Google Books.",
+  "author": "Hearth Team",
+  "category": "Metadata",
+  "min_hearth_version": "1.0.0",
+  "entrypoint": "plugin:GoogleBooksPlugin",
+  "capabilities": [
+    "metadata.book"
+  ],
+  "config_schema": {
+    "title": "GoogleBooksConfig",
+    "type": "object",
+    "properties": {
+      "api_key": {
+        "title": "API Key",
+        "type": "string",
+        "description": "Optional Google Books API key for increased quota",
+        "secret": true,
+        "default": ""
+      },
+      "enabled": {
+        "title": "Enabled",
+        "type": "boolean",
+        "default": true
+      }
+    }
+  }
+}

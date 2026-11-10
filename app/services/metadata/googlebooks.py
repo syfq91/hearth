@@ -1,26 +1,33 @@
-"""Google Books metadata provider fallback for books."""
+"""Backward compatibility adapter for Google Books metadata provider.
+
+The core implementation has moved to `plugins/googlebooks/`. This module remains
+to preserve existing imports and constructor signatures.
+"""
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import httpx
 
 from app.core.config import Settings
+from app.core.plugins.base import PluginContext
+from app.core.plugins.manifest import PluginManifest
 from app.services.metadata.base import (
     BookMetadata,
     MetadataProvider,
     MovieMetadata,
-    ProviderError,
     ProviderImage,
     SearchResult,
 )
+from plugins.googlebooks.plugin import GoogleBooksPlugin
 
 logger = logging.getLogger("hearth.metadata.googlebooks")
 
 
 class GoogleBooksProvider(MetadataProvider):
-    """Google Books provider as fallback for books missing from Open Library."""
+    """Backward-compatible adapter for Google Books metadata provider."""
 
     name = "googlebooks"
 
@@ -31,26 +38,39 @@ class GoogleBooksProvider(MetadataProvider):
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.settings = settings
-        self.base_url = settings.google_books_base_url.rstrip("/")
-        self._owned_client = client is None
-        self._client = client or httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=10.0,
-            headers={"User-Agent": "HearthMediaServer/0.1.0"},
+        manifest = PluginManifest(
+            id="org.hearth.plugins.googlebooks",
+            name="Google Books",
+            version="1.0.0",
+            entrypoint="plugin:GoogleBooksPlugin",
+            capabilities=["metadata.book"],
         )
+        context = PluginContext(
+            settings=settings,
+            sessionmaker=None,  # type: ignore[arg-type]
+            logger=logger,
+            data_dir=Path(settings.data_dir),
+            plugin_dir=Path("plugins/googlebooks"),
+        )
+        self._plugin = GoogleBooksPlugin(context, manifest, client=client)
+        self._plugin.apply_configuration({})
 
     @property
     def enabled(self) -> bool:
-        return self.settings.google_books_enabled
+        return self._plugin.enabled
+
+    @property
+    def base_url(self) -> str:
+        return self._plugin.base_url
 
     async def search(self, query: str, year: int | None = None) -> list[SearchResult]:
-        return []
+        return await self._plugin.search(query, year)
 
     async def fetch_details(self, provider_id: str) -> MovieMetadata | None:
-        return None
+        return await self._plugin.fetch_details(provider_id)
 
     async def fetch_images(self, provider_id: str) -> list[ProviderImage]:
-        return []
+        return await self._plugin.fetch_images(provider_id)
 
     async def search_book(
         self,
@@ -58,121 +78,13 @@ class GoogleBooksProvider(MetadataProvider):
         author: str | None = None,
         isbn: str | None = None,
     ) -> list[SearchResult]:
-        """Search Google Books volumes."""
-        if not self.enabled:
-            return []
-
-        if isbn:
-            q = f"isbn:{isbn.replace('-', '').strip()}"
-        else:
-            q = f"intitle:{query}"
-            if author:
-                q += f"+inauthor:{author}"
-
-        params = {"q": q, "maxResults": "10"}
-        api_key = self.settings.google_books_api_key
-        if api_key:
-            params["key"] = api_key
-        try:
-            res = await self._client.get(f"{self.base_url}/volumes", params=params)
-            if res.status_code != 200:
-                logger.warning("Google Books search status %s", res.status_code)
-                return []
-            data = res.json()
-        except Exception as exc:
-            logger.warning("Google Books search failed: %s", exc)
-            return []
-
-        items = data.get("items", [])
-        results: list[SearchResult] = []
-        for item in items:
-            v_id = item.get("id")
-            info = item.get("volumeInfo", {})
-            title = info.get("title")
-            if not v_id or not title:
-                continue
-
-            year: int | None = None
-            pub_date = info.get("publishedDate")
-            if pub_date and len(pub_date) >= 4 and pub_date[:4].isdigit():
-                year = int(pub_date[:4])
-
-            images = info.get("imageLinks", {})
-            poster_url = images.get("thumbnail") or images.get("smallThumbnail")
-            overview = info.get("description")
-
-            results.append(
-                SearchResult(
-                    provider=self.name,
-                    provider_id=v_id,
-                    title=title,
-                    year=year,
-                    overview=overview,
-                    poster_url=poster_url,
-                )
-            )
-        return results
+        return await self._plugin.search_book(query, author=author, isbn=isbn)
 
     async def fetch_book_details(self, book_id: str) -> BookMetadata | None:
-        """Fetch volume details by volume id."""
-        if not self.enabled:
-            return None
-
-        params = {}
-        if self.settings.google_books_api_key:
-            params["key"] = self.settings.google_books_api_key
-        try:
-            res = await self._client.get(f"{self.base_url}/volumes/{book_id}", params=params)
-            if res.status_code == 404:
-                return None
-            if res.status_code != 200:
-                raise ProviderError(f"Google Books failed: HTTP {res.status_code}")
-            data = res.json()
-        except Exception as exc:
-            logger.warning("Google Books lookup failed for %s: %s", book_id, exc)
-            return None
-
-        info = data.get("volumeInfo", {})
-        title = info.get("title", "")
-        authors = info.get("authors", [])
-        author_name = authors[0] if authors else None
-        publisher = info.get("publisher")
-        published_date = info.get("publishedDate")
-        overview = info.get("description")
-        page_count = info.get("pageCount")
-        categories = tuple(info.get("categories", ()))
-
-        images_dict = info.get("imageLinks", {})
-        images: list[ProviderImage] = []
-        for key in ("extraLarge", "large", "medium", "small", "thumbnail"):
-            if key in images_dict:
-                images.append(
-                    ProviderImage(
-                        kind="poster",
-                        source_url=images_dict[key],
-                        is_primary=True,
-                    )
-                )
-                break
-
-        return BookMetadata(
-            provider=self.name,
-            provider_id=book_id,
-            title=title,
-            author_name=author_name,
-            publisher=publisher,
-            published_date=published_date,
-            page_count=page_count,
-            overview=overview,
-            genres=categories,
-            images=tuple(images),
-            raw=data,
-        )
+        return await self._plugin.fetch_book_details(book_id)
 
     async def fetch_book_images(self, book_id: str) -> list[ProviderImage]:
-        details = await self.fetch_book_details(book_id)
-        return list(details.images) if details else []
+        return await self._plugin.fetch_book_images(book_id)
 
     async def close(self) -> None:
-        if self._owned_client:
-            await self._client.aclose()
+        await self._plugin.close()

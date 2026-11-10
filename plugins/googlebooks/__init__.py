@@ -1,0 +1,1 @@
+"""Google Books plugin package."""
