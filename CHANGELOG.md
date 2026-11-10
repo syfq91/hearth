@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Admin **Logs** tab and enhanced `GET /api/v1/admin/logs` endpoint supporting category filtering (`scanning`, `transcoding`, `activity`, `error`, `jobs`, `metadata`), text search, live auto-refresh tailing, log entry expansion, and JSON export.
 - BlurHash placeholder rendering in the web client using `fast-blurhash` with smooth image crossfades and memory caching.
 - Composite `GET /api/v1/home` endpoint returning continue watching, continue reading, next up, recent libraries, and recent albums in a single round-trip.
 - Configurable SQLite connection pool parameters (`HEARTH_DB_POOL_SIZE` and `HEARTH_DB_MAX_OVERFLOW`).

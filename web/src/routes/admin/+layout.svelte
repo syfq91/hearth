@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
-	import { LayoutDashboard, FolderTree, Users, FileQuestion, Cpu, KeyRound } from '@lucide/svelte';
+	import { LayoutDashboard, FolderTree, Users, FileQuestion, Cpu, KeyRound, ScrollText } from '@lucide/svelte';
 
 	let { children }: LayoutProps = $props();
 
@@ -38,6 +38,12 @@
 		aria-current={isActive('/admin/transcoding') ? 'page' : undefined}
 	>
 		<Cpu size={15} /> <span>Transcoding</span>
+	</a>
+	<a
+		href="/admin/logs"
+		aria-current={isActive('/admin/logs') ? 'page' : undefined}
+	>
+		<ScrollText size={15} /> <span>Logs</span>
 	</a>
 </nav>
 

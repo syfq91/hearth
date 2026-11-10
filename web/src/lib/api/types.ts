@@ -55,6 +55,7 @@ export type AdminSystemInfoResponse = S['AdminSystemInfoResponse'];
 export type TranscodeSessionResponse = S['TranscodeSessionResponse'];
 export type JobResponse = S['JobResponse'];
 export type AuditEntry = S['AuditEntry'];
+export type LogEntryResponse = S['LogEntryResponse'];
 export type UserDetail = S['UserDetail'];
 export type LibraryDetail = S['LibraryDetail'];
 export type UnmatchedItemResponse = S['UnmatchedItemResponse'];

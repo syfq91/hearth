@@ -3533,6 +3533,10 @@ export interface components {
         LogEntryResponse: {
             /** Exception */
             exception?: string | null;
+            /** Extra */
+            extra?: {
+                [key: string]: unknown;
+            };
             /** Level */
             level: string;
             /** Logger */
@@ -5143,6 +5147,7 @@ export interface operations {
                 limit?: number;
                 level?: string | null;
                 search?: string | null;
+                category?: string | null;
             };
             header?: never;
             path?: never;

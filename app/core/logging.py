@@ -137,6 +137,7 @@ def get_recent_logs(
     limit: int = 100,
     level: str | None = None,
     search: str | None = None,
+    category: str | None = None,
 ) -> list[dict[str, Any]]:
     """Return recent log entries in reverse chronological order (newest first)."""
     with _LOG_LOCK:
@@ -144,6 +145,54 @@ def get_recent_logs(
     if level:
         lvl_upper = level.upper()
         logs = [entry for entry in logs if entry.get("level") == lvl_upper]
+    if category and category.lower() != "all":
+        cat = category.lower()
+        if cat in ("error", "errors"):
+            logs = [
+                entry
+                for entry in logs
+                if str(entry.get("level", "")).upper() in ("ERROR", "CRITICAL")
+                or bool(entry.get("exception"))
+            ]
+        elif cat == "scanning":
+            logs = [
+                entry
+                for entry in logs
+                if entry.get("logger", "").startswith("app.services.scanner")
+                or "scanner" in entry.get("logger", "").lower()
+            ]
+        elif cat == "transcoding":
+            logs = [
+                entry
+                for entry in logs
+                if entry.get("logger", "").startswith("app.services.transcode")
+                or "transcode" in entry.get("logger", "").lower()
+            ]
+        elif cat == "activity":
+            logs = [
+                entry
+                for entry in logs
+                if entry.get("logger", "").startswith(("app.core.middleware", "app.api"))
+                or "middleware" in entry.get("logger", "").lower()
+                or "activity" in entry.get("logger", "").lower()
+            ]
+        elif cat in ("jobs", "job"):
+            logs = [
+                entry
+                for entry in logs
+                if entry.get("logger", "").startswith("app.services.jobs")
+                or "jobs" in entry.get("logger", "").lower()
+                or "job" in entry.get("logger", "").lower()
+            ]
+        elif cat == "metadata":
+            logs = [
+                entry
+                for entry in logs
+                if entry.get("logger", "").startswith("app.services.metadata")
+                or "metadata" in entry.get("logger", "").lower()
+            ]
+        else:
+            logs = [entry for entry in logs if cat in entry.get("logger", "").lower()]
     if search:
         s_lower = search.lower()
         logs = [
@@ -151,5 +200,6 @@ def get_recent_logs(
             for entry in logs
             if s_lower in str(entry.get("message", "")).lower()
             or s_lower in str(entry.get("logger", "")).lower()
+            or s_lower in str(entry.get("request_id", "")).lower()
         ]
     return list(reversed(logs))[:limit]

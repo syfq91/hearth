@@ -155,6 +155,7 @@ class LogEntryResponse(BaseModel):
     message: str
     request_id: str | None = None
     exception: str | None = None
+    extra: dict[str, Any] = Field(default_factory=dict)
 
 
 class TranscodeSettingsResponse(BaseModel):
@@ -480,10 +481,23 @@ async def list_admin_logs(
     limit: int = Query(default=100, ge=1, le=500),
     level: str | None = Query(default=None, max_length=16),
     search: str | None = Query(default=None, max_length=128),
+    category: str | None = Query(default=None, max_length=32),
 ) -> list[LogEntryResponse]:
     """Tail recent in-memory log entries in reverse chronological order."""
-    entries = get_recent_logs(limit=limit, level=level, search=search)
-    return [LogEntryResponse.model_validate(e) for e in entries]
+    entries = get_recent_logs(limit=limit, level=level, search=search, category=category)
+    standard_keys = {"timestamp", "level", "logger", "message", "request_id", "exception"}
+    return [
+        LogEntryResponse(
+            timestamp=str(e.get("timestamp", "")),
+            level=str(e.get("level", "")),
+            logger=str(e.get("logger", "")),
+            message=str(e.get("message", "")),
+            request_id=e.get("request_id"),
+            exception=e.get("exception"),
+            extra={k: v for k, v in e.items() if k not in standard_keys and k != "extra"},
+        )
+        for e in entries
+    ]
 
 
 # ------------------------------------------------------------- transcode settings

@@ -7,7 +7,9 @@ from io import StringIO
 from app.core.logging import (
     JSONFormatter,
     RingBufferLogHandler,
+    get_recent_logs,
     get_request_id,
+    ring_buffer_handler,
     set_request_id,
     setup_logging,
 )
@@ -95,3 +97,44 @@ def test_setup_logging_rejects_unknown_level() -> None:
         assert "LOUD" in str(exc)
     else:
         raise AssertionError("Expected ValueError for an invalid log level")
+
+
+def test_get_recent_logs_categories_and_filters() -> None:
+    """Verify get_recent_logs properly filters by category, level, and search."""
+    scanner_logger = logging.getLogger("app.services.scanner.test")
+    scanner_logger.addHandler(ring_buffer_handler)
+    scanner_logger.setLevel(logging.INFO)
+
+    transcode_logger = logging.getLogger("app.services.transcode.test")
+    transcode_logger.addHandler(ring_buffer_handler)
+    transcode_logger.setLevel(logging.INFO)
+
+    middleware_logger = logging.getLogger("app.core.middleware")
+    middleware_logger.addHandler(ring_buffer_handler)
+    middleware_logger.setLevel(logging.INFO)
+
+    scanner_logger.info("Scanning completed for Movies", extra={"scanned": 42})
+    scanner_logger.error("Scanning failed on corrupted file")
+    transcode_logger.info("Transcoding session started", extra={"session_id": "sess-99"})
+    middleware_logger.info("GET /api/v1/health HTTP/1.1", extra={"status_code": 200})
+
+    # Test category scanning
+    scan_logs = get_recent_logs(category="scanning", limit=50)
+    assert any("Scanning completed for Movies" in entry["message"] for entry in scan_logs)
+    assert not any("Transcoding session started" in entry["message"] for entry in scan_logs)
+
+    # Test category transcoding
+    tx_logs = get_recent_logs(category="transcoding", limit=50)
+    assert any("Transcoding session started" in entry["message"] for entry in tx_logs)
+    assert not any("Scanning completed" in entry["message"] for entry in tx_logs)
+
+    # Test category activity
+    act_logs = get_recent_logs(category="activity", limit=50)
+    assert any("/api/v1/health" in entry["message"] for entry in act_logs)
+
+    # Test category error
+    err_logs = get_recent_logs(category="error", limit=50)
+    assert any("Scanning failed on corrupted file" in entry["message"] for entry in err_logs)
+    assert all(
+        entry["level"] in ("ERROR", "CRITICAL") or entry.get("exception") for entry in err_logs
+    )

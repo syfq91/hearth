@@ -134,3 +134,13 @@ async def test_observability_admin_log_viewer(
     search_logs = search_res.json()
     assert len(search_logs) >= 1
     assert "Gamma critical failure" in search_logs[0]["message"]
+
+    # 8. Filter by category
+    err_res = await api_client.get(
+        "/api/v1/admin/logs?category=error&limit=50",
+        headers=admin_headers,
+    )
+    assert err_res.status_code == 200
+    err_logs = err_res.json()
+    assert any("Gamma critical failure" in e["message"] for e in err_logs)
+    assert all(e["level"] in ("ERROR", "CRITICAL") or e.get("exception") for e in err_logs)
