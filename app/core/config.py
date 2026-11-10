@@ -155,6 +155,10 @@ class Settings(BaseSettings):
         "books.google.com",
     ]
 
+    # Plugins
+    plugins_dir: Path | None = None
+    builtin_plugins_dir: Path | None = None
+
     @property
     def database_url(self) -> str:
         """SQLAlchemy async URL for the configured SQLite database."""
@@ -169,6 +173,23 @@ class Settings(BaseSettings):
     def comic_cache_dir(self) -> Path:
         """Root directory for extracted and resized comic pages."""
         return self.data_dir / "cache" / "comics"
+
+    @property
+    def user_plugins_dir(self) -> Path:
+        """Root directory for user-installed custom plugins."""
+        return self.plugins_dir or (self.data_dir / "plugins")
+
+    @property
+    def core_plugins_dir(self) -> Path:
+        """Root directory for built-in bundled plugins."""
+        if self.builtin_plugins_dir is not None:
+            return self.builtin_plugins_dir
+        # In Docker container or when /app/plugins exists, use it
+        container_candidate = Path("/app/plugins")
+        if container_candidate.is_dir():
+            return container_candidate
+        # Fall back to "plugins" in current working directory / repo root
+        return Path("plugins").resolve()
 
 
 @lru_cache

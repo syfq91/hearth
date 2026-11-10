@@ -41,3 +41,21 @@ def test_get_settings_cached() -> None:
     s1 = get_settings()
     s2 = get_settings()
     assert s1 is s2
+
+
+def test_plugin_directories_defaults() -> None:
+    """Verify default plugin directories."""
+    settings = Settings()
+    assert settings.user_plugins_dir == settings.data_dir / "plugins"
+    assert settings.core_plugins_dir.name == "plugins"
+
+
+def test_plugin_directories_overrides() -> None:
+    """Verify explicit plugin directories overrides."""
+    from pathlib import Path
+
+    custom_user = Path("/custom/plugins")
+    custom_builtin = Path("/custom/builtin")
+    settings = Settings(plugins_dir=custom_user, builtin_plugins_dir=custom_builtin)
+    assert settings.user_plugins_dir == custom_user
+    assert settings.core_plugins_dir == custom_builtin

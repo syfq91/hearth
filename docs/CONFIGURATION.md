@@ -81,6 +81,13 @@ and is picked up by the worker on its next scan, so a restart is not required.
 Clearing a key in the UI removes it entirely rather than falling back to the
 environment. MusicBrainz and Open Library do not require API keys.
 
+## Plugins
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HEARTH_PLUGINS_DIR` | `/config/plugins` | Root directory for user-installed custom plugins |
+| `HEARTH_BUILTIN_PLUGINS_DIR` | `/app/plugins` (container) or `./plugins` | Root directory for built-in plugins |
+
 ## Playback and transcoding
 
 | Variable | Default | Purpose |
