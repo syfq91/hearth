@@ -321,7 +321,7 @@ flowchart LR
   - Refactored `build_metadata_matcher` in `app/services/metadata/factory.py` to register providers in `MetadataRegistry`.
   - Updated `/api/v1/metadata/search` endpoint in `app/api/v1/metadata.py` to use `registry.get_providers_for(media_type)`.
 
-### Phase 3: Move Online Metadata Providers to Standalone Plugins
+### Phase 3: Move Online Metadata Providers to Standalone Plugins [Completed]
 - **Directory Structure**:
   ```text
   plugins/
@@ -341,12 +341,14 @@ flowchart LR
       plugin.py
   ```
 - **Migrate Code & Settings**:
-  - Move logic from `app/services/metadata/tmdb.py` to `plugins/tmdb/`.
-  - Move logic from `app/services/metadata/musicbrainz.py` to `plugins/musicbrainz/`.
-  - Move logic from `app/services/metadata/openlibrary.py` to `plugins/openlibrary/`.
-  - Move logic from `app/services/metadata/googlebooks.py` to `plugins/googlebooks/`.
-  - Each plugin exports its own typed Pydantic configuration class.
-  - Maintain backward compatibility for environment variables (`HEARTH_TMDB_API_KEY`, etc.) by feeding them as initial defaults for plugin configs.
+  - Moved logic from `app/services/metadata/tmdb.py` to `plugins/tmdb/`.
+  - Moved logic from `app/services/metadata/musicbrainz.py` to `plugins/musicbrainz/`.
+  - Moved logic from `app/services/metadata/openlibrary.py` to `plugins/openlibrary/`.
+  - Moved logic from `app/services/metadata/googlebooks.py` to `plugins/googlebooks/`.
+  - Each plugin exports its own typed Pydantic configuration class (`TMDBConfig`, `MusicBrainzConfig`, `OpenLibraryConfig`, `GoogleBooksConfig`).
+  - Maintained backward compatibility for environment variables (`HEARTH_TMDB_API_KEY`, `HEARTH_GOOGLE_BOOKS_API_KEY`, etc.) as initial defaults for plugin configs.
+  - Provided lightweight backward-compatible adapter classes in `app/services/metadata/` to preserve all existing test suites and imports.
+  - Added unit test suite in `tests/unit/test_metadata_plugins.py` verifying discovery, schema parsing, typed configs, and registry registration.
 
 ### Phase 4: API Endpoints & Client Sync
 - **Implement `app/api/v1/plugins.py`**:
