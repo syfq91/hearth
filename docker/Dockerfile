@@ -69,6 +69,8 @@ WORKDIR /app
 COPY --from=builder --chown=root:root /app/.venv /app/.venv
 # Built SPA, served by FastAPI at `/` (see app/core/spa.py).
 COPY --from=web --chown=root:root /src/web/dist /app/web/dist
+# Built-in plugins, loaded by PluginManager from /app/plugins
+COPY --chown=root:root plugins ./plugins
 # Developer-only static player, served at /testplayer when present.
 COPY --chown=root:root tools ./tools
 
