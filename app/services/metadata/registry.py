@@ -102,7 +102,7 @@ class MetadataRegistry:
         self.sessionmaker = sessionmaker
         self._providers: dict[str, MetadataProvider] = {}
         self._types: dict[str, set[str]] = {}
-        self._cached_library_orders: dict[str, list[str]] = {}
+        self._cached_library_orders: dict[str, list[str] | None] = {}
 
         if providers:
             for p in providers:
@@ -183,6 +183,16 @@ class MetadataRegistry:
         order_map = {name: index for index, name in enumerate(order_names)}
         # Providers not explicitly in order_names appear at the end, preserving order
         return sorted(matching, key=lambda p: order_map.get(p.name, 999))
+
+    async def get_or_load_library_order(self, library_id: str) -> list[str] | None:
+        """Fetch library-level order from cache or database."""
+        if library_id in self._cached_library_orders:
+            return self._cached_library_orders[library_id]
+        if self.sessionmaker is not None:
+            order = await load_library_provider_order(self.sessionmaker, library_id)
+            self._cached_library_orders[library_id] = order
+            return order
+        return None
 
     async def prime_library_orders(self) -> None:
         """Cache all library-level provider orders from the database."""

@@ -308,6 +308,9 @@ class MetadataMatcher:
         if snapshot.match_state == "matched" and not force:
             return MatchResult(item_id=item_id, state="matched")
 
+        if snapshot.library_id and snapshot.library_id not in self.registry._cached_library_orders:
+            await self.registry.get_or_load_library_order(snapshot.library_id)
+
         if snapshot.type == "series":
             return await self._match_series(snapshot)
         if snapshot.type == "artist":
@@ -1250,7 +1253,13 @@ class MetadataMatcher:
                     book.author_id = existing_author.id
 
             await session.commit()
-        return MatchResult(item_id=snapshot.id, state="matched", images=stored_count)
+        return MatchResult(
+            item_id=snapshot.id,
+            state="matched",
+            provider=provider_name,
+            provider_id=provider_id,
+            images=stored_count,
+        )
 
     async def _apply_genres(
         self, session: AsyncSession, item_id: str, names: Sequence[str]
