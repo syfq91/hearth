@@ -4702,6 +4702,218 @@
         "title": "PlaylistSummary",
         "type": "object"
       },
+      "PluginConfigResponse": {
+        "additionalProperties": false,
+        "description": "Current configuration for a plugin with sensitive fields masked.",
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          },
+          "plugin_id": {
+            "title": "Plugin Id",
+            "type": "string"
+          },
+          "schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema"
+          }
+        },
+        "required": [
+          "plugin_id",
+          "config"
+        ],
+        "title": "PluginConfigResponse",
+        "type": "object"
+      },
+      "PluginDetail": {
+        "additionalProperties": false,
+        "description": "Detailed manifest and configuration for a single plugin.",
+        "properties": {
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          },
+          "config_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Schema"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_builtin": {
+            "default": true,
+            "title": "Is Builtin",
+            "type": "boolean"
+          },
+          "min_hearth_version": {
+            "title": "Min Hearth Version",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PluginStatus"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "description",
+          "author",
+          "category",
+          "min_hearth_version",
+          "status",
+          "capabilities"
+        ],
+        "title": "PluginDetail",
+        "type": "object"
+      },
+      "PluginStatus": {
+        "description": "Lifecycle and operational status of a plugin.",
+        "enum": [
+          "active",
+          "disabled",
+          "failed",
+          "config_required"
+        ],
+        "title": "PluginStatus",
+        "type": "string"
+      },
+      "PluginSummary": {
+        "additionalProperties": false,
+        "description": "Summary of an installed plugin and its runtime status.",
+        "properties": {
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "has_config_schema": {
+            "default": false,
+            "title": "Has Config Schema",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_builtin": {
+            "default": true,
+            "title": "Is Builtin",
+            "type": "boolean"
+          },
+          "is_configured": {
+            "default": true,
+            "title": "Is Configured",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PluginStatus"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "description",
+          "author",
+          "category",
+          "status",
+          "capabilities"
+        ],
+        "title": "PluginSummary",
+        "type": "object"
+      },
       "ProbeStream": {
         "description": "One audio, video, subtitle or data stream.",
         "properties": {
@@ -6843,6 +7055,22 @@
           }
         },
         "title": "UpdatePlaylistRequest",
+        "type": "object"
+      },
+      "UpdatePluginConfigRequest": {
+        "additionalProperties": false,
+        "description": "Payload to update configuration values for a plugin.",
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "UpdatePluginConfigRequest",
         "type": "object"
       },
       "UpdateTranscodeSettingsRequest": {
@@ -13189,6 +13417,316 @@
         "summary": "Remove Playlist Item",
         "tags": [
           "playlists"
+        ]
+      }
+    },
+    "/api/v1/plugins": {
+      "get": {
+        "description": "List all installed and discovered plugins with their operational status.",
+        "operationId": "list_plugins_api_v1_plugins_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PluginSummary"
+                  },
+                  "title": "Response List Plugins Api V1 Plugins Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Plugins",
+        "tags": [
+          "plugins"
+        ]
+      }
+    },
+    "/api/v1/plugins/reload": {
+      "post": {
+        "description": "Rescan plugin directories and reload active plugins.",
+        "operationId": "reload_plugins_api_v1_plugins_reload_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PluginSummary"
+                  },
+                  "title": "Response Reload Plugins Api V1 Plugins Reload Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reload Plugins",
+        "tags": [
+          "plugins"
+        ]
+      }
+    },
+    "/api/v1/plugins/{plugin_id}": {
+      "get": {
+        "description": "Get detailed manifest, capabilities, and masked configuration for a plugin.",
+        "operationId": "get_plugin_api_v1_plugins__plugin_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plugin_id",
+            "required": true,
+            "schema": {
+              "title": "Plugin Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Plugin",
+        "tags": [
+          "plugins"
+        ]
+      }
+    },
+    "/api/v1/plugins/{plugin_id}/config": {
+      "get": {
+        "description": "Get current configuration for a plugin with secrets masked.",
+        "operationId": "get_plugin_config_api_v1_plugins__plugin_id__config_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plugin_id",
+            "required": true,
+            "schema": {
+              "title": "Plugin Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Plugin Config",
+        "tags": [
+          "plugins"
+        ]
+      },
+      "put": {
+        "description": "Update configuration for a plugin, preserving unchanged masked secrets.",
+        "operationId": "update_plugin_config_api_v1_plugins__plugin_id__config_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plugin_id",
+            "required": true,
+            "schema": {
+              "title": "Plugin Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePluginConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Plugin Config",
+        "tags": [
+          "plugins"
+        ]
+      }
+    },
+    "/api/v1/plugins/{plugin_id}/disable": {
+      "post": {
+        "description": "Disable a plugin.",
+        "operationId": "disable_plugin_api_v1_plugins__plugin_id__disable_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plugin_id",
+            "required": true,
+            "schema": {
+              "title": "Plugin Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Disable Plugin",
+        "tags": [
+          "plugins"
+        ]
+      }
+    },
+    "/api/v1/plugins/{plugin_id}/enable": {
+      "post": {
+        "description": "Enable a plugin.",
+        "operationId": "enable_plugin_api_v1_plugins__plugin_id__enable_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plugin_id",
+            "required": true,
+            "schema": {
+              "title": "Plugin Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Enable Plugin",
+        "tags": [
+          "plugins"
         ]
       }
     },

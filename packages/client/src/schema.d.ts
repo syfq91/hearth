@@ -1820,6 +1820,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Plugins
+         * @description List all installed and discovered plugins with their operational status.
+         */
+        get: operations["list_plugins_api_v1_plugins_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plugins/reload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reload Plugins
+         * @description Rescan plugin directories and reload active plugins.
+         */
+        post: operations["reload_plugins_api_v1_plugins_reload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plugins/{plugin_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Plugin
+         * @description Get detailed manifest, capabilities, and masked configuration for a plugin.
+         */
+        get: operations["get_plugin_api_v1_plugins__plugin_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plugins/{plugin_id}/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Plugin Config
+         * @description Get current configuration for a plugin with secrets masked.
+         */
+        get: operations["get_plugin_config_api_v1_plugins__plugin_id__config_get"];
+        /**
+         * Update Plugin Config
+         * @description Update configuration for a plugin, preserving unchanged masked secrets.
+         */
+        put: operations["update_plugin_config_api_v1_plugins__plugin_id__config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plugins/{plugin_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable Plugin
+         * @description Disable a plugin.
+         */
+        post: operations["disable_plugin_api_v1_plugins__plugin_id__disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plugins/{plugin_id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable Plugin
+         * @description Enable a plugin.
+         */
+        post: operations["enable_plugin_api_v1_plugins__plugin_id__enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search": {
         parameters: {
             query?: never;
@@ -3918,6 +4042,104 @@ export interface components {
             updated_at: string;
         };
         /**
+         * PluginConfigResponse
+         * @description Current configuration for a plugin with sensitive fields masked.
+         */
+        PluginConfigResponse: {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Plugin Id */
+            plugin_id: string;
+            /** Schema */
+            schema?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * PluginDetail
+         * @description Detailed manifest and configuration for a single plugin.
+         */
+        PluginDetail: {
+            /** Author */
+            author: string;
+            /** Capabilities */
+            capabilities: string[];
+            /** Category */
+            category: string;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            };
+            /** Config Schema */
+            config_schema?: {
+                [key: string]: unknown;
+            } | null;
+            /** Description */
+            description: string;
+            /** Error Message */
+            error_message?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Is Builtin
+             * @default true
+             */
+            is_builtin: boolean;
+            /** Min Hearth Version */
+            min_hearth_version: string;
+            /** Name */
+            name: string;
+            status: components["schemas"]["PluginStatus"];
+            /** Version */
+            version: string;
+        };
+        /**
+         * PluginStatus
+         * @description Lifecycle and operational status of a plugin.
+         * @enum {string}
+         */
+        PluginStatus: "active" | "disabled" | "failed" | "config_required";
+        /**
+         * PluginSummary
+         * @description Summary of an installed plugin and its runtime status.
+         */
+        PluginSummary: {
+            /** Author */
+            author: string;
+            /** Capabilities */
+            capabilities: string[];
+            /** Category */
+            category: string;
+            /** Description */
+            description: string;
+            /** Error Message */
+            error_message?: string | null;
+            /**
+             * Has Config Schema
+             * @default false
+             */
+            has_config_schema: boolean;
+            /** Id */
+            id: string;
+            /**
+             * Is Builtin
+             * @default true
+             */
+            is_builtin: boolean;
+            /**
+             * Is Configured
+             * @default true
+             */
+            is_configured: boolean;
+            /** Name */
+            name: string;
+            status: components["schemas"]["PluginStatus"];
+            /** Version */
+            version: string;
+        };
+        /**
          * ProbeStream
          * @description One audio, video, subtitle or data stream.
          */
@@ -4679,6 +4901,16 @@ export interface components {
             description?: string | null;
             /** Name */
             name?: string | null;
+        };
+        /**
+         * UpdatePluginConfigRequest
+         * @description Payload to update configuration values for a plugin.
+         */
+        UpdatePluginConfigRequest: {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
         };
         /**
          * UpdateTranscodeSettingsRequest
@@ -8014,6 +8246,205 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_plugins_api_v1_plugins_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginSummary"][];
+                };
+            };
+        };
+    };
+    reload_plugins_api_v1_plugins_reload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginSummary"][];
+                };
+            };
+        };
+    };
+    get_plugin_api_v1_plugins__plugin_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_plugin_config_api_v1_plugins__plugin_id__config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_plugin_config_api_v1_plugins__plugin_id__config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePluginConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_plugin_api_v1_plugins__plugin_id__disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_plugin_api_v1_plugins__plugin_id__enable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginSummary"];
+                };
             };
             /** @description Validation Error */
             422: {
