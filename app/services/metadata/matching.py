@@ -61,6 +61,7 @@ from app.services.metadata.local import (
 )
 from app.services.metadata.musicbrainz import MusicBrainzProvider
 from app.services.metadata.openlibrary import OpenLibraryProvider
+from app.services.metadata.registry import MetadataRegistry
 from app.services.metadata.tmdb import TMDBProvider
 from app.services.scanner.walker import find_artist_artwork, find_series_artwork
 
@@ -174,6 +175,7 @@ class MetadataMatcher:
         sessionmaker: async_sessionmaker[AsyncSession],
         *,
         providers: Sequence[MetadataProvider] | None = None,
+        registry: MetadataRegistry | None = None,
         artwork: ArtworkHandler | None = None,
         clock: Callable[[], datetime] = utcnow,
     ) -> None:
@@ -183,41 +185,65 @@ class MetadataMatcher:
         self.clock = clock
         self._provider_calls = 0
 
-        if providers is None:
-            self.providers: list[MetadataProvider] = [LocalProvider()]
-            if settings.tmdb_api_key:
-                self.providers.append(TMDBProvider(settings, sessionmaker))
-            if settings.musicbrainz_enabled:
-                self.providers.append(MusicBrainzProvider(settings, sessionmaker))
-            if settings.openlibrary_enabled:
-                self.providers.append(OpenLibraryProvider(settings))
-            if settings.google_books_enabled:
-                self.providers.append(GoogleBooksProvider(settings))
+        if registry is not None:
+            self.registry = registry
+            if providers:
+                for p in providers:
+                    self.registry.register(p)
         else:
-            self.providers = list(providers)
+            self.registry = MetadataRegistry(sessionmaker=sessionmaker)
+            if providers is None:
+                self.registry.register(LocalProvider())
+                if settings.tmdb_api_key:
+                    self.registry.register(TMDBProvider(settings, sessionmaker))
+                if settings.musicbrainz_enabled:
+                    self.registry.register(MusicBrainzProvider(settings, sessionmaker))
+                if settings.openlibrary_enabled:
+                    self.registry.register(OpenLibraryProvider(settings))
+                if settings.google_books_enabled:
+                    self.registry.register(GoogleBooksProvider(settings))
+            else:
+                for p in providers:
+                    self.registry.register(p)
 
-        self.local_provider = next(
-            (provider for provider in self.providers if provider.name == "local"), None
-        )
-        self.remote_providers = [
-            provider for provider in self.providers if provider.name != "local"
-        ]
-        self._tmdb = next(
-            (provider for provider in self.remote_providers if provider.name == "tmdb"),
-            None,
-        )
-        self._musicbrainz = next(
-            (provider for provider in self.remote_providers if provider.name == "musicbrainz"),
-            None,
-        )
-        self._openlibrary = next(
-            (provider for provider in self.remote_providers if provider.name == "openlibrary"),
-            None,
-        )
-        self._googlebooks = next(
-            (provider for provider in self.remote_providers if provider.name == "googlebooks"),
-            None,
-        )
+    @property
+    def providers(self) -> list[MetadataProvider]:
+        return self.registry.all_providers()
+
+    @property
+    def local_provider(self) -> MetadataProvider | None:
+        return self.registry.get_provider("local")
+
+    @property
+    def remote_providers(self) -> list[MetadataProvider]:
+        return [p for p in self.registry.all_providers() if p.name != "local"]
+
+    @property
+    def _tmdb(self) -> MetadataProvider | None:
+        return self.registry.get_provider("tmdb")
+
+    @property
+    def _musicbrainz(self) -> MetadataProvider | None:
+        return self.registry.get_provider("musicbrainz")
+
+    @property
+    def _openlibrary(self) -> MetadataProvider | None:
+        return self.registry.get_provider("openlibrary")
+
+    @property
+    def _googlebooks(self) -> MetadataProvider | None:
+        return self.registry.get_provider("googlebooks")
+
+    def get_providers_for(
+        self,
+        media_type: str,
+        library_id: str | None = None,
+    ) -> list[MetadataProvider]:
+        """Return registered providers for media_type prioritizing library settings."""
+        return self.registry.get_providers_for(media_type, library_id=library_id)
+
+    def get_provider(self, name: str) -> MetadataProvider | None:
+        return self.registry.get_provider(name)
 
     # ------------------------------------------------------------------ public
 
@@ -254,6 +280,7 @@ class MetadataMatcher:
 
         stats = MatchStats()
         before_calls = self._provider_calls
+        await self.registry.prime_library_orders()
         for index, item_id in enumerate(item_ids):
             if is_cancelled is not None and await is_cancelled():
                 break
@@ -311,7 +338,12 @@ class MetadataMatcher:
                     None,
                 )
 
-        remote = self._tmdb or (self.remote_providers[0] if self.remote_providers else None)
+        movie_providers = [
+            p
+            for p in self.get_providers_for("movie", library_id=snapshot.library_id)
+            if p.name != "local" and p.enabled
+        ]
+        remote = movie_providers[0] if movie_providers else None
         if remote is None:
             message = local_error or "TMDB API key is not configured"
             return await self._save_failure(item_id, message)
@@ -650,9 +682,12 @@ class MetadataMatcher:
                             score=1.0,
                         )
 
-        provider = self._tmdb or next(
-            (p for p in self.remote_providers if hasattr(p, "search_tv")), None
-        )
+        tv_providers = [
+            p
+            for p in self.get_providers_for("series", library_id=snapshot.library_id)
+            if p.name != "local" and p.enabled and hasattr(p, "search_tv")
+        ]
+        provider = tv_providers[0] if tv_providers else None
         if provider is None:
             return await self._save_failure(snapshot.id, "No TV provider available")
 
@@ -965,9 +1000,14 @@ class MetadataMatcher:
                 )
                 break
 
-        # 2. Online enrichment via MusicBrainz (if available)
-        mb = self._musicbrainz
-        if mb is not None and mb.enabled:
+        # 2. Online enrichment via registered artist provider (if available)
+        music_providers = [
+            p
+            for p in self.get_providers_for("artist", library_id=snapshot.library_id)
+            if p.name != "local" and p.enabled and hasattr(p, "search_artist")
+        ]
+        mb = music_providers[0] if music_providers else None
+        if mb is not None:
             artist_meta = None
             self._provider_calls += 1
             if snapshot.musicbrainz_id:
@@ -1026,8 +1066,13 @@ class MetadataMatcher:
         return MatchResult(item_id=snapshot.id, state="matched")
 
     async def _match_album(self, snapshot: _ItemSnapshot) -> MatchResult:
-        mb = self._musicbrainz
-        if mb is not None and mb.enabled:
+        music_providers = [
+            p
+            for p in self.get_providers_for("album", library_id=snapshot.library_id)
+            if p.name != "local" and p.enabled and hasattr(p, "search_album")
+        ]
+        mb = music_providers[0] if music_providers else None
+        if mb is not None:
             album_meta = None
             self._provider_calls += 1
             if snapshot.musicbrainz_id:
@@ -1119,11 +1164,16 @@ class MetadataMatcher:
                     snapshot, "local", str(local_opf), details, list(details.images)
                 )
 
-        # 2. Open Library check
-        if self._openlibrary and self._openlibrary.enabled:
+        # 2. Remote providers (ordered by priority, e.g. per-library or server default)
+        book_providers = [
+            p
+            for p in self.get_providers_for("book", library_id=snapshot.library_id)
+            if p.name != "local" and p.enabled and hasattr(p, "search_book")
+        ]
+        for provider in book_providers:
             self._provider_calls += 1
             try:
-                candidates = await self._openlibrary.search_book(
+                candidates = await provider.search_book(
                     snapshot.title,
                     author=snapshot.author_name,
                     isbn=snapshot.isbn,
@@ -1131,37 +1181,16 @@ class MetadataMatcher:
                 if candidates:
                     best = candidates[0]
                     self._provider_calls += 1
-                    details = await self._openlibrary.fetch_book_details(best.provider_id)
+                    details = await provider.fetch_book_details(best.provider_id)
                     if details is not None:
                         images = list(details.images)
                         if not images:
-                            images = await self._openlibrary.fetch_book_images(best.provider_id)
+                            images = await provider.fetch_book_images(best.provider_id)
                         return await self._apply_book_match(
-                            snapshot, "openlibrary", best.provider_id, details, images
+                            snapshot, provider.name, best.provider_id, details, images
                         )
             except Exception as exc:
-                logger.warning("Open Library match failed for %s: %s", snapshot.id, exc)
-
-        # 3. Google Books fallback
-        if self._googlebooks and self._googlebooks.enabled:
-            self._provider_calls += 1
-            try:
-                candidates = await self._googlebooks.search_book(
-                    snapshot.title,
-                    author=snapshot.author_name,
-                    isbn=snapshot.isbn,
-                )
-                if candidates:
-                    best = candidates[0]
-                    self._provider_calls += 1
-                    details = await self._googlebooks.fetch_book_details(best.provider_id)
-                    if details is not None:
-                        images = list(details.images)
-                        return await self._apply_book_match(
-                            snapshot, "googlebooks", best.provider_id, details, images
-                        )
-            except Exception as exc:
-                logger.warning("Google Books match failed for %s: %s", snapshot.id, exc)
+                logger.warning("%s match failed for %s: %s", provider.name, snapshot.id, exc)
 
         # No match found
         async with self.sessionmaker() as session:
