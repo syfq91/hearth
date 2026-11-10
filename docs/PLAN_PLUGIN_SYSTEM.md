@@ -364,18 +364,19 @@ flowchart LR
 - **Client Synchronization**:
   - Ran `export_openapi.py` and `generate_client.py` updating `docs/openapi.json` and `packages/client/src/schema.d.ts`.
 
-### Phase 5: Web UI Admin Experience (`/admin/plugins`)
+### Phase 5: Web UI Admin Experience (`/admin/plugins`) [Completed]
 - **New Admin Route `web/src/routes/admin/plugins/`**:
   - **Plugins Overview**: Grid of installed plugins with badges:
     - Status: `Active`, `Disabled`, `Error`, `Configuration Required`.
-    - Capabilities badges (e.g., "Movie Metadata", "Music Metadata", "Book Metadata").
-    - One-click Enable / Disable toggle switch.
-  - **Plugin Configuration Modal**:
-    - Generates settings forms based on the plugin's configuration schema (API key inputs, language dropdowns, checkboxes).
-    - Secret masking: Shows masked hints (e.g. `••••••••abcd`) and allows updating or clearing.
+    - Capabilities badges (e.g., "Movie Metadata", "TV Metadata", "Music Metadata", "Book Metadata").
+    - One-click Enable / Disable toggle button.
+    - Hot-reload button calling `POST /api/v1/plugins/reload`.
+  - **Plugin Configuration Modal (`PluginConfigModal.svelte`)**:
+    - Dynamically generates settings forms based on the plugin's configuration schema (`properties`, `type`, `secret`, `default`, `enum`).
+    - Secret masking: Shows masked hints (e.g. `Configured (…abcd)`), toggle secret visibility, and allow clearing/updating secrets.
 - **Navigation Update**:
-  - Replace "Metadata" with "Plugins" in `web/src/routes/admin/+layout.svelte` pointing to `/admin/plugins`.
-  - Add redirect from `/admin/metadata` to `/admin/plugins`.
+  - Replaced "Metadata" with "Plugins" in `web/src/routes/admin/+layout.svelte` pointing to `/admin/plugins`.
+  - Added redirect from `/admin/metadata` to `/admin/plugins`.
 
 ### Phase 6: Testing, Documentation & ADR
 - **Unit & Integration Tests**:
