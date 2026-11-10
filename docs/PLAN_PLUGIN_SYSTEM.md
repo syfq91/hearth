@@ -378,17 +378,18 @@ flowchart LR
   - Replaced "Metadata" with "Plugins" in `web/src/routes/admin/+layout.svelte` pointing to `/admin/plugins`.
   - Added redirect from `/admin/metadata` to `/admin/plugins`.
 
-### Phase 6: Testing, Documentation & ADR
+### Phase 6: Testing, Documentation & ADR [Completed]
 - **Unit & Integration Tests**:
-  - Test manifest validation, bad manifest handling, and missing entrypoint handling.
-  - Test dynamic plugin loading, lifecycle hooks (`initialize`, `dispose`), and error isolation.
-  - Test configuration persistence and masking in SQLite `settings` table.
-  - Test `MetadataMatcher` matching items via plugin-provided providers.
-  - Test plugin enabling/disabling at runtime.
+  - Tested manifest validation, bad manifest handling, and missing entrypoint handling.
+  - Tested dynamic plugin loading, lifecycle hooks (`initialize`, `dispose`), and error isolation.
+  - Tested configuration persistence and masking in SQLite `settings` table.
+  - Tested `MetadataMatcher` matching items via plugin-provided providers in `tests/unit/test_metadata_matcher.py`.
+  - Tested library-level provider priority ordering overriding default order.
+  - Tested plugin enabling/disabling at runtime and graceful fallback to `LocalProvider`.
 - **Documentation**:
-  - Add ADR `ADR-0012: Jellyfin-Style Plugin System and Metadata Provider Decoupling` to `docs/DECISIONS.md`.
-  - Document plugin development guide and manifest specs in `docs/PLUGINS.md`.
-  - Update `docs/ARCHITECTURE.md` and `README.md`.
+  - Added `ADR 066: Jellyfin-Style Plugin System and Metadata Provider Decoupling` to `docs/DECISIONS.md`.
+  - Documented plugin development guide, manifest specifications, and capability contracts in `docs/PLUGINS.md`.
+  - Updated `docs/ARCHITECTURE.md` and `README.md`.
 
 ---
 

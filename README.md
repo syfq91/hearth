@@ -21,8 +21,11 @@ and falls back to CPU transcoding when there is no GPU.
 - **A place for everyone** — separate accounts, per-user watch and reading
   progress, favorites, and per-library access.
 - **Unified search** — find anything across every library at once.
-- **Simple administration** — add libraries, scan, fix unmatched metadata,
-  and watch active transcodes and jobs from the admin area.
+- **Extensible plugin system** — decoupled online metadata providers
+  (TMDB, MusicBrainz, Open Library, Google Books), external notification
+  integrations, and client API adapters managed from the web dashboard.
+- **Simple administration** — add libraries, scan, configure plugins,
+  fix unmatched metadata, and watch active transcodes and jobs.
 
 The homepage keeps your unfinished media one click away with **Continue
 watching** and **Continue reading** rows.
@@ -63,12 +66,11 @@ You need Docker with Compose v2 and a folder containing your media.
 3. Press **Scan** and follow progress on the admin overview.
 
 Hearth understands common file and folder naming, embedded tags, and local
-`.nfo` / `metadata.opf` files plus sidecar artwork. Online metadata is a
-fallback: music comes from MusicBrainz, books from Open Library and Google
-Books, and movies and TV from TMDB. TMDB needs a free API key — add
-`HEARTH_TMDB_API_KEY` to your `.env` before scanning if you want movie and TV
-artwork and descriptions. See [Configuration](docs/CONFIGURATION.md) for the
-exact variables.
+`.nfo` / `metadata.opf` files plus sidecar artwork. Online metadata is provided
+by modular plugins: music comes from MusicBrainz, books from Open Library and Google
+Books, and movies and TV from TMDB. Plugins can be configured and toggled from
+**Admin → Plugins** or via environment variables (e.g. `HEARTH_TMDB_API_KEY`).
+See [Plugins](docs/PLUGINS.md) and [Configuration](docs/CONFIGURATION.md).
 
 ## Everyday use
 

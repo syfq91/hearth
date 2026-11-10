@@ -53,9 +53,10 @@ app/
     ratelimit.py       login sliding-window limiter
     ids.py             UUIDv7 generator
     system.py          ffmpeg/VAAPI/database health probes
+    plugins/           plugin manager, manifest parser, capability contracts
   api/
     v1/                health, auth, libraries, users, jobs, events, admin,
-                       items, images, metadata
+                       items, images, metadata, plugins
   db/
     base.py            declarative base, UTC datetime type, naming conventions
     models.py          users, refresh tokens, libraries, settings, jobs, audit
@@ -65,13 +66,14 @@ app/
   services/
     audit.py           append-only admin audit entries
     libraries.py       media-root path validation
-    scanner/           walkers, watchers, matchers (Phase 2)
-    metadata/          TMDB, MusicBrainz, Open Library, NFO (Phase 2+)
-    media/             ffprobe wrapper, tags, book readers (Phase 2+)
-    transcode/         capabilities, decision engine, builder, sessions (Phase 7)
-    images/            fetch, resize, cache, BlurHash (Phase 2)
+    scanner/           walkers, watchers, matchers
+    metadata/          decoupled registry, local baseline provider, matcher
+    media/             ffprobe wrapper, tags, book readers
+    transcode/         capabilities, decision engine, builder, sessions
+    images/            fetch, resize, cache, BlurHash
     jobs/              handler registry, no-op job, durable worker
   workers/             reserved for future worker-only modules
+plugins/               built-in standalone plugins (TMDB, MusicBrainz, Open Library, Google Books)
 tests/
   unit/ integration/ e2e/ fixtures/
 docker/                Dockerfile, compose.yaml
