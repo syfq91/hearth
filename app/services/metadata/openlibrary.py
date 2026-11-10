@@ -1,26 +1,33 @@
-"""Open Library metadata provider for books and covers."""
+"""Backward compatibility adapter for Open Library metadata provider.
+
+The core implementation has moved to `plugins/openlibrary/`. This module remains
+to preserve existing imports and constructor signatures.
+"""
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import httpx
 
 from app.core.config import Settings
+from app.core.plugins.base import PluginContext
+from app.core.plugins.manifest import PluginManifest
 from app.services.metadata.base import (
     BookMetadata,
     MetadataProvider,
     MovieMetadata,
-    ProviderError,
     ProviderImage,
     SearchResult,
 )
+from plugins.openlibrary.plugin import OpenLibraryPlugin
 
 logger = logging.getLogger("hearth.metadata.openlibrary")
 
 
 class OpenLibraryProvider(MetadataProvider):
-    """Metadata provider searching Open Library and fetching book details."""
+    """Backward-compatible adapter for Open Library metadata provider."""
 
     name = "openlibrary"
 
@@ -31,27 +38,43 @@ class OpenLibraryProvider(MetadataProvider):
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.settings = settings
-        self.base_url = settings.openlibrary_base_url.rstrip("/")
-        self.covers_base_url = settings.openlibrary_covers_base_url.rstrip("/")
-        self._owned_client = client is None
-        self._client = client or httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=10.0,
-            headers={"User-Agent": "HearthMediaServer/0.1.0"},
+        manifest = PluginManifest(
+            id="org.hearth.plugins.openlibrary",
+            name="Open Library",
+            version="1.0.0",
+            entrypoint="plugin:OpenLibraryPlugin",
+            capabilities=["metadata.book"],
         )
+        context = PluginContext(
+            settings=settings,
+            sessionmaker=None,  # type: ignore[arg-type]
+            logger=logger,
+            data_dir=Path(settings.data_dir),
+            plugin_dir=Path("plugins/openlibrary"),
+        )
+        self._plugin = OpenLibraryPlugin(context, manifest, client=client)
+        self._plugin.apply_configuration({})
 
     @property
     def enabled(self) -> bool:
-        return self.settings.openlibrary_enabled
+        return self._plugin.enabled
+
+    @property
+    def base_url(self) -> str:
+        return self._plugin.base_url
+
+    @property
+    def covers_base_url(self) -> str:
+        return self._plugin.covers_base_url
 
     async def search(self, query: str, year: int | None = None) -> list[SearchResult]:
-        return []
+        return await self._plugin.search(query, year)
 
     async def fetch_details(self, provider_id: str) -> MovieMetadata | None:
-        return None
+        return await self._plugin.fetch_details(provider_id)
 
     async def fetch_images(self, provider_id: str) -> list[ProviderImage]:
-        return []
+        return await self._plugin.fetch_images(provider_id)
 
     async def search_book(
         self,
@@ -59,113 +82,13 @@ class OpenLibraryProvider(MetadataProvider):
         author: str | None = None,
         isbn: str | None = None,
     ) -> list[SearchResult]:
-        """Search Open Library for book candidates by title/author or ISBN."""
-        if not self.enabled:
-            return []
-
-        params: dict[str, str] = {"limit": "10"}
-        if isbn:
-            clean_isbn = isbn.replace("-", "").strip()
-            params["isbn"] = clean_isbn
-        else:
-            params["title"] = query
-            if author:
-                params["author"] = author
-
-        try:
-            res = await self._client.get(f"{self.base_url}/search.json", params=params)
-            if res.status_code != 200:
-                logger.warning("Open Library search returned status %s", res.status_code)
-                return []
-            data = res.json()
-        except Exception as exc:
-            logger.warning("Open Library search failed: %s", exc)
-            return []
-
-        docs = data.get("docs", [])
-        results: list[SearchResult] = []
-        for doc in docs:
-            key = doc.get("key")
-            title = doc.get("title")
-            if not key or not title:
-                continue
-            year = doc.get("first_publish_year")
-            cover_i = doc.get("cover_i")
-            poster_url = f"{self.covers_base_url}/b/id/{cover_i}-L.jpg" if cover_i else None
-            overview = doc.get("first_sentence", [None])
-            if isinstance(overview, list):
-                overview = overview[0] if overview else None
-
-            results.append(
-                SearchResult(
-                    provider=self.name,
-                    provider_id=key,
-                    title=title,
-                    year=year,
-                    overview=overview,
-                    poster_url=poster_url,
-                )
-            )
-        return results
+        return await self._plugin.search_book(query, author=author, isbn=isbn)
 
     async def fetch_book_details(self, book_id: str) -> BookMetadata | None:
-        """Fetch normalized book details from Open Library."""
-        if not self.enabled:
-            return None
-
-        clean_id = book_id.strip()
-        if not clean_id.startswith("/"):
-            if clean_id.startswith("OL") and clean_id.endswith("W"):
-                path = f"/works/{clean_id}.json"
-            elif clean_id.startswith("OL") and clean_id.endswith("M"):
-                path = f"/books/{clean_id}.json"
-            else:
-                path = f"/{clean_id}.json"
-        else:
-            path = f"{clean_id}.json" if not clean_id.endswith(".json") else clean_id
-
-        try:
-            res = await self._client.get(f"{self.base_url}{path}")
-            if res.status_code == 404:
-                return None
-            if res.status_code != 200:
-                raise ProviderError(f"Open Library details failed: HTTP {res.status_code}")
-            data = res.json()
-        except Exception as exc:
-            logger.warning("Open Library detail lookup failed for %s: %s", book_id, exc)
-            return None
-
-        title = data.get("title", "")
-        desc_raw = data.get("description")
-        overview = desc_raw.get("value") if isinstance(desc_raw, dict) else desc_raw
-        subjects = tuple(data.get("subjects", ()))[:10]
-
-        covers = data.get("covers", [])
-        images: list[ProviderImage] = []
-        for cov_id in covers:
-            if isinstance(cov_id, int) and cov_id > 0:
-                images.append(
-                    ProviderImage(
-                        kind="poster",
-                        source_url=f"{self.covers_base_url}/b/id/{cov_id}-L.jpg",
-                        is_primary=len(images) == 0,
-                    )
-                )
-
-        return BookMetadata(
-            provider=self.name,
-            provider_id=book_id,
-            title=title,
-            overview=overview,
-            genres=subjects,
-            images=tuple(images),
-            raw=data,
-        )
+        return await self._plugin.fetch_book_details(book_id)
 
     async def fetch_book_images(self, book_id: str) -> list[ProviderImage]:
-        details = await self.fetch_book_details(book_id)
-        return list(details.images) if details else []
+        return await self._plugin.fetch_book_images(book_id)
 
     async def close(self) -> None:
-        if self._owned_client:
-            await self._client.aclose()
+        await self._plugin.close()

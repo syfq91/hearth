@@ -1,0 +1,1 @@
+"""Open Library plugin package."""

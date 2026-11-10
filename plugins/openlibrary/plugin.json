@@ -1,0 +1,24 @@
+{
+  "id": "org.hearth.plugins.openlibrary",
+  "name": "Open Library",
+  "version": "1.0.0",
+  "description": "Fetches book metadata, covers, and author details from Open Library.",
+  "author": "Hearth Team",
+  "category": "Metadata",
+  "min_hearth_version": "1.0.0",
+  "entrypoint": "plugin:OpenLibraryPlugin",
+  "capabilities": [
+    "metadata.book"
+  ],
+  "config_schema": {
+    "title": "OpenLibraryConfig",
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "title": "Enabled",
+        "type": "boolean",
+        "default": true
+      }
+    }
+  }
+}
