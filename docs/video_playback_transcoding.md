@@ -1,442 +1,464 @@
-# Video Playback & Transcoding Architecture: Reference & Hearth Improvement Plan
+# Video Playback & Transcoding: Reference Spec and Agent Work Plan
 
-This document synthesizes the video playback and transcoding architectures from Jellyfin/Ferrofin (`ferrofin_transcoding.md` and `ferrofin_video_playback.md`), conducts a gap analysis against Hearth's current implementation, and establishes a comprehensive engineering blueprint to upgrade Hearth's media streaming and transcoding engine to production-grade reliability, efficiency, and compatibility.
+> **Audience:** AI coding agents (and humans reviewing their work).
+> **Goal:** Upgrade Hearth's HLS playback/transcoding engine to production-grade reliability, one small verifiable task at a time.
+> **Source of truth:** This file. If code and this file disagree, stop and report the conflict (see §0.4) instead of guessing.
 
 ---
 
-## 1. Executive Summary & Core Mental Model
+## 0. How to Use This Document (Read First)
 
-The media streaming subsystem exists to make a single guarantee to any client:
-> **"Give me your device capabilities, and I will negotiate the optimal playback path (Direct Play, Remux, or Transcode), stream the media seamlessly, adapt dynamically to seeking and network conditions, and cleanly reclaim server compute and storage."**
+### 0.1 Operating rules for agents
 
-### 1.1 The Five-Stage Lifecycle
+1. **Verify before editing.** File paths in this document come from an earlier audit and may be stale. Before each task, confirm every listed path and symbol exists (`ls`, `grep -rn`). If one is missing, locate its real equivalent and note the correction in your PR description.
+2. **One task = one branch = one PR.** Task IDs are `T01`–`T12`. Do not bundle tasks. Do not start a task before its dependencies (§5 graph) are merged.
+3. **Test first.** For each task, write the failing tests listed under "Acceptance" first, watch them fail, then implement.
+4. **Smallest diff that satisfies acceptance criteria.** No drive-by refactors, renames, or formatting sweeps. Out-of-scope items are listed per task.
+5. **Never guess ffmpeg behavior.** If a flag's behavior matters, verify it with the real `ffmpeg` binary using the smoke tests in §6 and record the ffmpeg version (`ffmpeg -version`) in the PR.
+6. **Discover tooling, don't assume it.** Find the test/lint/type-check commands in `pyproject.toml`, `Makefile`, `package.json`, or CI config (`.github/workflows/`). Run all of them before opening a PR.
+7. **Fail loudly, degrade gracefully.** Every new failure path must log with `session_id` and a stable error code, and must have a defined client-visible behavior (status code, header, retry hint).
+
+### 0.2 Definition of Done (every task)
+
+- [ ] All acceptance criteria for the task are met and each has an automated test.
+- [ ] Existing test suite, linter, and type checker pass.
+- [ ] No invariant in §2 is violated (cite the invariant IDs you touched in the PR).
+- [ ] New config values are named constants or settings, not magic numbers.
+- [ ] PR description contains: task ID, what changed, how it was verified, ffmpeg version used, and any deviation from this document.
+- [ ] This document is updated if behavior or file locations changed (append to §8 Changelog).
+
+### 0.3 Priority legend
+
+| Tag | Meaning |
+|---|---|
+| **P0** | Correctness or resource-safety bug. Do first. |
+| **P1** | Compatibility or robustness. Do next. |
+| **P2** | Polish and efficiency. |
+
+### 0.4 When to stop and ask
+
+Stop and report (do not improvise) if: a task's premise is false (e.g. the bug is already fixed); the change requires a schema migration or a public API break not described here; an acceptance criterion cannot be tested without hardware the environment lacks (VAAPI/NVENC); or two documented rules conflict.
+
+---
+
+## 1. Mental Model
+
+The streaming subsystem makes one guarantee:
+
+> Given a client's device capabilities, negotiate the cheapest working playback path (Direct Play, Remux, or Transcode), stream it seamlessly, adapt to seeking and network conditions, and reclaim server compute and disk.
 
 ```mermaid
 flowchart TD
-    subgraph S1["1. Probe & Normalization (Scan Time)"]
-        FFProbe["ffprobe -print_format json"] --> Normalizer["Probe Normalizer"]
-        Normalizer --> Stored["Database: MediaFile + Streams JSON"]
-    end
-
-    subgraph S2["2. Negotiation (PlaybackInfo)"]
-        ClientProfile["Client DeviceProfile / Preset"] --> Decision["StreamBuilder Decision Engine"]
-        Stored --> Decision
-        UserPolicy["User Limits (Bitrate, Transcode Allowed)"] --> Decision
-        Decision --> StreamInfo["StreamInfo (PlayMethod + TranscodeReasons Union)"]
-    end
-
-    subgraph S3["3. Command Planning"]
-        StreamInfo --> Planner["FFmpeg Argv Planner"]
-        ServerCaps["Server Capabilities (VAAPI, NVENC, SW)"] --> Planner
-        Planner --> JobPlan["EncodingJobInfo (Pure argv array + env)"]
-    end
-
-    subgraph S4["4. Runtime Supervision"]
-        JobPlan --> Supervisor["Session Supervisor (TranscodeManager)"]
-        Supervisor --> Process["FFmpeg Subprocess"]
-        Supervisor --> Throttler["Stdin Throttler (Pause/Resume Lead Gap)"]
-        Supervisor --> CircuitBreaker["Circuit Breaker (Anti-Skip-Walk)"]
-    end
-
-    subgraph S5["5. Delivery & Playlists"]
-        Process --> TempFiles["Atomic Segments (temp_file -> .m4s/.ts)"]
-        Supervisor --> Master["Master Playlist (master.m3u8: RFC 6381, Subs)"]
-        Supervisor --> Variant["Variant Playlist (media.m3u8: VOD + init.mp4)"]
-        Variant --> HTTP["HTTP Streaming / Range Requests"]
-    end
+    A[1. Probe at scan time<br/>ffprobe -> normalized JSON in DB] --> B[2. Negotiate<br/>pure function -> PlayMethod + reasons]
+    B --> C[3. Plan<br/>pure function -> ffmpeg argv + env]
+    C --> D[4. Supervise<br/>process, throttle, reap, circuit breaker]
+    D --> E[5. Deliver<br/>master.m3u8, media.m3u8, segments]
 ```
 
-### 1.2 Decision Hierarchy: The Three Play Methods
+### 1.1 Play methods
 
-1. **DirectPlay (`PlayMethod::DirectPlay`)**:
-   - The container, video codec/profile/level, and audio codec/channels are natively supported by the client, and the source bitrate is within client and user bandwidth limits.
-   - Served directly over HTTP range requests (`/api/v1/stream/{file_id}`) with zero server CPU/GPU overhead.
-2. **DirectStream / Remux (`PlayMethod::DirectStream` or `remux_hls`)**:
-   - The video stream is natively supported, but the container (e.g. MKV on Safari/Chrome) or the audio track (e.g. DTS/TrueHD) is incompatible with direct playback.
-   - The video stream is copied without re-encoding (`-c:v copy`), while audio is transcoded (e.g. to AAC/Opus) and remuxed into an HLS fMP4 or TS container on the fly.
-3. **Transcode (`PlayMethod::Transcode` or `transcode_hls`)**:
-   - The video codec, profile, level, bit depth, or bitrate exceeds client or user capabilities, or subtitle burn-in is required.
-   - Both video and audio are transformed by ffmpeg (using hardware acceleration where available) into a compliant stream.
+| Method | When | Server cost |
+|---|---|---|
+| **DirectPlay** | Container, video, and audio all supported; bitrate within limits | None (HTTP range requests on `/api/v1/stream/{file_id}`) |
+| **Remux / DirectStream** | Video OK; only container or audio unsupported | Low: `-c:v copy`, audio re-encoded, repackaged to HLS fMP4 |
+| **Transcode** | Any video constraint fails, or subtitle burn-in required | High: full video re-encode |
 
-### 1.3 Universal Ground Rules
+### 1.2 Cross-cutting rules
 
-- **Time Units**: Internal seek offsets and media positions in modern streaming servers are tracked in high-precision units (Ferrofin uses 100 ns ticks: 10,000,000 ticks/sec; Hearth uses floating-point seconds and milliseconds). Conversions must remain consistent across database, DTOs, and playlist timestamps.
-- **Session Identification**: Every playback negotiation mints a unique `session_id` (or `PlaySessionId`). All progress reports, keepalives, segment requests, and cancellation commands must echo this identifier.
-- **Media Token Security**: Video and audio elements cannot send custom HTTP headers (such as `Authorization: Bearer <token>`). Endpoints authenticate via short-lived, HMAC-signed media tokens (`?token=...`) scoped specifically to the user and item.
-- **Case-Insensitive Query Binding**: Player implementations vary across web, mobile, and smart TVs (`VideoBitrate` vs `videoBitRate`). The backend must bind query arguments case-insensitively to prevent dropping negotiated limits.
+- **Time units:** Hearth uses float seconds internally and milliseconds in some DTOs. Convert in exactly one place per boundary and name variables with units (`start_s`, `duration_ms`).
+- **Session identity:** every negotiation mints a `session_id`. Progress, keepalive, segment, and stop calls must echo it.
+- **Media tokens:** `<video>`/hls.js segment requests cannot send `Authorization` headers. Authenticate with short-lived HMAC-signed `?token=` scoped to (user, item, session).
+- **Query binding:** bind query parameters case-insensitively (`VideoBitrate` vs `videoBitRate`); otherwise negotiated limits are silently dropped by some players.
 
 ---
 
-## 2. Media Probing & Normalization Architecture
+## 2. Invariants
 
-Probing must occur **at scan time**, never during a user request. The server must persist normalized stream metadata so negotiation can evaluate candidates instantly without disk I/O.
+Agents MUST NOT violate these. Each has an ID for citation in PRs and tests.
 
-### 2.1 Extraction Rules
+| ID | Invariant |
+|---|---|
+| **INV-1** | Probing happens at scan time only, never on a playback request. |
+| **INV-2** | Unknown probe values are stored as `null`, never fabricated defaults. |
+| **INV-3** | Negotiation and command planning are **pure functions** (no I/O, no clock, no globals). Process management lives only in the supervisor. |
+| **INV-4** | ffmpeg is launched with an **argv list**, never `shell=True`, never string-concatenated commands. |
+| **INV-5** | Segment files become visible to clients only when complete (atomic rename). |
+| **INV-6** | A paused ffmpeg process is always resumed before it is terminated. |
+| **INV-7** | Segment endpoints never return 404 for a segment that exists in the playlist but failed to generate. They return 503 + `Retry-After`. |
+| **INV-8** | A seek never deletes segments that are already complete on disk. Only session end/reap deletes the session directory. |
+| **INV-9** | Software-encoded H.264 output is always `yuv420p` (never High 10). |
+| **INV-10** | Any client-supplied path component (segment name, session id) is validated against a strict regex before touching the filesystem. |
+| **INV-11** | `-force_key_frames` / `-sc_threshold` are applied only when re-encoding video, never with `-c:v copy`. |
+| **INV-12** | Every ffmpeg start, exit (with code), pause, resume, and kill is logged with `session_id`. |
 
-`ffprobe` is executed with arguments:
-```bash
+---
+
+## 3. Reference Specification
+
+### 3.1 Probing and normalization
+
+Command:
+
+```
 ffprobe -i <path> -threads 0 -v warning -print_format json -show_streams -show_format -show_chapters
 ```
 
-The resulting JSON is normalized into strict data structures:
-- **Video Streams**: Codec, profile, level, width, height, aspect ratio (SAR/DAR), frame rate (r_frame_rate vs avg_frame_rate), bit depth (inferred from `pix_fmt`, e.g. `yuv420p` = 8-bit, `yuv420p10le` = 10-bit), color space, color primaries, color transfer (e.g. `smpte2084` for PQ, `arib-std-b67` for HLG), Dolby Vision configuration record (profile, level, RPU present), HDR10+ metadata, and field order (interlaced vs progressive).
-- **Audio Streams**: Codec, profile, channel count, channel layout (e.g. `5.1(side)`, `stereo`), sample rate, bit rate, language, and dispositions (`default`, `forced`, `hearing_impaired`).
-- **Subtitle Streams**: Codec (`subrip`, `ass`, `webvtt`, `hdmv_pgs_subtitle`, `dvd_subtitle`), language, title, and dispositions.
-- **Attachments**: Font files (`.ttf`, `.otf`) embedded in MKV containers extracted for subtitle rendering.
+Persist normalized fields (all nullable):
 
-### 2.2 Unknown Heuristics & Pitfalls
+- **Video:** codec, profile, level, width, height, SAR/DAR, `r_frame_rate` and `avg_frame_rate`, bit depth (derive from `pix_fmt`: `yuv420p` = 8, `yuv420p10le` = 10), color space/primaries/transfer (`smpte2084` = PQ, `arib-std-b67` = HLG), Dolby Vision config, HDR10+ presence, field order.
+- **Audio:** codec, profile, channels, channel layout, sample rate, bit rate, language, dispositions.
+- **Subtitles:** codec (`subrip`, `ass`, `webvtt`, `hdmv_pgs_subtitle`, `dvd_subtitle`), language, title, dispositions.
+- **Attachments:** embedded fonts (`.ttf`, `.otf`) for ASS rendering.
 
-- **Do Not Fabricate Unknowns**: If `ffprobe` does not report a video level or width, leave it as `null` rather than fabricating arbitrary defaults that poison the decision engine.
-- **Unknown Bitrate Assumption**: If a file lacks container or video bitrate metadata, assume a conservative default of **40 Mbps** during bandwidth checks. Assuming a lower default (like 5 Mbps) causes high-bitrate files to be incorrectly negotiated as Direct Play over constrained connections, leading to severe client buffering.
+**Unknown bitrate:** assume **40 Mbps** in bandwidth checks (INV-2 applies to storage; this default applies only at decision time). A low default such as 5 Mbps wrongly approves Direct Play for heavy files on slow links.
 
----
+### 3.2 Client profile
 
-## 3. Client Capabilities & Decision Engine (Negotiation)
-
-The decision engine is a **pure function**:
-```text
-(ClientProfile, MediaSourceInfo, UserLimits, RequestOverrides) -> TranscodePlan
-```
-
-### 3.1 DeviceProfile Specification
-
-A client reports its decode capabilities via a structured profile:
 ```json
 {
-  "containers": ["mp4", "webm", "mkv"],
+  "containers": ["mp4", "webm"],
   "video_codecs": [
     {"codec": "h264", "profiles": ["baseline", "main", "high"], "max_level": 51},
-    {"codec": "hevc", "profiles": ["main", "main 10"], "max_level": 150},
-    {"codec": "av1", "profiles": ["main"], "max_level": 19}
+    {"codec": "hevc", "profiles": ["main", "main 10"], "max_level": 150}
   ],
-  "audio_codecs": [
-    {"codec": "aac", "max_channels": 6},
-    {"codec": "opus", "max_channels": 6},
-    {"codec": "ac3", "max_channels": 6},
-    {"codec": "eac3", "max_channels": 8}
-  ],
-  "subtitle_profiles": [
-    {"format": "vtt", "method": "External"},
-    {"format": "ass", "method": "External"},
-    {"format": "pgs", "method": "Encode"}
-  ],
-  "max_width": 3840,
-  "max_height": 2160,
+  "audio_codecs": [{"codec": "aac", "max_channels": 6}],
+  "subtitle_profiles": [{"format": "vtt", "method": "External"}, {"format": "pgs", "method": "Encode"}],
+  "max_width": 3840, "max_height": 2160,
   "max_bitrate": 50000000,
-  "hdr": true,
+  "hdr": false,
   "hls_fmp4": true
 }
 ```
 
-### 3.2 The Union of Transcode Reasons
+Browser `isTypeSupported` only proves *decode support*, not hardware acceleration or battery cost. Treat the profile as a capability ceiling, not a performance guarantee.
 
-Rather than halting at the first failure, the decision engine computes the complete **union** of failure reasons using bitflags or standardized string enums:
+### 3.3 Transcode reasons (compute the full union, don't stop at first failure)
 
-| Transcode Reason | Description | Remux Eligible? |
-| :--- | :--- | :--- |
-| `ContainerNotSupported` | Container (e.g. MKV, AVI) not supported natively | **Yes** |
-| `AudioCodecNotSupported` | Audio codec (e.g. DTS, TrueHD) not supported | **Yes** |
-| `AudioChannelsNotSupported`| Channel count exceeds client capacity (e.g. 7.1 -> stereo) | **Yes** |
-| `AudioSampleRateNotSupported`| Sample rate unsupported (e.g. 96 kHz) | **Yes** |
-| `VideoCodecNotSupported` | Video codec not supported (e.g. HEVC on old browser) | **No** (Full transcode) |
-| `VideoProfileNotSupported`| Profile unsupported (e.g. High 10 on 8-bit decoder) | **No** (Full transcode) |
-| `VideoLevelNotSupported` | Video level exceeds hardware decoder limits | **No** (Full transcode) |
-| `VideoResolutionNotSupported`| Resolution exceeds client display/decoder ceiling | **No** (Full transcode) |
-| `ContainerBitrateExceedsLimit`| Bitrate exceeds client or user bandwidth cap | **No** (Full transcode) |
-| `VideoRangeTypeNotSupported` | HDR/HLG/Dolby Vision requested on SDR client | **No** (Tonemap transcode) |
-| `SubtitleBurnInRequired` | Bitmap or styled subtitles requiring video burn-in | **No** (Full transcode) |
+| Reason | Remux-eligible |
+|---|---|
+| `ContainerNotSupported` | Yes |
+| `AudioCodecNotSupported` | Yes |
+| `AudioChannelsNotSupported` | Yes |
+| `AudioSampleRateNotSupported` | Yes |
+| `VideoCodecNotSupported` | No |
+| `VideoProfileNotSupported` | No |
+| `VideoLevelNotSupported` | No |
+| `VideoResolutionNotSupported` | No |
+| `ContainerBitrateExceedsLimit` | No |
+| `VideoRangeTypeNotSupported` | No (tonemap transcode) |
+| `SubtitleBurnInRequired` | No |
 
-**The Remux Rule:**
-$$\text{Remux Eligible} \iff \text{Reasons} \subseteq \{\text{ContainerNotSupported}, \text{AudioCodecNotSupported}, \text{AudioChannelsNotSupported}, \text{AudioSampleRateNotSupported}\}$$
+**Remux rule:** remux is allowed iff the reason set is a subset of {`ContainerNotSupported`, `AudioCodecNotSupported`, `AudioChannelsNotSupported`, `AudioSampleRateNotSupported`}. An empty set means DirectPlay.
 
-If any video constraint fails, the stream must undergo video transcoding.
+### 3.4 Bitrate budgeting
 
-### 3.3 Dynamic Bitrate & Audio Allocation
+| Total cap | Audio bitrate |
+|---|---|
+| <= 640 kbps | 128 kbps |
+| <= 2 Mbps | 192 kbps |
+| <= 10 Mbps | 384 kbps |
+| > 10 Mbps | 640 kbps |
 
-When transcoding to fit a bitrate ceiling:
-1. **Total -> Audio Bitrate Ladder**:
-   - Total $\le 640\text{ kbps} \implies \text{Audio } 128\text{ kbps}$
-   - Total $\le 2\text{ Mbps} \implies \text{Audio } 192\text{ kbps}$
-   - Total $\le 10\text{ Mbps} \implies \text{Audio } 384\text{ kbps}$
-   - Total $> 10\text{ Mbps} \implies \text{Audio } 640\text{ kbps}$
-2. **Video Bitrate Budget**:
-   $$\text{VideoBitrate} = \max(\text{TotalCap} - \text{AudioBitrate}, 64\text{ kbps})$$
-3. **Audio Downmix Matrices**:
-   When downmixing 5.1/7.1 to stereo, use normalized channel matrices rather than naive ffmpeg mixing:
-   - **Nightmode Dialogue Boost**: Center channel $+3\text{ dB}$, L/R $-3\text{ dB}$, Surround $-6\text{ dB}$.
-   - **Dave750 Algorithm**: Preserves phase relationships without clipping.
+`video_bitrate = max(total_cap - audio_bitrate, 64 kbps)`
 
----
+Stereo downmix of 5.1/7.1: use an explicit `pan`/`aresample` matrix, not ffmpeg's default. Night-mode variant: center +3 dB, L/R -3 dB, surrounds -6 dB; always apply a limiter to avoid clipping.
 
-## 4. FFmpeg Command Planner & Filter Pipeline
+### 3.5 ffmpeg command planner
 
-The planner converts the negotiated `TranscodePlan` into an explicit, deterministic `argv` array.
+Argument order matters:
 
-### 4.1 Input Argument Order & Fast Seeking
-
-```text
+```
 ffmpeg -hide_banner -loglevel warning -y \
   [-hwaccel vaapi -hwaccel_output_format vaapi -vaapi_device /dev/dri/renderD128] \
-  [-ss <start_offset>] \
-  -i <input_path>
+  [-ss <start_s>] [-noaccurate_seek  # only when video is copied] \
+  -analyzeduration 100M -probesize 1G \
+  -i <input> \
+  ...codec/filter args... \
+  -f hls -hls_time <seg_s> -hls_playlist_type vod -hls_segment_type fmp4 \
+  -hls_flags temp_file -start_number <n> ...
 ```
 
-- **Input Seeking (`-ss` before `-i`)**: Essential for instant container-level seeking. When remuxing copied video, append `-noaccurate_seek` so audio sync aligns with the preceding keyframe.
-- **Probe Boundaries**: Explicitly configure `-analyzeduration 100M -probesize 1G` to prevent stream-detection failures on high-bitrate remuxes.
-- **Subtitle Symlink Isolation**: Subtitle filters in ffmpeg suffer from path-escaping bugs when paths contain quotes, brackets, or colons. Create a clean symlink (`sub_source.mkv`) inside the session directory before invoking `subtitles='sub_source.mkv'`.
+- **Input-side `-ss`** (before `-i`) for instant container seek.
+- **Timestamp continuity after a mid-file start:** when starting at offset `S`, segments must carry timestamps continuing the global timeline. Verify with the smoke test in §6.3 whether `-output_ts_offset <S>` is required for the pinned ffmpeg version; the playlist and `#EXTINF` accounting must stay consistent with the first segment index.
+- **Keyframes (re-encode only, INV-11):** `-force_key_frames "expr:gte(t,n_forced*<seg_s>)"`. For `libx264` also `-sc_threshold 0`. For hardware encoders, set GOP explicitly (`-g <fps*seg_s> -keyint_min <fps*seg_s>`) since `-sc_threshold` does not apply.
+- **Subtitle burn-in paths:** ffmpeg's `subtitles=` filter breaks on quotes, brackets, and colons. Symlink the source to a clean name inside the session dir (e.g. `sub_source.mkv`) and reference that.
+- **HEVC in fMP4 HLS:** add `-tag:v hvc1` so Apple clients accept it.
 
-### 4.2 Keyframe Precision & Atomic Segments
-
-To ensure HLS segments cut cleanly without timestamp drift:
-1. **Forced Keyframes**:
-   - Re-encoded streams **must** enforce keyframes at segment boundaries:
-     ```text
-     -force_key_frames "expr:gte(t,n_forced*<segment_duration>)"
-     ```
-   - For `libx264`, also add `-sc_threshold 0` to prevent scene changes from shifting segment boundaries.
-2. **Atomic Segment Generation**:
-   - Always supply `-hls_flags temp_file`.
-   - ffmpeg writes segments to `.tmp` files and renames them to `.m4s` or `.ts` only upon completion. This eliminates the race condition where clients read half-written segment files.
-
-### 4.3 Hardware Acceleration & Filter Graphs
+Filter chains:
 
 ```mermaid
 flowchart LR
-    subgraph VAAPI["VAAPI Hardware Chain"]
-        VIn["HW Surface (NV12)"] --> VScale["scale_vaapi (if resized)"]
-        VScale --> VTone["tonemap_vaapi (if HDR)"]
-        VTone --> VEnc["h264_vaapi / hevc_vaapi"]
+    subgraph HW[VAAPI]
+        H1[HW surface] --> H2[scale_vaapi] --> H3[tonemap_vaapi if HDR] --> H4[h264_vaapi/hevc_vaapi]
     end
-
-    subgraph SW["Software Fallback Chain"]
-        SIn["Decoded Frames"] --> SScale["scale (even dims, DAR preserved)"]
-        SScale --> STone["tonemap=mobius (if HDR)"]
-        STone --> SFmt["format=yuv420p"]
-        SFmt --> SEnc["libx264 (veryfast, crf 23)"]
+    subgraph SW[Software]
+        S1[decoded frames] --> S2[scale: even dims, DAR kept] --> S3[tonemap=mobius if HDR] --> S4[format=yuv420p] --> S5[libx264 veryfast crf 23]
     end
 ```
 
-- **Pixel Format Guard**: Always enforce `format=yuv420p` in software chains; otherwise `libx264` may emit High 10 profile for 10-bit sources, which browser Media Source Extensions (MSE) cannot decode.
-- **Hardware Fallback**: If a hardware decode or encode fails with an unexpected exit code, catch the failure, log the stderr tail, and immediately restart the session using software `libx264`.
+**Hardware fallback:** if a hardware decode/encode run exits non-zero, log the stderr tail and restart once with the software chain. Count this restart toward the circuit breaker (T07) so it cannot loop.
+
+### 3.5.1 Supervisor behavior
+
+| Concern | Rule |
+|---|---|
+| Throttle | Pause when `lead >= 60 s`, resume when `lead <= 20 s`, checked every 5 s. `lead = encoded_time - last_requested_segment_end`. |
+| Pause mechanism | Prefer `SIGSTOP`/`SIGCONT` on POSIX (deterministic, stateless). Stdin `p` in stock ffmpeg is a **toggle**, so if used it requires tracked state and a stdin pipe without `-nostdin`. Choose one and document the choice. |
+| Seek outside lookahead | `SIGTERM` current process, keep files, compute `start_number = floor(seek_s / seg_s)`, spawn new ffmpeg. If target segment already exists on disk, serve it without restarting. |
+| Consumer guard | `active_request_count` incremented/decremented around each segment response (including streaming body). Reaper must skip sessions with count > 0. |
+| Idle reaper | No activity for 60 s (HLS) or 10 s (progressive) and count == 0: resume if paused, terminate, delete session dir. |
+| Circuit breaker | 3 consecutive crashes within 30 s: open for 10 s, respond 503 + `Retry-After: 10`. Close after cooldown; first success resets the counter. |
+
+### 3.6 HLS delivery
+
+**Master playlist** (`master.m3u8`): `BANDWIDTH`, `AVERAGE-BANDWIDTH`, `RESOLUTION`, `FRAME-RATE`, and an accurate `CODECS` list (RFC 6381), plus a `SUBTITLES` group when applicable.
+
+RFC 6381 strings:
+
+| Codec | Format | Example |
+|---|---|---|
+| H.264 | `avc1.<profile_idc hex><constraint hex><level_idc hex>` | `avc1.640028` (High, L4.0) |
+| HEVC | `hvc1.<profile>.<compat flags>.<L\|H><level_idc>.<constraints>` | `hvc1.1.6.L150.B0` (Main, L5.0; level_idc = level x 30) |
+| AV1 | `av01.<profile>.<level idx><tier>.<bit depth>` | `av01.0.08M.08` |
+| AAC-LC / HE-AAC | `mp4a.40.2` / `mp4a.40.5` | |
+| AC-3 / E-AC-3 / Opus | `ac-3` / `ec-3` / `Opus` | |
+
+**Variant playlist** (`media.m3u8`): VOD, full timeline up front, `#EXT-X-MAP` for `init.mp4`, last segment shorter than the rest, `#EXT-X-ENDLIST`. Segment URIs carry the media token.
 
 ---
 
-## 5. Transcode Supervisor & Process Runtime
+## 4. Current State vs Target (Gap Analysis)
 
-The runtime babysits the ffmpeg process, regulates resource consumption, and handles client interactivity.
+| Area | Current Hearth (per prior audit; verify) | Target | Task | Pri |
+|---|---|---|---|---|
+| Client profile | Omitted; defaults to `unknown` (1080p, 4 Mbps) | MSE-detected profile + UA fallback | T04 | P0 |
+| Throttling | None | 60 s / 20 s pause/resume | T06 | P0 |
+| Seek cache | Unlinks all files on seek | Keep segments (INV-8) | T03 | P0 |
+| Segment atomicity | Direct writes to `.m4s` | `-hls_flags temp_file` | T01 | P0 |
+| Keyframes | Source-dependent | Forced at segment boundaries | T02 | P1 |
+| Manifest CODECS | Hardcoded `avc1.640028,mp4a.40.2` | Computed from real streams | T08 | P1 |
+| Failure mode | 404 -> hls.js skip-walks the playlist | 503 + Retry-After, circuit breaker | T07 | P1 |
+| Consumer tracking | Timestamp `touch()` | Ref-counted guard | T09 | P2 |
+| Subtitles | Burns in all ASS/SSA/bitmap | Text subs as WebVTT tracks; burn-in only if needed | T10 | P2 |
+| Decision engine | Unaudited | Reason-union + remux rule + unknown-bitrate default | T05 | P1 |
+| Frontend resilience | Unaudited | Retry-After handling, sendBeacon stop | T11 | P2 |
+| Path/token safety | Unaudited | INV-10 enforced | T12 | P1 |
 
-### 5.1 Stdin Throttling (Don't Outrun the Client)
+---
 
-Unthrottled encoders consume 100% CPU/GPU and fill disk space caching hours ahead of the viewer.
+## 5. Task Backlog
+
+### Dependency graph
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Running: Session Started
-    Running --> Paused: lead_time >= 60s (Send 'p' to stdin)
-    Paused --> Running: lead_time <= 20s (Send 'p' to stdin)
-    Running --> Stopped: Stop requested / Reaped
-    Paused --> Stopped: Resume first, then SIGTERM/SIGKILL
+flowchart LR
+    T01 --> T03
+    T02 --> T03
+    T03 --> T06
+    T09 --> T06
+    T05 --> T04
+    T07 --> T06
+    T08 --> T10
+    T04 --> T11
+    T07 --> T11
+    T12 --> T09
 ```
 
-- **Lead Calculation**:
-  $$\text{LeadSeconds} = \text{EncodedTime} - \text{ClientDownloadTime}$$
-- **Pause Action**: Write `p` (or `c\n`) to ffmpeg stdin.
-- **Critical Invariant**: A paused ffmpeg ignores `q` (quit). Always send the resume key before issuing a termination signal (`SIGTERM` / `SIGKILL`).
+Tasks without incoming edges may start immediately: **T01, T02, T05, T07, T08, T12**.
 
-### 5.2 Non-Destructive Seeking & Segment Cache Retention
-
-When a user seeks outside the active 2-segment lookahead:
-1. Send `SIGTERM` to the active ffmpeg process.
-2. **Do NOT delete existing `.m4s` / `.ts` files on disk.**
-3. Calculate the new `start_number = seek_offset // segment_duration`.
-4. Spawn a new ffmpeg process with `-ss <seek_offset>` and `-start_number <start_number>`.
-5. If the viewer seeks backwards into previously watched content, the server serves cached segments immediately without restarting ffmpeg.
-
-### 5.3 Active Request Accounting & Consumer Guards
-
-- Replace naive timestamps with reference-counted consumer guards (`active_request_count`).
-- When a client is actively downloading a segment over a slow mobile connection, `active_request_count > 0` protects the session from the idle reaper, even if the transfer takes longer than the idle timeout.
-
-### 5.4 Circuit Breaker: Anti-Skip-Walking
-
-When transcoding fails repeatedly:
-- If ffmpeg crashes 3 consecutive times for the same session, engage a **10-second circuit breaker**.
-- Return **HTTP 503 Service Unavailable** with a `Retry-After: 10` header.
-- **Never return 404 on segment failures**: `hls.js` treats 404 as a missing segment and rapidly requests the next, walking the entire playlist and triggering dozens of doomed ffmpeg processes. Clients retry 503 with exponential backoff.
-
-### 5.5 Idle Reaper & Keepalive Heartbeat
-
-- **Ping / Progress**: Clients report playback state (`/progress` or `/ping`) every 10 seconds.
-- **Idle Timeout**: If `active_request_count == 0` and no activity occurs for 60 seconds (HLS) or 10 seconds (progressive), the reaper cleanly kills the process and deletes session temp files.
+Each task lists **Files** (verify first), **Change**, **Acceptance** (each item needs a test), and **Out of scope**.
 
 ---
 
-## 6. HLS Delivery & Playlist Specifications
+### T01 (P0): Atomic segment writes
 
-### 6.1 Master Playlist (`master.m3u8`)
+- **Files:** `app/services/transcode/builder.py` (`build_ffmpeg_hls_command`)
+- **Change:** add `-hls_flags temp_file` (merge with existing `-hls_flags` using `+`, e.g. `temp_file+independent_segments`, never emit the flag twice).
+- **Acceptance:**
+  1. Unit test: generated argv contains exactly one `-hls_flags` whose value includes `temp_file`.
+  2. Integration/smoke (§6.3): while ffmpeg runs, no file ending `.m4s`/`.ts` is ever shorter than its final size; temp files use a `.tmp` suffix.
+  3. Segment endpoint ignores `.tmp` files and treats only final names as available (ties to INV-5, INV-10).
+- **Out of scope:** keyframe flags (T02).
 
-The master playlist provides stream metadata and codec declarations per RFC 6381:
+### T02 (P1): Forced keyframes at segment boundaries
 
-```m3u8
-#EXTM3U
-#EXT-X-VERSION:7
-#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",DEFAULT=YES,AUTOSELECT=YES,URI="subtitles.m3u8?token=..."
-#EXT-X-STREAM-INF:BANDWIDTH=8000000,AVERAGE-BANDWIDTH=6000000,RESOLUTION=1920x1080,FRAME-RATE=23.976,CODECS="avc1.640028,mp4a.40.2",SUBTITLES="subs"
-media.m3u8?token=...
+- **Files:** `builder.py`
+- **Change:** when the video stream is re-encoded, add `-force_key_frames expr:gte(t,n_forced*{seg_s})`; add `-sc_threshold 0` only for `libx264`; for hardware encoders set `-g`/`-keyint_min` from fps x `seg_s`. When `-c:v copy`, add none of these (INV-11).
+- **Acceptance:**
+  1. Unit tests for three planner modes: libx264, VAAPI, copy. Copy mode must contain neither flag.
+  2. Smoke test: `ffprobe -show_packets` on produced segments shows each segment begins with a keyframe and durations are within 50 ms of `seg_s` (last segment excepted).
+- **Out of scope:** copy-mode keyframe snapping (segments follow source GOP; document the resulting variable `#EXTINF`).
+
+### T03 (P0): Non-destructive seeking
+
+- **Depends on:** T01, T02
+- **Files:** `app/services/transcode/session.py` (`TranscodeSession.seek`), HLS segment handler in `app/api/v1/hls.py`
+- **Change:**
+  1. `seek(target_s)`: if the target segment file already exists, do nothing. Otherwise terminate the active ffmpeg (respecting INV-6) **without touching the output dir**, then spawn a new ffmpeg with `-ss <target_s>` and `-start_number <floor(target_s/seg_s)>`.
+  2. Make the segment handler wait (bounded, e.g. 10 s) for a segment that the current/new process is about to produce; on timeout return 503 + `Retry-After` (INV-7).
+  3. Resolve the timestamp continuity question from §3.5 and encode the answer in the planner with a comment citing the smoke test.
+- **Acceptance:**
+  1. Test: seek forward then back into a previously produced range -> no new ffmpeg process is spawned and files are unchanged (inode/mtime assertions).
+  2. Test: seek forward -> old process terminated, new argv has correct `-ss` and `-start_number`.
+  3. Smoke: segments produced after a seek play back-to-back with earlier ones in `ffplay`/hls.js without a timestamp jump.
+  4. No code path other than session end/reap deletes segments (grep proof in PR).
+- **Out of scope:** disk-quota eviction.
+
+### T04 (P0): Client capability detection and profile resolution
+
+- **Depends on:** T05
+- **Files:** `web/src/lib/components/VideoPlayer.svelte`, `app/services/transcode/profile.py`, the `POST /items/{item_id}/playback-info` schema/handler
+- **Change:**
+  1. Frontend: implement `detectBrowserCapabilities()` using `MediaSource.isTypeSupported` / `canPlayType` (guard for missing `MediaSource`, e.g. iOS Safari uses native HLS). Send as `capabilities` in the playback-info body. Cache the result per page load.
+  2. Backend: schema-validate `capabilities` (unknown fields ignored, bad types -> 422). If absent, fall back to a User-Agent preset (Chrome, Safari, Firefox, Android TV). Only if UA is unrecognized use a conservative `unknown` preset.
+  3. Bind query params case-insensitively where the legacy query path exists.
+- **Acceptance:**
+  1. Backend tests: explicit capabilities win over UA preset; UA preset wins over `unknown`; malformed capabilities -> 422 with field path.
+  2. Frontend unit test with mocked `MediaSource` verifies the emitted profile for (H.264 only), (H.264+HEVC), and (no MediaSource).
+  3. Existing clients that send no capabilities still play (regression test).
+- **Out of scope:** per-device persistent profiles.
+
+### T05 (P1): Decision-engine audit and correctness
+
+- **Files:** negotiation module under `app/services/transcode/` (locate it)
+- **Change:** audit against §3.3-§3.4 and fix deviations: compute the **full reason union**; apply the Remux rule exactly; use 40 Mbps for unknown bitrate; enforce INV-2 (no fabricated defaults); keep the function pure (INV-3). Add the `-pix_fmt`/`format=yuv420p` guard (INV-9) in the planner's software chain; implement the hardware -> software fallback hook (restart once, counted by T07).
+- **Acceptance (table-driven tests):**
+  1. (MKV, H.264, AC3) on an MP4/H.264/AAC-only client -> reasons = {Container, AudioCodec}, method = Remux.
+  2. (MP4, HEVC) on an H.264-only client -> Transcode, reasons contain `VideoCodecNotSupported`.
+  3. Source with null bitrate and 8 Mbps cap -> Transcode (40 Mbps assumed).
+  4. 10-bit H.264 source via software path -> argv contains `format=yuv420p`.
+  5. Function purity: same inputs -> identical output; no filesystem/clock access (enforce by running with those patched to raise).
+
+### T06 (P0): Transcode throttling
+
+- **Depends on:** T03, T07, T09
+- **Files:** `session.py`, supervisor/manager module, `hls.py` (record last served segment)
+- **Change:** implement `pause()` / `resume()` idempotently with tracked state, using the mechanism chosen in §3.5.1. Supervisor tick every 5 s computes `lead` from encoded time (parse ffmpeg `-progress` output or count completed segments) minus `last_served_segment_end`; pause at >= 60 s, resume at <= 20 s. `stop()` calls `resume()` first (INV-6). Log every transition (INV-12).
+- **Acceptance:**
+  1. Unit test with a fake clock/process: lead 61 -> pause called once; lead 19 -> resume called once; repeated ticks at the same state produce no extra calls.
+  2. `stop()` on a paused session issues resume before terminate (assert call order).
+  3. Smoke: a 2-hour source with no client requests stops advancing at ~60 s lead (CPU near idle) and continues when segments are requested.
+  4. A paused session is still reaped after the idle timeout without leaking a stopped process (`ps` check in integration test).
+- **Out of scope:** adaptive thresholds per bitrate.
+
+### T07 (P1): Circuit breaker and 503 semantics
+
+- **Files:** `SessionManager`, `hls.py`
+- **Change:** track consecutive startup/exit failures per session; after 3 within 30 s open the breaker for 10 s. While open, segment requests return **503** with `Retry-After: 10` and a JSON error code. Replace any 404-on-generation-failure path (INV-7). Genuine nonexistent session or invalid segment name stays 404/400.
+- **Acceptance:**
+  1. Integration test: fake ffmpeg that exits 1 -> after 3 failures, response is 503 with `Retry-After`; after cooldown a new attempt is allowed; a success resets the counter.
+  2. Test: no request during the open state spawns a new process.
+  3. Hardware-fallback restart counts as one failure.
+
+### T08 (P1): Dynamic RFC 6381 codec strings
+
+- **Files:** new `app/services/transcode/codecs.py`, `app/api/v1/hls.py`
+- **Change:** implement `video_codec_string(codec, profile, level, bit_depth, ...)` and `audio_codec_string(codec, profile)` per §3.6. Derive from the **output** stream (transcode target if re-encoded, else source). Master playlist uses these plus real `BANDWIDTH`/`RESOLUTION`/`FRAME-RATE`. Unknown inputs -> omit that codec from `CODECS` rather than inventing one (INV-2).
+- **Acceptance:** `tests/unit/test_transcode_codecs.py` covers: H.264 Baseline/Main/High at 3.0/3.1/4.0/5.1; HEVC Main L93/L150; AV1 8-bit; AAC-LC, HE-AAC; AC-3, E-AC-3; unknown profile -> omitted. Golden-string assertions. Master playlist test asserts no hardcoded `avc1.640028` remains for non-High/4.0 sources.
+
+### T09 (P2): Active request accounting and idle reaper
+
+- **Depends on:** T12
+- **Files:** `session.py`, `hls.py`
+- **Change:** add `active_request_count` and an async context manager `session.track_request()` wrapping segment handling **including body streaming** (use `try/finally` / response background task so disconnects decrement). Reaper skips sessions with count > 0; timeouts per §3.5.1.
+- **Acceptance:** tests for increment/decrement on success, exception, and client disconnect; reaper does not kill a session mid-slow-download (simulate with a throttled body); count never goes negative.
+
+### T10 (P2): Subtitle pipeline
+
+- **Depends on:** T08
+- **Files:** subtitle extraction code, `hls.py`, planner
+- **Change:** text subtitles (SRT/ASS/WebVTT) are converted to WebVTT and exposed as an HLS `SUBTITLES` group (`subtitles.m3u8`); no video transcode is triggered for them. Bitmap subs (PGS/DVD) and any client lacking a text method use burn-in (`SubtitleBurnInRequired`) via the symlink technique (§3.5). ASS styling is lossy in WebVTT: if the profile lists `ass` as `External`, deliver ASS to a capable renderer instead.
+- **Acceptance:** SRT on a client with VTT support -> method stays Remux/DirectStream when otherwise eligible; PGS -> Transcode with burn-in and filter path points at the symlink; filenames containing quotes, brackets, and colons work (parametrized test).
+
+### T11 (P2): Frontend resilience
+
+- **Depends on:** T04, T07
+- **Files:** `VideoPlayer.svelte`
+- **Change:** configure hls.js retry/backoff to honor `Retry-After` on 503; send progress every 10 s and immediately on pause; send `navigator.sendBeacon('/api/v1/hls/{sessionId}/stop')` on `pagehide`/component destroy (use `pagehide`, not `beforeunload`, for mobile reliability). The stop endpoint must accept beacon semantics (POST, token in query or body since headers are not settable).
+- **Acceptance:** component tests with mocked hls.js and `navigator.sendBeacon`; Playwright test (§6.4) shows playback recovering after a forced 503 burst without request storms (cap on requests/sec asserted).
+
+### T12 (P1): Path and token hardening
+
+- **Files:** `hls.py`, token utilities
+- **Change:** enforce INV-10: segment names must match `^(init\.mp4|seg_\d{1,6}\.(m4s|ts))$`; `session_id` must match a strict UUID/hex pattern; resolve the final path and assert it stays inside the session dir. Tokens: HMAC-signed, include user, item, session, expiry; constant-time comparison; reject expired.
+- **Acceptance:** tests for `../`, absolute paths, encoded traversal (`%2e%2e`), overlong names, wrong-session token, expired token -> all 400/401/403 and never touch the filesystem outside the session dir.
+
+---
+
+## 6. Verification
+
+### 6.1 Test layout
+
+- `tests/unit/test_transcode_builder.py` (T01, T02, T05)
+- `tests/unit/test_transcode_codecs.py` (T08)
+- `tests/unit/test_transcode_throttler.py` (T06)
+- `tests/unit/test_transcode_decision.py` (T05)
+- `tests/integration/test_hls_seeking.py` (T03)
+- `tests/integration/test_circuit_breaker.py` (T07)
+- `tests/integration/test_hls_security.py` (T12)
+
+Use a **fake ffmpeg executable** (a small script honoring the same CLI shape) for deterministic crash/throttle tests; use the real binary only for tests marked `@pytest.mark.ffmpeg` (skippable when ffmpeg is absent).
+
+### 6.2 Test media
+
+Generate fixtures rather than committing large files:
+
+```bash
+# 60 s, H.264 High, AAC, keyframe every 2 s
+ffmpeg -f lavfi -i testsrc2=size=1280x720:rate=24 -f lavfi -i sine=frequency=440 -t 60 \
+  -c:v libx264 -g 48 -pix_fmt yuv420p -c:a aac fixture_h264.mp4
+
+# 10-bit HEVC (exercises the yuv420p guard / transcode path)
+ffmpeg -f lavfi -i testsrc2=size=1280x720:rate=24 -t 30 \
+  -c:v libx265 -pix_fmt yuv420p10le fixture_hevc10.mkv
 ```
 
-**RFC 6381 Codec String Table**:
-- **H.264**: `avc1.<profile_hex><compat_hex><level_hex>` (e.g. `avc1.640028` for High Profile, Level 4.0; `avc1.4d401f` for Main Profile, Level 3.1).
-- **HEVC**: `hvc1.1.6.L150.B0` (Main Profile, Level 5.0).
-- **AV1**: `av01.0.08M.08` (Main Profile, Level 4.0, 8-bit).
-- **AAC**: `mp4a.40.2` (AAC-LC), `mp4a.40.5` (HE-AAC).
-- **AC-3 / E-AC-3**: `ac-3`, `ec-3`.
-- **Opus**: `Opus`.
+### 6.3 Smoke checks (real ffmpeg)
 
-### 6.2 Variant Playlist (`media.m3u8`)
+```bash
+# Segment boundaries start on keyframes and have expected durations
+ffprobe -v error -select_streams v:0 -show_entries packet=pts_time,flags \
+  -of csv=p=0 seg_000.m4s | head
 
-For fMP4 VOD streaming, the playlist provides the full timeline up front:
+# Atomicity: poll during a run; no partial final-named files
+while pgrep ffmpeg >/dev/null; do ls -l session_dir | grep -E '\.(m4s|ts)$'; sleep 0.2; done
 
-```m3u8
-#EXTM3U
-#EXT-X-VERSION:7
-#EXT-X-TARGETDURATION:4
-#EXT-X-MEDIA-SEQUENCE:0
-#EXT-X-PLAYLIST-TYPE:VOD
-#EXT-X-MAP:URI="init.mp4?token=..."
-#EXTINF:4.000000,
-seg_000.m4s?token=...
-#EXTINF:4.000000,
-seg_001.m4s?token=...
-#EXTINF:2.450000,
-seg_002.m4s?token=...
-#EXT-X-ENDLIST
+# Timestamp continuity after seek: first PTS of the first post-seek segment
+# should be ~ start_number * seg_s (± one frame)
+ffprobe -v error -show_entries packet=pts_time -of csv=p=0 -read_intervals %+#1 seg_015.m4s
 ```
 
----
+Record outputs and the `ffmpeg -version` line in the PR.
 
-## 7. Frontend Web Client Integration (VideoPlayer)
+### 6.4 End-to-end (Playwright)
 
-To ensure the server makes optimal decisions and clients handle streams reliably:
+Chromium and Firefox desktop plus a mobile emulation profile: start playback of H.264 and HEVC-10-bit fixtures, seek forward/back/forward, throttle the network, force a 503 burst on segments, and assert: playback resumes, no more than N requests/second hit the segment endpoint, and `/stop` is received on navigation away.
 
-1. **Client Capability Auto-Detection**:
-   The web player should probe browser Media Source Extensions on startup:
-   ```typescript
-   function detectBrowserCapabilities(): ClientCapabilities {
-     const video = document.createElement('video');
-     return {
-       containers: ['mp4', 'webm'],
-       video_codecs: [
-         MediaSource.isTypeSupported('video/mp4; codecs="avc1.640028"') ? 'h264' : '',
-         MediaSource.isTypeSupported('video/mp4; codecs="hvc1.1.6.L150.B0"') ? 'hevc' : '',
-         MediaSource.isTypeSupported('video/webm; codecs="vp9"') ? 'vp9' : '',
-         MediaSource.isTypeSupported('video/mp4; codecs="av01.0.08M.08"') ? 'av1' : ''
-       ].filter(Boolean),
-       audio_codecs: [
-         video.canPlayType('audio/mp4; codecs="mp4a.40.2"') ? 'aac' : '',
-         video.canPlayType('audio/ogg; codecs="opus"') ? 'opus' : '',
-         video.canPlayType('audio/mp4; codecs="ac-3"') ? 'ac3' : '',
-         video.canPlayType('audio/mp4; codecs="ec-3"') ? 'eac3' : ''
-       ].filter(Boolean),
-       max_width: window.screen.width * window.devicePixelRatio,
-       max_height: window.screen.height * window.devicePixelRatio,
-       hdr: window.matchMedia('(dynamic-range: high)').matches,
-       hls_fmp4: true
-     };
-   }
-   ```
-2. **Keepalive & Progress Heartbeat**:
-   - Send progress updates every 10 seconds while playing.
-   - Send an immediate progress update upon pause.
-   - Send `/stop` synchronously on page unload via `navigator.sendBeacon`.
-3. **Resilient Seek & Error Recovery**:
-   - Honor `Retry-After` headers on HTTP 503 responses rather than failing immediately.
+### 6.5 Regression checklist before merging the final task
+
+- [ ] No place in the codebase deletes session segment files other than session end/reap.
+- [ ] `grep -rn "avc1.640028"` returns only tests/golden data.
+- [ ] Every `subprocess` call uses an argv list.
+- [ ] No segment path returns 404 for a playlist-listed segment during generation.
+- [ ] CPU is idle when no client is requesting segments and lead >= 60 s.
 
 ---
 
-## 8. Hearth Gap Analysis & Improvement Roadmap
+## 7. Assumptions to Verify (Agents: confirm or correct in PR)
 
-### 8.1 Current State Audit
-
-| Feature Area | Jellyfin / Ferrofin Reference | Hearth (Current Codebase) | Priority |
-| :--- | :--- | :--- | :--- |
-| **Client Profiling** | Rich `DeviceProfile` with MSE inspection | Omits profile; defaults to `unknown` (1080p, 4Mbps) | **P0 (Immediate)** |
-| **Throttling** | Stdin pause/resume maintaining 60s lead | None; ffmpeg runs at 100% until EOF | **P0 (Immediate)** |
-| **Seek Cache** | Kills ffmpeg, keeps cached segments | Unlinks all files on seek | **P0 (Immediate)** |
-| **Segment Atomicity** | `-hls_flags temp_file` (atomic rename) | Direct write to destination `.m4s` | **P0 (Immediate)** |
-| **Keyframe Alignment**| `-force_key_frames` matching segment size | None; depends on source keyframes | **P1 (High)** |
-| **Manifest CODECS** | Dynamic RFC 6381 codec strings | Hardcoded `avc1.640028,mp4a.40.2` | **P1 (High)** |
-| **Circuit Breaker** | 3 failures -> 503 with cooldown | None; returns 404, causing skip-walking | **P1 (High)** |
-| **Consumer Tracking** | Reference-counted `active_request_count` | Simple timestamp `touch()` | **P2 (Medium)** |
-| **Subtitles** | WebVTT external -> HLS stream -> Burn-in | Burns in all ASS/SSA and bitmap subtitles | **P2 (Medium)** |
+1. Paths named in §5 exist as written.
+2. The pinned ffmpeg version supports the flags used (`-hls_flags temp_file` with fMP4, `-noaccurate_seek`).
+3. Whether `-output_ts_offset` is needed for mid-file starts with fMP4 (answer via §6.3 and record it).
+4. Pause mechanism choice (SIGSTOP/SIGCONT vs stdin toggle) and whether the deployment target includes Windows (SIGSTOP unavailable there).
+5. Test, lint, and type-check commands (discover from repo config).
+6. Whether VAAPI/NVENC tests can run in CI; if not, rely on argv-only unit tests for those branches.
 
 ---
 
-### 8.2 Phased Implementation Plan
+## 8. Changelog
 
-```mermaid
-gantt
-    title Hearth Media Playback Engineering Roadmap
-    dateFormat  YYYY-MM-DD
-    section Phase 1: Core Reliability
-    Client Profile Auto-Detection & Preset Passing :p1a, 2026-11-12, 3d
-    Atomic Segments (temp_file) & Forced Keyframes   :p1b, after p1a, 2d
-    Non-Destructive Seek Cache Retention           :p1c, after p1b, 2d
-    section Phase 2: Transcode Throttling
-    Stdin Pipe Control & Lead Monitoring           :p2a, after p1c, 4d
-    Circuit Breaker (HTTP 503 & Anti-Skip-Walk)    :p2b, after p2a, 2d
-    section Phase 3: Manifest Precision
-    RFC 6381 Dynamic Codec String Helper          :p3a, after p2b, 3d
-    Subtitle Manifest Integration                  :p3b, after p3a, 3d
-    section Phase 4: Frontend Polish
-    VideoPlayer Resilient Error Handling & Beacon  :p4a, after p3b, 3d
-```
+| Date | Task | Summary | PR |
+|---|---|---|---|
+| | | | |
 
-#### Phase 1: Core Reliability & Decision Correctness (P0)
-1. **Frontend Client Capabilities**:
-   - Update `web/src/lib/components/VideoPlayer.svelte` to detect MSE capabilities (`detectBrowserCapabilities`) and pass `capabilities` in the `POST /items/{item_id}/playback-info` payload.
-   - Update `app/services/transcode/profile.py` so requests with no explicit preset detect the browser from the `User-Agent` header (Chrome, Safari, Firefox, Android TV) rather than defaulting to `unknown`.
-2. **Atomic Segments**:
-   - Add `-hls_flags temp_file` to `build_ffmpeg_hls_command` in `app/services/transcode/builder.py`.
-3. **Forced Keyframes**:
-   - Add `-force_key_frames expr:gte(t,n_forced*{segment_duration})` and `-sc_threshold 0` (for `libx264`) in `builder.py`.
-4. **Non-Destructive Seeking**:
-   - In `app/services/transcode/session.py`, modify `TranscodeSession.seek` to terminate the active process without unlinking the output directory.
-
-#### Phase 2: Transcoding Resource Management & Throttling (P0)
-1. **FFmpeg Stdin Pipe Control**:
-   - Launch ffmpeg subprocess with `stdin=asyncio.subprocess.PIPE`.
-   - Implement `TranscodeSession.pause()` and `TranscodeSession.resume()` sending `p` to stdin.
-   - Track client download position via served segment requests (`last_served_segment * segment_duration`).
-   - Run a 5-second supervisor tick: pause when `current_encoded_time - last_served_time >= 60.0`, resume when `current_encoded_time - last_served_time <= 20.0`.
-   - Ensure `stop()` always calls `resume()` before `SIGTERM`/`SIGKILL`.
-2. **Circuit Breaker**:
-   - Track consecutive startup crashes per session in `SessionManager`.
-   - After 3 consecutive crashes within 30 seconds, trip the breaker and return HTTP 503 (`Retry-After: 10`) on segment requests to prevent player skip-walking.
-
-#### Phase 3: Manifest Precision & Stream Metadata (P1)
-1. **Dynamic RFC 6381 Codec Helper**:
-   - Create `app/services/transcode/codecs.py` to construct exact RFC 6381 strings for H.264, HEVC, AV1, AAC, and AC-3 based on actual stream/transcode properties.
-   - Update `app/api/v1/hls.py` to use dynamic codec strings in `master.m3u8`.
-2. **Active Request Accounting**:
-   - Implement an async context manager guard around `get_media_segment` in `app/api/v1/hls.py` to increment/decrement `session.active_request_count`.
-
-#### Phase 4: Subtitle & Frontend Polish (P2)
-1. **Subtitle Extraction Pipeline**:
-   - Allow text-based subtitles (SRT/WebVTT) to be delivered as external WebVTT or HLS subtitle tracks without triggering a full video transcode.
-2. **Page Unload Teardown**:
-   - Add `navigator.sendBeacon('/api/v1/hls/{sessionId}/stop')` in `VideoPlayer.svelte` on component destroy or page navigation.
-
----
-
-## 9. Verification & Testing Strategy
-
-1. **Unit Tests**:
-   - `tests/unit/test_transcode_codecs.py`: Validate RFC 6381 string generation across H.264/HEVC/AV1 profiles and audio types.
-   - `tests/unit/test_transcode_builder.py`: Verify that generated ffmpeg commands include `-hls_flags temp_file`, forced keyframe expressions, and correct subtitle filter quoting.
-   - `tests/unit/test_transcode_throttler.py`: Mock subprocess stdin and verify pause/resume triggers at the 60s/20s thresholds.
-2. **Integration Tests**:
-   - `tests/integration/test_hls_seeking.py`: Test seeking back and forth; verify cached segments are preserved and served immediately.
-   - `tests/integration/test_circuit_breaker.py`: Simulate repeated ffmpeg crashes; verify endpoint returns 503 with `Retry-After`.
-3. **End-to-End Tests**:
-   - Validate desktop browser playback (Chrome/Firefox) and mobile emulation in Playwright without transcode stalls or skip-walking.
+*(Agents: append a row per merged task.)*
