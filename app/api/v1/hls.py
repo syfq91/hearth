@@ -11,7 +11,12 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from app.core.deps import SettingsDep, ViewerDep
-from app.core.errors import BadGatewayError, ForbiddenError, NotFoundError
+from app.core.errors import (
+    BadGatewayError,
+    ForbiddenError,
+    NotFoundError,
+    ServiceUnavailableError,
+)
 from app.services.transcode.session import get_session_manager
 
 router = APIRouter(prefix="/hls", tags=["hls"])
@@ -227,13 +232,25 @@ async def get_media_segment(
 
     session.touch()
     segment_index = int(segment_file.split(".")[0].split("_")[1])
+
+    if session.duration_seconds > 0:
+        total_segments = max(
+            1, math.ceil(session.duration_seconds / settings.transcode_segment_duration_seconds)
+        )
+        if segment_index < 0 or segment_index >= total_segments:
+            raise NotFoundError("Segment out of range", code="segment_out_of_range")
+
     ready = await session.ensure_segment(
         segment_index,
-        timeout=settings.transcode_first_segment_timeout_seconds,
+        timeout=settings.transcode_segment_wait_timeout_seconds,
     )
     seg_path = session.output_dir / segment_file
     if not ready or not seg_path.exists():
-        raise NotFoundError("Segment file not found", code="segment_not_found")
+        raise ServiceUnavailableError(
+            "Segment generation in progress; retry shortly",
+            code="transcode_timeout",
+            retry_after=1,
+        )
 
     return FileResponse(
         path=seg_path,

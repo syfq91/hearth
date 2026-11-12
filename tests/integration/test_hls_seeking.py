@@ -13,12 +13,16 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+from urllib.parse import quote
 
+import httpx
 import pytest
 
 from app.core.config import Settings
+from app.core.secrets import load_keys
+from app.core.tokens import create_media_token
 from app.services.transcode.decision import TranscodePlan
-from app.services.transcode.session import TranscodeSession
+from app.services.transcode.session import TranscodeSession, get_session_manager
 
 
 class MockSubprocess:
@@ -222,3 +226,91 @@ def test_no_code_path_other_than_stop_deletes_segments() -> None:
         assert func_name in ("stop", "startup_sweep"), (
             f"Unexpected deletion call {op}() in {func_name} at line {line_no}"
         )
+
+
+@pytest.mark.asyncio
+async def test_segment_endpoint_503_retry_after_on_timeout(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+) -> None:
+    """T03 acceptance 2 / INV-7: Segment endpoints never return 404 for a segment that
+    exists in the playlist but failed to generate. They return 503 + Retry-After.
+    """
+    res_setup = await api_client.post(
+        "/api/v1/auth/setup",
+        json={"username": "admin", "password": "correct horse"},
+    )
+    assert res_setup.status_code == 201, res_setup.text
+    tokens = res_setup.json()
+    bearer_headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    me_res = await api_client.get("/api/v1/auth/me", headers=bearer_headers)
+    admin_id = me_res.json()["id"]
+
+    manager = get_session_manager(db_settings)
+    session_id = "test_503_timeout_session"
+    out_dir = db_settings.transcode_dir / session_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Initial setup: duration is 20s (5 segments of 4s: seg_000 to seg_004)
+    # Fast segment wait timeout (0.1s) for testing
+    db_settings.transcode_segment_wait_timeout_seconds = 0.1
+    (out_dir / "init.mp4").write_bytes(b"\x00\x00\x00\x20ftypiso5")
+    (out_dir / "media.m3u8").write_text("#EXTM3U\n", encoding="utf-8")
+
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    session = TranscodeSession(
+        session_id=session_id,
+        user_id=admin_id,
+        item_id="item_seek_503",
+        file_id="file_seek_503",
+        input_path=Path("/media/test.mp4"),
+        output_dir=out_dir,
+        plan=plan,
+        settings=db_settings,
+        duration_seconds=20.0,
+    )
+    manager.sessions[session_id] = session
+
+    keys = load_keys(db_settings)
+    token, _ = create_media_token(
+        user_id=admin_id,
+        token_version=0,
+        settings=db_settings,
+        key=keys.media,
+        item_id="item_seek_503",
+    )
+    encoded_token = quote(token, safe="")
+
+    # Request segment 2 (which exists in the 20s playlist but is not yet on disk)
+    res_pending = await api_client.get(
+        f"/api/v1/hls/{session_id}/seg_002.m4s?token={encoded_token}"
+    )
+    assert res_pending.status_code == 503, f"Expected 503, got {res_pending.status_code}"
+    assert res_pending.headers.get("Retry-After") == "1"
+    assert res_pending.json()["error"]["code"] == "transcode_timeout"
+
+    # Request segment 10 (beyond 20s duration -> 5 segments max 0..4) -> 404 out of range
+    res_out_of_range = await api_client.get(
+        f"/api/v1/hls/{session_id}/seg_010.m4s?token={encoded_token}"
+    )
+    assert res_out_of_range.status_code == 404
+    assert res_out_of_range.json()["error"]["code"] == "segment_out_of_range"
+
+    # Request invalid segment name format -> 404 invalid_segment
+    res_invalid = await api_client.get(
+        f"/api/v1/hls/{session_id}/seg_bad.m4s?token={encoded_token}"
+    )
+    assert res_invalid.status_code == 404
+    assert res_invalid.json()["error"]["code"] == "invalid_segment"
+
+    await manager.stop_all()

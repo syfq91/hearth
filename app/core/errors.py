@@ -200,6 +200,29 @@ class TranscodeCapacityExceededError(AppError):
         )
 
 
+class ServiceUnavailableError(AppError):
+    """Service temporarily unavailable (503) with a Retry-After hint."""
+
+    def __init__(
+        self,
+        message: str = "Service temporarily unavailable; retry shortly",
+        code: str = "service_unavailable",
+        retry_after: int = 1,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        err_details = dict(details) if details else {}
+        if retry_after:
+            err_details["retry_after"] = retry_after
+        headers = {"Retry-After": str(retry_after)} if retry_after else {}
+        super().__init__(
+            message=message,
+            code=code,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            details=err_details,
+            headers=headers,
+        )
+
+
 class PayloadTooLargeError(AppError):
     """Payload exceeds maximum size limit (413)."""
 

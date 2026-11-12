@@ -294,11 +294,13 @@ async def test_hls_segment_endpoint_ignores_tmp_files(
     assert res_direct_tmp.status_code == 404
     assert res_direct_tmp.json()["error"]["code"] == "invalid_segment"
 
-    # 2. Requesting seg_000.m4s when only seg_000.m4s.tmp exists does not return .tmp data (INV-5)
-    # Since session process is not running, ensure_segment will quickly return false
+    # 2. Requesting seg_000.m4s when only seg_000.m4s.tmp exists does not return .tmp data.
+    # Since session process is not running, ensure_segment times out and returns 503
+    # with Retry-After (INV-7)
     res_seg = await api_client.get(f"/api/v1/hls/{session_id}/seg_000.m4s?token={encoded_token}")
-    assert res_seg.status_code == 404
-    assert res_seg.json()["error"]["code"] == "segment_not_found"
+    assert res_seg.status_code == 503
+    assert res_seg.headers.get("Retry-After") == "1"
+    assert res_seg.json()["error"]["code"] == "transcode_timeout"
 
     # 3. Simulate atomic rename: seg_000.m4s.tmp is renamed to seg_000.m4s
     (out_dir / "seg_000.m4s.tmp").unlink()
