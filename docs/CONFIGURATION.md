@@ -98,6 +98,8 @@ environment. MusicBrainz and Open Library do not require API keys.
 | `HEARTH_TRANSCODE_MAX_SW_SESSIONS` | `4` | Concurrent software transcode sessions |
 | `HEARTH_TRANSCODE_IDLE_TIMEOUT_SECONDS` | `60` | Stop an idle transcode session after this delay |
 | `HEARTH_TRANSCODE_FIRST_SEGMENT_TIMEOUT_SECONDS` | `30` | Max wait time for initial/seek segment production |
+| `HEARTH_TRANSCODE_SEGMENT_WAIT_TIMEOUT_SECONDS` | `10` | Bounded wait time for individual HLS segment delivery |
+| `HEARTH_TRANSCODE_SEGMENT_DURATION_SECONDS` | `4` | Target segment duration in seconds |
 | `HEARTH_WATCHED_THRESHOLD` | `0.90` | Fraction of an item that counts as watched |
 | `HEARTH_STREAM_CHUNK_BYTES` | `524288` | Direct-play read size (512 KiB) |
 

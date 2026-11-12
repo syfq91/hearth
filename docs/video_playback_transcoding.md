@@ -448,7 +448,7 @@ Chromium and Firefox desktop plus a mobile emulation profile: start playback of 
 
 1. Paths named in §5 exist as written.
 2. The pinned ffmpeg version supports the flags used (`-hls_flags temp_file` with fMP4, `-noaccurate_seek`). *Verified: ffmpeg 7.1.5-0+deb13u1 supports `-hls_flags temp_file` with fMP4 segments and playlists.*
-3. Whether `-output_ts_offset` is needed for mid-file starts with fMP4 (answer via §6.3 and record it).
+3. Whether `-output_ts_offset` is needed for mid-file starts with fMP4. *Verified: FFmpeg 7.1.5 resets output packet timestamps to 0 without `-output_ts_offset`; setting `-output_ts_offset <start_offset>` anchors post-seek first PTS at `start_number * seg_s`, ensuring continuous timeline.*
 4. Pause mechanism choice (SIGSTOP/SIGCONT vs stdin toggle) and whether the deployment target includes Windows (SIGSTOP unavailable there).
 5. Test, lint, and type-check commands (discover from repo config).
 6. Whether VAAPI/NVENC tests can run in CI; if not, rely on argv-only unit tests for those branches.
@@ -461,5 +461,6 @@ Chromium and Firefox desktop plus a mobile emulation profile: start playback of 
 |---|---|---|---|
 | 2026-11-12 | T01 | Atomic segment writes: added `-hls_flags temp_file` with flag merging, unit tests, ffmpeg smoke test, and endpoint rejection of `.tmp` | T01 |
 | 2026-11-12 | T02 | Forced keyframes at segment boundaries: added `-force_key_frames` + `-sc_threshold 0` (libx264) and `-g`/`-keyint_min` (VAAPI); verified first-packet keyframes & <50ms duration delta; copy mode unchanged (variable #EXTINF) | T02 |
+| 2026-11-12 | T03 | Non-destructive seeking: cached segment reuse without process respawn, file deletion removed from seek (INV-8), resume before stop (INV-6), bounded wait with 503 Retry-After on segment timeout (INV-7), and -output_ts_offset for seamless timeline continuity | T03 |
 
 *(Agents: append a row per merged task.)*
