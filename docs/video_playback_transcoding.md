@@ -460,5 +460,6 @@ Chromium and Firefox desktop plus a mobile emulation profile: start playback of 
 | Date | Task | Summary | PR |
 |---|---|---|---|
 | 2026-11-12 | T01 | Atomic segment writes: added `-hls_flags temp_file` with flag merging, unit tests, ffmpeg smoke test, and endpoint rejection of `.tmp` | T01 |
+| 2026-11-12 | T02 | Forced keyframes at segment boundaries: added `-force_key_frames` + `-sc_threshold 0` (libx264) and `-g`/`-keyint_min` (VAAPI); verified first-packet keyframes & <50ms duration delta; copy mode unchanged (variable #EXTINF) | T02 |
 
 *(Agents: append a row per merged task.)*
