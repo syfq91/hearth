@@ -249,26 +249,66 @@ class TranscodeSession:
             return seg_file.exists() and seg_file.stat().st_size > 0
 
     async def seek(self, offset_seconds: float) -> None:
-        """Seek to a new offset by restarting ffmpeg with new -ss."""
-        logger.info("seeking session %s to %gs", self.id, offset_seconds)
+        """Seek to a new offset non-destructively (INV-8).
+
+        If target segment already exists on disk, do nothing (reuse cached segment).
+        Otherwise terminate active ffmpeg (respecting INV-6) without touching the output
+        directory, then spawn a new ffmpeg starting at target_segment.
+        """
+        target_seg = (
+            int(offset_seconds // self.segment_duration) if self.segment_duration > 0 else 0
+        )
+        target_file = self.output_dir / f"seg_{target_seg:03d}.m4s"
+
+        if target_file.exists() and target_file.stat().st_size > 0:
+            logger.info(
+                "seek session %s to %gs: segment %d already cached on disk; skipping restart",
+                self.id,
+                offset_seconds,
+                target_seg,
+            )
+            return
+
         async with self._seek_lock:
-            self.start_offset = offset_seconds
+            # Recheck after acquiring lock
+            if target_file.exists() and target_file.stat().st_size > 0:
+                logger.info(
+                    "seek session %s to %gs: segment %d cached after lock; skipping restart",
+                    self.id,
+                    offset_seconds,
+                    target_seg,
+                )
+                return
+
+            seek_offset = float(target_seg * self.segment_duration)
+            logger.info(
+                "seeking session %s to %gs (aligned segment %d, offset %.1fs)",
+                self.id,
+                offset_seconds,
+                target_seg,
+                seek_offset,
+            )
+            self.start_offset = seek_offset
             await self._stop_process()
-            # Clean existing segments
-            if self.output_dir.exists():
-                for p in self.output_dir.iterdir():
-                    if p.is_file():
-                        p.unlink(missing_ok=True)
+            # Non-destructive: existing segment files are preserved (INV-8)
             await self.start_process()
 
     async def _stop_process(self) -> None:
-        """Terminate the ffmpeg process cleanly."""
+        """Terminate the ffmpeg process cleanly (respecting INV-6)."""
         if self._monitor_task and not self._monitor_task.done():
             self._monitor_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._monitor_task
 
         if self.process and self.process.returncode is None:
+            # A paused ffmpeg process is always resumed before it is terminated (INV-6)
+            if getattr(self, "is_paused", False):
+                with contextlib.suppress(Exception):
+                    import signal
+
+                    self.process.send_signal(signal.SIGCONT)
+                    self.is_paused = False
+
             try:
                 self.process.terminate()
                 try:
