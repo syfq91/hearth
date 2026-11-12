@@ -447,7 +447,7 @@ Chromium and Firefox desktop plus a mobile emulation profile: start playback of 
 ## 7. Assumptions to Verify (Agents: confirm or correct in PR)
 
 1. Paths named in §5 exist as written.
-2. The pinned ffmpeg version supports the flags used (`-hls_flags temp_file` with fMP4, `-noaccurate_seek`).
+2. The pinned ffmpeg version supports the flags used (`-hls_flags temp_file` with fMP4, `-noaccurate_seek`). *Verified: ffmpeg 7.1.5-0+deb13u1 supports `-hls_flags temp_file` with fMP4 segments and playlists.*
 3. Whether `-output_ts_offset` is needed for mid-file starts with fMP4 (answer via §6.3 and record it).
 4. Pause mechanism choice (SIGSTOP/SIGCONT vs stdin toggle) and whether the deployment target includes Windows (SIGSTOP unavailable there).
 5. Test, lint, and type-check commands (discover from repo config).
@@ -459,6 +459,6 @@ Chromium and Firefox desktop plus a mobile emulation profile: start playback of 
 
 | Date | Task | Summary | PR |
 |---|---|---|---|
-| | | | |
+| 2026-11-12 | T01 | Atomic segment writes: added `-hls_flags temp_file` with flag merging, unit tests, ffmpeg smoke test, and endpoint rejection of `.tmp` | T01 |
 
 *(Agents: append a row per merged task.)*
