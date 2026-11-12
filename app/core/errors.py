@@ -42,6 +42,23 @@ class AppError(Exception):
         }
 
 
+class BadRequestError(AppError):
+    """Bad request error (400)."""
+
+    def __init__(
+        self,
+        message: str = "Bad request",
+        code: str = "bad_request",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            message=message,
+            code=code,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            details=details,
+        )
+
+
 class NotFoundError(AppError):
     """Resource not found error (404)."""
 

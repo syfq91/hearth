@@ -205,6 +205,7 @@ class Viewer:
 
     user: User
     item_id: str | None = None
+    session_id: str | None = None
 
 
 async def get_viewer(
@@ -218,11 +219,15 @@ async def get_viewer(
 
     Media elements (``<img>``, later ``<video>``) cannot attach an
     ``Authorization`` header, so this dependency lets the same read endpoints
-    accept either. A media token may be scoped to one item.
+    accept either. A media token may be scoped to one item and/or one session.
     """
     if token is not None:
         claims = verify_media_token(token, key=keys.media)
-        return Viewer(user=await _load_media_user(claims, session), item_id=claims.item_id)
+        return Viewer(
+            user=await _load_media_user(claims, session),
+            item_id=claims.item_id,
+            session_id=claims.session_id,
+        )
     return Viewer(user=await get_current_user(credentials, settings, keys, session))
 
 

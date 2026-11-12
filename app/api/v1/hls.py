@@ -4,26 +4,62 @@ from __future__ import annotations
 
 import math
 import re
+from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from app.core.deps import SettingsDep, ViewerDep
+from app.core.deps import SettingsDep, Viewer, ViewerDep
 from app.core.errors import (
     BadGatewayError,
+    BadRequestError,
     ForbiddenError,
     NotFoundError,
     ServiceUnavailableError,
 )
 from app.services.transcode.codecs import compute_master_codecs
-from app.services.transcode.session import get_session_manager
+from app.services.transcode.session import SessionManager, TranscodeSession, get_session_manager
 
 router = APIRouter(prefix="/hls", tags=["hls"])
 
-_SEGMENT_RE = re.compile(r"^seg_\d+\.m4s$")
+_SESSION_ID_RE = re.compile(
+    r"^[0-9a-fA-F]{32}$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$|^[a-zA-Z0-9_-]{1,64}$"
+)
+_SEGMENT_RE = re.compile(r"^(init\.mp4|seg_\d{1,6}\.(m4s|ts))$")
 HLS_MIME = "application/vnd.apple.mpegurl"
+
+
+def _validate_session_id(session_id: str) -> None:
+    if not _SESSION_ID_RE.match(session_id):
+        raise BadRequestError("Invalid session ID format", code="invalid_session_id")
+
+
+def _resolve_session_path(session_dir: Path, filename: str) -> Path:
+    resolved_dir = session_dir.resolve()
+    resolved_path = (session_dir / filename).resolve()
+    if not resolved_path.is_relative_to(resolved_dir):
+        raise ForbiddenError("Path traversal detected", code="forbidden_path")
+    return resolved_path
+
+
+def _get_validated_session(
+    session_id: str,
+    manager: SessionManager,
+    viewer: Viewer,
+) -> TranscodeSession:
+    _validate_session_id(session_id)
+    session = manager.get_session(session_id)
+    if session is None:
+        raise NotFoundError("Transcoding session not found", code="session_not_found")
+    if viewer.user.id != session.user_id and viewer.user.role != "admin":
+        raise ForbiddenError("Session access denied", code="session_access_denied")
+    if viewer.session_id and viewer.session_id != session.id:
+        raise ForbiddenError("Media token not valid for this session", code="invalid_media_token")
+    if viewer.item_id and viewer.item_id != session.item_id:
+        raise ForbiddenError("Media token not valid for this item", code="invalid_media_token")
+    return session
 
 
 class SessionStopResponse(BaseModel):
@@ -53,11 +89,7 @@ async def get_master_playlist(
     races in client players.
     """
     manager = get_session_manager(settings)
-    session = manager.get_session(session_id)
-    if session is None:
-        raise NotFoundError("Transcoding session not found", code="session_not_found")
-    if viewer.user.id != session.user_id and viewer.user.role != "admin":
-        raise ForbiddenError("Session access denied", code="session_access_denied")
+    session = _get_validated_session(session_id, manager, viewer)
 
     session.touch()
     if session.is_circuit_open():
@@ -139,14 +171,10 @@ async def get_media_playlist(
 ) -> Response:
     """Return the active media playlist with token-appended segment references."""
     manager = get_session_manager(settings)
-    session = manager.get_session(session_id)
-    if session is None:
-        raise NotFoundError("Transcoding session not found", code="session_not_found")
-    if viewer.user.id != session.user_id and viewer.user.role != "admin":
-        raise ForbiddenError("Session access denied", code="session_access_denied")
+    session = _get_validated_session(session_id, manager, viewer)
 
     session.touch()
-    m3u8_path = session.output_dir / "media.m3u8"
+    m3u8_path = _resolve_session_path(session.output_dir, "media.m3u8")
     if not m3u8_path.exists():
         if session.is_circuit_open():
             raise ServiceUnavailableError(
@@ -234,14 +262,10 @@ async def get_init_segment(
 ) -> FileResponse:
     """Return the fMP4 initialization segment."""
     manager = get_session_manager(settings)
-    session = manager.get_session(session_id)
-    if session is None:
-        raise NotFoundError("Transcoding session not found", code="session_not_found")
-    if viewer.user.id != session.user_id and viewer.user.role != "admin":
-        raise ForbiddenError("Session access denied", code="session_access_denied")
+    session = _get_validated_session(session_id, manager, viewer)
 
     session.touch()
-    init_path = session.output_dir / "init.mp4"
+    init_path = _resolve_session_path(session.output_dir, "init.mp4")
     if not (init_path.exists() and init_path.stat().st_size > 0):
         if session.is_circuit_open():
             raise ServiceUnavailableError(
@@ -290,17 +314,21 @@ async def get_media_segment(
 ) -> FileResponse:
     """Return a media segment (.m4s)."""
     if not _SEGMENT_RE.match(segment_file):
+        if (
+            ".." in segment_file
+            or "%" in segment_file
+            or "/" in segment_file
+            or "\\" in segment_file
+            or len(segment_file) > 64
+        ):
+            raise BadRequestError("Invalid segment filename", code="invalid_segment")
         raise NotFoundError("Invalid segment filename", code="invalid_segment")
 
     manager = get_session_manager(settings)
-    session = manager.get_session(session_id)
-    if session is None:
-        raise NotFoundError("Transcoding session not found", code="session_not_found")
-    if viewer.user.id != session.user_id and viewer.user.role != "admin":
-        raise ForbiddenError("Session access denied", code="session_access_denied")
+    session = _get_validated_session(session_id, manager, viewer)
 
     session.touch()
-    segment_index = int(segment_file.split(".")[0].split("_")[1])
+    segment_index = int(segment_file.split(".")[0].split("_")[1]) if "_" in segment_file else 0
 
     if session.duration_seconds > 0:
         total_segments = max(
@@ -309,7 +337,7 @@ async def get_media_segment(
         if segment_index < 0 or segment_index >= total_segments:
             raise NotFoundError("Segment out of range", code="segment_out_of_range")
 
-    seg_path = session.output_dir / segment_file
+    seg_path = _resolve_session_path(session.output_dir, segment_file)
     if seg_path.exists() and seg_path.stat().st_size > 0:
         session.record_success()
         return FileResponse(
@@ -356,12 +384,17 @@ async def stop_hls_session(
     settings: SettingsDep,
 ) -> SessionStopResponse:
     """Explicitly stop an active playback session."""
+    _validate_session_id(session_id)
     manager = get_session_manager(settings)
     session = manager.get_session(session_id)
     if session is None:
         return SessionStopResponse(stopped=True)
     if viewer.user.id != session.user_id and viewer.user.role != "admin":
         raise ForbiddenError("Session access denied", code="session_access_denied")
+    if viewer.session_id and viewer.session_id != session.id:
+        raise ForbiddenError("Media token not valid for this session", code="invalid_media_token")
+    if viewer.item_id and viewer.item_id != session.item_id:
+        raise ForbiddenError("Media token not valid for this item", code="invalid_media_token")
 
     await manager.stop_session(session_id)
     return SessionStopResponse(stopped=True)

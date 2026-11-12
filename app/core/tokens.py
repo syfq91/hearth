@@ -116,6 +116,7 @@ class MediaTokenClaims:
     item_id: str | None
     token_version: int
     expires_at: datetime
+    session_id: str | None = None
 
 
 def _b64url_encode(value: bytes) -> str:
@@ -134,19 +135,22 @@ def create_media_token(
     settings: Settings,
     key: bytes,
     item_id: str | None = None,
+    session_id: str | None = None,
     now: datetime | None = None,
 ) -> tuple[str, datetime]:
     """Mint an HMAC-signed token for query-string media consumers.
 
     ``<video>``, ``<img>`` and ``<audio>`` elements cannot attach an
     Authorization header, so these tokens travel in URLs. They are scoped to a
-    user, optionally to one item, and expire after ``media_token_seconds``.
+    user, optionally to one item, optionally to one transcode session, and
+    expire after ``media_token_seconds``.
     """
     issued_at = (now or datetime.now(UTC)).replace(microsecond=0)
     expires_at = issued_at + timedelta(seconds=settings.media_token_seconds)
     payload: dict[str, Any] = {
         "sub": user_id,
         "item": item_id,
+        "session": session_id,
         "tv": token_version,
         "scope": MEDIA_TOKEN_SCOPE,
         "iat": int(issued_at.timestamp()),
@@ -190,9 +194,11 @@ def verify_media_token(
         raise UnauthorizedError("Media token expired", code="invalid_media_token")
 
     item = payload.get("item")
+    session = payload.get("session")
     return MediaTokenClaims(
         user_id=user_id,
         item_id=str(item) if item is not None else None,
+        session_id=str(session) if session is not None else None,
         token_version=token_version,
         expires_at=expires_at,
     )
