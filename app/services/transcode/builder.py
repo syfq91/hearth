@@ -205,6 +205,14 @@ def build_ffmpeg_hls_command(
             ]
         )
 
+    # Timestamp continuity for mid-file start (T03 / §3.5 / §6.3):
+    # Input seek (-ss before -i) resets output container timestamps to 0.0.
+    # Setting -output_ts_offset ensures segment packets carry global timeline
+    # timestamps (matching start_number * segment_duration), allowing post-seek
+    # segments to play back-to-back with pre-seek segments without clock jumps.
+    if start_offset > 0.0:
+        cmd.extend(["-output_ts_offset", f"{start_offset:g}"])
+
     # Output HLS fMP4 configuration
     cmd.extend(
         [

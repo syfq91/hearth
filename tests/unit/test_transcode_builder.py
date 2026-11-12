@@ -257,6 +257,29 @@ def test_builder_start_offset_seek_before_input(tmp_path: Path) -> None:
     i_idx = cmd.index("-i")
     assert ss_idx < i_idx
     assert cmd[ss_idx + 1] == "125.5"
+    assert "-output_ts_offset" in cmd
+    assert cmd[cmd.index("-output_ts_offset") + 1] == "125.5"
+
+
+def test_builder_start_offset_zero_omits_output_ts_offset(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        start_offset=0.0,
+    )
+    assert "-ss" not in cmd
+    assert "-output_ts_offset" not in cmd
 
 
 def test_builder_hls_flags_temp_file_default(tmp_path: Path) -> None:
