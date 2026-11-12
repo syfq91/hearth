@@ -1,5 +1,6 @@
 """Integration tests for HLS fMP4 delivery endpoints."""
 
+import asyncio
 from pathlib import Path
 from urllib.parse import quote
 
@@ -408,5 +409,128 @@ async def test_master_playlist_dynamic_codecs_non_high_source(
     assert "AVERAGE-BANDWIDTH=3500000" in master_text
     assert "RESOLUTION=1280x720" in master_text
     assert "FRAME-RATE=23.976" in master_text
+
+    await manager.stop_all()
+
+
+@pytest.mark.asyncio
+async def test_segment_streaming_active_request_accounting_and_reaper(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    tmp_path: Path,
+) -> None:
+    from datetime import timedelta
+
+    from app.db.base import utcnow
+
+    admin_tokens = await _setup(api_client)
+    me_res = await api_client.get("/api/v1/auth/me", headers=_bearer(admin_tokens))
+    admin_id = me_res.json()["id"]
+
+    manager = get_session_manager(db_settings)
+    session_id = "test_accounting_session"
+    out_dir = db_settings.transcode_dir / session_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1 MB segment data
+    seg_data = b"X" * (1024 * 1024)
+    (out_dir / "init.mp4").write_bytes(b"\x00\x00\x00\x20ftypiso5")
+    (out_dir / "seg_000.m4s").write_bytes(seg_data)
+
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="transcode",
+        audio_codec="aac",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    session = TranscodeSession(
+        session_id=session_id,
+        user_id=admin_id,
+        item_id="item_accounting",
+        file_id="file_accounting",
+        input_path=Path("/media/test.mp4"),
+        output_dir=out_dir,
+        plan=plan,
+        settings=db_settings,
+        duration_seconds=60.0,
+    )
+    manager.sessions[session_id] = session
+
+    keys = load_keys(db_settings)
+    token, _ = create_media_token(
+        user_id=admin_id,
+        token_version=0,
+        settings=db_settings,
+        key=keys.media,
+        item_id="item_accounting",
+        session_id=session_id,
+    )
+    encoded_token = quote(token, safe="")
+
+    assert session.active_request_count == 0
+
+    # 1. Normal HTTP request: completes and decrements active_request_count back to 0
+    res = await api_client.get(f"/api/v1/hls/{session_id}/seg_000.m4s?token={encoded_token}")
+    assert res.status_code == 200
+    assert len(res.content) == len(seg_data)
+    assert session.active_request_count == 0
+
+    # 2. Test active streaming and reaper protection during slow download
+    from app.api.v1.hls import TrackedFileResponse
+
+    session.increment_request()
+    tracked_resp = TrackedFileResponse(session=session, path=out_dir / "seg_000.m4s")
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": f"/api/v1/hls/{session_id}/seg_000.m4s",
+        "headers": [],
+        "asgi": {"version": "3.0", "spec_version": "2.4"},
+    }
+
+    reaped_during_stream = None
+    active_during_stream = None
+
+    async def dummy_receive() -> dict[str, str]:
+        return {"type": "http.request"}
+
+    async def slow_send(message: dict[str, object]) -> None:
+        nonlocal reaped_during_stream, active_during_stream
+        if message.get("type") == "http.response.body":
+            active_during_stream = session.active_request_count
+            # Simulate idle timeout passing mid-slow-download
+            session.last_activity_at = utcnow() - timedelta(seconds=70)
+            reaped_during_stream = await manager.reap_idle_sessions()
+
+    await tracked_resp(scope, dummy_receive, slow_send)
+
+    assert active_during_stream == 1
+    assert reaped_during_stream == []
+    assert session_id in manager.sessions
+    assert session.active_request_count == 0
+
+    # 3. Test client disconnect mid-stream
+    session.increment_request()
+    disconnect_resp = TrackedFileResponse(session=session, path=out_dir / "seg_000.m4s")
+
+    async def aborting_send(message: dict[str, object]) -> None:
+        if message.get("type") == "http.response.body":
+            raise asyncio.CancelledError("Client disconnected")
+
+    with pytest.raises(asyncio.CancelledError):
+        await disconnect_resp(scope, dummy_receive, aborting_send)
+
+    # Client disconnect must decrement active_request_count back to 0
+    assert session.active_request_count == 0
+
+    # 4. Now that active_request_count is 0, idle reaper can reap it
+    session.last_activity_at = utcnow() - timedelta(seconds=70)
+    reaped = await manager.reap_idle_sessions()
+    assert session_id in reaped
+    assert session_id not in manager.sessions
 
     await manager.stop_all()

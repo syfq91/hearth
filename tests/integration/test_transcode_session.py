@@ -277,3 +277,145 @@ async def test_user_revocation_stops_sessions(tmp_path: Path) -> None:
         assert list(manager.sessions.values())[0].user_id == "user_other"
 
         await manager.stop_all()
+
+
+@pytest.mark.asyncio
+async def test_active_request_accounting_success_and_exception(tmp_path: Path) -> None:
+    transcode_dir = tmp_path / "transcode"
+    settings = Settings(transcode_dir=transcode_dir)
+    manager = SessionManager(settings)
+
+    mock_proc = MockProcess(exit_code=0, stderr_lines=[b"running\n"])
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)):
+        session = await manager.create_session(
+            user_id="user_1",
+            item_id="item_1",
+            file_id="file_1",
+            input_path=Path("/media/movie1.mp4"),
+            plan=_sample_plan(hw=False),
+        )
+
+        assert session.active_request_count == 0
+
+        # Success case
+        async with session.track_request():
+            assert session.active_request_count == 1
+        assert session.active_request_count == 0
+
+        # Exception case
+        with pytest.raises(RuntimeError):
+            async with session.track_request():
+                assert session.active_request_count == 1
+                raise RuntimeError("simulated error during segment handling")
+        assert session.active_request_count == 0
+
+        # Count never goes negative
+        session.decrement_request()
+        session.decrement_request()
+        assert session.active_request_count == 0
+
+        await manager.stop_all()
+
+
+@pytest.mark.asyncio
+async def test_idle_reaper_skips_active_requests(tmp_path: Path) -> None:
+    from datetime import timedelta
+
+    from app.db.base import utcnow
+
+    transcode_dir = tmp_path / "transcode"
+    settings = Settings(transcode_dir=transcode_dir, transcode_idle_timeout_seconds=60.0)
+    manager = SessionManager(settings)
+
+    mock_proc1 = MockProcess(exit_code=0, stderr_lines=[b"running\n"])
+    mock_proc2 = MockProcess(exit_code=0, stderr_lines=[b"running\n"])
+
+    with patch("asyncio.create_subprocess_exec", side_effect=[mock_proc1, mock_proc2]):
+        session_active = await manager.create_session(
+            user_id="user_1",
+            item_id="item_1",
+            file_id="file_1",
+            input_path=Path("/media/movie1.mp4"),
+            plan=_sample_plan(hw=False),
+        )
+        session_idle = await manager.create_session(
+            user_id="user_2",
+            item_id="item_2",
+            file_id="file_2",
+            input_path=Path("/media/movie2.mp4"),
+            plan=_sample_plan(hw=False),
+        )
+
+        # Mark both sessions as last active 70 seconds ago (> 60s idle timeout)
+        stale_time = utcnow() - timedelta(seconds=70)
+        session_active.last_activity_at = stale_time
+        session_idle.last_activity_at = stale_time
+
+        # Simulate an in-flight request on session_active
+        session_active.increment_request()
+        assert session_active.active_request_count == 1
+        assert session_idle.active_request_count == 0
+
+        # Run reap pass
+        reaped = await manager.reap_idle_sessions()
+        assert session_idle.id in reaped
+        assert session_active.id not in reaped
+        assert session_active.id in manager.sessions
+        assert session_idle.id not in manager.sessions
+
+        # Now finish the active request and reap again
+        session_active.decrement_request()
+        assert session_active.active_request_count == 0
+
+        # Mark as stale again to simulate idle timeout passing after request finished
+        session_active.last_activity_at = stale_time
+
+        reaped_second = await manager.reap_idle_sessions()
+        assert session_active.id in reaped_second
+        assert session_active.id not in manager.sessions
+
+        await manager.stop_all()
+
+
+@pytest.mark.asyncio
+async def test_idle_reaper_timeouts_hls_vs_progressive(tmp_path: Path) -> None:
+    from datetime import timedelta
+
+    from app.db.base import utcnow
+
+    transcode_dir = tmp_path / "transcode"
+    settings = Settings(transcode_dir=transcode_dir, transcode_idle_timeout_seconds=60.0)
+    manager = SessionManager(settings)
+
+    mock_proc1 = MockProcess(exit_code=0, stderr_lines=[b"running\n"])
+    mock_proc2 = MockProcess(exit_code=0, stderr_lines=[b"running\n"])
+
+    with patch("asyncio.create_subprocess_exec", side_effect=[mock_proc1, mock_proc2]):
+        session_hls = await manager.create_session(
+            user_id="user_1",
+            item_id="item_1",
+            file_id="file_1",
+            input_path=Path("/media/movie1.mp4"),
+            plan=_sample_plan(hw=False),
+        )
+        session_prog = await manager.create_session(
+            user_id="user_2",
+            item_id="item_2",
+            file_id="file_2",
+            input_path=Path("/media/movie2.mp4"),
+            plan=_sample_plan(hw=False),
+        )
+        session_prog.is_progressive = True
+
+        # Set both sessions to 15 seconds ago
+        # 15s > 10s (progressive timeout) but < 60s (HLS timeout)
+        activity_time = utcnow() - timedelta(seconds=15)
+        session_hls.last_activity_at = activity_time
+        session_prog.last_activity_at = activity_time
+
+        reaped = await manager.reap_idle_sessions()
+        assert session_prog.id in reaped
+        assert session_hls.id not in reaped
+        assert session_hls.id in manager.sessions
+
+        await manager.stop_all()

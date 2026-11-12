@@ -14,6 +14,8 @@ import re
 import shutil
 import uuid
 from collections import deque
+from collections.abc import AsyncIterator
+from datetime import datetime
 from pathlib import Path
 
 from app.core.config import Settings, get_settings
@@ -90,6 +92,10 @@ class TranscodeSession:
         self.circuit_window_seconds: float = 30.0
         self.circuit_cooldown_seconds: float = 10.0
 
+        # Active request accounting (§3.5.1, T09)
+        self.active_request_count: int = 0
+        self.is_progressive: bool = False
+
     def record_failure(self, now: float | None = None) -> None:
         """Record an ffmpeg startup or exit failure and evaluate circuit breaker threshold."""
         try:
@@ -147,6 +153,32 @@ class TranscodeSession:
     def touch(self) -> None:
         """Mark recent client activity."""
         self.last_activity_at = utcnow()
+
+    @property
+    def idle_timeout_seconds(self) -> float:
+        """Idle timeout for this session per §3.5.1: 10s for progressive, 60s for HLS."""
+        if getattr(self, "is_progressive", False):
+            return 10.0
+        return self.settings.transcode_idle_timeout_seconds
+
+    def increment_request(self) -> None:
+        """Increment active request count and mark recent activity."""
+        self.active_request_count += 1
+        self.touch()
+
+    def decrement_request(self) -> None:
+        """Decrement active request count (bounded >= 0) and mark recent activity."""
+        self.active_request_count = max(0, self.active_request_count - 1)
+        self.touch()
+
+    @contextlib.asynccontextmanager
+    async def track_request(self) -> AsyncIterator[None]:
+        """Async context manager tracking an active request on this session."""
+        self.increment_request()
+        try:
+            yield
+        finally:
+            self.decrement_request()
 
     @property
     def uptime_seconds(self) -> float:
@@ -582,26 +614,37 @@ class SessionManager:
         if self._reaper_task is None or self._reaper_task.done():
             self._reaper_task = asyncio.create_task(self._reap_idle_loop())
 
+    async def reap_idle_sessions(self, now: datetime | None = None) -> list[str]:
+        """Reap idle sessions exceeding their idle timeout when active_request_count == 0.
+
+        Per §3.5.1:
+        - 60s idle timeout for HLS, 10s for progressive.
+        - Skips sessions with active_request_count > 0.
+        - Resumes if paused before terminating (handled in session.stop()).
+        """
+        current_time = now or utcnow()
+        reaped_ids: list[str] = []
+        async with self._lock:
+            stale_ids = [
+                s.id
+                for s in self.sessions.values()
+                if s.active_request_count == 0
+                and (current_time - s.last_activity_at).total_seconds() > s.idle_timeout_seconds
+            ]
+            for sid in stale_ids:
+                session = self.sessions.pop(sid, None)
+                if session:
+                    logger.info("reaping idle transcode session %s", sid)
+                    await session.stop()
+                    reaped_ids.append(sid)
+        return reaped_ids
+
     async def _reap_idle_loop(self) -> None:
         """Periodically reap sessions exceeding the idle timeout."""
         try:
             while True:
                 await asyncio.sleep(5.0)
-                now = utcnow()
-                idle_timeout = self.settings.transcode_idle_timeout_seconds
-
-                async with self._lock:
-                    stale_ids = [
-                        s.id
-                        for s in self.sessions.values()
-                        if (now - s.last_activity_at).total_seconds() > idle_timeout
-                    ]
-                    for sid in stale_ids:
-                        session = self.sessions.pop(sid, None)
-                        if session:
-                            logger.info("reaping idle transcode session %s", sid)
-                            await session.stop()
-
+                await self.reap_idle_sessions()
                 if not self.sessions:
                     break
         except asyncio.CancelledError:
