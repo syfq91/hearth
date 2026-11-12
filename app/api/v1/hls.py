@@ -59,10 +59,22 @@ async def get_master_playlist(
         raise ForbiddenError("Session access denied", code="session_access_denied")
 
     session.touch()
+    if session.is_circuit_open():
+        raise ServiceUnavailableError(
+            "Transcoding circuit breaker open; retry shortly",
+            code="transcode_circuit_open",
+            retry_after=session.circuit_retry_after(),
+        )
     ready = await session.wait_for_first_segment(
         timeout=settings.transcode_first_segment_timeout_seconds
     )
     if not ready:
+        if session.is_circuit_open():
+            raise ServiceUnavailableError(
+                "Transcoding circuit breaker open; retry shortly",
+                code="transcode_circuit_open",
+                retry_after=session.circuit_retry_after(),
+            )
         raise BadGatewayError(
             "Transcoding failed to produce the initial segment",
             code="transcode_failed",
@@ -115,11 +127,27 @@ async def get_media_playlist(
     session.touch()
     m3u8_path = session.output_dir / "media.m3u8"
     if not m3u8_path.exists():
+        if session.is_circuit_open():
+            raise ServiceUnavailableError(
+                "Transcoding circuit breaker open; retry shortly",
+                code="transcode_circuit_open",
+                retry_after=session.circuit_retry_after(),
+            )
         ready = await session.wait_for_first_segment(
             timeout=settings.transcode_first_segment_timeout_seconds
         )
         if not ready or not m3u8_path.exists():
-            raise NotFoundError("Media playlist not available", code="playlist_not_found")
+            if session.is_circuit_open():
+                raise ServiceUnavailableError(
+                    "Transcoding circuit breaker open; retry shortly",
+                    code="transcode_circuit_open",
+                    retry_after=session.circuit_retry_after(),
+                )
+            raise ServiceUnavailableError(
+                "Media playlist generation in progress; retry shortly",
+                code="transcode_timeout",
+                retry_after=1,
+            )
 
     raw_content = m3u8_path.read_text(encoding="utf-8")
     token_suffix = f"?token={quote(token, safe='')}" if token else ""
@@ -193,8 +221,28 @@ async def get_init_segment(
 
     session.touch()
     init_path = session.output_dir / "init.mp4"
-    if not init_path.exists():
-        raise NotFoundError("Initialization segment not found", code="segment_not_found")
+    if not (init_path.exists() and init_path.stat().st_size > 0):
+        if session.is_circuit_open():
+            raise ServiceUnavailableError(
+                "Transcoding circuit breaker open; retry shortly",
+                code="transcode_circuit_open",
+                retry_after=session.circuit_retry_after(),
+            )
+        ready = await session.wait_for_first_segment(
+            timeout=settings.transcode_first_segment_timeout_seconds
+        )
+        if not ready or not init_path.exists() or init_path.stat().st_size == 0:
+            if session.is_circuit_open():
+                raise ServiceUnavailableError(
+                    "Transcoding circuit breaker open; retry shortly",
+                    code="transcode_circuit_open",
+                    retry_after=session.circuit_retry_after(),
+                )
+            raise ServiceUnavailableError(
+                "Initialization segment generation in progress; retry shortly",
+                code="transcode_timeout",
+                retry_after=1,
+            )
 
     return FileResponse(
         path=init_path,
@@ -240,12 +288,33 @@ async def get_media_segment(
         if segment_index < 0 or segment_index >= total_segments:
             raise NotFoundError("Segment out of range", code="segment_out_of_range")
 
+    seg_path = session.output_dir / segment_file
+    if seg_path.exists() and seg_path.stat().st_size > 0:
+        session.record_success()
+        return FileResponse(
+            path=seg_path,
+            media_type="video/iso.segment",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
+    if session.is_circuit_open():
+        raise ServiceUnavailableError(
+            "Transcoding circuit breaker open; retry shortly",
+            code="transcode_circuit_open",
+            retry_after=session.circuit_retry_after(),
+        )
+
     ready = await session.ensure_segment(
         segment_index,
         timeout=settings.transcode_segment_wait_timeout_seconds,
     )
-    seg_path = session.output_dir / segment_file
-    if not ready or not seg_path.exists():
+    if not ready or not seg_path.exists() or seg_path.stat().st_size == 0:
+        if session.is_circuit_open():
+            raise ServiceUnavailableError(
+                "Transcoding circuit breaker open; retry shortly",
+                code="transcode_circuit_open",
+                retry_after=session.circuit_retry_after(),
+            )
         raise ServiceUnavailableError(
             "Segment generation in progress; retry shortly",
             code="transcode_timeout",

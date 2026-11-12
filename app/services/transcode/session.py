@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import math
 import re
 import shutil
 import uuid
@@ -75,6 +76,67 @@ class TranscodeSession:
         self.speed: str | None = None
         self.cmd: list[str] = []
 
+        # Circuit breaker state (§3.5.1, T07)
+        self.failure_timestamps: list[float] = []
+        self.circuit_open_until: float = 0.0
+        self.circuit_failures_threshold: int = 3
+        self.circuit_window_seconds: float = 30.0
+        self.circuit_cooldown_seconds: float = 10.0
+
+    def record_failure(self, now: float | None = None) -> None:
+        """Record an ffmpeg startup or exit failure and evaluate circuit breaker threshold."""
+        try:
+            loop_time = now if now is not None else asyncio.get_running_loop().time()
+        except RuntimeError:
+            import time
+
+            loop_time = now if now is not None else time.monotonic()
+
+        cutoff = loop_time - self.circuit_window_seconds
+        self.failure_timestamps = [t for t in self.failure_timestamps if t >= cutoff]
+        self.failure_timestamps.append(loop_time)
+
+        if len(self.failure_timestamps) >= self.circuit_failures_threshold:
+            self.circuit_open_until = loop_time + self.circuit_cooldown_seconds
+            logger.warning(
+                "transcode circuit breaker OPEN for session %s (%d fails in %.1fs; open for %.1fs)",
+                self.id,
+                len(self.failure_timestamps),
+                self.circuit_window_seconds,
+                self.circuit_cooldown_seconds,
+                extra={
+                    "session_id": self.id,
+                    "failures": len(self.failure_timestamps),
+                    "open_until": self.circuit_open_until,
+                },
+            )
+
+    def record_success(self) -> None:
+        """Reset consecutive failures upon successful production/serving of a segment."""
+        self.failure_timestamps.clear()
+        self.circuit_open_until = 0.0
+
+    def is_circuit_open(self, now: float | None = None) -> bool:
+        """Return True if circuit breaker is currently open."""
+        try:
+            loop_time = now if now is not None else asyncio.get_running_loop().time()
+        except RuntimeError:
+            import time
+
+            loop_time = now if now is not None else time.monotonic()
+        return loop_time < self.circuit_open_until
+
+    def circuit_retry_after(self, now: float | None = None) -> int:
+        """Return integer seconds for Retry-After header while circuit breaker is open."""
+        try:
+            loop_time = now if now is not None else asyncio.get_running_loop().time()
+        except RuntimeError:
+            import time
+
+            loop_time = now if now is not None else time.monotonic()
+        remaining = self.circuit_open_until - loop_time
+        return max(1, int(math.ceil(remaining)))
+
     def touch(self) -> None:
         """Mark recent client activity."""
         self.last_activity_at = utcnow()
@@ -86,6 +148,14 @@ class TranscodeSession:
 
     async def start_process(self) -> None:
         """Build command and launch ffmpeg subprocess."""
+        if self.is_circuit_open():
+            logger.warning(
+                "refusing to start ffmpeg process for session %s: circuit breaker is open",
+                self.id,
+                extra={"session_id": self.id},
+            )
+            return
+
         self.output_dir.mkdir(parents=True, exist_ok=True)
         start_seg = (
             int(self.start_offset // self.segment_duration) if self.segment_duration > 0 else 0
@@ -118,13 +188,17 @@ class TranscodeSession:
             with contextlib.suppress(Exception):
                 os.nice(10)
 
-        self.process = await asyncio.create_subprocess_exec(
-            *self.cmd,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.PIPE,
-            preexec_fn=_set_nice,
-        )
-        self._monitor_task = asyncio.create_task(self._monitor_stderr())
+        try:
+            self.process = await asyncio.create_subprocess_exec(
+                *self.cmd,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+                preexec_fn=_set_nice,
+            )
+            self._monitor_task = asyncio.create_task(self._monitor_stderr())
+        except Exception:
+            logger.exception("failed to spawn ffmpeg for session %s", self.id)
+            self.record_failure()
 
     async def _monitor_stderr(self) -> None:
         """Read and parse ffmpeg stderr for progress and crash detection."""
@@ -164,6 +238,7 @@ class TranscodeSession:
                     tail,
                     extra={"session_id": self.id, "returncode": returncode, "stderr": tail},
                 )
+                self.record_failure()
                 # Crash detection and fallback from hardware to software
                 if self.is_hardware and not self.has_fallen_back:
                     logger.info("attempting software fallback for session %s", self.id)
@@ -171,7 +246,8 @@ class TranscodeSession:
                     self.is_hardware = False
                     self.plan.hwaccel = "none"
                     self.plan.video_codec = "libx264"
-                    await self.start_process()
+                    if not self.is_circuit_open():
+                        await self.start_process()
 
         except asyncio.CancelledError:
             pass
@@ -182,11 +258,21 @@ class TranscodeSession:
         """Wait until media.m3u8 and init.mp4 exist on disk."""
         m3u8 = self.output_dir / "media.m3u8"
         init = self.output_dir / "init.mp4"
+        if m3u8.exists() and init.exists():
+            self.record_success()
+            return True
+
+        if self.is_circuit_open():
+            return False
+
         start = asyncio.get_running_loop().time()
 
         while asyncio.get_running_loop().time() - start < timeout:
             if m3u8.exists() and init.exists():
+                self.record_success()
                 return True
+            if self.is_circuit_open():
+                return False
             if (
                 self.process
                 and self.process.returncode is not None
@@ -202,11 +288,19 @@ class TranscodeSession:
         """Ensure that seg_{segment_index:03d}.m4s exists on disk, seeking if necessary."""
         seg_file = self.output_dir / f"seg_{segment_index:03d}.m4s"
         if seg_file.exists() and seg_file.stat().st_size > 0:
+            self.record_success()
             return True
+
+        if self.is_circuit_open():
+            return False
 
         async with self._seek_lock:
             if seg_file.exists() and seg_file.stat().st_size > 0:
+                self.record_success()
                 return True
+
+            if self.is_circuit_open():
+                return False
 
             latest_seg = -1
             for p in self.output_dir.glob("seg_*.m4s"):
@@ -237,7 +331,10 @@ class TranscodeSession:
             start = asyncio.get_running_loop().time()
             while asyncio.get_running_loop().time() - start < timeout:
                 if seg_file.exists() and seg_file.stat().st_size > 0:
+                    self.record_success()
                     return True
+                if self.is_circuit_open():
+                    return False
                 if (
                     self.process
                     and self.process.returncode is not None
@@ -255,6 +352,14 @@ class TranscodeSession:
         Otherwise terminate active ffmpeg (respecting INV-6) without touching the output
         directory, then spawn a new ffmpeg starting at target_segment.
         """
+        if self.is_circuit_open():
+            logger.warning(
+                "refusing seek for session %s: circuit breaker is open",
+                self.id,
+                extra={"session_id": self.id},
+            )
+            return
+
         target_seg = (
             int(offset_seconds // self.segment_duration) if self.segment_duration > 0 else 0
         )
