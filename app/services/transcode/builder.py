@@ -60,6 +60,7 @@ def build_ffmpeg_hls_command(
     segment_duration: int = 4,
     audio_bitrate_kbps: int = 192,
     hls_flags: str | None = None,
+    fps: float = 24.0,
 ) -> list[str]:
     """Produce argument list for ffmpeg executing HLS fMP4 delivery."""
     cmd: list[str] = [
@@ -125,6 +126,19 @@ def build_ffmpeg_hls_command(
         cmd.extend(["-vf", ",".join(filters)])
         cmd.extend(["-c:v", plan.video_codec or "h264_vaapi"])
 
+        # Forced keyframes for hardware encoders (INV-11)
+        gop = max(1, int(round(fps * segment_duration)))
+        cmd.extend(
+            [
+                "-force_key_frames",
+                f"expr:gte(t,n_forced*{segment_duration})",
+                "-g",
+                str(gop),
+                "-keyint_min",
+                str(gop),
+            ]
+        )
+
         if plan.target_bitrate:
             kbps = int(plan.target_bitrate / 1000)
             max_kbps = int(kbps * 1.2)
@@ -164,6 +178,10 @@ def build_ffmpeg_hls_command(
                 "23",
                 "-pix_fmt",
                 "yuv420p",
+                "-force_key_frames",
+                f"expr:gte(t,n_forced*{segment_duration})",
+                "-sc_threshold",
+                "0",
             ]
         )
         if plan.target_bitrate:

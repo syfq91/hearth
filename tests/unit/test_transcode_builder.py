@@ -328,3 +328,78 @@ def test_builder_hls_flags_no_duplicate_when_already_contains_temp_file(tmp_path
     flags = cmd[idx + 1].split("+")
     assert flags.count("temp_file") == 1
     assert "independent_segments" in flags
+
+
+def test_builder_forced_keyframes_libx264(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        segment_duration=4,
+    )
+    assert "-force_key_frames" in cmd
+    assert cmd[cmd.index("-force_key_frames") + 1] == "expr:gte(t,n_forced*4)"
+    assert "-sc_threshold" in cmd
+    assert cmd[cmd.index("-sc_threshold") + 1] == "0"
+    assert "-g" not in cmd
+    assert "-keyint_min" not in cmd
+
+
+def test_builder_forced_keyframes_vaapi(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="h264_vaapi",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="vaapi",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        segment_duration=4,
+        fps=25.0,
+    )
+    assert "-force_key_frames" in cmd
+    assert cmd[cmd.index("-force_key_frames") + 1] == "expr:gte(t,n_forced*4)"
+    assert "-sc_threshold" not in cmd
+    assert "-g" in cmd
+    assert cmd[cmd.index("-g") + 1] == "100"
+    assert "-keyint_min" in cmd
+    assert cmd[cmd.index("-keyint_min") + 1] == "100"
+
+
+def test_builder_forced_keyframes_copy_mode(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="remux_hls",
+        video_action="copy",
+        video_codec="copy",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        segment_duration=4,
+    )
+    assert "-force_key_frames" not in cmd
+    assert "-sc_threshold" not in cmd
+    assert "-g" not in cmd
+    assert "-keyint_min" not in cmd
