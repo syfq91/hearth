@@ -320,6 +320,10 @@ async def playback_info(
     )
     subtitles = subtitle_responses(media_file.id, media_file.path, token=token)
     audio_streams = [s for s in probe_res.streams if s.codec_type == "audio"]
+    source_audio = next(
+        (s for s in audio_streams if s.index == plan.audio_stream_index),
+        None,
+    ) or (audio_streams[0] if audio_streams else None)
     embedded_subtitles = [s for s in probe_res.streams if s.codec_type == "subtitle"]
 
     if plan.mode == "direct_play":
@@ -346,6 +350,8 @@ async def playback_info(
         plan=plan,
         start_offset=request.start_time_offset_seconds,
         duration_seconds=media_file.duration_seconds or probe_res.duration_seconds or 0.0,
+        source_video=probe_res.primary_video,
+        source_audio=source_audio,
     )
 
     return PlaybackInfoResponse(

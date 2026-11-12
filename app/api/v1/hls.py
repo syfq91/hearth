@@ -17,6 +17,7 @@ from app.core.errors import (
     NotFoundError,
     ServiceUnavailableError,
 )
+from app.services.transcode.codecs import compute_master_codecs
 from app.services.transcode.session import get_session_manager
 
 router = APIRouter(prefix="/hls", tags=["hls"])
@@ -82,15 +83,35 @@ async def get_master_playlist(
 
     # Carry forward media token if present in query string
     token_suffix = f"?token={quote(token, safe='')}" if token else ""
-    width = session.plan.target_width or 1920
-    height = session.plan.target_height or 1080
+    width = session.plan.target_width
+    height = session.plan.target_height
+    if not width and session.source_video:
+        width = session.source_video.width
+    if not height and session.source_video:
+        height = session.source_video.height
+    width = width or 1920
+    height = height or 1080
+
     bandwidth = session.plan.target_bitrate or 6_000_000
 
+    stream_inf_attrs: list[str] = [
+        f"BANDWIDTH={bandwidth}",
+        f"AVERAGE-BANDWIDTH={bandwidth}",
+        f"RESOLUTION={width}x{height}",
+    ]
+
+    fps = session.fps or session.source_fps
+    if fps and fps > 0:
+        stream_inf_attrs.append(f"FRAME-RATE={fps:.3f}")
+
+    codecs_str = compute_master_codecs(session)
+    if codecs_str:
+        stream_inf_attrs.append(f'CODECS="{codecs_str}"')
+
+    attrs_line = ",".join(stream_inf_attrs)
+
     master_content = (
-        "#EXTM3U\n"
-        "#EXT-X-VERSION:7\n"
-        f'#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},RESOLUTION={width}x{height},CODECS="avc1.640028,mp4a.40.2"\n'
-        f"media.m3u8{token_suffix}\n"
+        f"#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-STREAM-INF:{attrs_line}\nmedia.m3u8{token_suffix}\n"
     )
 
     return Response(

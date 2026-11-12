@@ -9,6 +9,7 @@ import pytest
 from app.core.config import Settings
 from app.core.secrets import load_keys
 from app.core.tokens import create_media_token
+from app.services.media.probe import ProbeStream
 from app.services.transcode.decision import TranscodePlan
 from app.services.transcode.session import TranscodeSession, get_session_manager
 
@@ -312,5 +313,100 @@ async def test_hls_segment_endpoint_ignores_tmp_files(
     )
     assert res_complete.status_code == 200
     assert res_complete.content == b"\x00\x00\x00\x10final_complete_data"
+
+    await manager.stop_all()
+
+
+@pytest.mark.asyncio
+async def test_master_playlist_dynamic_codecs_non_high_source(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    tmp_path: Path,
+) -> None:
+    """T08 acceptance: master playlist asserts no hardcoded avc1.640028 remains
+
+    for non-High/4.0 sources, and real BANDWIDTH/RESOLUTION/FRAME-RATE are emitted.
+    """
+    admin_tokens = await _setup(api_client)
+    manager = get_session_manager(db_settings)
+    session_id = "test_non_high_codecs"
+    out_dir = db_settings.transcode_dir / session_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write dummy initial segment files so wait_for_first_segment succeeds
+    (out_dir / "init.mp4").write_bytes(b"\x00\x00\x00\x20ftypiso5")
+    (out_dir / "media.m3u8").write_text("#EXTM3U\n#EXT-X-VERSION:7\n", encoding="utf-8")
+
+    # Copied HEVC Main L93 video + Copied E-AC-3 audio
+    plan = TranscodePlan(
+        mode="remux_hls",
+        video_action="copy",
+        video_codec="copy",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=6,
+        subtitle_action="none",
+        target_width=1280,
+        target_height=720,
+        target_bitrate=3_500_000,
+        hwaccel="none",
+    )
+
+    src_video = ProbeStream(
+        index=0,
+        codec_type="video",
+        codec_name="hevc",
+        profile="Main",
+        level=93,
+        width=1280,
+        height=720,
+    )
+    src_audio = ProbeStream(
+        index=1,
+        codec_type="audio",
+        codec_name="eac3",
+        channels=6,
+    )
+
+    me_res = await api_client.get("/api/v1/auth/me", headers=_bearer(admin_tokens))
+    admin_id = me_res.json()["id"]
+
+    session = TranscodeSession(
+        session_id=session_id,
+        user_id=admin_id,
+        item_id="item_hevc",
+        file_id="file_hevc",
+        input_path=Path("/media/hevc.mkv"),
+        output_dir=out_dir,
+        plan=plan,
+        settings=db_settings,
+        source_video=src_video,
+        source_audio=src_audio,
+        source_fps=23.976,
+    )
+    manager.sessions[session_id] = session
+
+    keys = load_keys(db_settings)
+    token, _ = create_media_token(
+        user_id=admin_id,
+        token_version=0,
+        settings=db_settings,
+        key=keys.media,
+        item_id="item_hevc",
+    )
+    encoded_token = quote(token, safe="")
+
+    res = await api_client.get(f"/api/v1/hls/{session_id}/master.m3u8?token={encoded_token}")
+    assert res.status_code == 200
+    master_text = res.text
+
+    # Dynamic RFC 6381 codec strings
+    assert 'CODECS="hvc1.1.6.L93.B0,ec-3"' in master_text
+    # No hardcoded avc1.640028 remains
+    assert "avc1.640028" not in master_text
+    assert "BANDWIDTH=3500000" in master_text
+    assert "AVERAGE-BANDWIDTH=3500000" in master_text
+    assert "RESOLUTION=1280x720" in master_text
+    assert "FRAME-RATE=23.976" in master_text
 
     await manager.stop_all()

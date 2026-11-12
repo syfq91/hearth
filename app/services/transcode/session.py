@@ -19,6 +19,7 @@ from pathlib import Path
 from app.core.config import Settings, get_settings
 from app.core.errors import TranscodeCapacityExceededError
 from app.db.base import utcnow
+from app.services.media.probe import ProbeStream
 from app.services.transcode.builder import build_ffmpeg_hls_command
 from app.services.transcode.decision import TranscodePlan
 
@@ -44,6 +45,9 @@ class TranscodeSession:
         settings: Settings,
         start_offset: float = 0.0,
         duration_seconds: float = 0.0,
+        source_video: ProbeStream | None = None,
+        source_audio: ProbeStream | None = None,
+        source_fps: float | None = None,
     ) -> None:
         self.id = session_id
         self.user_id = user_id
@@ -55,6 +59,9 @@ class TranscodeSession:
         self.settings = settings
         self.start_offset = start_offset
         self.duration_seconds = duration_seconds
+        self.source_video = source_video
+        self.source_audio = source_audio
+        self.source_fps = source_fps
         self.segment_duration = settings.transcode_segment_duration_seconds
         self._seek_lock = asyncio.Lock()
         self.current_start_segment = (
@@ -454,6 +461,9 @@ class SessionManager:
         plan: TranscodePlan,
         start_offset: float = 0.0,
         duration_seconds: float = 0.0,
+        source_video: ProbeStream | None = None,
+        source_audio: ProbeStream | None = None,
+        source_fps: float | None = None,
     ) -> TranscodeSession:
         """Create and start a new transcoding session, respecting concurrency limits."""
         async with self._lock:
@@ -503,6 +513,9 @@ class SessionManager:
                 settings=self.settings,
                 start_offset=start_offset,
                 duration_seconds=duration_seconds,
+                source_video=source_video,
+                source_audio=source_audio,
+                source_fps=source_fps,
             )
             self.sessions[session_id] = session
             await session.start_process()
