@@ -11,6 +11,8 @@ Validates:
 from __future__ import annotations
 
 import ast
+import asyncio
+import shutil
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 from urllib.parse import quote
@@ -314,3 +316,128 @@ async def test_segment_endpoint_503_retry_after_on_timeout(
     assert res_invalid.json()["error"]["code"] == "invalid_segment"
 
     await manager.stop_all()
+
+
+@pytest.mark.skipif(
+    shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
+    reason="ffmpeg and ffprobe required for seek timestamp continuity smoke test",
+)
+@pytest.mark.asyncio
+async def test_seek_smoke_timestamp_continuity_back_to_back(tmp_path: Path) -> None:
+    """T03 acceptance 3 (§3.5 / §6.3 smoke): Segments produced after a seek play back-to-back
+    with earlier ones without a timestamp jump.
+
+    First PTS of post-seek segment is ~ start_number * seg_s (± one frame).
+    """
+    input_file = tmp_path / "smoke_seek_src.mp4"
+    out_dir = tmp_path / "smoke_seek_hls"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Create a 10s source with 24fps and 1s GOP
+    gen_proc = await asyncio.create_subprocess_exec(
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "warning",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=320x240:rate=24",
+        "-t",
+        "10",
+        "-c:v",
+        "libx264",
+        "-g",
+        "24",
+        "-pix_fmt",
+        "yuv420p",
+        str(input_file),
+    )
+    await gen_proc.wait()
+    assert gen_proc.returncode == 0
+
+    # 2. Start session at offset 0.0 with segment_duration = 1s
+    settings = Settings(transcode_dir=tmp_path, transcode_segment_duration_seconds=1)
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    session = TranscodeSession(
+        session_id="smoke_seek_session",
+        user_id="user_smoke",
+        item_id="item_smoke",
+        file_id="file_smoke",
+        input_path=input_file,
+        output_dir=out_dir,
+        plan=plan,
+        settings=settings,
+        start_offset=0.0,
+        duration_seconds=10.0,
+    )
+
+    await session.start_process()
+
+    # Wait for first segment seg_000.m4s to be produced
+    seg0 = out_dir / "seg_000.m4s"
+    ready0 = await session.ensure_segment(0, timeout=10.0)
+    assert ready0 and seg0.exists()
+
+    # 3. Seek forward to 4.0s (segment index 4)
+    await session.seek(4.0)
+
+    # Wait for post-seek segment seg_004.m4s
+    seg4 = out_dir / "seg_004.m4s"
+    ready4 = await session.ensure_segment(4, timeout=10.0)
+    assert ready4 and seg4.exists()
+
+    # INV-8 check: Earlier seg_000.m4s is STILL on disk
+    assert seg0.exists(), "Earlier segment seg_000.m4s was deleted by seek!"
+
+    # 4. Probe PTS timestamps using ffprobe on init.mp4 + segment
+    init_bytes = (out_dir / "init.mp4").read_bytes()
+
+    async def _get_first_pts(seg_path: Path) -> float:
+        combined = init_bytes + seg_path.read_bytes()
+        probe_proc = await asyncio.create_subprocess_exec(
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "packet=pts_time,flags",
+            "-of",
+            "csv=p=0",
+            "-",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await probe_proc.communicate(input=combined)
+        first_line = stdout.decode().splitlines()[0]
+        pts_str, _ = first_line.split(",")
+        return float(pts_str)
+
+    pts0 = await _get_first_pts(seg0)
+    pts4 = await _get_first_pts(seg4)
+
+    # Segment 0 starts near 0.0 (within H.264 B-frame reordering delay <= 2 frames ~ 0.085s)
+    assert abs(pts0 - 0.0) <= 0.1, f"Expected seg_000 first PTS near 0.0s, got {pts0}s"
+
+    # Segment 4 starts near 4.0s, advancing by exactly the 4.0s seek delta
+    assert abs((pts4 - pts0) - 4.0) <= 0.045, (
+        f"Expected PTS delta between seg_004 and seg_000 ~4.0s, got {pts4 - pts0:.4f}s "
+        f"(pts0={pts0}, pts4={pts4})"
+    )
+    assert abs(pts4 - 4.0) <= 0.1, (
+        f"Expected post-seek seg_004 first PTS near 4.0s, got {pts4}s (timestamp jump detected!)"
+    )
+
+    await session.stop()
