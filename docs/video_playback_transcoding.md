@@ -463,5 +463,6 @@ Chromium and Firefox desktop plus a mobile emulation profile: start playback of 
 | 2026-11-12 | T02 | Forced keyframes at segment boundaries: added `-force_key_frames` + `-sc_threshold 0` (libx264) and `-g`/`-keyint_min` (VAAPI); verified first-packet keyframes & <50ms duration delta; copy mode unchanged (variable #EXTINF) | T02 |
 | 2026-11-12 | T03 | Non-destructive seeking: cached segment reuse without process respawn, file deletion removed from seek (INV-8), resume before stop (INV-6), bounded wait with 503 Retry-After on segment timeout (INV-7), and -output_ts_offset for seamless timeline continuity | T03 |
 | 2026-11-12 | T05 | Decision engine audit: full reason union computation, exact Remux rule enforcement (§3.3), 40 Mbps unknown bitrate assumed at decision time (§3.1, INV-2), 10-bit H.264 profile fix, pure function enforcement (INV-3), and software yuv420p verification (INV-9) | T05 |
+| 2026-11-12 | T07 | Circuit breaker and 503 semantics: track 3 startup/exit failures within 30s with 10s open cooldown, return 503 Retry-After with code `transcode_circuit_open`, replace 404 generation-failure paths (INV-7), count hardware-fallback as one failure, and block process spawn while breaker open | T07 |
 
 *(Agents: append a row per merged task.)*
