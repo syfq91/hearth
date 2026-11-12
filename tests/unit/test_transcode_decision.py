@@ -20,8 +20,11 @@ from app.services.transcode.capabilities import (
     ServerTranscodeCapabilities,
 )
 from app.services.transcode.decision import (
+    AudioCodec,
+    Container,
     PlaybackOptions,
     TranscodePlan,
+    TranscodeReason,
     UserLimits,
     evaluate_playback_plan,
 )
@@ -922,7 +925,10 @@ def test_decision_engine_matrix(
     assert plan.audio_action == expected_a_action, f"[{case_id}] Audio action mismatch"
     assert plan.subtitle_action == expected_sub_action, f"[{case_id}] Sub action mismatch"
     assert plan.hwaccel == expected_hw, f"[{case_id}] HWaccel mismatch: {plan.reasons}"
-    assert len(plan.reasons) > 0, f"[{case_id}] Plan reasons must not be empty"
+    if expected_mode == "direct_play" and user_limits.allow_transcode:
+        assert plan.reasons == [], f"[{case_id}] Direct play must have empty reason set (§3.3)"
+    else:
+        assert len(plan.reasons) > 0, f"[{case_id}] Plan reasons must not be empty"
 
 
 def test_target_resolution_calculation() -> None:
@@ -945,7 +951,7 @@ def test_hdr_tonemapping_flags() -> None:
     caps = BUILTIN_PRESETS["chrome"]  # hdr=False
     plan = evaluate_playback_plan(probe, caps, UserLimits(), _vaapi_caps(), PlaybackOptions())
     assert plan.tonemap_hdr is True
-    assert any("tonemap" in r.lower() for r in plan.reasons)
+    assert TranscodeReason.VideoRangeTypeNotSupported in plan.reasons
 
 
 def test_subtitle_stream_index_is_relative_to_subtitles() -> None:
@@ -973,3 +979,181 @@ def test_subtitle_stream_index_is_relative_to_subtitles() -> None:
     assert plan.subtitle_action == "burn_in"
     # ffmpeg :si parameter requires 0-based relative index among subtitle streams
     assert plan.subtitle_stream_index == 1
+
+
+# ==============================================================================
+# T05 (P1): Decision-Engine Audit Acceptance Tests (§3.3, §3.4, INV-2, INV-3, INV-9)
+# ==============================================================================
+
+
+def test_decision_audit_acceptance_1_remux() -> None:
+    """1. (MKV, H.264, AC3) on MP4/H.264/AAC-only client -> Remux.
+
+    reasons = {Container, AudioCodec}, method = Remux.
+    """
+    probe = _make_probe(
+        container="mkv",
+        v_codec="h264",
+        v_profile="High",
+        width=1920,
+        height=1080,
+        bit_rate=4_000_000,
+        is_hdr=False,
+        a_codec="ac3",
+        a_channels=2,
+    )
+    caps = ClientCapabilities(
+        containers=["mp4"],
+        video_codecs=["h264"],
+        audio_codecs=["aac"],
+        max_width=1920,
+        max_height=1080,
+        hls_fmp4=True,
+    )
+    plan = evaluate_playback_plan(probe, caps, UserLimits(), _vaapi_caps(), PlaybackOptions())
+    assert plan.mode == "remux_hls"
+    assert set(plan.reasons) == {Container, AudioCodec}
+    assert set(plan.reasons) == {
+        TranscodeReason.ContainerNotSupported,
+        TranscodeReason.AudioCodecNotSupported,
+    }
+
+
+def test_decision_audit_acceptance_2_transcode_hevc() -> None:
+    """2. (MP4, HEVC) on an H.264-only client -> Transcode.
+
+    reasons contain VideoCodecNotSupported.
+    """
+    probe = _make_probe(
+        container="mp4",
+        v_codec="hevc",
+        v_profile="Main",
+        width=1920,
+        height=1080,
+        bit_rate=4_000_000,
+        is_hdr=False,
+        a_codec="aac",
+        a_channels=2,
+    )
+    caps = ClientCapabilities(
+        containers=["mp4"],
+        video_codecs=["h264"],
+        audio_codecs=["aac"],
+        max_width=1920,
+        max_height=1080,
+        hls_fmp4=True,
+    )
+    plan = evaluate_playback_plan(probe, caps, UserLimits(), _vaapi_caps(), PlaybackOptions())
+    assert plan.mode == "transcode_hls"
+    assert TranscodeReason.VideoCodecNotSupported in plan.reasons
+    assert "VideoCodecNotSupported" in plan.reasons
+
+
+def test_decision_audit_acceptance_3_null_bitrate_40mbps_assumed() -> None:
+    """3. Source with null bitrate and 8 Mbps cap -> Transcode.
+
+    40 Mbps assumed per §3.1; INV-2 holds for storage.
+    """
+    probe = _make_probe(
+        container="mp4",
+        v_codec="h264",
+        v_profile="High",
+        width=1920,
+        height=1080,
+        bit_rate=4_000_000,
+        is_hdr=False,
+        a_codec="aac",
+        a_channels=2,
+    )
+    # Clear bit_rate to simulate unknown probe value
+    probe.bit_rate = None
+    assert probe.bit_rate is None  # INV-2: probe must not have fabricated defaults
+
+    caps = BUILTIN_PRESETS["chrome"]  # chrome has no default max_bitrate
+    user_limits = UserLimits(max_bitrate=8_000_000)  # 8 Mbps cap
+
+    plan = evaluate_playback_plan(probe, caps, user_limits, _vaapi_caps(), PlaybackOptions())
+    assert plan.mode == "transcode_hls"
+    assert TranscodeReason.ContainerBitrateExceedsLimit in plan.reasons
+    assert "ContainerBitrateExceedsLimit" in plan.reasons
+    assert probe.bit_rate is None  # INV-2: storage remains null after evaluation
+
+
+def test_decision_audit_acceptance_4_10bit_h264_software_yuv420p(tmp_path: Any) -> None:
+    """4. 10-bit H.264 source via software path -> argv contains format=yuv420p (INV-9)."""
+    from pathlib import Path
+
+    from app.services.transcode.builder import build_ffmpeg_hls_command
+
+    probe = _make_probe(
+        container="mkv",
+        v_codec="h264",
+        v_profile="High 10",
+        width=1920,
+        height=1080,
+        bit_rate=4_000_000,
+        is_hdr=False,
+        a_codec="aac",
+        a_channels=2,
+    )
+    caps = BUILTIN_PRESETS["chrome"]  # video_profiles: [baseline, main, high] (no High 10)
+    server_caps = _vaapi_caps(force_sw=True)  # Force software path
+
+    plan = evaluate_playback_plan(probe, caps, UserLimits(), server_caps, PlaybackOptions())
+    assert plan.mode == "transcode_hls"
+    assert plan.hwaccel == "none"
+    assert plan.video_codec == "libx264"
+
+    cmd = build_ffmpeg_hls_command(
+        plan=plan,
+        input_path=Path("/media/sample10bit.mkv"),
+        output_dir=tmp_path,
+    )
+    # Check INV-9: software chain must force yuv420p format
+    vf_arg = ""
+    for idx, arg in enumerate(cmd):
+        if arg == "-vf" and idx + 1 < len(cmd):
+            vf_arg = cmd[idx + 1]
+            break
+    assert "format=yuv420p" in vf_arg
+    assert "-pix_fmt" in cmd
+    pix_fmt_idx = cmd.index("-pix_fmt")
+    assert cmd[pix_fmt_idx + 1] == "yuv420p"
+
+
+def test_decision_audit_acceptance_5_function_purity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """5. Function purity (INV-3): same inputs -> identical output.
+
+    Must not perform any filesystem or clock access.
+    """
+    import builtins
+    import datetime
+    import os
+    import pathlib
+    import time
+
+    def _forbidden(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("Forbidden I/O or clock access inside pure decision engine!")
+
+    probe = _make_probe("mkv", "h264", "High", 1920, 1080, 4_000_000, False, "ac3", 2)
+    caps = BUILTIN_PRESETS["chrome"]
+    user_limits = UserLimits()
+    server_caps = _vaapi_caps()
+    opts = PlaybackOptions()
+
+    # Call 1 normally
+    plan1 = evaluate_playback_plan(probe, caps, user_limits, server_caps, opts)
+
+    # Patch filesystem and clock to raise if called
+    monkeypatch.setattr(builtins, "open", _forbidden)
+    monkeypatch.setattr(os, "stat", _forbidden)
+    monkeypatch.setattr(pathlib.Path, "exists", _forbidden)
+    monkeypatch.setattr(pathlib.Path, "stat", _forbidden)
+    monkeypatch.setattr(time, "time", _forbidden)
+    monkeypatch.setattr(time, "monotonic", _forbidden)
+    monkeypatch.setattr(datetime, "datetime", _forbidden)
+
+    # Call 2 with patched filesystem/clock
+    plan2 = evaluate_playback_plan(probe, caps, user_limits, server_caps, opts)
+
+    assert plan1 == plan2

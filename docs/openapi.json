@@ -1585,6 +1585,30 @@
             "title": "Hls Fmp4",
             "type": "boolean"
           },
+          "max_audio_channels": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Audio Channels"
+          },
+          "max_audio_sample_rate": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Audio Sample Rate"
+          },
           "max_bitrate": {
             "anyOf": [
               {
@@ -1608,6 +1632,18 @@
               }
             ],
             "title": "Max Height"
+          },
+          "max_video_level": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Video Level"
           },
           "max_width": {
             "anyOf": [

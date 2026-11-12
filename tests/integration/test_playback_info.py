@@ -103,7 +103,7 @@ async def test_playback_info_returns_usable_direct_play_urls(
     assert body["hls_url"] is None
     assert body["session_id"] is None
     assert body["expires_at"]
-    assert body["reasons"]
+    assert body["reasons"] == []
     assert len(body["subtitles"]) == 1
     subtitle = body["subtitles"][0]
     assert subtitle["format"] == "srt"
@@ -298,7 +298,7 @@ async def test_playback_info_transcoding_decision_and_track_selection(
     assert data["mode"] == "transcode_hls"
     assert data["session_id"] is not None
     assert "/api/v1/hls/" in data["hls_url"]
-    assert any("hevc" in r.lower() for r in data["reasons"])
+    assert "VideoCodecNotSupported" in data["reasons"]
 
     # Stop the previous session so concurrency slots are not exhausted
     await api_client.post(f"/api/v1/hls/{data['session_id']}/stop", headers=_bearer(admin))
@@ -316,4 +316,4 @@ async def test_playback_info_transcoding_decision_and_track_selection(
     assert track_res.status_code == 200
     t_data = track_res.json()
     assert t_data["mode"] == "transcode_hls"
-    assert any("burn-in" in r.lower() for r in t_data["reasons"])
+    assert "SubtitleBurnInRequired" in t_data["reasons"]

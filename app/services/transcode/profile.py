@@ -25,6 +25,9 @@ class ClientCapabilities(BaseModel):
     max_width: int | None = Field(default=None, gt=0)
     max_height: int | None = Field(default=None, gt=0)
     max_bitrate: int | None = Field(default=None, gt=0)
+    max_video_level: int | None = Field(default=None, gt=0)
+    max_audio_channels: int | None = Field(default=None, gt=0)
+    max_audio_sample_rate: int | None = Field(default=None, gt=0)
     subtitle_formats: list[str] = Field(default_factory=list)
     hdr: bool = False
     hls_fmp4: bool = False
@@ -67,8 +70,24 @@ class ClientCapabilities(BaseModel):
 
         if profile and self.video_profiles:
             p_lower = profile.lower()
-            if is_h264 and any(h in p_lower for h in ("baseline", "main", "high")):
-                return any(p.lower() in p_lower for p in self.video_profiles)
+            if is_h264:
+                # 10-bit H.264 profiles (e.g. High 10) must not match 8-bit 'high'
+                if "10" in p_lower and not any("10" in p.lower() for p in self.video_profiles):
+                    return False
+                if any(h in p_lower for h in ("baseline", "main", "high")):
+                    for p in self.video_profiles:
+                        target = p.lower()
+                        if target == p_lower:
+                            return True
+                        if (
+                            target in ("baseline", "main", "high")
+                            and "10" not in p_lower
+                            and target in p_lower
+                        ):
+                            return True
+                        if "10" in target and "10" in p_lower:
+                            return True
+                    return False
             if is_hevc and "main 10" in p_lower:
                 return any("main 10" in p.lower() for p in self.video_profiles)
         return True
@@ -191,6 +210,12 @@ def resolve_client_capabilities(client: ClientCapabilities | None = None) -> Cli
         base.max_height = client.max_height
     if client.max_bitrate is not None:
         base.max_bitrate = client.max_bitrate
+    if client.max_video_level is not None:
+        base.max_video_level = client.max_video_level
+    if client.max_audio_channels is not None:
+        base.max_audio_channels = client.max_audio_channels
+    if client.max_audio_sample_rate is not None:
+        base.max_audio_sample_rate = client.max_audio_sample_rate
     if client.hdr:
         base.hdr = True
     if client.hls_fmp4:

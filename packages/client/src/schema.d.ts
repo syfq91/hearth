@@ -2938,10 +2938,16 @@ export interface components {
              * @default false
              */
             hls_fmp4: boolean;
+            /** Max Audio Channels */
+            max_audio_channels?: number | null;
+            /** Max Audio Sample Rate */
+            max_audio_sample_rate?: number | null;
             /** Max Bitrate */
             max_bitrate?: number | null;
             /** Max Height */
             max_height?: number | null;
+            /** Max Video Level */
+            max_video_level?: number | null;
             /** Max Width */
             max_width?: number | null;
             /** Preset */

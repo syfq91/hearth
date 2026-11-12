@@ -6,6 +6,7 @@ and server capabilities to produce an actionable TranscodePlan.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -18,6 +19,47 @@ PlaybackMode = Literal["direct_play", "remux_hls", "transcode_hls"]
 ActionType = Literal["copy", "transcode"]
 SubtitleAction = Literal["none", "sidecar_vtt", "burn_in"]
 HwAccelMode = Literal["vaapi", "none"]
+
+
+class TranscodeReason(StrEnum):
+    """Reason why direct play is not possible per §3.3."""
+
+    ContainerNotSupported = "ContainerNotSupported"
+    AudioCodecNotSupported = "AudioCodecNotSupported"
+    AudioChannelsNotSupported = "AudioChannelsNotSupported"
+    AudioSampleRateNotSupported = "AudioSampleRateNotSupported"
+    VideoCodecNotSupported = "VideoCodecNotSupported"
+    VideoProfileNotSupported = "VideoProfileNotSupported"
+    VideoLevelNotSupported = "VideoLevelNotSupported"
+    VideoResolutionNotSupported = "VideoResolutionNotSupported"
+    ContainerBitrateExceedsLimit = "ContainerBitrateExceedsLimit"
+    VideoRangeTypeNotSupported = "VideoRangeTypeNotSupported"
+    SubtitleBurnInRequired = "SubtitleBurnInRequired"
+
+
+# Aliases matching §3.3 acceptance criteria
+Container = TranscodeReason.ContainerNotSupported
+AudioCodec = TranscodeReason.AudioCodecNotSupported
+
+REMUX_ELIGIBLE_REASONS: frozenset[str] = frozenset(
+    {
+        TranscodeReason.ContainerNotSupported,
+        TranscodeReason.AudioCodecNotSupported,
+        TranscodeReason.AudioChannelsNotSupported,
+        TranscodeReason.AudioSampleRateNotSupported,
+    }
+)
+
+
+def budget_audio_bitrate(total_cap_bps: int) -> int:
+    """Compute target audio bitrate from total bitrate cap per §3.4."""
+    if total_cap_bps <= 640_000:
+        return 128_000
+    if total_cap_bps <= 2_000_000:
+        return 192_000
+    if total_cap_bps <= 10_000_000:
+        return 384_000
+    return 640_000
 
 
 class UserLimits(BaseModel):
@@ -55,6 +97,12 @@ class TranscodePlan(BaseModel):
     reasons: list[str] = Field(default_factory=list)
 
 
+def _add_reason(reasons: list[str], reason: str) -> None:
+    """Append a transcode reason if not already present, preserving order."""
+    if reason not in reasons:
+        reasons.append(reason)
+
+
 def evaluate_playback_plan(
     file_streams: ProbeResult,
     capabilities: ClientCapabilities,
@@ -62,27 +110,16 @@ def evaluate_playback_plan(
     server_caps: ServerTranscodeCapabilities,
     options: PlaybackOptions | None = None,
 ) -> TranscodePlan:
-    """Evaluate media file against client and server constraints to form a TranscodePlan."""
+    """Evaluate media file against client and server constraints to form a TranscodePlan.
+
+    Pure function adhering to INV-3 (no filesystem, clock, or network access).
+    Computes the full union of failure reasons per §3.3 before selecting the delivery mode.
+    """
     opts = options or PlaybackOptions()
     resolved_client = resolve_client_capabilities(capabilities)
     reasons: list[str] = []
 
     primary_video = file_streams.primary_video
-
-    # Check user transcode permissions first
-    if not user_limits.allow_transcode:
-        reasons.append("Transcode disallowed by user limits; attempting direct play")
-        return TranscodePlan(
-            mode="direct_play",
-            video_action="copy",
-            video_codec="copy",
-            audio_action="copy",
-            audio_codec="copy",
-            audio_channels=2,
-            subtitle_action="none",
-            hwaccel="none",
-            reasons=reasons,
-        )
 
     # 1. Resolve Audio Stream
     audio_stream: ProbeStream | None = None
@@ -92,7 +129,6 @@ def evaluate_playback_plan(
                 audio_stream = s
                 break
     if audio_stream is None:
-        # Default or first audio stream
         audio_streams = file_streams.audio_streams
         for s in audio_streams:
             if s.is_default:
@@ -117,25 +153,17 @@ def evaluate_playback_plan(
     # 3. Check Subtitle compatibility
     subtitle_action: SubtitleAction = "none"
     subtitle_index: int | None = None
-    sub_forces_burn_in = False
 
     if sub_stream is not None:
         subtitle_index = sub_stream_index
         c_name = (sub_stream.codec_name or "").lower()
-        if c_name in ("hdmv_pgs_subtitle", "dvd_subtitle", "vobsub", "pgs", "xsub"):
+        if c_name in ("hdmv_pgs_subtitle", "dvd_subtitle", "vobsub", "pgs", "xsub", "ass", "ssa"):
             subtitle_action = "burn_in"
-            sub_forces_burn_in = True
-            reasons.append(f"Bitmap subtitle format '{c_name}' requires burn-in overlay")
-        elif c_name in ("ass", "ssa"):
-            subtitle_action = "burn_in"
-            sub_forces_burn_in = True
-            reasons.append(f"Styled subtitle format '{c_name}' requires burn-in overlay")
+            _add_reason(reasons, TranscodeReason.SubtitleBurnInRequired)
         else:
             subtitle_action = "sidecar_vtt"
-            reasons.append(f"Text subtitle format '{c_name}' served as sidecar WebVTT")
 
     # 4. Check Video Compatibility
-    video_transcode_needed = sub_forces_burn_in
     tonemap_needed = False
     target_w: int | None = None
     target_h: int | None = None
@@ -144,14 +172,21 @@ def evaluate_playback_plan(
         v_codec = (primary_video.codec_name or "").lower()
         v_profile = primary_video.profile
 
-        if not resolved_client.supports_video_codec(v_codec, v_profile):
-            video_transcode_needed = True
-            reasons.append(f"Video codec '{v_codec}' is not supported by client")
+        if not resolved_client.supports_video_codec(v_codec):
+            _add_reason(reasons, TranscodeReason.VideoCodecNotSupported)
+        elif v_profile and not resolved_client.supports_video_codec(v_codec, v_profile):
+            _add_reason(reasons, TranscodeReason.VideoProfileNotSupported)
+
+        if (
+            resolved_client.max_video_level is not None
+            and primary_video.level is not None
+            and primary_video.level > resolved_client.max_video_level
+        ):
+            _add_reason(reasons, TranscodeReason.VideoLevelNotSupported)
 
         if primary_video.is_hdr and not resolved_client.hdr:
-            video_transcode_needed = True
             tonemap_needed = True
-            reasons.append("HDR color transfer requires tonemapping to SDR")
+            _add_reason(reasons, TranscodeReason.VideoRangeTypeNotSupported)
 
         if primary_video.width and primary_video.height:
             src_w = primary_video.width
@@ -164,18 +199,14 @@ def evaluate_playback_plan(
             scale = min(scale_w, scale_h)
 
             if scale < 1.0:
-                video_transcode_needed = True
                 calc_w = int(src_w * scale)
                 calc_h = int(src_h * scale)
-                # Keep even dimensions
                 target_w = calc_w - (calc_w % 2)
                 target_h = calc_h - (calc_h % 2)
-                reasons.append(
-                    f"Video resolution {src_w}x{src_h} exceeds client maximum; "
-                    f"downscaling to {target_w}x{target_h}"
-                )
+                _add_reason(reasons, TranscodeReason.VideoResolutionNotSupported)
 
-    # Check bitrate limits
+    # Check bitrate limits (INV-2: probe values stored as null;
+    # 40 Mbps assumed at decision time per §3.1)
     bitrate_limits: list[int] = []
     if resolved_client.max_bitrate:
         bitrate_limits.append(resolved_client.max_bitrate)
@@ -185,11 +216,18 @@ def evaluate_playback_plan(
         bitrate_limits.append(opts.target_max_bitrate)
 
     target_bitrate: int | None = min(bitrate_limits) if bitrate_limits else None
-    if target_bitrate and file_streams.bit_rate and file_streams.bit_rate > target_bitrate:
-        video_transcode_needed = True
-        reasons.append(
-            f"Bitrate {file_streams.bit_rate} exceeds limit {target_bitrate}; capping bitrate"
-        )
+    if file_streams.bit_rate is not None:
+        effective_bitrate = file_streams.bit_rate
+    elif (
+        file_streams.size_bytes
+        and file_streams.duration_seconds
+        and file_streams.duration_seconds > 0
+    ):
+        effective_bitrate = int((file_streams.size_bytes * 8) / file_streams.duration_seconds)
+    else:
+        effective_bitrate = 40_000_000
+    if target_bitrate and effective_bitrate > target_bitrate:
+        _add_reason(reasons, TranscodeReason.ContainerBitrateExceedsLimit)
 
     # 5. Check Audio Compatibility
     audio_transcode_needed = False
@@ -201,10 +239,25 @@ def evaluate_playback_plan(
         if not resolved_client.supports_audio_codec(a_codec):
             audio_transcode_needed = True
             audio_codec_target = "aac"
-            reasons.append(
-                f"Audio codec '{a_codec}' is not supported by client; transcoding to AAC"
-            )
-        elif audio_stream.channels and audio_stream.channels > 2:
+            _add_reason(reasons, TranscodeReason.AudioCodecNotSupported)
+        if (
+            resolved_client.max_audio_channels is not None
+            and audio_stream.channels is not None
+            and audio_stream.channels > resolved_client.max_audio_channels
+        ):
+            audio_transcode_needed = True
+            audio_codec_target = "aac"
+            _add_reason(reasons, TranscodeReason.AudioChannelsNotSupported)
+        if (
+            resolved_client.max_audio_sample_rate is not None
+            and audio_stream.sample_rate is not None
+            and audio_stream.sample_rate > resolved_client.max_audio_sample_rate
+        ):
+            audio_transcode_needed = True
+            audio_codec_target = "aac"
+            _add_reason(reasons, TranscodeReason.AudioSampleRateNotSupported)
+
+        if audio_stream.channels and audio_stream.channels > 2:
             target_channels = audio_stream.channels
     else:
         audio_codec_target = "copy"
@@ -212,13 +265,49 @@ def evaluate_playback_plan(
     # 6. Check Container Compatibility
     container_supported = resolved_client.supports_container(file_streams.container)
     if not container_supported:
-        reasons.append(f"Container '{file_streams.container}' is not supported natively by client")
+        _add_reason(reasons, TranscodeReason.ContainerNotSupported)
 
-    # 7. Hardware vs Software Selection
+    # 7. Remux Rule (§3.3): remux is allowed iff reason set is subset of REMUX_ELIGIBLE_REASONS.
+    # Empty set means DirectPlay.
+    reason_set = set(reasons)
+    if not reason_set:
+        mode: PlaybackMode = "direct_play"
+    elif reason_set.issubset(REMUX_ELIGIBLE_REASONS):
+        mode = "remux_hls"
+    else:
+        mode = "transcode_hls"
+
+    # User transcode permission override
+    if not user_limits.allow_transcode and mode != "direct_play":
+        return TranscodePlan(
+            mode="direct_play",
+            video_action="copy",
+            video_codec="copy",
+            audio_action="copy",
+            audio_codec="copy",
+            audio_channels=2,
+            subtitle_action="none",
+            hwaccel="none",
+            reasons=reasons,
+        )
+
+    # 8. Action types, codecs, and hardware vs software selection
     hwaccel_mode: HwAccelMode = "none"
     video_codec_target = "copy"
 
-    if video_transcode_needed:
+    if mode == "direct_play":
+        v_action: ActionType = "copy"
+        video_codec_target = "copy"
+        a_action: ActionType = "copy"
+        audio_codec_target = "copy"
+    elif mode == "remux_hls":
+        v_action = "copy"
+        video_codec_target = "copy"
+        a_action = "transcode" if audio_transcode_needed else "copy"
+    else:  # transcode_hls
+        v_action = "transcode"
+        a_action = "transcode" if audio_transcode_needed else "copy"
+
         can_vaapi = (
             server_caps.available
             and not server_caps.force_software
@@ -230,44 +319,16 @@ def evaluate_playback_plan(
             and not server_caps.can_vaapi_decode(primary_video.codec_name)
         ):
             can_vaapi = False
-            reasons.append(
-                f"VAAPI cannot decode '{primary_video.codec_name}'; falling back to software"
-            )
 
         if tonemap_needed and not server_caps.tonemap_vaapi:
             can_vaapi = False
-            reasons.append("Server lacks tonemap_vaapi support; falling back to software")
 
         if can_vaapi:
             hwaccel_mode = "vaapi"
             video_codec_target = "h264_vaapi"
-            reasons.append("Using VAAPI hardware acceleration")
         else:
             hwaccel_mode = "none"
             video_codec_target = "libx264"
-            reasons.append("Falling back to software x264 video transcode")
-
-    # 8. Delivery Mode Selection
-    if video_transcode_needed:
-        mode: PlaybackMode = "transcode_hls"
-        v_action: ActionType = "transcode"
-        a_action: ActionType = "transcode" if audio_transcode_needed else "copy"
-        if not audio_transcode_needed:
-            audio_codec_target = "copy"
-    elif audio_transcode_needed or not container_supported:
-        mode = "remux_hls"
-        v_action = "copy"
-        video_codec_target = "copy"
-        a_action = "transcode" if audio_transcode_needed else "copy"
-    else:
-        mode = "direct_play"
-        v_action = "copy"
-        video_codec_target = "copy"
-        a_action = "copy"
-        audio_codec_target = "copy"
-        reasons.append(
-            "Direct play: container, video, and audio are compatible with client profile"
-        )
 
     return TranscodePlan(
         mode=mode,
@@ -290,11 +351,16 @@ def evaluate_playback_plan(
 
 __all__ = [
     "ActionType",
+    "AudioCodec",
+    "Container",
     "HwAccelMode",
     "PlaybackMode",
     "PlaybackOptions",
+    "REMUX_ELIGIBLE_REASONS",
     "SubtitleAction",
     "TranscodePlan",
+    "TranscodeReason",
     "UserLimits",
+    "budget_audio_bitrate",
     "evaluate_playback_plan",
 ]
