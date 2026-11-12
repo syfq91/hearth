@@ -33,6 +33,21 @@ def _resolve_subtitle_source_path(input_path: Path, output_dir: Path) -> str:
         return str(input_path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
+def _merge_hls_flags(existing_flags: str | None, *new_flags: str) -> str:
+    """Merge HLS flag strings using '+' without duplicates."""
+    flags: list[str] = []
+    if existing_flags:
+        for f in existing_flags.split("+"):
+            clean = f.strip()
+            if clean and clean not in flags:
+                flags.append(clean)
+    for f in new_flags:
+        clean = f.strip()
+        if clean and clean not in flags:
+            flags.append(clean)
+    return "+".join(flags)
+
+
 def build_ffmpeg_hls_command(
     plan: TranscodePlan,
     input_path: Path,
@@ -44,6 +59,7 @@ def build_ffmpeg_hls_command(
     start_number: int = 0,
     segment_duration: int = 4,
     audio_bitrate_kbps: int = 192,
+    hls_flags: str | None = None,
 ) -> list[str]:
     """Produce argument list for ffmpeg executing HLS fMP4 delivery."""
     cmd: list[str] = [
@@ -184,6 +200,16 @@ def build_ffmpeg_hls_command(
     )
     if start_number > 0:
         cmd.extend(["-start_number", str(start_number)])
+
+    # Merge HLS flags (temp_file ensures atomic segment writes, INV-5)
+    if "-hls_flags" in cmd:
+        idx = cmd.index("-hls_flags")
+        cmd[idx + 1] = _merge_hls_flags(
+            cmd[idx + 1], "temp_file", *(hls_flags.split("+") if hls_flags else [])
+        )
+    else:
+        cmd.extend(["-hls_flags", _merge_hls_flags(hls_flags, "temp_file")])
+
     cmd.extend(
         [
             "-hls_list_size",

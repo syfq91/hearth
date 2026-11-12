@@ -257,3 +257,74 @@ def test_builder_start_offset_seek_before_input(tmp_path: Path) -> None:
     i_idx = cmd.index("-i")
     assert ss_idx < i_idx
     assert cmd[ss_idx + 1] == "125.5"
+
+
+def test_builder_hls_flags_temp_file_default(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="remux_hls",
+        video_action="copy",
+        video_codec="copy",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+    )
+    assert cmd.count("-hls_flags") == 1
+    idx = cmd.index("-hls_flags")
+    flags = cmd[idx + 1].split("+")
+    assert "temp_file" in flags
+
+
+def test_builder_hls_flags_merge_existing_flags(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="remux_hls",
+        video_action="copy",
+        video_codec="copy",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        hls_flags="independent_segments",
+    )
+    assert cmd.count("-hls_flags") == 1
+    idx = cmd.index("-hls_flags")
+    flags = cmd[idx + 1].split("+")
+    assert "temp_file" in flags
+    assert "independent_segments" in flags
+    assert len(flags) == len(set(flags))
+
+
+def test_builder_hls_flags_no_duplicate_when_already_contains_temp_file(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="remux_hls",
+        video_action="copy",
+        video_codec="copy",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        hls_flags="temp_file+independent_segments",
+    )
+    assert cmd.count("-hls_flags") == 1
+    idx = cmd.index("-hls_flags")
+    flags = cmd[idx + 1].split("+")
+    assert flags.count("temp_file") == 1
+    assert "independent_segments" in flags
