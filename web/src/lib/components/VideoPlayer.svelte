@@ -5,6 +5,7 @@
 	import type JASSUB from 'jassub';
 	import { ArrowLeft } from '@lucide/svelte';
 	import { api } from '../api/client';
+	import { detectBrowserCapabilities } from '../capabilities';
 	import {
 		addAudioMenuButton,
 		addInfoButton,
@@ -407,6 +408,7 @@
 		try {
 			response = await api.post<PlaybackInfoResponse>(`/items/${itemId}/playback-info`, {
 				body: {
+					capabilities: detectBrowserCapabilities(),
 					audio_track_index: audioTrackIndex,
 					subtitle_track_index: embeddedSubtitleIndex,
 					start_time_offset_seconds: offsetSeconds

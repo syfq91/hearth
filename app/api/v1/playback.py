@@ -5,13 +5,14 @@ routes only load the item, enforce library access and persist the result.
 """
 
 import asyncio
+import contextlib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Request
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -103,8 +104,10 @@ PlaybackMode = Literal["direct_play", "remux_hls", "transcode_hls"]
 class PlaybackInfoRequest(BaseModel):
     """A playback-info request; omitting it asks for defaults."""
 
+    model_config = ConfigDict(extra="ignore")
+
     file_id: str | None = Field(default=None, max_length=36)
-    capabilities: ClientCapabilities = Field(default_factory=ClientCapabilities)
+    capabilities: ClientCapabilities | None = None
     audio_track_index: int | None = None
     subtitle_track_index: int | None = None
     start_time_offset_seconds: float = 0.0
@@ -244,6 +247,30 @@ async def report_progress(
     )
 
 
+def _extract_query_playback_info(request: Request) -> dict[str, Any]:
+    """Parse query parameters case-insensitively for legacy player compatibility."""
+    params: dict[str, Any] = {}
+    for k, v in request.query_params.items():
+        norm = k.lower().replace("-", "").replace("_", "")
+        if norm in ("videobitrate", "maxbitrate", "targetmaxbitrate"):
+            with contextlib.suppress(ValueError):
+                params["target_max_bitrate"] = int(v)
+        elif norm in ("audiotrackindex", "audiotrack"):
+            with contextlib.suppress(ValueError):
+                params["audio_track_index"] = int(v)
+        elif norm in ("subtitletrackindex", "subtitletrack"):
+            with contextlib.suppress(ValueError):
+                params["subtitle_track_index"] = int(v)
+        elif norm in ("starttimeoffset", "starttimeoffsetseconds", "startoffset", "offsetseconds"):
+            with contextlib.suppress(ValueError):
+                params["start_time_offset_seconds"] = float(v)
+        elif norm in ("fileid",):
+            params["file_id"] = v
+        elif norm in ("preset",):
+            params["preset"] = v
+    return params
+
+
 @router.post("/items/{item_id}/playback-info")
 async def playback_info(
     item_id: str,
@@ -251,6 +278,7 @@ async def playback_info(
     settings: SettingsDep,
     keys: KeysDep,
     session: SessionDep,
+    request: Request,
     body: PlaybackInfoRequest | None = None,
 ) -> PlaybackInfoResponse:
     """Return how the client should play an item.
@@ -259,9 +287,36 @@ async def playback_info(
     limits, and server hardware capabilities. Returns either direct play or an
     HLS stream session.
     """
-    request = body or PlaybackInfoRequest()
+    query_params = _extract_query_playback_info(request)
+    if body is not None:
+        request_obj = body.model_copy()
+        if "target_max_bitrate" in query_params and request_obj.target_max_bitrate is None:
+            request_obj.target_max_bitrate = query_params["target_max_bitrate"]
+        if "audio_track_index" in query_params and request_obj.audio_track_index is None:
+            request_obj.audio_track_index = query_params["audio_track_index"]
+        if "subtitle_track_index" in query_params and request_obj.subtitle_track_index is None:
+            request_obj.subtitle_track_index = query_params["subtitle_track_index"]
+        if (
+            "start_time_offset_seconds" in query_params
+            and request_obj.start_time_offset_seconds == 0.0
+        ):
+            request_obj.start_time_offset_seconds = query_params["start_time_offset_seconds"]
+        if "file_id" in query_params and request_obj.file_id is None:
+            request_obj.file_id = query_params["file_id"]
+        if "preset" in query_params:
+            if request_obj.capabilities is None:
+                request_obj.capabilities = ClientCapabilities(preset=query_params["preset"])
+            elif not request_obj.capabilities.preset:
+                request_obj.capabilities.preset = query_params["preset"]
+    else:
+        caps = (
+            ClientCapabilities(preset=query_params["preset"]) if "preset" in query_params else None
+        )
+        req_kwargs: dict[str, Any] = {k: v for k, v in query_params.items() if k != "preset"}
+        request_obj = PlaybackInfoRequest(capabilities=caps, **req_kwargs)
+
     item = await _load_item(session, user, item_id)
-    media_file = _select_file(item, request.file_id)
+    media_file = _select_file(item, request_obj.file_id)
     await _require_inside_library(session, item, media_file)
 
     token, expires_at = create_media_token(
@@ -300,16 +355,18 @@ async def playback_info(
         allow_transcode=user.allow_transcode,
     )
     playback_options = PlaybackOptions(
-        audio_track_index=request.audio_track_index,
-        subtitle_track_index=request.subtitle_track_index,
-        target_max_bitrate=request.target_max_bitrate,
+        audio_track_index=request_obj.audio_track_index,
+        subtitle_track_index=request_obj.subtitle_track_index,
+        target_max_bitrate=request_obj.target_max_bitrate,
     )
+    user_agent = request.headers.get("user-agent")
     plan = evaluate_playback_plan(
         probe_res,
-        request.capabilities,
+        request_obj.capabilities,
         user_limits,
         server_caps,
         playback_options,
+        user_agent=user_agent,
     )
 
     file_resp = PlaybackFileResponse(
@@ -348,7 +405,7 @@ async def playback_info(
         file_id=media_file.id,
         input_path=Path(media_file.path),
         plan=plan,
-        start_offset=request.start_time_offset_seconds,
+        start_offset=request_obj.start_time_offset_seconds,
         duration_seconds=media_file.duration_seconds or probe_res.duration_seconds or 0.0,
         source_video=probe_res.primary_video,
         source_audio=source_audio,

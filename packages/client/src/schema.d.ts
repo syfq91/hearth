@@ -3903,7 +3903,7 @@ export interface components {
         PlaybackInfoRequest: {
             /** Audio Track Index */
             audio_track_index?: number | null;
-            capabilities?: components["schemas"]["ClientCapabilities"];
+            capabilities?: components["schemas"]["ClientCapabilities"] | null;
             /** File Id */
             file_id?: string | null;
             /**

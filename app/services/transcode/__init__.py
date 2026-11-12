@@ -27,6 +27,7 @@ from app.services.transcode.profile import (
     BUILTIN_PRESETS,
     ClientCapabilities,
     PresetName,
+    detect_preset_from_user_agent,
     resolve_client_capabilities,
 )
 
@@ -49,6 +50,7 @@ __all__ = [
     "UserLimits",
     "budget_audio_bitrate",
     "build_ffmpeg_hls_command",
+    "detect_preset_from_user_agent",
     "evaluate_playback_plan",
     "parse_vainfo_output",
     "probe_transcode_capabilities",

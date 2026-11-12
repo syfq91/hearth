@@ -105,10 +105,11 @@ def _add_reason(reasons: list[str], reason: str) -> None:
 
 def evaluate_playback_plan(
     file_streams: ProbeResult,
-    capabilities: ClientCapabilities,
+    capabilities: ClientCapabilities | None,
     user_limits: UserLimits,
     server_caps: ServerTranscodeCapabilities,
     options: PlaybackOptions | None = None,
+    user_agent: str | None = None,
 ) -> TranscodePlan:
     """Evaluate media file against client and server constraints to form a TranscodePlan.
 
@@ -116,7 +117,7 @@ def evaluate_playback_plan(
     Computes the full union of failure reasons per §3.3 before selecting the delivery mode.
     """
     opts = options or PlaybackOptions()
-    resolved_client = resolve_client_capabilities(capabilities)
+    resolved_client = resolve_client_capabilities(capabilities, user_agent=user_agent)
     reasons: list[str] = []
 
     primary_video = file_streams.primary_video

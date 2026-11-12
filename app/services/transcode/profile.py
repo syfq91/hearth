@@ -9,13 +9,15 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 PresetName = Literal["chrome", "firefox", "safari", "android_tv", "unknown"]
 
 
 class ClientCapabilities(BaseModel):
     """What a client device or browser player supports."""
+
+    model_config = ConfigDict(extra="ignore")
 
     preset: str | None = Field(default=None, max_length=64)
     containers: list[str] = Field(default_factory=list)
@@ -181,16 +183,63 @@ BUILTIN_PRESETS: dict[str, ClientCapabilities] = {
 }
 
 
-def resolve_client_capabilities(client: ClientCapabilities | None = None) -> ClientCapabilities:
-    """Resolve preset and apply any client-provided overrides."""
+def detect_preset_from_user_agent(user_agent: str | None) -> PresetName:
+    """Infer the built-in preset from a User-Agent header string.
+
+    Recognizes Chrome (and Chromium-based browsers), Firefox, Safari, and
+    Android TV. Unrecognized or missing strings fall back to 'unknown'.
+    """
+    if not user_agent:
+        return "unknown"
+    ua = user_agent.lower()
+
+    # Android TV / Fire TV check
+    if "android" in ua and any(k in ua for k in ("tv", "aft", "bravia", "smarttv")):
+        return "android_tv"
+
+    # Firefox check (desktop & mobile)
+    if "firefox" in ua or "fxios" in ua:
+        return "firefox"
+
+    # Chrome / Chromium check (including Edge, Opera, Samsung, CriOS)
+    # Must precede Safari check because Chrome UAs include "Safari/537.36"
+    if "chrome" in ua or "crios" in ua or "chromium" in ua:
+        return "chrome"
+
+    # Safari check (desktop & iOS Mobile Safari)
+    if "safari" in ua and any(k in ua for k in ("version", "mobile", "applewebkit")):
+        return "safari"
+
+    return "unknown"
+
+
+def resolve_client_capabilities(
+    client: ClientCapabilities | None = None,
+    user_agent: str | None = None,
+) -> ClientCapabilities:
+    """Resolve preset and apply any client-provided overrides.
+
+    Explicit capabilities win over User-Agent presets. When capabilities are
+    absent, User-Agent detection chooses among 'chrome', 'firefox', 'safari',
+    'android_tv', or falls back to 'unknown'.
+    """
+    preset_name: str | None = None
+    if client is not None and client.preset:
+        preset_name = client.preset.lower().strip()
+    elif user_agent:
+        preset_name = detect_preset_from_user_agent(user_agent)
+
+    if not preset_name or preset_name not in BUILTIN_PRESETS:
+        preset_name = "unknown"
+
+    base = BUILTIN_PRESETS[preset_name].model_copy(deep=True)
+
     if client is None:
-        return BUILTIN_PRESETS["unknown"].model_copy(deep=True)
+        return base
 
-    preset_name = (client.preset or "").lower().strip()
-    base = BUILTIN_PRESETS.get(preset_name, BUILTIN_PRESETS["unknown"]).model_copy(deep=True)
-
-    # If preset was unknown but client provided explicit codecs/containers, start fresh
-    if not preset_name and (client.containers or client.video_codecs or client.audio_codecs):
+    # If preset was not explicitly set on client, but client provided explicit codecs/containers,
+    # start fresh with empty capabilities so explicit capabilities win over preset defaults
+    if not client.preset and (client.containers or client.video_codecs or client.audio_codecs):
         base = ClientCapabilities()
 
     # Override non-empty lists and explicitly set values
@@ -230,5 +279,6 @@ __all__ = [
     "BUILTIN_PRESETS",
     "ClientCapabilities",
     "PresetName",
+    "detect_preset_from_user_agent",
     "resolve_client_capabilities",
 ]

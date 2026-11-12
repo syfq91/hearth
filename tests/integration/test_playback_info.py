@@ -317,3 +317,192 @@ async def test_playback_info_transcoding_decision_and_track_selection(
     t_data = track_res.json()
     assert t_data["mode"] == "transcode_hls"
     assert "SubtitleBurnInRequired" in t_data["reasons"]
+
+
+async def test_playback_info_user_agent_fallback_and_precedence(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    _, item_id, file_ids, _ = await _seed(db_settings, db_sessionmaker, sidecar=False)
+
+    # Set media file to HEVC video + AAC audio
+    streams_json = {
+        "container": "mp4",
+        "duration_seconds": 120.0,
+        "size_bytes": 10_000_000,
+        "streams": [
+            {
+                "index": 0,
+                "codec_name": "hevc",
+                "codec_type": "video",
+                "profile": "Main",
+                "width": 1920,
+                "height": 1080,
+                "bitrate": 4_000_000,
+            },
+            {
+                "index": 1,
+                "codec_name": "aac",
+                "codec_type": "audio",
+                "channels": 2,
+                "sample_rate": 48000,
+            },
+        ],
+    }
+    async with db_sessionmaker() as session:
+        f = await session.get(MediaFile, file_ids[0])
+        assert f is not None
+        f.streams_json = streams_json
+        await session.commit()
+
+    # 1. No capabilities provided, Safari UA -> Safari supports HEVC natively
+    safari_ua = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15"
+    )
+    safari_headers = {**_bearer(admin), "User-Agent": safari_ua}
+    res_safari = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        headers=safari_headers,
+    )
+    assert res_safari.status_code == 200
+    assert res_safari.json()["mode"] == "direct_play"
+
+    # 2. No capabilities provided, Chrome UA -> Chrome cannot play HEVC mp4 natively
+    chrome_ua = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+    chrome_headers = {**_bearer(admin), "User-Agent": chrome_ua}
+    res_chrome = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        headers=chrome_headers,
+    )
+    assert res_chrome.status_code == 200
+    data_chrome = res_chrome.json()
+    assert data_chrome["mode"] == "transcode_hls"
+    assert "VideoCodecNotSupported" in data_chrome["reasons"]
+    await api_client.post(f"/api/v1/hls/{data_chrome['session_id']}/stop", headers=_bearer(admin))
+
+    # 3. Explicit capabilities WIN over UA preset:
+    # Caller sends Chrome UA, but sends explicit capabilities supporting HEVC
+    res_explicit = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={
+            "capabilities": {
+                "containers": ["mp4"],
+                "video_codecs": ["hevc"],
+                "audio_codecs": ["aac"],
+            }
+        },
+        headers=chrome_headers,
+    )
+    assert res_explicit.status_code == 200
+    assert res_explicit.json()["mode"] == "direct_play"
+
+    # 4. Unrecognized UA falls back to unknown (unknown does not support HEVC)
+    res_unknown = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        headers={**_bearer(admin), "User-Agent": "curl/7.88.1"},
+    )
+    assert res_unknown.status_code == 200
+    data_unknown = res_unknown.json()
+    assert data_unknown["mode"] == "transcode_hls"
+    assert "VideoCodecNotSupported" in data_unknown["reasons"]
+    await api_client.post(f"/api/v1/hls/{data_unknown['session_id']}/stop", headers=_bearer(admin))
+
+
+async def test_playback_info_malformed_capabilities_returns_422(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    _, item_id, _, _ = await _seed(db_settings, db_sessionmaker, sidecar=False)
+
+    # Bad type for max_width -> 422 with field path
+    bad_res = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={"capabilities": {"max_width": "not-an-integer"}},
+        headers=_bearer(admin),
+    )
+    assert bad_res.status_code == 422
+    err_body = bad_res.json()
+    errors = err_body["error"]["details"]["errors"]
+    locs = [e["loc"] for e in errors]
+    assert any("max_width" in loc for loc in locs)
+
+    # Unknown fields are ignored
+    unknown_field_res = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={"capabilities": {"random_field_xyz": 12345}},
+        headers=_bearer(admin),
+    )
+    assert unknown_field_res.status_code == 200
+
+
+async def test_playback_info_case_insensitive_query_params(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    _, item_id, file_ids, _ = await _seed(db_settings, db_sessionmaker, sidecar=False)
+
+    # Media file is 4 Mbps H.264
+    streams_json = {
+        "container": "mp4",
+        "duration_seconds": 120.0,
+        "size_bytes": 60_000_000,
+        "bit_rate": 4_000_000,
+        "streams": [
+            {
+                "index": 0,
+                "codec_name": "h264",
+                "codec_type": "video",
+                "profile": "High",
+                "width": 1920,
+                "height": 1080,
+                "bitrate": 4_000_000,
+            },
+            {
+                "index": 1,
+                "codec_name": "aac",
+                "codec_type": "audio",
+                "channels": 2,
+                "sample_rate": 48000,
+            },
+        ],
+    }
+    async with db_sessionmaker() as session:
+        f = await session.get(MediaFile, file_ids[0])
+        assert f is not None
+        f.streams_json = streams_json
+        await session.commit()
+
+    # Client queries with VideoBitrate=1000000 (1 Mbps cap, lower than 4 Mbps media)
+    # This should trigger transcode_hls with ContainerBitrateExceedsLimit
+    res1 = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info?VideoBitrate=1000000",
+        json={"capabilities": {"preset": "chrome"}},
+        headers=_bearer(admin),
+    )
+    assert res1.status_code == 200
+    data1 = res1.json()
+    assert data1["mode"] == "transcode_hls"
+    assert "ContainerBitrateExceedsLimit" in data1["reasons"]
+    await api_client.post(f"/api/v1/hls/{data1['session_id']}/stop", headers=_bearer(admin))
+
+    # Client queries with videoBitRate=1000000 (camelCase)
+    res2 = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info?videoBitRate=1000000",
+        json={"capabilities": {"preset": "chrome"}},
+        headers=_bearer(admin),
+    )
+    assert res2.status_code == 200
+    data2 = res2.json()
+    assert data2["mode"] == "transcode_hls"
+    assert "ContainerBitrateExceedsLimit" in data2["reasons"]
+    await api_client.post(f"/api/v1/hls/{data2['session_id']}/stop", headers=_bearer(admin))

@@ -3,6 +3,7 @@
 from app.services.transcode.profile import (
     BUILTIN_PRESETS,
     ClientCapabilities,
+    detect_preset_from_user_agent,
     resolve_client_capabilities,
 )
 
@@ -124,3 +125,81 @@ def test_supports_subtitle_helper() -> None:
     assert caps.supports_subtitle("srt") is True
     assert caps.supports_subtitle("ass") is False
     assert caps.supports_subtitle("pgs") is False
+
+
+def test_detect_preset_from_user_agent() -> None:
+    # Chrome
+    chrome_ua = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+    assert detect_preset_from_user_agent(chrome_ua) == "chrome"
+
+    # Chrome iOS
+    crios_ua = (
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.0.0 Mobile/15E148 Safari/604.1"
+    )
+    assert detect_preset_from_user_agent(crios_ua) == "chrome"
+
+    # Firefox
+    firefox_ua = "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/119.0"
+    assert detect_preset_from_user_agent(firefox_ua) == "firefox"
+
+    # Safari
+    safari_ua = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15"
+    )
+    assert detect_preset_from_user_agent(safari_ua) == "safari"
+
+    # Android TV (e.g. Shield TV or Sony Bravia)
+    shield_ua = (
+        "Mozilla/5.0 (Linux; Android 11; SHIELD Android TV Build/...) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+    )
+    assert detect_preset_from_user_agent(shield_ua) == "android_tv"
+
+    # Fire TV
+    firetv_ua = (
+        "Mozilla/5.0 (Linux; Android 9; AFTMM Build/...) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36"
+    )
+    assert detect_preset_from_user_agent(firetv_ua) == "android_tv"
+
+    # Unrecognized / unknown
+    assert detect_preset_from_user_agent("curl/7.88.1") == "unknown"
+    assert detect_preset_from_user_agent(None) == "unknown"
+
+
+def test_ua_preset_wins_over_unknown_when_absent() -> None:
+    chrome_ua = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+    res = resolve_client_capabilities(client=None, user_agent=chrome_ua)
+    assert res.preset == "chrome"
+    assert "vp9" in res.video_codecs
+    assert res.hls_fmp4 is True
+
+
+def test_unrecognized_ua_falls_back_to_unknown_preset() -> None:
+    res = resolve_client_capabilities(client=None, user_agent="curl/7.88.1")
+    assert res.preset == "unknown"
+    assert res.video_codecs == ["h264"]
+    assert res.max_bitrate == 4_000_000
+
+
+def test_explicit_capabilities_win_over_ua_preset() -> None:
+    chrome_ua = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+    client = ClientCapabilities(
+        video_codecs=["hevc"],
+        containers=["mkv"],
+    )
+    res = resolve_client_capabilities(client=client, user_agent=chrome_ua)
+    # Explicit codecs and containers override Chrome's default [h264, vp9, av1]
+    assert res.video_codecs == ["hevc"]
+    assert res.containers == ["mkv"]
