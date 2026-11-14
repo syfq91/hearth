@@ -96,6 +96,10 @@ class TranscodeSession:
         self.active_request_count: int = 0
         self.is_progressive: bool = False
 
+        # Throttling state (§3.5.1, T06)
+        self.is_paused: bool = False
+        self.last_served_segment_end: float = float(start_offset)
+
     def record_failure(self, now: float | None = None) -> None:
         """Record an ffmpeg startup or exit failure and evaluate circuit breaker threshold."""
         try:
@@ -184,6 +188,91 @@ class TranscodeSession:
     def uptime_seconds(self) -> float:
         """Duration since session creation."""
         return (utcnow() - self.created_at).total_seconds()
+
+    @property
+    def encoded_time_seconds(self) -> float:
+        """Highest contiguous timestamp in seconds transcoded so far from current served point."""
+        if not self.output_dir.exists():
+            return self.start_offset
+        seg_idx = (
+            int(self.last_served_segment_end // self.segment_duration)
+            if self.segment_duration > 0
+            else 0
+        )
+        while (self.output_dir / f"seg_{seg_idx:03d}.m4s").exists():
+            seg_idx += 1
+        return float(seg_idx * self.segment_duration)
+
+    def compute_lead(self) -> float:
+        """Lookahead delta between encoded time and client consumption in seconds."""
+        return max(0.0, self.encoded_time_seconds - self.last_served_segment_end)
+
+    def pause(self) -> bool:
+        """Pause the transcoding process via SIGSTOP if running and unpaused."""
+        if self.is_paused or self.process is None or self.process.returncode is not None:
+            return False
+        try:
+            import signal
+
+            if hasattr(signal, "SIGSTOP"):
+                self.process.send_signal(signal.SIGSTOP)
+            self.is_paused = True
+            lead = self.compute_lead()
+            logger.info(
+                "throttled pause for session %s (lead=%.1fs, encoded=%.1fs, served=%.1fs)",
+                self.id,
+                lead,
+                self.encoded_time_seconds,
+                self.last_served_segment_end,
+                extra={
+                    "session_id": self.id,
+                    "event": "throttled_pause",
+                    "lead": lead,
+                    "encoded_time": self.encoded_time_seconds,
+                    "last_served_segment_end": self.last_served_segment_end,
+                },
+            )
+            return True
+        except (ProcessLookupError, OSError):
+            return False
+
+    def resume(self) -> bool:
+        """Resume the transcoding process via SIGCONT if running and paused."""
+        if not self.is_paused or self.process is None or self.process.returncode is not None:
+            return False
+        try:
+            import signal
+
+            if hasattr(signal, "SIGCONT"):
+                self.process.send_signal(signal.SIGCONT)
+            self.is_paused = False
+            lead = self.compute_lead()
+            logger.info(
+                "throttled resume for session %s (lead=%.1fs, encoded=%.1fs, served=%.1fs)",
+                self.id,
+                lead,
+                self.encoded_time_seconds,
+                self.last_served_segment_end,
+                extra={
+                    "session_id": self.id,
+                    "event": "throttled_resume",
+                    "lead": lead,
+                    "encoded_time": self.encoded_time_seconds,
+                    "last_served_segment_end": self.last_served_segment_end,
+                },
+            )
+            return True
+        except (ProcessLookupError, OSError):
+            self.is_paused = False
+            return False
+
+    def record_served_segment(self, segment_index: int) -> None:
+        """Record a segment requested by a client and resume if throttling lead dropped."""
+        seg_end = float((segment_index + 1) * self.segment_duration)
+        if seg_end > self.last_served_segment_end:
+            self.last_served_segment_end = seg_end
+        if self.is_paused and self.compute_lead() <= 20.0:
+            self.resume()
 
     async def start_process(self) -> None:
         """Build command and launch ffmpeg subprocess."""
@@ -448,12 +537,8 @@ class TranscodeSession:
 
         if self.process and self.process.returncode is None:
             # A paused ffmpeg process is always resumed before it is terminated (INV-6)
-            if getattr(self, "is_paused", False):
-                with contextlib.suppress(Exception):
-                    import signal
-
-                    self.process.send_signal(signal.SIGCONT)
-                    self.is_paused = False
+            if self.is_paused:
+                self.resume()
 
             try:
                 self.process.terminate()
@@ -641,11 +726,25 @@ class SessionManager:
                     reaped_ids.append(sid)
         return reaped_ids
 
+    async def throttle_sessions(self) -> None:
+        """Check transcoding lead on all active sessions and pause/resume accordingly (§3.5.1)."""
+        for session in list(self.sessions.values()):
+            if session.is_stopped or getattr(session, "is_progressive", False):
+                continue
+            if session.process is None or session.process.returncode is not None:
+                continue
+            lead = session.compute_lead()
+            if not session.is_paused and lead >= 60.0:
+                session.pause()
+            elif session.is_paused and lead <= 20.0:
+                session.resume()
+
     async def _reap_idle_loop(self) -> None:
-        """Periodically reap sessions exceeding the idle timeout."""
+        """Periodically reap sessions exceeding the idle timeout and evaluate throttling."""
         try:
             while True:
                 await asyncio.sleep(5.0)
+                await self.throttle_sessions()
                 await self.reap_idle_sessions()
                 if not self.sessions:
                     break

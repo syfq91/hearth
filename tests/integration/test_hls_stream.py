@@ -630,3 +630,83 @@ async def test_hls_subtitles_pipeline(
     assert unauth_res.status_code == 401
 
     await manager.stop_all()
+
+
+@pytest.mark.asyncio
+async def test_hls_throttling_integration(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    tmp_path: Path,
+) -> None:
+    """T06: Supervisor pauses at lead >= 60s; requesting segment resumes when lead <= 20s."""
+    admin_tokens = await _setup(api_client)
+    manager = get_session_manager(db_settings)
+    session_id = "test_throttle_session_integration"
+    out_dir = db_settings.transcode_dir / session_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    (out_dir / "init.mp4").write_bytes(b"\x00\x00\x00\x20ftypiso5")
+    # 16 segments of 4s = 64s
+    for i in range(16):
+        (out_dir / f"seg_{i:03d}.m4s").write_bytes(b"\x00\x00\x00\x10moof")
+    (out_dir / "media.m3u8").write_text("#EXTM3U\n", encoding="utf-8")
+
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        target_width=1280,
+        target_height=720,
+        target_bitrate=2_000_000,
+        hwaccel="none",
+    )
+
+    me_res = await api_client.get("/api/v1/auth/me", headers=_bearer(admin_tokens))
+    admin_id = me_res.json()["id"]
+
+    session = TranscodeSession(
+        session_id=session_id,
+        user_id=admin_id,
+        item_id="item_throttle",
+        file_id="file_throttle",
+        input_path=Path("/media/movie.mp4"),
+        output_dir=out_dir,
+        plan=plan,
+        settings=db_settings,
+        duration_seconds=7200.0,
+    )
+    from unittest.mock import AsyncMock, MagicMock
+
+    mock_proc = MagicMock(returncode=None)
+    mock_proc.wait = AsyncMock(return_value=0)
+    session.process = mock_proc  # type: ignore[assignment]
+    manager.sessions[session_id] = session
+
+    keys = load_keys(db_settings)
+    token, _ = create_media_token(
+        user_id=admin_id,
+        token_version=0,
+        settings=db_settings,
+        key=keys.media,
+        item_id="item_throttle",
+    )
+    encoded_token = quote(token, safe="")
+
+    # 1. Lead is 64s >= 60s -> throttle_sessions pauses session
+    assert session.compute_lead() == 64.0
+    await manager.throttle_sessions()
+    assert session.is_paused is True
+
+    # 2. Client requests seg_011.m4s -> served end becomes 12 * 4 = 48s, lead becomes 16s <= 20s
+    seg_res = await api_client.get(f"/api/v1/hls/{session_id}/seg_011.m4s?token={encoded_token}")
+    assert seg_res.status_code == 200
+    assert session.last_served_segment_end == 48.0
+    assert session.compute_lead() == 16.0
+    # Immediate resume upon client catchup
+    assert session.is_paused is False
+
+    await manager.stop_all()

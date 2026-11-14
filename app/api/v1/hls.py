@@ -455,6 +455,7 @@ async def get_media_segment(
         seg_path = _resolve_session_path(session.output_dir, segment_file)
         if seg_path.exists() and seg_path.stat().st_size > 0:
             session.record_success()
+            session.record_served_segment(segment_index)
             return TrackedFileResponse(
                 session=session,
                 path=seg_path,
@@ -486,6 +487,7 @@ async def get_media_segment(
                 retry_after=1,
             )
 
+        session.record_served_segment(segment_index)
         return TrackedFileResponse(
             session=session,
             path=seg_path,
