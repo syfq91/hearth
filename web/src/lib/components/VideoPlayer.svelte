@@ -356,6 +356,38 @@
 	async function applySubtitleChoice(): Promise<void> {
 		if (!subtitleManager) return;
 
+		// Build font attachment URLs for JASSUB font catalog
+		const tokenQuery = sessionMediaToken ? `?token=${encodeURIComponent(sessionMediaToken)}` : '';
+		const fontUrls = (info?.attachments ?? []).map(
+			(att) => `/api/v1/media/${info?.file?.id}/attachments/${att.index}${tokenQuery}`
+		);
+		const transcodeOffset =
+			info?.mode !== 'direct_play' && resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
+
+		if (subtitleChoice.startsWith('emb:')) {
+			// Embedded tracks are delivered by the server when they cannot ride
+			// the HLS manifest (direct play, or ASS rendered client-side).
+			const url = info?.embedded_subtitle_url;
+			if (!url) {
+				await subtitleManager.clearTrack();
+				return;
+			}
+			const index = Number.parseInt(subtitleChoice.slice('emb:'.length), 10);
+			const stream = (info?.embedded_subtitles ?? []).find((s) => s.index === index);
+			await subtitleManager.loadTrack(
+				{
+					id: subtitleChoice,
+					url,
+					format: info?.embedded_subtitle_format,
+					language: stream?.language,
+					label: stream?.title || stream?.language || 'Subtitles'
+				},
+				fontUrls,
+				transcodeOffset
+			);
+			return;
+		}
+
 		const externalId = subtitleChoice.startsWith('ext:')
 			? subtitleChoice.slice('ext:'.length)
 			: null;
@@ -370,15 +402,6 @@
 			await subtitleManager.clearTrack();
 			return;
 		}
-
-		// Build font attachment URLs for JASSUB font catalog
-		const tokenQuery = sessionMediaToken ? `?token=${encodeURIComponent(sessionMediaToken)}` : '';
-		const fontUrls = (info?.attachments ?? []).map(
-			(att) => `/api/v1/media/${info?.file?.id}/attachments/${att.index}${tokenQuery}`
-		);
-
-		const transcodeOffset =
-			info?.mode !== 'direct_play' && resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
 
 		await subtitleManager.loadTrack(
 			{
