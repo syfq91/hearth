@@ -204,3 +204,84 @@ def _write_script(
     script.write_text("\n".join(lines) + "\n", encoding="utf-8")
     script.chmod(0o755)
     return script
+
+
+def test_parse_payload_captures_attachment_streams() -> None:
+    payload = {
+        "format": {"format_name": "matroska", "duration": "100.0"},
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+            },
+            {
+                "index": 1,
+                "codec_type": "attachment",
+                "tags": {
+                    "filename": "custom_font.ttf",
+                    "mimetype": "application/x-truetype-font",
+                },
+            },
+            {
+                "index": 2,
+                "codec_type": "attachment",
+                "tags": {
+                    "filename": "other_font.otf",
+                    "mimetype": "font/otf",
+                },
+            },
+            {
+                "index": 3,
+                "codec_type": "attachment",
+                "tags": {
+                    "filename": "cover.jpg",
+                    "mimetype": "image/jpeg",
+                },
+            },
+        ],
+        "chapters": [],
+    }
+
+    result = parse_probe_payload(payload)
+
+    assert len(result.attachments) == 3
+    assert len(result.font_attachments) == 2
+    assert result.font_attachments[0].index == 1
+    assert result.font_attachments[0].filename == "custom_font.ttf"
+    assert result.font_attachments[0].mime_type == "application/x-truetype-font"
+    assert result.font_attachments[0].is_font is True
+    assert result.font_attachments[1].index == 2
+    assert result.font_attachments[1].filename == "other_font.otf"
+    assert result.font_attachments[1].is_font is True
+
+
+def test_font_attachments_fallback_from_streams() -> None:
+    from app.services.media.probe import ProbeResult, ProbeStream
+
+    # Simulates an older ProbeResult where attachments was not populated in JSON
+    res = ProbeResult(
+        container="matroska",
+        streams=[
+            ProbeStream(index=0, codec_type="video"),
+            ProbeStream(
+                index=1,
+                codec_type="attachment",
+                filename="anime.woff2",
+                mime_type="font/woff2",
+            ),
+            ProbeStream(
+                index=2,
+                codec_type="attachment",
+                filename="readme.txt",
+                mime_type="text/plain",
+            ),
+        ],
+    )
+
+    assert res.attachments == []
+    assert len(res.all_attachments) == 2
+    assert len(res.font_attachments) == 1
+    assert res.font_attachments[0].index == 1
+    assert res.font_attachments[0].filename == "anime.woff2"
+

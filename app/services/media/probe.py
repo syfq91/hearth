@@ -17,6 +17,41 @@ _HDR_TRANSFERS = {"smpte2084": "HDR10", "arib-std-b67": "HLG"}
 _DOVI_TAGS = {"dvh1", "dvhe", "dav1"}
 _DOVI_SIDE_DATA = {"DOVI configuration record", "Dolby Vision metadata"}
 
+SUPPORTED_FONT_MIME_TYPES = frozenset(
+    {
+        "application/x-truetype-font",
+        "application/vnd.ms-opentype",
+        "application/x-font-ttf",
+        "application/x-font-otf",
+        "font/ttf",
+        "font/otf",
+        "font/woff",
+        "font/woff2",
+        "font/sfnt",
+    }
+)
+FONT_EXTENSIONS = frozenset({".ttf", ".otf", ".woff", ".woff2", ".ttc"})
+
+
+class AttachmentStream(BaseModel):
+    """One embedded container attachment (e.g. font, cover art)."""
+
+    index: int
+    filename: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+
+    @property
+    def is_font(self) -> bool:
+        """Whether this attachment appears to be a renderable font."""
+        if self.mime_type and self.mime_type.lower() in SUPPORTED_FONT_MIME_TYPES:
+            return True
+        if self.filename:
+            suffix = Path(self.filename).suffix.lower()
+            if suffix in FONT_EXTENSIONS:
+                return True
+        return False
+
 
 class ProbeError(Exception):
     """A media file could not be probed.
@@ -55,6 +90,8 @@ class ProbeStream(BaseModel):
     hdr_format: str | None = None
     color_transfer: str | None = None
     codec_tag_string: str | None = None
+    filename: str | None = None
+    mime_type: str | None = None
 
 
 class ProbeChapter(BaseModel):
@@ -76,6 +113,7 @@ class ProbeResult(BaseModel):
     size_bytes: int | None = None
     streams: list[ProbeStream] = Field(default_factory=list)
     chapters: list[ProbeChapter] = Field(default_factory=list)
+    attachments: list[AttachmentStream] = Field(default_factory=list)
 
     @property
     def video_streams(self) -> list[ProbeStream]:
@@ -97,6 +135,28 @@ class ProbeResult(BaseModel):
         """The first video stream, which is the one playback defaults to."""
         videos = self.video_streams
         return videos[0] if videos else None
+
+    @property
+    def all_attachments(self) -> list[AttachmentStream]:
+        """All container attachments, with fallback to stream inspection."""
+        if self.attachments:
+            return self.attachments
+        fallback: list[AttachmentStream] = []
+        for s in self.streams:
+            if s.codec_type == "attachment":
+                fallback.append(
+                    AttachmentStream(
+                        index=s.index,
+                        filename=s.filename,
+                        mime_type=s.mime_type,
+                    )
+                )
+        return fallback
+
+    @property
+    def font_attachments(self) -> list[AttachmentStream]:
+        """Font attachments suitable for ASS/SSA subtitle rendering."""
+        return [att for att in self.all_attachments if att.is_font]
 
 
 def _as_int(value: object) -> int | None:
@@ -158,6 +218,8 @@ def _parse_stream(stream: dict[str, Any]) -> ProbeStream:
         hdr_format=hdr,
         color_transfer=stream.get("color_transfer"),
         codec_tag_string=stream.get("codec_tag_string"),
+        filename=tags.get("filename"),
+        mime_type=tags.get("mimetype"),
     )
 
 
@@ -169,13 +231,33 @@ def parse_probe_payload(payload: dict[str, Any]) -> ProbeResult:
     if not isinstance(streams, list) or not isinstance(chapters, list):
         raise ValueError("ffprobe payload has malformed streams or chapters")
 
+    parsed_streams = [_parse_stream(stream) for stream in streams if isinstance(stream, dict)]
+
+    raw_attachments = payload.get("attachments")
+    if isinstance(raw_attachments, list) and raw_attachments:
+        attachment_objects = [
+            AttachmentStream.model_validate(att)
+            for att in raw_attachments
+            if isinstance(att, dict)
+        ]
+    else:
+        attachment_objects = [
+            AttachmentStream(
+                index=s.index,
+                filename=s.filename,
+                mime_type=s.mime_type,
+            )
+            for s in parsed_streams
+            if s.codec_type == "attachment"
+        ]
+
     return ProbeResult(
         container=str(format_info.get("format_name") or "unknown"),
         format_long_name=format_info.get("format_long_name"),
         duration_seconds=_as_float(format_info.get("duration")),
         bit_rate=_as_int(format_info.get("bit_rate")),
         size_bytes=_as_int(format_info.get("size")),
-        streams=[_parse_stream(stream) for stream in streams if isinstance(stream, dict)],
+        streams=parsed_streams,
         chapters=[
             ProbeChapter(
                 index=index,
@@ -186,6 +268,7 @@ def parse_probe_payload(payload: dict[str, Any]) -> ProbeResult:
             for index, chapter in enumerate(chapters)
             if isinstance(chapter, dict)
         ],
+        attachments=attachment_objects,
     )
 
 
