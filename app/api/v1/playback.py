@@ -628,15 +628,18 @@ def _embedded_subtitle_delivery(
     """Return a URL for the selected embedded subtitle when the server does not
     deliver it inside the HLS manifest.
 
-    ``sidecar_vtt`` during direct play has no HLS session to carry a subtitle
-    rendition, so the client fetches the converted WebVTT directly. HLS delivery
-    of ``sidecar_vtt`` is handled by the master playlist instead.
+    ``external_ass`` is always rendered client-side (JASSUB), so it is served
+    raw for both direct play and HLS. ``sidecar_vtt`` is only served directly
+    during direct play; HLS delivery is advertised in the master playlist.
     """
-    if plan.subtitle_action != "sidecar_vtt" or plan.subtitle_stream_index is None:
+    if plan.subtitle_stream_index is None:
         return None, None
-    if plan.mode != "direct_play":
+    if plan.subtitle_action == "external_ass":
+        fmt = "ass"
+    elif plan.subtitle_action == "sidecar_vtt" and plan.mode == "direct_play":
+        fmt = "vtt"
+    else:
         return None, None
-    fmt = "vtt"
     url = (
         f"/api/v1/media/{media_file.id}/subtitles/"
         f"{plan.subtitle_stream_index}.{fmt}?token={encoded_token}"
