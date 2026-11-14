@@ -1630,6 +1630,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/media/{file_id}/attachments/{attachment_index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Attachment
+         * @description Return an extracted container attachment (e.g. embedded font) by stream index.
+         *
+         *     Authenticates via bearer token or short-lived media token in ``?token=``.
+         *     Extracts the attachment stream on-the-fly via FFmpeg and caches it under
+         *     ``HEARTH_TRANSCODE_DIR/fonts/``.
+         */
+        get: operations["get_attachment_api_v1_media__file_id__attachments__attachment_index__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/metadata/search": {
         parameters: {
             query?: never;
@@ -2688,6 +2712,20 @@ export interface components {
              * @default 0
              */
             track_count: number;
+        };
+        /**
+         * AttachmentResponse
+         * @description An embedded container attachment (e.g. font) that can be downloaded.
+         */
+        AttachmentResponse: {
+            /** Filename */
+            filename?: string | null;
+            /** Index */
+            index: number;
+            /** Mime Type */
+            mime_type?: string | null;
+            /** Url */
+            url: string;
         };
         /**
          * Attribution
@@ -3951,6 +3989,11 @@ export interface components {
             /** File Id */
             file_id?: string | null;
             /**
+             * Force Burn In Subtitles
+             * @default false
+             */
+            force_burn_in_subtitles: boolean;
+            /**
              * Start Time Offset Seconds
              * @default 0
              */
@@ -3968,6 +4011,8 @@ export interface components {
          *     for the HLS modes so clients can stream fMP4 live transcoding.
          */
         PlaybackInfoResponse: {
+            /** Attachments */
+            attachments?: components["schemas"]["AttachmentResponse"][];
             /** Audio Streams */
             audio_streams?: components["schemas"]["ProbeStream"][];
             /** Command */
@@ -4210,6 +4255,8 @@ export interface components {
             codec_type: string;
             /** Color Transfer */
             color_transfer?: string | null;
+            /** Filename */
+            filename?: string | null;
             /** Hdr Format */
             hdr_format?: string | null;
             /** Height */
@@ -4235,6 +4282,8 @@ export interface components {
             language?: string | null;
             /** Level */
             level?: number | null;
+            /** Mime Type */
+            mime_type?: string | null;
             /** Pix Fmt */
             pix_fmt?: string | null;
             /** Profile */
@@ -7945,6 +7994,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScanJobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_attachment_api_v1_media__file_id__attachments__attachment_index__get: {
+        parameters: {
+            query?: {
+                /** @description Media access token */
+                token?: string | null;
+            };
+            header?: never;
+            path: {
+                file_id: string;
+                attachment_index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Extracted media attachment file (font, image, etc.) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                    "font/otf": string;
+                    "font/ttf": string;
+                    "font/woff": string;
+                    "font/woff2": string;
                 };
             };
             /** @description Validation Error */

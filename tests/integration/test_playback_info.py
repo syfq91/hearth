@@ -506,3 +506,109 @@ async def test_playback_info_case_insensitive_query_params(
     assert data2["mode"] == "transcode_hls"
     assert "ContainerBitrateExceedsLimit" in data2["reasons"]
     await api_client.post(f"/api/v1/hls/{data2['session_id']}/stop", headers=_bearer(admin))
+
+
+async def test_playback_info_includes_font_attachments(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    _, item_id, file_ids, _ = await _seed(db_settings, db_sessionmaker, sidecar=False)
+
+    streams_json = {
+        "container": "matroska",
+        "duration_seconds": 100.0,
+        "streams": [
+            {"index": 0, "codec_type": "video", "codec_name": "h264"},
+            {"index": 1, "codec_type": "audio", "codec_name": "aac"},
+            {
+                "index": 2,
+                "codec_type": "attachment",
+                "tags": {"filename": "anime.ttf", "mimetype": "font/ttf"},
+            },
+        ],
+        "chapters": [],
+    }
+    async with db_sessionmaker() as session:
+        f = await session.get(MediaFile, file_ids[0])
+        assert f is not None
+        f.streams_json = streams_json
+        await session.commit()
+
+    res = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        headers=_bearer(admin),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data["attachments"]) == 1
+    att = data["attachments"][0]
+    assert att["index"] == 2
+    assert att["filename"] == "anime.ttf"
+    assert att["mime_type"] == "font/ttf"
+    assert f"/api/v1/media/{file_ids[0]}/attachments/2?token=" in att["url"]
+
+
+async def test_playback_info_force_burn_in_subtitles(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    _, item_id, file_ids, _ = await _seed(db_settings, db_sessionmaker, sidecar=False)
+
+    streams_json = {
+        "container": "mp4",
+        "duration_seconds": 100.0,
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+                "pix_fmt": "yuv420p",
+            },
+            {
+                "index": 1,
+                "codec_type": "audio",
+                "codec_name": "aac",
+                "channels": 2,
+                "sample_rate": 48000,
+            },
+            {
+                "index": 2,
+                "codec_type": "subtitle",
+                "codec_name": "ass",
+                "tags": {"language": "eng"},
+            },
+        ],
+        "chapters": [],
+    }
+    async with db_sessionmaker() as session:
+        f = await session.get(MediaFile, file_ids[0])
+        assert f is not None
+        f.streams_json = streams_json
+        await session.commit()
+
+    # Query with force_burn_in_subtitles=True and subtitle_track_index=2
+    res = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={
+            "capabilities": {
+                "preset": "chrome",
+                "subtitle_profiles": [{"format": "ass", "method": "external"}],
+            },
+            "subtitle_track_index": 2,
+            "force_burn_in_subtitles": True,
+        },
+        headers=_bearer(admin),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["mode"] == "transcode_hls"
+    assert "SubtitleBurnInRequired" in data["reasons"]
+    assert data["plan"]["subtitle_action"] == "burn_in"
+    if data.get("session_id"):
+        await api_client.post(f"/api/v1/hls/{data['session_id']}/stop", headers=_bearer(admin))

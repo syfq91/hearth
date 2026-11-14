@@ -112,6 +112,16 @@ class PlaybackInfoRequest(BaseModel):
     subtitle_track_index: int | None = None
     start_time_offset_seconds: float = 0.0
     target_max_bitrate: int | None = Field(default=None, gt=0)
+    force_burn_in_subtitles: bool = False
+
+
+class AttachmentResponse(BaseModel):
+    """An embedded container attachment (e.g. font) that can be downloaded."""
+
+    index: int
+    filename: str | None = None
+    mime_type: str | None = None
+    url: str
 
 
 class PlaybackFileResponse(BaseModel):
@@ -139,6 +149,7 @@ class PlaybackInfoResponse(BaseModel):
     video_stream: ProbeStream | None = None
     audio_streams: list[ProbeStream] = Field(default_factory=list)
     embedded_subtitles: list[ProbeStream] = Field(default_factory=list)
+    attachments: list[AttachmentResponse] = Field(default_factory=list)
     reasons: list[str] = Field(default_factory=list)
     expires_at: datetime | None = None
     plan: TranscodePlan | None = None
@@ -264,6 +275,8 @@ def _extract_query_playback_info(request: Request) -> dict[str, Any]:
         elif norm in ("starttimeoffset", "starttimeoffsetseconds", "startoffset", "offsetseconds"):
             with contextlib.suppress(ValueError):
                 params["start_time_offset_seconds"] = float(v)
+        elif norm in ("forceburninsubtitles", "forceburnin", "burnin"):
+            params["force_burn_in_subtitles"] = v.lower() in ("true", "1", "yes")
         elif norm in ("fileid",):
             params["file_id"] = v
         elif norm in ("preset",):
@@ -301,6 +314,8 @@ async def playback_info(
             and request_obj.start_time_offset_seconds == 0.0
         ):
             request_obj.start_time_offset_seconds = query_params["start_time_offset_seconds"]
+        if "force_burn_in_subtitles" in query_params and not request_obj.force_burn_in_subtitles:
+            request_obj.force_burn_in_subtitles = bool(query_params["force_burn_in_subtitles"])
         if "file_id" in query_params and request_obj.file_id is None:
             request_obj.file_id = query_params["file_id"]
         if "preset" in query_params:
@@ -358,6 +373,7 @@ async def playback_info(
         audio_track_index=request_obj.audio_track_index,
         subtitle_track_index=request_obj.subtitle_track_index,
         target_max_bitrate=request_obj.target_max_bitrate,
+        force_burn_in_subtitles=request_obj.force_burn_in_subtitles,
     )
     user_agent = request.headers.get("user-agent")
     plan = evaluate_playback_plan(
@@ -382,6 +398,15 @@ async def playback_info(
         None,
     ) or (audio_streams[0] if audio_streams else None)
     embedded_subtitles = [s for s in probe_res.streams if s.codec_type == "subtitle"]
+    attachments = [
+        AttachmentResponse(
+            index=att.index,
+            filename=att.filename,
+            mime_type=att.mime_type,
+            url=f"/api/v1/media/{media_file.id}/attachments/{att.index}?token={encoded_token}",
+        )
+        for att in probe_res.font_attachments
+    ]
 
     if plan.mode == "direct_play":
         return PlaybackInfoResponse(
@@ -392,6 +417,7 @@ async def playback_info(
             video_stream=probe_res.primary_video,
             audio_streams=audio_streams,
             embedded_subtitles=embedded_subtitles,
+            attachments=attachments,
             reasons=plan.reasons,
             expires_at=expires_at,
             plan=plan,
@@ -420,6 +446,7 @@ async def playback_info(
         video_stream=probe_res.primary_video,
         audio_streams=audio_streams,
         embedded_subtitles=embedded_subtitles,
+        attachments=attachments,
         reasons=plan.reasons,
         expires_at=expires_at,
         plan=plan,

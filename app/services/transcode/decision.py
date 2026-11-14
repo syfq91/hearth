@@ -75,6 +75,7 @@ class PlaybackOptions(BaseModel):
     audio_track_index: int | None = None
     subtitle_track_index: int | None = None
     target_max_bitrate: int | None = None
+    force_burn_in_subtitles: bool = False
 
 
 class TranscodePlan(BaseModel):
@@ -162,7 +163,7 @@ def evaluate_playback_plan(
             {"hdmv_pgs_subtitle", "dvd_subtitle", "dvdsub", "vobsub", "pgs", "pgssub", "xsub"}
         )
 
-        if c_name in bitmap_codecs:
+        if opts.force_burn_in_subtitles or c_name in bitmap_codecs:
             subtitle_action = "burn_in"
             _add_reason(reasons, TranscodeReason.SubtitleBurnInRequired)
         else:

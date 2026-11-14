@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 _FFPROBE_TIMEOUT_SECONDS = 30.0
 _HDR_TRANSFERS = {"smpte2084": "HDR10", "arib-std-b67": "HLG"}
@@ -39,6 +39,21 @@ class AttachmentStream(BaseModel):
     index: int
     filename: str | None = None
     mime_type: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _extract_tags(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            tags = data.get("tags")
+            if isinstance(tags, dict):
+                if "filename" not in data and "filename" in tags:
+                    data["filename"] = tags["filename"]
+                if "mime_type" not in data and "mimetype" in tags:
+                    data["mime_type"] = tags["mimetype"]
+                elif "mime_type" not in data and "mime_type" in tags:
+                    data["mime_type"] = tags["mime_type"]
+        return data
+
     size_bytes: int | None = None
 
     @property
@@ -93,6 +108,20 @@ class ProbeStream(BaseModel):
     filename: str | None = None
     mime_type: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _extract_tags(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            tags = data.get("tags")
+            if isinstance(tags, dict):
+                if "filename" not in data and "filename" in tags:
+                    data["filename"] = tags["filename"]
+                if "mime_type" not in data and "mimetype" in tags:
+                    data["mime_type"] = tags["mimetype"]
+                elif "mime_type" not in data and "mime_type" in tags:
+                    data["mime_type"] = tags["mime_type"]
+        return data
+
 
 class ProbeChapter(BaseModel):
     """One chapter marker."""
@@ -114,6 +143,30 @@ class ProbeResult(BaseModel):
     streams: list[ProbeStream] = Field(default_factory=list)
     chapters: list[ProbeChapter] = Field(default_factory=list)
     attachments: list[AttachmentStream] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _ensure_attachments(cls, data: Any) -> Any:
+        if isinstance(data, dict) and not data.get("attachments"):
+            streams = data.get("streams")
+            if isinstance(streams, list):
+                attachments = []
+                for s in streams:
+                    if isinstance(s, dict) and s.get("codec_type") == "attachment":
+                        raw_tags = s.get("tags")
+                        tags: dict[str, Any] = raw_tags if isinstance(raw_tags, dict) else {}
+                        attachments.append(
+                            {
+                                "index": s.get("index", 0),
+                                "filename": s.get("filename") or tags.get("filename"),
+                                "mime_type": s.get("mime_type")
+                                or tags.get("mimetype")
+                                or tags.get("mime_type"),
+                            }
+                        )
+                if attachments:
+                    data["attachments"] = attachments
+        return data
 
     @property
     def video_streams(self) -> list[ProbeStream]:

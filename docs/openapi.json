@@ -697,6 +697,47 @@
         "title": "ArtistSummary",
         "type": "object"
       },
+      "AttachmentResponse": {
+        "description": "An embedded container attachment (e.g. font) that can be downloaded.",
+        "properties": {
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "mime_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mime Type"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "url"
+        ],
+        "title": "AttachmentResponse",
+        "type": "object"
+      },
       "Attribution": {
         "description": "Required attribution for a metadata source.",
         "properties": {
@@ -4420,6 +4461,11 @@
             ],
             "title": "File Id"
           },
+          "force_burn_in_subtitles": {
+            "default": false,
+            "title": "Force Burn In Subtitles",
+            "type": "boolean"
+          },
           "start_time_offset_seconds": {
             "default": 0.0,
             "title": "Start Time Offset Seconds",
@@ -4455,6 +4501,13 @@
       "PlaybackInfoResponse": {
         "description": "A playback decision plus URLs the client can use directly.\n\n``url`` is set for direct play. ``hls_url`` and ``session_id`` are populated\nfor the HLS modes so clients can stream fMP4 live transcoding.",
         "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentResponse"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
           "audio_streams": {
             "items": {
               "$ref": "#/components/schemas/ProbeStream"
@@ -5048,6 +5101,17 @@
             ],
             "title": "Color Transfer"
           },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
           "hdr_format": {
             "anyOf": [
               {
@@ -5110,6 +5174,17 @@
               }
             ],
             "title": "Level"
+          },
+          "mime_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mime Type"
           },
           "pix_fmt": {
             "anyOf": [
@@ -12865,6 +12940,106 @@
         "summary": "Scan Library",
         "tags": [
           "libraries"
+        ]
+      }
+    },
+    "/api/v1/media/{file_id}/attachments/{attachment_index}": {
+      "get": {
+        "description": "Return an extracted container attachment (e.g. embedded font) by stream index.\n\nAuthenticates via bearer token or short-lived media token in ``?token=``.\nExtracts the attachment stream on-the-fly via FFmpeg and caches it under\n``HEARTH_TRANSCODE_DIR/fonts/``.",
+        "operationId": "get_attachment_api_v1_media__file_id__attachments__attachment_index__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "title": "File Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_index",
+            "required": true,
+            "schema": {
+              "title": "Attachment Index",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "font/otf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "font/ttf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "font/woff": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "font/woff2": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Extracted media attachment file (font, image, etc.)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Attachment",
+        "tags": [
+          "media"
         ]
       }
     },

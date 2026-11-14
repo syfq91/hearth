@@ -216,6 +216,24 @@ When `method` is `transcode_hls` or `remux_hls`:
 6. **Explicit Stop**: Clients can explicitly release server resources with `POST /api/v1/hls/{session_id}/stop` (supports bearer auth, query string token, or body token for `sendBeacon`).
 7. **Concurrency Caps**: Exceeding server transcoding capacity yields HTTP 503 (`transcode_capacity_exceeded`) with a `Retry-After: 5` header.
 
+### 3.4 Container Font Attachments & Subtitle Burn-In Fallback
+When playing media files containing embedded fonts (typically Matroska `.mkv` files with ASS/SSA subtitles), `POST /api/v1/items/{item_id}/playback-info` populates an `attachments` list in `PlaybackInfoResponse`:
+```json
+{
+  "attachments": [
+    {
+      "index": 2,
+      "filename": "Arial-Bold.ttf",
+      "mime_type": "font/ttf",
+      "url": "/api/v1/media/018f0000-0000-7000-8000-000000000000/attachments/2?token=..."
+    }
+  ]
+}
+```
+Clients rendering ASS subtitles client-side (via WebAssembly/JASSUB) supply these attachment URLs to the font loader.
+
+If a client encounters an unrecoverable client-side subtitle crash, it can re-request playback negotiation with `force_burn_in_subtitles: true` in the `PlaybackInfoRequest` body (or `?forceBurnInSubtitles=true`), which bypasses external subtitle profiles and forces FFmpeg server-side subtitle burn-in.
+
 ---
 
 ## 4. Playback Progress, Watch States, and Scrobbling
@@ -309,6 +327,7 @@ When `method` is `transcode_hls` or `remux_hls`:
 | | `/api/v1/hls/{session_id}/subtitles.vtt` | GET | Viewer | HLS WebVTT subtitle track |
 | | `/api/v1/hls/{session_id}/stop` | POST | Viewer | Terminate active transcode session |
 | | `/api/v1/subtitles/{id}.vtt` | GET | Viewer | WebVTT subtitle track |
+| | `/api/v1/media/{file_id}/attachments/{idx}` | GET | Viewer | Container font attachment stream |
 | | `/api/v1/images/{id}` | GET | Viewer | Cached artwork variant generator |
 | **Books** | `/api/v1/books` | GET | User | List books with keyset pagination |
 | | `/api/v1/books/{id}` | GET | User | Book detail with available formats |
