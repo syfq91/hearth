@@ -715,3 +715,23 @@
   - Keeping online metadata providers hardcoded in core: Rejected because it prevents community extensibility and clutters the core codebase with third-party API quirks.
 
 
+## ADR 067: Migration from Video.js to Native HTML5 Video, hls.js, and Jellyfin ASS Subtitle Pipeline
+
+- **Date:** 2026-11-14
+- **Status:** Accepted
+- **Context:**
+  Hearth's web client implemented video playback via `video.js` and Video.js HTTP Streaming (VHS). While functional, Video.js added substantial bundle weight and legacy DOM layers that complicated custom TV/D-pad spatial navigation, subtitle canvas synchronization, and error recovery ladders. Furthermore, complex anime and foreign-language ASS/SSA subtitles suffered from missing embedded container fonts and lacked real-time sync adjustments.
+- **Decision:**
+  - **Player Engine Migration**: Deprecate and remove `video.js` and `video-js.css`. Drive playback directly through native `<HTMLVideoElement>` (for DirectPlay and Safari native HLS) and `hls.js` (for transcoded fMP4 HLS streams).
+  - **Native Svelte 5 UI**: Implement all OSD playback controls, timeline scrubbers, quality selectors, and TV spatial D-pad navigation natively using Svelte 5 runes (`$state`, `$derived`, `$effect`), eliminating Video.js component wrappers.
+  - **Container Font Extraction**: Extract embedded font attachments (`application/x-truetype-font`, `font/otf`, `font/ttf`, `font/woff`, `font/woff2`) on-the-fly using FFmpeg, cache them on disk under `HEARTH_TRANSCODE_DIR/fonts/`, and serve them via `/api/v1/media/{file_id}/attachments/{idx}` to JASSUB's WebAssembly canvas renderer.
+  - **Automated Fallback Ladder**: On JASSUB/WASM crashes or initialization failures, immediately re-negotiate playback with `force_burn_in_subtitles: true` to seamlessly resume playback with FFmpeg server-side burn-in.
+  - **Dynamic Subtitle Synchronization**: Compensate for HLS transcode start offsets and allow manual user offset adjustment ($\pm 5.0\text{ s}$), persisting offsets per item in browser `localStorage`.
+  - **High-Bitrate 4K Buffer Clamping**: Clamp `hls.js` maximum buffer length to 6 seconds for streams $\ge 25\text{ Mbps}$ on Chromium and Firefox to avoid memory pressure and crashes.
+- **Alternatives Considered:**
+  - Retaining Video.js: Rejected due to bundle overhead, styling rigidity, and impedance mismatch with Svelte 5 reactive state.
+  - Scan-time font extraction: Rejected because it penalizes scanner performance and bloats disk/database storage for unwatched media.
+  - Ephemeral (in-memory) subtitle sync: Rejected because users lose their calibration if they pause, refresh, or resume later.
+
+
+
