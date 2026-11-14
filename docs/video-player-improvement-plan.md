@@ -77,38 +77,12 @@ flowchart TD
 
 ---
 
-### Phase 2: Engine Migration (Native `<video>` + `hls.js`)
+### Phase 2: Engine Migration (Native `<video>` + `hls.js`) *(Completed)*
 
-#### [NEW] `web/src/lib/player/hls-engine.ts`
-- Encapsulates `hls.js` initialization and event lifecycle:
-  - Buffer length clamping: 6s maximum buffer for streams $\ge 25\text{ Mbps}$ on Chromium/Firefox, 30s otherwise.
-  - Media & network error recovery ladder (`hls.recoverMediaError()`, `hls.startLoad()`).
-  - Supports Safari native HLS (`application/vnd.apple.mpegurl`).
-  - Seamless rendition switching for quality selector.
-
-#### [NEW] `web/src/lib/player/subtitles.svelte.ts`
-- Dedicated `SubtitleManager` class:
-  - Encapsulates JASSUB instantiation, Web Worker lifecycle, and canvas overlay styling.
-  - Supplies embedded font attachment URLs to `new JASSUB({ fonts: [...] })`.
-  - Configures optimal performance parameters:
-    - `renderMode: 'wasm-blend'`
-    - `libassMemoryLimit: 40`, `libassGlyphLimit: 40`
-    - `targetFps` aligned with video framerate
-    - `prescaleFactor: 0.8`, `maxRenderHeight: 2160`
-    - `renderAhead: 90`
-  - Calculates combined time sync offset:
-    $$\text{effectiveOffset} = \text{transcodingOffsetSeconds} + \text{userSyncOffsetSeconds}$$
-  - Manages `onError` recovery trigger and exposes `resize()` and `resetRenderAheadCache()`.
-
-#### [MODIFY] `web/src/lib/capabilities.ts`
-- Extend `detectBrowserCapabilities()` to supply rich `subtitle_profiles`:
-  ```typescript
-  subtitle_profiles: [
-      { format: 'vtt', method: 'external' },
-      { format: 'ass', method: 'external' },
-      { format: 'ssa', method: 'external' }
-  ]
-  ```
+- [x] **Capabilities Subtitle Profiles**: Extended `detectBrowserCapabilities()` in `web/src/lib/capabilities.ts` to emit rich client subtitle profiles (`vtt`, `ass`, `ssa` via `external`) and added `burn_in_fallback` capability builder for recovery negotiation.
+- [x] **Native HLS Engine Wrapper**: Implemented `HlsEngine` in `web/src/lib/player/hls-engine.ts` with `hls.js`, dynamic high-bitrate buffer clamping (6s for $\ge 25\text{ Mbps}$ on Chromium/Firefox), Safari native fallback, and 503 retry interceptor. Tested in `web/src/lib/player/hls-engine.test.ts`.
+- [x] **Subtitle Subsystem Controller**: Implemented `SubtitleManager` in `web/src/lib/player/subtitles.svelte.ts` coordinating JASSUB WASM rendering, container font attachments, effective sync offset compensation, WebVTT `<track>` elements, and error reporting. Tested in `web/src/lib/player/subtitles.test.ts`.
+- [x] **Unit Testing & Svelte Validation**: All 18 unit tests passing via `npm run test:unit`, `npm run check` reports 0 errors and 0 warnings, and static production build succeeds.
 
 ---
 
