@@ -213,7 +213,7 @@ When `method` is `transcode_hls` or `remux_hls`:
 3. **Segments**: Init (`init.mp4`) and media chunks (`seg_0.m4s`, `seg_1.m4s`, ...) are served with `Cache-Control`.
 4. **Seeking**: Client seeking initiates a new playback-info or seek request; ffmpeg restarts with `-ss` seeking on keyframes.
 5. **Idle Reaper**: An active transcode process is automatically reaped if no segment requests arrive within 60 seconds.
-6. **Explicit Stop**: Clients can explicitly release server resources with `POST /api/v1/hls/{session_id}/stop`.
+6. **Explicit Stop**: Clients can explicitly release server resources with `POST /api/v1/hls/{session_id}/stop` (supports bearer auth, query string token, or body token for `sendBeacon`).
 7. **Concurrency Caps**: Exceeding server transcoding capacity yields HTTP 503 (`transcode_capacity_exceeded`) with a `Retry-After: 5` header.
 
 ---
@@ -305,6 +305,8 @@ When `method` is `transcode_hls` or `remux_hls`:
 | | `/api/v1/stream/audio/{track_id}` | GET | Viewer | Direct audio stream with Range support |
 | | `/api/v1/stream/audio/{track_id}/transcode` | GET | Viewer | Live audio transcoding (Opus, MP3, AAC) |
 | | `/api/v1/hls/{session_id}/master.m3u8` | GET | Viewer | HLS fMP4 master playlist |
+| | `/api/v1/hls/{session_id}/subtitles.m3u8` | GET | Viewer | HLS subtitles playlist |
+| | `/api/v1/hls/{session_id}/subtitles.vtt` | GET | Viewer | HLS WebVTT subtitle track |
 | | `/api/v1/hls/{session_id}/stop` | POST | Viewer | Terminate active transcode session |
 | | `/api/v1/subtitles/{id}.vtt` | GET | Viewer | WebVTT subtitle track |
 | | `/api/v1/images/{id}` | GET | Viewer | Cached artwork variant generator |
