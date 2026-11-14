@@ -183,11 +183,32 @@ export function detectBrowserCapabilities(): ClientCapabilities {
 		video_codecs: videoCodecs,
 		video_profiles: videoProfiles,
 		audio_codecs: audioCodecs,
-		subtitle_formats: ['vtt'],
+		subtitle_formats: ['vtt', 'ass', 'ssa'],
+		subtitle_profiles: [
+			{ format: 'vtt', method: 'external' },
+			{ format: 'ass', method: 'external' },
+			{ format: 'ssa', method: 'external' }
+		],
 		hdr,
 		hls_fmp4: hlsFmp4
 	};
 
 	cachedCapabilities = caps;
 	return caps;
+}
+
+/**
+ * Return client capabilities overriding ASS/SSA profiles to 'encode' (server burn-in).
+ * Used when client-side WebAssembly subtitle rendering fails or crashes.
+ */
+export function getCapabilitiesWithBurnInFallback(): ClientCapabilities {
+	const base = detectBrowserCapabilities();
+	return {
+		...base,
+		subtitle_profiles: [
+			{ format: 'vtt', method: 'external' },
+			{ format: 'ass', method: 'encode' },
+			{ format: 'ssa', method: 'encode' }
+		]
+	};
 }

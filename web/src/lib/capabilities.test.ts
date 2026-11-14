@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import {
 	detectBrowserCapabilities,
+	getCapabilitiesWithBurnInFallback,
 	clearCapabilitiesCache
 } from './capabilities.ts';
 
@@ -128,6 +129,36 @@ test('detectBrowserCapabilities caches result per page load', () => {
 		const caps2 = detectBrowserCapabilities();
 		assert.strictEqual(callCount, countAfterFirst, 'Second call must use cached result without re-probing');
 		assert.strictEqual(caps1, caps2, 'Cached instance should be returned');
+	} finally {
+		(globalThis as any).window = origWindow;
+		clearCapabilitiesCache();
+	}
+});
+
+test('detectBrowserCapabilities emits rich subtitle profiles and fallback generator works', () => {
+	clearCapabilitiesCache();
+	const origWindow = (globalThis as any).window;
+	(globalThis as any).window = {
+		MediaSource: {
+			isTypeSupported: () => true
+		}
+	};
+
+	try {
+		const caps = detectBrowserCapabilities();
+		assert.deepStrictEqual(caps.subtitle_formats, ['vtt', 'ass', 'ssa']);
+		assert.deepStrictEqual(caps.subtitle_profiles, [
+			{ format: 'vtt', method: 'external' },
+			{ format: 'ass', method: 'external' },
+			{ format: 'ssa', method: 'external' }
+		]);
+
+		const fallback = getCapabilitiesWithBurnInFallback();
+		assert.deepStrictEqual(fallback.subtitle_profiles, [
+			{ format: 'vtt', method: 'external' },
+			{ format: 'ass', method: 'encode' },
+			{ format: 'ssa', method: 'encode' }
+		]);
 	} finally {
 		(globalThis as any).window = origWindow;
 		clearCapabilitiesCache();
