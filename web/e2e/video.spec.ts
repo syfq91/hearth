@@ -71,3 +71,56 @@ test('resume picks up where playback stopped', async ({ page, request }) => {
 		.poll(() => resumed.evaluate((el: HTMLVideoElement) => el.currentTime), { timeout: 30_000 })
 		.toBeGreaterThan(stoppedAt - 5);
 });
+
+test('playback recovers after 503 burst without request storms (T11)', async ({ page, request }) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
+
+	let burst503Count = 0;
+	const requestTimes: number[] = [];
+
+	// Intercept HLS segments to force a burst of 503s with Retry-After: 1
+	await page.route('**/api/v1/hls/**/seg_*.m4s*', async (route) => {
+		requestTimes.push(Date.now());
+		if (burst503Count < 2) {
+			burst503Count++;
+			await route.fulfill({
+				status: 503,
+				headers: {
+					'Retry-After': '1',
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					error: {
+						code: 'transcode_timeout',
+						message: 'Segment generation in progress; retry shortly'
+					}
+				})
+			});
+			return;
+		}
+		await route.continue();
+	});
+
+	await page.goto('/');
+	await page.getByRole('link', { name: MOVIE_TITLE }).first().click();
+	await page.getByRole('link', { name: /^(Play|Resume)$/ }).click();
+
+	const video = page.locator('video');
+	await expect(video).toBeVisible();
+	await expect
+		.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime), { timeout: 30_000 })
+		.toBeGreaterThan(1);
+
+	// If HLS segments were requested and hit 503s, verify request intervals >= 700ms (no storm)
+	if (requestTimes.length >= 2) {
+		for (let i = 1; i < Math.min(requestTimes.length, burst503Count + 1); i++) {
+			const diff = requestTimes[i] - requestTimes[i - 1];
+			expect(diff).toBeGreaterThanOrEqual(700);
+		}
+	}
+
+	// Navigate away to trigger stop beacon on unmount/pagehide
+	await page.getByRole('link', { name: 'Home' }).click();
+	await expect(page).toHaveURL(/\/$/);
+});

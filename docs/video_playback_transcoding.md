@@ -436,11 +436,11 @@ Chromium and Firefox desktop plus a mobile emulation profile: start playback of 
 
 ### 6.5 Regression checklist before merging the final task
 
-- [ ] No place in the codebase deletes session segment files other than session end/reap.
-- [ ] `grep -rn "avc1.640028"` returns only tests/golden data.
-- [ ] Every `subprocess` call uses an argv list.
-- [ ] No segment path returns 404 for a playlist-listed segment during generation.
-- [ ] CPU is idle when no client is requesting segments and lead >= 60 s.
+- [x] No place in the codebase deletes session segment files other than session end/reap.
+- [x] `grep -rn "avc1.640028"` returns only tests/golden data.
+- [x] Every `subprocess` call uses an argv list.
+- [x] No segment path returns 404 for a playlist-listed segment during generation.
+- [x] CPU is idle when no client is requesting segments and lead >= 60 s.
 
 ---
 
@@ -470,5 +470,6 @@ Chromium and Firefox desktop plus a mobile emulation profile: start playback of 
 | 2026-11-12 | T09 | Active request accounting and idle reaper: implemented active_request_count and track_request() context manager, TrackedFileResponse wrapping ASGI streaming until full response delivery or disconnect (INV-5), 60s HLS vs 10s progressive timeouts (§3.5.1), and reaper skipping active sessions | T09 |
 | 2026-11-14 | T10 | Subtitle pipeline: text subtitles (SRT/ASS/WebVTT) converted to WebVTT without video transcode, SubtitleProfile model support, external ASS delivery when requested by profile, bitmap subtitles (PGS/DVD) and text-lacking clients use burn-in via safe symlink path, HLS SUBTITLES group in master.m3u8, and subtitles.m3u8/subtitles.vtt endpoints | T10 |
 | 2026-11-14 | T06 | Transcode throttling: supervisor tick calculates lookahead lead (encoded minus served), pauses encoder with SIGSTOP at lead >= 60s, resumes with SIGCONT at lead <= 20s or on client request, preserves INV-6 (resume before terminate), and provides structured logging | T06 |
+| 2026-11-14 | T11 | Frontend resilience: configured 503 Retry-After backoff in Video.js VHS and hls.js loaders to prevent request storms, updated progress interval to 10s and immediate on pause, implemented navigator.sendBeacon on pagehide/unmount with keepalive fallback, and added stop endpoint beacon semantics | T11 |
 
 *(Agents: append a row per merged task.)*

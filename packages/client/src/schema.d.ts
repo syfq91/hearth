@@ -1101,6 +1101,8 @@ export interface paths {
         /**
          * Stop Hls Session
          * @description Explicitly stop an active playback session.
+         *
+         *     Accepts bearer auth, query string token, or body token for beacon requests.
          */
         post: operations["stop_hls_session_api_v1_hls__session_id__stop_post"];
         delete?: never;
@@ -4619,6 +4621,11 @@ export interface components {
              */
             tonemap_vaapi: boolean;
         };
+        /** SessionStopRequest */
+        SessionStopRequest: {
+            /** Token */
+            token?: string | null;
+        };
         /** SessionStopResponse */
         SessionStopResponse: {
             /**
@@ -6996,7 +7003,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SessionStopRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -804,9 +804,43 @@
 
       if (window.Hls && window.Hls.isSupported()) {
         if (state.hls) state.hls.destroy();
+
+        class HlsRetryLoader extends window.Hls.DefaultConfig.loader {
+          load(context, config, callbacks) {
+            const origOnError = callbacks.onError;
+            let attempts = 0;
+            const maxAttempts = 5;
+            const wrappedCallbacks = Object.assign({}, callbacks, {
+              onError: (error, ctx, networkDetails, stats) => {
+                const status = error?.code || networkDetails?.status;
+                if (status === 503 && attempts < maxAttempts) {
+                  attempts++;
+                  let retrySeconds = 1;
+                  if (networkDetails && typeof networkDetails.getResponseHeader === "function") {
+                    const h = networkDetails.getResponseHeader("Retry-After");
+                    if (h) {
+                      const p = parseFloat(h);
+                      if (!isNaN(p) && p > 0) retrySeconds = p;
+                    }
+                  }
+                  log(`Received 503; retrying in ${retrySeconds}s (attempt ${attempts}/${maxAttempts})`);
+                  setTimeout(() => {
+                    super.load(context, config, wrappedCallbacks);
+                  }, Math.min(10000, retrySeconds * 1000));
+                  return;
+                }
+                origOnError(error, ctx, networkDetails, stats);
+              }
+            });
+            super.load(context, config, wrappedCallbacks);
+          }
+        }
+
         const hls = new window.Hls({
           enableWorker: true,
           lowLatencyMode: false,
+          pLoader: HlsRetryLoader,
+          fLoader: HlsRetryLoader,
         });
         state.hls = hls;
         hls.loadSource(hlsFullUrl);
@@ -1006,11 +1040,17 @@
   player.addEventListener("error", () => {
     setStatus("Playback failed. Check the request log and that the file still exists.", "bad");
   });
-  window.addEventListener("beforeunload", () => {
+  window.addEventListener("pagehide", () => {
     stopProgressTimer();
     if (state.activeSessionId) {
-      // Fire-and-forget stop via sendBeacon or synchronous fetch
-      navigator.sendBeacon(`${state.base}/api/v1/hls/${state.activeSessionId}/stop`);
+      // Fire-and-forget stop via sendBeacon (T11)
+      const token = state.lastPlaybackInfo && state.lastPlaybackInfo.hls_url
+        ? new URL(state.lastPlaybackInfo.hls_url, state.base).searchParams.get("token")
+        : null;
+      const url = token
+        ? `${state.base}/api/v1/hls/${state.activeSessionId}/stop?token=${encodeURIComponent(token)}`
+        : `${state.base}/api/v1/hls/${state.activeSessionId}/stop`;
+      navigator.sendBeacon(url);
     }
   });
 })();

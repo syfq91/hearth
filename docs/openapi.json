@@ -6114,6 +6114,23 @@
         "title": "ServerTranscodeCapabilities",
         "type": "object"
       },
+      "SessionStopRequest": {
+        "properties": {
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          }
+        },
+        "title": "SessionStopRequest",
+        "type": "object"
+      },
       "SessionStopResponse": {
         "properties": {
           "stopped": {
@@ -11000,7 +11017,7 @@
     },
     "/api/v1/hls/{session_id}/stop": {
       "post": {
-        "description": "Explicitly stop an active playback session.",
+        "description": "Explicitly stop an active playback session.\n\nAccepts bearer auth, query string token, or body token for beacon requests.",
         "operationId": "stop_hls_session_api_v1_hls__session_id__stop_post",
         "parameters": [
           {
@@ -11031,6 +11048,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SessionStopRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

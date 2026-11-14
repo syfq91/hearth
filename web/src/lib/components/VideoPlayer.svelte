@@ -6,6 +6,7 @@
 	import { ArrowLeft } from '@lucide/svelte';
 	import { api } from '../api/client';
 	import { detectBrowserCapabilities } from '../capabilities';
+	import { installVhsRetryInterceptor, sendStopBeacon } from '../video-resilience';
 	import {
 		addAudioMenuButton,
 		addInfoButton,
@@ -43,6 +44,7 @@
 
 	/** Server-side HLS session for `info`; plain so re-planning cannot loop effects. */
 	let sessionId: string | null = null;
+	let sessionMediaToken: string | null = null;
 	let resumeApplied = false;
 	let resumePositionMs = 0;
 	let lastReportedMs = 0;
@@ -84,8 +86,8 @@
 	let subtitleChoice = $state('');
 
 	// Progress checkpoints (docs/API.md §4: resume and next-up depend on
-	// them): every 15s of playback, immediately on pause, and on unload.
-	const REPORT_INTERVAL_MS = 15_000;
+	// them): every 10s of playback (T11), immediately on pause, and on unload.
+	const REPORT_INTERVAL_MS = 10_000;
 
 	async function report(state: 'playing' | 'paused' | 'stopped'): Promise<void> {
 		if (!player || player.isDisposed()) return;
@@ -387,9 +389,11 @@
 		expectedDuration = 0;
 
 		const previousSession = sessionId;
+		const previousToken = sessionMediaToken;
 		sessionId = null;
+		sessionMediaToken = null;
 		if (previousSession) {
-			void api.post(`/hls/${previousSession}/stop`).catch(() => {});
+			sendStopBeacon(previousSession, previousToken);
 		}
 
 		embeddedSubtitleIndex = subtitleChoice.startsWith('emb:')
@@ -423,6 +427,14 @@
 		if (destroyed) return;
 		info = response;
 		sessionId = response.session_id ?? null;
+		if (response.hls_url) {
+			try {
+				const parsed = new URL(response.hls_url, window.location.origin);
+				sessionMediaToken = parsed.searchParams.get('token');
+			} catch {
+				sessionMediaToken = null;
+			}
+		}
 		await attachSource(response);
 	}
 
@@ -490,6 +502,7 @@
 
 	function initPlayer(): void {
 		if (!containerEl || player) return;
+		installVhsRetryInterceptor(videojs);
 
 		const video = document.createElement('video');
 		video.className = 'video-js vjs-default-skin vjs-big-play-centered';
@@ -651,9 +664,14 @@
 		return () => window.removeEventListener('keydown', cancelNativeSpace, true);
 	});
 
-	// Unload reporting: keep the resume point when the tab is hidden or closed
+	// Unload reporting: keep the resume point and stop transcode session when tab is hidden or closed (T11)
 	$effect(() => {
-		const onHide = () => void report('paused');
+		const onHide = () => {
+			void report('paused');
+			if (sessionId) {
+				sendStopBeacon(sessionId, sessionMediaToken);
+			}
+		};
 		window.addEventListener('pagehide', onHide);
 		document.addEventListener('visibilitychange', onHide);
 		return () => {
@@ -670,8 +688,9 @@
 			expectedDuration = 0;
 			void report('stopped');
 			const session = sessionId;
+			const token = sessionMediaToken;
 			if (session) {
-				void api.post(`/hls/${session}/stop`).catch(() => {});
+				sendStopBeacon(session, token);
 			}
 			void destroyJassub();
 			if (player && !player.isDisposed()) {

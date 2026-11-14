@@ -710,3 +710,130 @@ async def test_hls_throttling_integration(
     assert session.is_paused is False
 
     await manager.stop_all()
+
+
+@pytest.mark.asyncio
+async def test_hls_stop_beacon_semantics(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    tmp_path: Path,
+) -> None:
+    """T11: The stop endpoint must accept beacon semantics (POST, token in query or body)."""
+    admin_tokens = await _setup(api_client)
+    manager = get_session_manager(db_settings)
+    keys = load_keys(db_settings)
+
+    me_res = await api_client.get("/api/v1/auth/me", headers=_bearer(admin_tokens))
+    admin_id = me_res.json()["id"]
+
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        target_width=1280,
+        target_height=720,
+        target_bitrate=2_000_000,
+        hwaccel="none",
+    )
+
+    # 1. Non-existent session returns 200 stopped=True
+    res_nonexistent = await api_client.post(
+        "/api/v1/hls/nonexistent_session/stop",
+        headers=_bearer(admin_tokens),
+    )
+    assert res_nonexistent.status_code == 200
+    assert res_nonexistent.json() == {"stopped": True}
+
+    # 2. Stop via query parameter token (sendBeacon without body)
+    sid1 = "test_stop_beacon_query"
+    out_dir1 = db_settings.transcode_dir / sid1
+    out_dir1.mkdir(parents=True, exist_ok=True)
+    session1 = TranscodeSession(
+        session_id=sid1,
+        user_id=admin_id,
+        item_id="item_beacon_1",
+        file_id="file_beacon_1",
+        input_path=Path("/media/movie.mp4"),
+        output_dir=out_dir1,
+        plan=plan,
+        settings=db_settings,
+    )
+    manager.sessions[sid1] = session1
+
+    token1, _ = create_media_token(
+        user_id=admin_id,
+        token_version=0,
+        settings=db_settings,
+        key=keys.media,
+        item_id="item_beacon_1",
+        session_id=sid1,
+    )
+    stop_query = await api_client.post(
+        f"/api/v1/hls/{sid1}/stop?token={quote(token1, safe='')}",
+    )
+    assert stop_query.status_code == 200
+    assert stop_query.json() == {"stopped": True}
+    assert sid1 not in manager.sessions
+
+    # 3. Stop via JSON body token (sendBeacon with JSON body)
+    sid2 = "test_stop_beacon_body"
+    out_dir2 = db_settings.transcode_dir / sid2
+    out_dir2.mkdir(parents=True, exist_ok=True)
+    session2 = TranscodeSession(
+        session_id=sid2,
+        user_id=admin_id,
+        item_id="item_beacon_2",
+        file_id="file_beacon_2",
+        input_path=Path("/media/movie.mp4"),
+        output_dir=out_dir2,
+        plan=plan,
+        settings=db_settings,
+    )
+    manager.sessions[sid2] = session2
+
+    token2, _ = create_media_token(
+        user_id=admin_id,
+        token_version=0,
+        settings=db_settings,
+        key=keys.media,
+        item_id="item_beacon_2",
+        session_id=sid2,
+    )
+    stop_body = await api_client.post(
+        f"/api/v1/hls/{sid2}/stop",
+        json={"token": token2},
+    )
+    assert stop_body.status_code == 200
+    assert stop_body.json() == {"stopped": True}
+    assert sid2 not in manager.sessions
+
+    # 4. Stop with mismatched session token returns 403
+    sid3 = "test_stop_beacon_mismatch"
+    out_dir3 = db_settings.transcode_dir / sid3
+    out_dir3.mkdir(parents=True, exist_ok=True)
+    session3 = TranscodeSession(
+        session_id=sid3,
+        user_id=admin_id,
+        item_id="item_beacon_3",
+        file_id="file_beacon_3",
+        input_path=Path("/media/movie.mp4"),
+        output_dir=out_dir3,
+        plan=plan,
+        settings=db_settings,
+    )
+    manager.sessions[sid3] = session3
+
+    # token2 is scoped to sid2, not sid3
+    stop_forbidden = await api_client.post(
+        f"/api/v1/hls/{sid3}/stop",
+        json={"token": token2},
+    )
+    assert stop_forbidden.status_code == 403
+    assert stop_forbidden.json()["error"]["code"] == "invalid_media_token"
+
+    # Clean up
+    await manager.stop_all()

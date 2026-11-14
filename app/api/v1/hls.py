@@ -5,15 +5,23 @@ from __future__ import annotations
 import math
 import re
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from starlette.types import Receive, Scope, Send
 
-from app.core.deps import SettingsDep, Viewer, ViewerDep
+from app.core.deps import (
+    BearerCredentials,
+    KeysDep,
+    SettingsDep,
+    Viewer,
+    ViewerDep,
+    _load_media_user,
+    get_current_user,
+)
 from app.core.errors import (
     BadGatewayError,
     BadRequestError,
@@ -21,6 +29,8 @@ from app.core.errors import (
     NotFoundError,
     ServiceUnavailableError,
 )
+from app.core.tokens import verify_media_token
+from app.db.session import SessionDep
 from app.services.subtitles import extract_embedded_subtitle
 from app.services.transcode.codecs import compute_master_codecs
 from app.services.transcode.session import SessionManager, TranscodeSession, get_session_manager
@@ -67,6 +77,41 @@ def _get_validated_session(
 
 class SessionStopResponse(BaseModel):
     stopped: bool = True
+
+
+class SessionStopRequest(BaseModel):
+    token: str | None = None
+
+
+async def get_stop_session_viewer(
+    request: Request,
+    credentials: BearerCredentials,
+    settings: SettingsDep,
+    keys: KeysDep,
+    session: SessionDep,
+    token: Annotated[str | None, Query(description="Media access token")] = None,
+) -> Viewer:
+    """Resolve viewer for stop endpoint via query token, body token, or bearer credentials."""
+    resolved_token = token
+    if resolved_token is None and credentials is None:
+        try:
+            body = await request.json()
+            if isinstance(body, dict) and isinstance(body.get("token"), str):
+                resolved_token = body["token"]
+        except Exception:
+            pass
+
+    if resolved_token is not None:
+        claims = verify_media_token(resolved_token, key=keys.media)
+        return Viewer(
+            user=await _load_media_user(claims, session),
+            item_id=claims.item_id,
+            session_id=claims.session_id,
+        )
+    return Viewer(user=await get_current_user(credentials, settings, keys, session))
+
+
+StopViewerDep = Annotated[Viewer, Depends(get_stop_session_viewer)]
 
 
 @router.get(
@@ -502,10 +547,14 @@ async def get_media_segment(
 @router.post("/{session_id}/stop")
 async def stop_hls_session(
     session_id: str,
-    viewer: ViewerDep,
+    viewer: StopViewerDep,
     settings: SettingsDep,
+    body: SessionStopRequest | None = None,
 ) -> SessionStopResponse:
-    """Explicitly stop an active playback session."""
+    """Explicitly stop an active playback session.
+
+    Accepts bearer auth, query string token, or body token for beacon requests.
+    """
     _validate_session_id(session_id)
     manager = get_session_manager(settings)
     session = manager.get_session(session_id)
