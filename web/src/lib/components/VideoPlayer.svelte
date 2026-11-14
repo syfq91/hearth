@@ -7,6 +7,7 @@
 	import { api } from '../api/client';
 	import { detectBrowserCapabilities } from '../capabilities';
 	import { installVhsRetryInterceptor, sendStopBeacon } from '../video-resilience';
+	import { toAss } from '../video-subtitles';
 	import {
 		addAudioMenuButton,
 		addInfoButton,
@@ -236,77 +237,22 @@
 		}
 	}
 
-	function toAssTimestamp(ts: string): string {
-		const parts = ts.trim().replace(',', '.').split(':');
-		let h = 0;
-		let m = 0;
-		let s = 0;
-		let ms = 0;
-		if (parts.length === 3) {
-			h = Number.parseInt(parts[0], 10) || 0;
-			m = Number.parseInt(parts[1], 10) || 0;
-			const secParts = parts[2].split('.');
-			s = Number.parseInt(secParts[0], 10) || 0;
-			ms = Number.parseInt(secParts[1] ?? '0', 10) || 0;
-		} else if (parts.length === 2) {
-			m = Number.parseInt(parts[0], 10) || 0;
-			const secParts = parts[1].split('.');
-			s = Number.parseInt(secParts[0], 10) || 0;
-			ms = Number.parseInt(secParts[1] ?? '0', 10) || 0;
+	function renderJassubFrame(repaint = true): void {
+		if (!jassubInstance || !videoEl || !hasJassub) return;
+		const curTime = videoEl.currentTime;
+		const w = videoEl.videoWidth || videoEl.clientWidth;
+		const h = videoEl.videoHeight || videoEl.clientHeight;
+		if (w > 0 && h > 0) {
+			void jassubInstance.manualRender(
+				{
+					mediaTime: curTime,
+					width: w,
+					height: h,
+					expectedDisplayTime: performance.now()
+				},
+				repaint
+			);
 		}
-		const cs = Math.floor(ms / 10)
-			.toString()
-			.padStart(2, '0')
-			.slice(0, 2);
-		return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${cs}`;
-	}
-
-	function toAss(content: string): string {
-		if (content.includes('[Script Info]') || content.includes('[Events]')) {
-			return content;
-		}
-		const header = [
-			'[Script Info]',
-			'ScriptType: v4.00+',
-			'WrapStyle: 0',
-			'ScaledBorderAndShadow: yes',
-			'YCbCr Matrix: None',
-			'',
-			'[V4+ Styles]',
-			'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-			'Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1',
-			'',
-			'[Events]',
-			'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
-		].join('\n');
-
-		const lines = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-		const dialogues: string[] = [];
-		const timeRegex =
-			/((?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{2,3})\s*-->\s*((?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{2,3})/;
-
-		let i = 0;
-		while (i < lines.length) {
-			const line = lines[i].trim();
-			const match = timeRegex.exec(line);
-			if (match) {
-				const start = toAssTimestamp(match[1]);
-				const end = toAssTimestamp(match[2]);
-				i += 1;
-				const textLines: string[] = [];
-				while (i < lines.length && lines[i].trim() !== '') {
-					textLines.push(lines[i].trim());
-					i += 1;
-				}
-				if (textLines.length > 0) {
-					const text = textLines.join('\\N');
-					dialogues.push(`Dialogue: 0,${start},${end},Default,,0,0,0,,${text}`);
-				}
-			} else {
-				i += 1;
-			}
-		}
-		return `${header}\n${dialogues.join('\n')}\n`;
 	}
 
 	async function destroyJassub(): Promise<void> {
@@ -327,6 +273,7 @@
 		const externalId = subtitleChoice.startsWith('ext:')
 			? subtitleChoice.slice('ext:'.length)
 			: null;
+		const isEmbedded = subtitleChoice.startsWith('emb:');
 
 		await destroyJassub();
 
@@ -335,7 +282,18 @@
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const tracks = player.textTracks() as any;
 			for (let i = 0; i < tracks.length; i += 1) {
-				tracks[i].mode = tracks[i].id === subtitleChoice ? 'showing' : 'disabled';
+				const track = tracks[i];
+				if (isEmbedded) {
+					if (track.id?.startsWith('ext:')) {
+						track.mode = 'disabled';
+					} else if (track.kind === 'subtitles') {
+						track.mode = 'showing';
+					}
+				} else if (externalId) {
+					track.mode = track.id === subtitleChoice ? 'showing' : 'disabled';
+				} else {
+					track.mode = 'disabled';
+				}
 			}
 
 			if (!externalId || !videoEl) return;
@@ -343,11 +301,13 @@
 			const selectedTrack = (info?.subtitles ?? []).find((t) => t.id === externalId);
 			if (!selectedTrack) return;
 
+			// JASSUB is only needed for ASS/SSA styling; standard SRT/VTT are rendered natively
+			if (selectedTrack.format !== 'ass' && selectedTrack.format !== 'ssa') {
+				return;
+			}
+
 			const delimiter = selectedTrack.url.includes('?') ? '&' : '?';
-			const fetchUrl =
-				selectedTrack.format === 'ass' || selectedTrack.format === 'ssa'
-					? `${selectedTrack.url}${delimiter}raw=true`
-					: selectedTrack.url;
+			const fetchUrl = `${selectedTrack.url}${delimiter}raw=true`;
 
 			try {
 				const res = await fetch(fetchUrl);
@@ -357,14 +317,23 @@
 
 				if (subtitleChoice === `ext:${externalId}` && videoEl) {
 					const { default: JASSUBConstructor } = await import('jassub');
-					jassubInstance = new JASSUBConstructor({
+					const instance = new JASSUBConstructor({
 						video: videoEl,
 						subContent
 					});
-					hasJassub = true;
+					await instance.ready;
+
+					if (subtitleChoice === `ext:${externalId}` && videoEl) {
+						jassubInstance = instance;
+						hasJassub = true;
+						renderJassubFrame(true);
+					} else {
+						void instance.destroy();
+					}
 				}
 			} catch (err) {
 				console.warn('JASSUB initialization failed, falling back to native text track:', err);
+				await destroyJassub();
 				hasJassub = false;
 			}
 		} finally {
@@ -553,8 +522,22 @@
 
 		instance.on('timeupdate', handleTimeUpdate);
 		instance.on('timeupdate', syncDuration);
+		instance.on('timeupdate', () => {
+			if (isPaused) {
+				renderJassubFrame(false);
+			}
+		});
+		instance.on('seeked', () => {
+			renderJassubFrame(true);
+		});
 		instance.on('durationchange', syncDuration);
 		instance.on('loadedmetadata', syncDuration);
+		instance.on('loadedmetadata', () => {
+			if (jassubInstance && hasJassub) {
+				void jassubInstance.resize();
+				renderJassubFrame(true);
+			}
+		});
 		instance.on('canplay', syncDuration);
 		instance.on('loadedmetadata', applyResume);
 		instance.on('canplay', applyResume);
@@ -566,6 +549,7 @@
 			isPaused = true;
 			isUserActive = true;
 			if (hideTimeout) clearTimeout(hideTimeout);
+			renderJassubFrame(true);
 			void report('paused');
 		});
 		instance.on('useractive', () => triggerActivity());
@@ -585,6 +569,20 @@
 				loadError = `Playback failed: ${err.message || 'unknown error'}`;
 			}
 		});
+
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const textTracks = instance.textTracks() as any;
+		if (textTracks) {
+			textTracks.on('addtrack', () => {
+				if (syncingTracks || !subtitleChoice.startsWith('emb:')) return;
+				for (let i = 0; i < textTracks.length; i += 1) {
+					const track = textTracks[i];
+					if (!track.id?.startsWith('ext:') && track.kind === 'subtitles') {
+						track.mode = 'showing';
+					}
+				}
+			});
+		}
 
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const ql = (instance as any).qualityLevels?.();
