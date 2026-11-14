@@ -195,6 +195,15 @@ ENDPOINT_POLICIES: dict[tuple[str, str], EndpointPolicy] = {
     ("GET", "/api/v1/subtitles/{subtitle_id}.vtt"): EndpointPolicy(
         "viewer", library_protected=True
     ),
+    ("GET", "/api/v1/media/{file_id}/subtitles/{stream_index}.vtt"): EndpointPolicy(
+        "viewer", library_protected=True
+    ),
+    ("GET", "/api/v1/media/{file_id}/subtitles/{stream_index}.ass"): EndpointPolicy(
+        "viewer", library_protected=True
+    ),
+    ("GET", "/api/v1/media/{file_id}/attachments/{attachment_index}"): EndpointPolicy(
+        "viewer", library_protected=True
+    ),
     ("GET", "/api/v1/books/{book_id}/file/{format}"): EndpointPolicy(
         "viewer", library_protected=True
     ),

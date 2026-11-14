@@ -104,7 +104,7 @@ async def _embedded_subtitle_response(
 
 
 @router.get(
-    "/media/{file_id}/subtitles/{stream_index:int}.vtt",
+    "/media/{file_id}/subtitles/{stream_index}.vtt",
     response_class=Response,
     responses={
         200: {
@@ -128,7 +128,7 @@ async def get_embedded_subtitle_vtt(
 
 
 @router.get(
-    "/media/{file_id}/subtitles/{stream_index:int}.ass",
+    "/media/{file_id}/subtitles/{stream_index}.ass",
     response_class=Response,
     responses={
         200: {
