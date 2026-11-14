@@ -67,44 +67,13 @@ flowchart TD
 
 ## 4. Proposed Changes
 
-### Phase 1: Backend Font Attachments & Subtitle Capability Contract
+### Phase 1: Backend Font Attachments & Subtitle Capability Contract *(Completed)*
 
-#### [MODIFY] `app/services/media/probe.py`
-- Update stream probing to capture attachment streams (`codec_type == "attachment"`).
-- Record attachment properties: `index`, `filename` (from `tags.filename`), and `mime_type` (from `tags.mimetype`).
-- Filter recognized font MIME types:
-  - `application/x-truetype-font`
-  - `application/vnd.ms-opentype`
-  - `font/ttf`
-  - `font/otf`
-  - `font/woff`
-  - `font/woff2`
-
-```python
-class AttachmentStream(BaseModel):
-    index: int
-    filename: str | None = None
-    mime_type: str | None = None
-    size_bytes: int | None = None
-```
-
-#### [NEW] `app/api/v1/attachments.py`
-- Implement `GET /api/v1/media/{file_id}/attachments/{attachment_index}`:
-  - Validates user library permissions and resolves media file path safely.
-  - Checks disk cache at `Path(settings.transcode_dir) / "fonts" / f"{file_id}_{attachment_index}.bin"`.
-  - If cache miss: executes `ffmpeg -dump_attachment:s:{index} {cache_path} -i {video_path}` via `asyncio.create_subprocess_exec`.
-  - Streams cached file with proper font `Content-Type` and `Cache-Control: public, max-age=86400`.
-
-#### [MODIFY] `app/api/v1/playback.py`
-- Add `attachments: list[AttachmentResponse]` to `PlaybackInfoResponse`:
-  ```python
-  class AttachmentResponse(BaseModel):
-      index: int
-      filename: str
-      mime_type: str
-      url: str
-  ```
-- Support `force_burn_in_subtitles: bool = False` in `PlaybackInfoRequest`. When `True`, `evaluate_playback_plan` bypasses client-side ASS profiles and forces `subtitle_action = "burn_in"`.
+- [x] **Stream Probe Attachments**: Extended `ProbeStream` and `ProbeResult` in `app/services/media/probe.py` with `AttachmentStream` model, capturing `index`, `filename`, and `mime_type` with automated font MIME/extension classification.
+- [x] **Attachment Delivery API**: Created `GET /api/v1/media/{file_id}/attachments/{attachment_index}` in `app/api/v1/attachments.py` with on-the-fly FFmpeg extraction and caching under `HEARTH_TRANSCODE_DIR/fonts/`.
+- [x] **Playback Negotiation**: Added `attachments: list[AttachmentResponse]` to `PlaybackInfoResponse` and `force_burn_in_subtitles` fallback flag to `PlaybackInfoRequest` and `PlaybackOptions`.
+- [x] **Schemas & Client Types**: Regenerated `docs/openapi.json` and `packages/client/src/schema.d.ts`.
+- [x] **Test Coverage**: Added `tests/unit/test_probe.py` attachment tests, `tests/integration/test_attachments.py`, and `tests/integration/test_playback_info.py` verification.
 
 ---
 
