@@ -294,7 +294,7 @@ async def test_criterion_4_seeking_idle_reaper_and_zero_orphans(
         "-f",
         "lavfi",
         "-i",
-        "testsrc=d=3:s=320x240:r=24",
+        "testsrc=d=10:s=320x240:r=24",
         "-c:v",
         "libx264",
         "-preset",
@@ -330,9 +330,9 @@ async def test_criterion_4_seeking_idle_reaper_and_zero_orphans(
     assert session.process is not None
     orig_pid = session.process.pid
 
-    # Seek to 1.5s
-    await session.seek(1.5)
-    assert session.start_offset == 1.5
+    # Seek to 5.0s (outside segment 0)
+    await session.seek(5.0)
+    assert session.start_offset == 5.0
     assert session.process is not None
     assert session.process.pid != orig_pid
     await manager.stop_session(session.id)

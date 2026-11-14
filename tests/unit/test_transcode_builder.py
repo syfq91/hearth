@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from app.services.transcode.builder import build_ffmpeg_hls_command
 from app.services.transcode.decision import TranscodePlan
 
@@ -186,6 +188,58 @@ def test_builder_burn_in_subtitles_complex_filename(tmp_path: Path) -> None:
     assert sub_symlink.is_symlink()
     assert os.readlink(sub_symlink) == str(complex_file)
     assert f"subtitles='{sub_symlink}':si=0" in vf
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "My [Favorite] Movie: 'The Best' (2024).mkv",
+        "Show - S01E01 - [1080p] [Dual-Audio] [x265].mkv",
+        "Movie with 'single' and \"double\" quotes: test.mp4",
+        "Tricky [Name]: Episode 1, Part 2 (Cut's).mkv",
+    ],
+)
+def test_builder_burn_in_subtitles_parametrized_tricky_filenames(
+    tmp_path: Path, filename: str
+) -> None:
+    import os
+
+    session_dir = tmp_path / "session_tricky"
+    session_dir.mkdir(parents=True, exist_ok=True)
+    media_file = tmp_path / filename
+
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="h264_vaapi",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="burn_in",
+        subtitle_stream_index=1,
+        hwaccel="vaapi",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        media_file,
+        session_dir,
+        render_device="/dev/dri/renderD128",
+    )
+    vf = cmd[cmd.index("-vf") + 1]
+    assert "subtitles=" in vf
+
+    # Symlink must be in session_dir with clean name
+    ext = media_file.suffix or ".mkv"
+    sub_symlink = session_dir / f"sub_source{ext}"
+    assert sub_symlink.is_symlink()
+    assert os.readlink(sub_symlink) == str(media_file)
+    # The filter must reference the clean symlink, avoiding filtergraph parser crashes
+    assert f"subtitles='{sub_symlink}':si=1" in vf
+    # Clean symlink path itself must not contain problematic chars
+    assert "'" not in sub_symlink.name
+    assert ":" not in sub_symlink.name
+    assert "[" not in sub_symlink.name
+    assert "]" not in sub_symlink.name
 
 
 def test_builder_software_x264_fallback(tmp_path: Path) -> None:

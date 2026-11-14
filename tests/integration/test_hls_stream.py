@@ -534,3 +534,99 @@ async def test_segment_streaming_active_request_accounting_and_reaper(
     assert session_id not in manager.sessions
 
     await manager.stop_all()
+
+
+@pytest.mark.asyncio
+async def test_hls_subtitles_pipeline(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    tmp_path: Path,
+) -> None:
+    """T10: Text subtitles exposed in master.m3u8 as SUBTITLES group
+    and served via subtitles.m3u8/subtitles.vtt.
+    """
+    admin_tokens = await _setup(api_client)
+    manager = get_session_manager(db_settings)
+    session_id = "test_subtitles_session_789"
+    out_dir = db_settings.transcode_dir / session_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Initial segments written by transcode
+    (out_dir / "init.mp4").write_bytes(b"\x00\x00\x00\x20ftypiso5")
+    (out_dir / "seg_000.m4s").write_bytes(b"\x00\x00\x00\x10moof")
+    (out_dir / "media.m3u8").write_text("#EXTM3U\n", encoding="utf-8")
+    (out_dir / "subtitles.vtt").write_text(
+        "WEBVTT\n\n00:01.000 --> 00:02.000\nHello from VTT\n", encoding="utf-8"
+    )
+
+    plan = TranscodePlan(
+        mode="remux_hls",
+        video_action="copy",
+        video_codec="copy",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="sidecar_vtt",
+        subtitle_stream_index=0,
+        target_width=1920,
+        target_height=1080,
+        target_bitrate=3_000_000,
+        hwaccel="none",
+    )
+
+    me_res = await api_client.get("/api/v1/auth/me", headers=_bearer(admin_tokens))
+    admin_id = me_res.json()["id"]
+
+    session = TranscodeSession(
+        session_id=session_id,
+        user_id=admin_id,
+        item_id="item_sub",
+        file_id="file_sub",
+        input_path=Path("/media/movie.mkv"),
+        output_dir=out_dir,
+        plan=plan,
+        settings=db_settings,
+        duration_seconds=60.0,
+    )
+    manager.sessions[session_id] = session
+
+    keys = load_keys(db_settings)
+    token, _ = create_media_token(
+        user_id=admin_id,
+        token_version=0,
+        settings=db_settings,
+        key=keys.media,
+        item_id="item_sub",
+    )
+    encoded_token = quote(token, safe="")
+
+    # 1. Master playlist should advertise SUBTITLES group
+    master_res = await api_client.get(f"/api/v1/hls/{session_id}/master.m3u8?token={encoded_token}")
+    assert master_res.status_code == 200
+    master_text = master_res.text
+    assert '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs"' in master_text
+    assert f'URI="subtitles.m3u8?token={encoded_token}"' in master_text
+    assert 'SUBTITLES="subs"' in master_text
+
+    # 2. Subtitle playlist should return VOD playlist pointing to subtitles.vtt
+    sub_m3u8_res = await api_client.get(
+        f"/api/v1/hls/{session_id}/subtitles.m3u8?token={encoded_token}"
+    )
+    assert sub_m3u8_res.status_code == 200
+    assert sub_m3u8_res.headers["Content-Type"].startswith("application/vnd.apple.mpegurl")
+    sub_text = sub_m3u8_res.text
+    assert "#EXT-X-PLAYLIST-TYPE:VOD" in sub_text
+    assert f"subtitles.vtt?token={encoded_token}" in sub_text
+    assert "#EXT-X-ENDLIST" in sub_text
+
+    # 3. Subtitles VTT endpoint should return the WebVTT file
+    vtt_res = await api_client.get(f"/api/v1/hls/{session_id}/subtitles.vtt?token={encoded_token}")
+    assert vtt_res.status_code == 200
+    assert vtt_res.headers["Content-Type"].startswith("text/vtt")
+    assert "Hello from VTT" in vtt_res.text
+
+    # 4. Auth checks
+    unauth_res = await api_client.get(f"/api/v1/hls/{session_id}/subtitles.m3u8")
+    assert unauth_res.status_code == 401
+
+    await manager.stop_all()

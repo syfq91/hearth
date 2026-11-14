@@ -9,9 +9,18 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 PresetName = Literal["chrome", "firefox", "safari", "android_tv", "unknown"]
+
+
+class SubtitleProfile(BaseModel):
+    """Subtitle delivery capability for a specific subtitle format."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    format: str = Field(validation_alias=AliasChoices("format", "Format"), default="")
+    method: str = Field(validation_alias=AliasChoices("method", "Method"), default="")
 
 
 class ClientCapabilities(BaseModel):
@@ -31,6 +40,10 @@ class ClientCapabilities(BaseModel):
     max_audio_channels: int | None = Field(default=None, gt=0)
     max_audio_sample_rate: int | None = Field(default=None, gt=0)
     subtitle_formats: list[str] = Field(default_factory=list)
+    subtitle_profiles: list[SubtitleProfile] = Field(
+        validation_alias=AliasChoices("subtitle_profiles", "SubtitleProfiles"),
+        default_factory=list,
+    )
     hdr: bool = False
     hls_fmp4: bool = False
 
@@ -253,6 +266,8 @@ def resolve_client_capabilities(
         base.audio_codecs = [a.lower().strip() for a in client.audio_codecs]
     if client.subtitle_formats:
         base.subtitle_formats = [s.lower().strip() for s in client.subtitle_formats]
+    if client.subtitle_profiles:
+        base.subtitle_profiles = [p.model_copy() for p in client.subtitle_profiles]
     if client.max_width is not None:
         base.max_width = client.max_width
     if client.max_height is not None:
@@ -279,6 +294,7 @@ __all__ = [
     "BUILTIN_PRESETS",
     "ClientCapabilities",
     "PresetName",
+    "SubtitleProfile",
     "detect_preset_from_user_agent",
     "resolve_client_capabilities",
 ]

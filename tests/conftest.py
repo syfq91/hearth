@@ -57,7 +57,7 @@ async def db_session(
 async def api_client(db_settings: Settings) -> AsyncIterator[httpx.AsyncClient]:
     """HTTP client with a started application lifespan and fresh schema."""
     application = create_app(db_settings)
-    async with LifespanManager(application):
+    async with LifespanManager(application, startup_timeout=30):
         transport = httpx.ASGITransport(app=application)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             yield client

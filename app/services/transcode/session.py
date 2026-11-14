@@ -405,6 +405,7 @@ class TranscodeSession:
         target_file = self.output_dir / f"seg_{target_seg:03d}.m4s"
 
         if target_file.exists() and target_file.stat().st_size > 0:
+            self.start_offset = offset_seconds
             logger.info(
                 "seek session %s to %gs: segment %d already cached on disk; skipping restart",
                 self.id,
@@ -416,6 +417,7 @@ class TranscodeSession:
         async with self._seek_lock:
             # Recheck after acquiring lock
             if target_file.exists() and target_file.stat().st_size > 0:
+                self.start_offset = offset_seconds
                 logger.info(
                     "seek session %s to %gs: segment %d cached after lock; skipping restart",
                     self.id,
@@ -432,7 +434,7 @@ class TranscodeSession:
                 target_seg,
                 seek_offset,
             )
-            self.start_offset = seek_offset
+            self.start_offset = offset_seconds
             await self._stop_process()
             # Non-destructive: existing segment files are preserved (INV-8)
             await self.start_process()

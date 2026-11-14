@@ -1676,6 +1676,13 @@
             "title": "Subtitle Formats",
             "type": "array"
           },
+          "subtitle_profiles": {
+            "items": {
+              "$ref": "#/components/schemas/SubtitleProfile"
+            },
+            "title": "Subtitle Profiles",
+            "type": "array"
+          },
           "video_codecs": {
             "items": {
               "type": "string"
@@ -6137,6 +6144,23 @@
         "title": "SetupStatusResponse",
         "type": "object"
       },
+      "SubtitleProfile": {
+        "description": "Subtitle delivery capability for a specific subtitle format.",
+        "properties": {
+          "format": {
+            "default": "",
+            "title": "Format",
+            "type": "string"
+          },
+          "method": {
+            "default": "",
+            "title": "Method",
+            "type": "string"
+          }
+        },
+        "title": "SubtitleProfile",
+        "type": "object"
+      },
       "SubtitleResponse": {
         "description": "A playable external subtitle track.",
         "properties": {
@@ -6661,7 +6685,8 @@
             "enum": [
               "none",
               "sidecar_vtt",
-              "burn_in"
+              "burn_in",
+              "external_ass"
             ],
             "title": "Subtitle Action",
             "type": "string"
@@ -11034,6 +11059,138 @@
           }
         ],
         "summary": "Stop Hls Session",
+        "tags": [
+          "hls"
+        ]
+      }
+    },
+    "/api/v1/hls/{session_id}/subtitles.m3u8": {
+      "get": {
+        "description": "Return the WebVTT subtitle playlist for an HLS session.",
+        "operationId": "get_subtitle_playlist_api_v1_hls__session_id__subtitles_m3u8_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.apple.mpegurl": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Subtitle HLS playlist"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Subtitle Playlist",
+        "tags": [
+          "hls"
+        ]
+      }
+    },
+    "/api/v1/hls/{session_id}/subtitles.vtt": {
+      "get": {
+        "description": "Return the WebVTT subtitle document for an HLS session.",
+        "operationId": "get_subtitle_vtt_api_v1_hls__session_id__subtitles_vtt_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/vtt": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "WebVTT subtitle track for HLS session"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Subtitle Vtt",
         "tags": [
           "hls"
         ]

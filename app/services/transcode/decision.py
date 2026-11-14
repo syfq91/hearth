@@ -17,7 +17,7 @@ from app.services.transcode.profile import ClientCapabilities, resolve_client_ca
 
 PlaybackMode = Literal["direct_play", "remux_hls", "transcode_hls"]
 ActionType = Literal["copy", "transcode"]
-SubtitleAction = Literal["none", "sidecar_vtt", "burn_in"]
+SubtitleAction = Literal["none", "sidecar_vtt", "burn_in", "external_ass"]
 HwAccelMode = Literal["vaapi", "none"]
 
 
@@ -158,11 +158,58 @@ def evaluate_playback_plan(
     if sub_stream is not None:
         subtitle_index = sub_stream_index
         c_name = (sub_stream.codec_name or "").lower()
-        if c_name in ("hdmv_pgs_subtitle", "dvd_subtitle", "vobsub", "pgs", "xsub", "ass", "ssa"):
+        bitmap_codecs = frozenset(
+            {"hdmv_pgs_subtitle", "dvd_subtitle", "dvdsub", "vobsub", "pgs", "pgssub", "xsub"}
+        )
+
+        if c_name in bitmap_codecs:
             subtitle_action = "burn_in"
             _add_reason(reasons, TranscodeReason.SubtitleBurnInRequired)
         else:
-            subtitle_action = "sidecar_vtt"
+            # Text subtitle (SRT, ASS, SSA, WebVTT, etc.)
+            c_norm = (
+                "srt"
+                if c_name in ("subrip", "srt")
+                else ("vtt" if c_name in ("webvtt", "vtt") else c_name)
+            )
+
+            matched_profile = None
+            vtt_profile = None
+            if resolved_client.subtitle_profiles:
+                for prof in resolved_client.subtitle_profiles:
+                    p_fmt = prof.format.lower().lstrip(".")
+                    if p_fmt in (c_name, c_norm):
+                        matched_profile = prof
+                    if p_fmt in ("vtt", "webvtt"):
+                        vtt_profile = prof
+
+            if matched_profile is not None:
+                m = matched_profile.method.lower()
+                if m == "encode":
+                    subtitle_action = "burn_in"
+                    _add_reason(reasons, TranscodeReason.SubtitleBurnInRequired)
+                elif m == "external" and c_norm in ("ass", "ssa"):
+                    subtitle_action = "external_ass"
+                else:
+                    subtitle_action = "sidecar_vtt"
+            elif vtt_profile is not None:
+                m = vtt_profile.method.lower()
+                if m == "encode":
+                    subtitle_action = "burn_in"
+                    _add_reason(reasons, TranscodeReason.SubtitleBurnInRequired)
+                else:
+                    subtitle_action = "sidecar_vtt"
+            elif resolved_client.subtitle_profiles and not resolved_client.subtitle_formats:
+                # Client supplied subtitle_profiles but none matched text/vtt delivery
+                subtitle_action = "burn_in"
+                _add_reason(reasons, TranscodeReason.SubtitleBurnInRequired)
+            elif resolved_client.supports_subtitle("vtt") or resolved_client.supports_subtitle(
+                c_norm
+            ):
+                subtitle_action = "sidecar_vtt"
+            else:
+                subtitle_action = "burn_in"
+                _add_reason(reasons, TranscodeReason.SubtitleBurnInRequired)
 
     # 4. Check Video Compatibility
     tonemap_needed = False

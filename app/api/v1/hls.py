@@ -21,6 +21,7 @@ from app.core.errors import (
     NotFoundError,
     ServiceUnavailableError,
 )
+from app.services.subtitles import extract_embedded_subtitle
 from app.services.transcode.codecs import compute_master_codecs
 from app.services.transcode.session import SessionManager, TranscodeSession, get_session_manager
 
@@ -142,11 +143,19 @@ async def get_master_playlist(
     if codecs_str:
         stream_inf_attrs.append(f'CODECS="{codecs_str}"')
 
+    if session.plan.subtitle_action == "sidecar_vtt":
+        stream_inf_attrs.append('SUBTITLES="subs"')
+
     attrs_line = ",".join(stream_inf_attrs)
 
-    master_content = (
-        f"#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-STREAM-INF:{attrs_line}\nmedia.m3u8{token_suffix}\n"
-    )
+    master_lines = ["#EXTM3U", "#EXT-X-VERSION:7"]
+    if session.plan.subtitle_action == "sidecar_vtt":
+        master_lines.append(
+            f'#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="subtitles",DEFAULT=YES,AUTOSELECT=YES,FORCED=NO,URI="subtitles.m3u8{token_suffix}"'
+        )
+    master_lines.append(f"#EXT-X-STREAM-INF:{attrs_line}")
+    master_lines.append(f"media.m3u8{token_suffix}")
+    master_content = "\n".join(master_lines) + "\n"
 
     return Response(
         content=master_content,
@@ -244,6 +253,88 @@ async def get_media_playlist(
         content=content,
         media_type=HLS_MIME,
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
+@router.get(
+    "/{session_id}/subtitles.m3u8",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Subtitle HLS playlist",
+            "content": {"application/vnd.apple.mpegurl": {"schema": {"type": "string"}}},
+        }
+    },
+)
+async def get_subtitle_playlist(
+    session_id: str,
+    viewer: ViewerDep,
+    settings: SettingsDep,
+    token: str | None = Query(default=None),
+) -> Response:
+    """Return the WebVTT subtitle playlist for an HLS session."""
+    manager = get_session_manager(settings)
+    session = _get_validated_session(session_id, manager, viewer)
+    session.touch()
+
+    token_suffix = f"?token={quote(token, safe='')}" if token else ""
+    seg_dur = max(1.0, session.duration_seconds or 30.0)
+    target_dur = math.ceil(seg_dur)
+
+    content = (
+        "#EXTM3U\n"
+        "#EXT-X-VERSION:3\n"
+        f"#EXT-X-TARGETDURATION:{target_dur}\n"
+        "#EXT-X-MEDIA-SEQUENCE:0\n"
+        "#EXT-X-PLAYLIST-TYPE:VOD\n"
+        f"#EXTINF:{seg_dur:.3f},\n"
+        f"subtitles.vtt{token_suffix}\n"
+        "#EXT-X-ENDLIST\n"
+    )
+    return Response(
+        content=content,
+        media_type=HLS_MIME,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
+@router.get(
+    "/{session_id}/subtitles.vtt",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "WebVTT subtitle track for HLS session",
+            "content": {"text/vtt": {"schema": {"type": "string"}}},
+        }
+    },
+)
+async def get_subtitle_vtt(
+    session_id: str,
+    viewer: ViewerDep,
+    settings: SettingsDep,
+) -> Response:
+    """Return the WebVTT subtitle document for an HLS session."""
+    manager = get_session_manager(settings)
+    session = _get_validated_session(session_id, manager, viewer)
+    session.touch()
+
+    vtt_path = _resolve_session_path(session.output_dir, "subtitles.vtt")
+    if vtt_path.exists():
+        vtt_content = vtt_path.read_text(encoding="utf-8", errors="replace")
+    elif session.plan.subtitle_stream_index is not None:
+        vtt_content = await extract_embedded_subtitle(
+            session.input_path,
+            session.plan.subtitle_stream_index,
+            fmt="webvtt",
+            output_path=vtt_path,
+        )
+    else:
+        vtt_content = "WEBVTT\n\n"
+
+    return Response(
+        content=vtt_content,
+        media_type="text/vtt",
+        headers={"Cache-Control": "public, max-age=3600"},
     )
 
 

@@ -161,3 +161,11 @@ def test_language_is_taken_from_the_sidecar_name(tmp_path: Path) -> None:
     assert subtitle_language(video, tmp_path / "Movie.EN.forced.srt") == "en"
     assert subtitle_language(video, tmp_path / "Movie.srt") is None
     assert subtitle_language(video, tmp_path / "Other.en.srt") is None
+
+
+@pytest.mark.asyncio
+async def test_extract_embedded_subtitle_handles_missing_file(tmp_path: Path) -> None:
+    from app.services.subtitles import extract_embedded_subtitle
+
+    result = await extract_embedded_subtitle(tmp_path / "nonexistent.mkv", 0, fmt="webvtt")
+    assert result == "WEBVTT\n\n"

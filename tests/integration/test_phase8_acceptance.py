@@ -204,8 +204,18 @@ ENDPOINT_POLICIES: dict[tuple[str, str], EndpointPolicy] = {
     ("GET", "/api/v1/hls/{session_id}/master.m3u8"): EndpointPolicy("viewer"),
     ("GET", "/api/v1/hls/{session_id}/media.m3u8"): EndpointPolicy("viewer"),
     ("GET", "/api/v1/hls/{session_id}/init.mp4"): EndpointPolicy("viewer"),
+    ("GET", "/api/v1/hls/{session_id}/subtitles.m3u8"): EndpointPolicy("viewer"),
+    ("GET", "/api/v1/hls/{session_id}/subtitles.vtt"): EndpointPolicy("viewer"),
     ("GET", "/api/v1/hls/{session_id}/{segment_file}"): EndpointPolicy("viewer"),
     ("POST", "/api/v1/hls/{session_id}/stop"): EndpointPolicy("viewer"),
+    # Plugins (Admin only)
+    ("GET", "/api/v1/plugins"): EndpointPolicy("admin"),
+    ("POST", "/api/v1/plugins/reload"): EndpointPolicy("admin"),
+    ("GET", "/api/v1/plugins/{plugin_id}"): EndpointPolicy("admin"),
+    ("GET", "/api/v1/plugins/{plugin_id}/config"): EndpointPolicy("admin"),
+    ("PUT", "/api/v1/plugins/{plugin_id}/config"): EndpointPolicy("admin"),
+    ("POST", "/api/v1/plugins/{plugin_id}/disable"): EndpointPolicy("admin"),
+    ("POST", "/api/v1/plugins/{plugin_id}/enable"): EndpointPolicy("admin"),
 }
 
 

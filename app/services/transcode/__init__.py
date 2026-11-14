@@ -27,6 +27,7 @@ from app.services.transcode.profile import (
     BUILTIN_PRESETS,
     ClientCapabilities,
     PresetName,
+    SubtitleProfile,
     detect_preset_from_user_agent,
     resolve_client_capabilities,
 )
@@ -45,6 +46,7 @@ __all__ = [
     "REMUX_ELIGIBLE_REASONS",
     "ServerTranscodeCapabilities",
     "SubtitleAction",
+    "SubtitleProfile",
     "TranscodePlan",
     "TranscodeReason",
     "UserLimits",

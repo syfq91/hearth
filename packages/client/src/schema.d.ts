@@ -1109,6 +1109,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hls/{session_id}/subtitles.m3u8": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Subtitle Playlist
+         * @description Return the WebVTT subtitle playlist for an HLS session.
+         */
+        get: operations["get_subtitle_playlist_api_v1_hls__session_id__subtitles_m3u8_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hls/{session_id}/subtitles.vtt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Subtitle Vtt
+         * @description Return the WebVTT subtitle document for an HLS session.
+         */
+        get: operations["get_subtitle_vtt_api_v1_hls__session_id__subtitles_vtt_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/hls/{session_id}/{segment_file}": {
         parameters: {
             query?: never;
@@ -2954,6 +2994,8 @@ export interface components {
             preset?: string | null;
             /** Subtitle Formats */
             subtitle_formats?: string[];
+            /** Subtitle Profiles */
+            subtitle_profiles?: components["schemas"]["SubtitleProfile"][];
             /** Video Codecs */
             video_codecs?: string[];
             /** Video Profiles */
@@ -4596,6 +4638,22 @@ export interface components {
             setup_required: boolean;
         };
         /**
+         * SubtitleProfile
+         * @description Subtitle delivery capability for a specific subtitle format.
+         */
+        SubtitleProfile: {
+            /**
+             * Format
+             * @default
+             */
+            format: string;
+            /**
+             * Method
+             * @default
+             */
+            method: string;
+        };
+        /**
          * SubtitleResponse
          * @description A playable external subtitle track.
          */
@@ -4755,7 +4813,7 @@ export interface components {
              * Subtitle Action
              * @enum {string}
              */
-            subtitle_action: "none" | "sidecar_vtt" | "burn_in";
+            subtitle_action: "none" | "sidecar_vtt" | "burn_in" | "external_ass";
             /** Subtitle Stream Index */
             subtitle_stream_index?: number | null;
             /** Target Bitrate */
@@ -6947,6 +7005,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionStopResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_subtitle_playlist_api_v1_hls__session_id__subtitles_m3u8_get: {
+        parameters: {
+            query?: {
+                /** @description Media access token */
+                token?: string | null;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subtitle HLS playlist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.apple.mpegurl": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_subtitle_vtt_api_v1_hls__session_id__subtitles_vtt_get: {
+        parameters: {
+            query?: {
+                /** @description Media access token */
+                token?: string | null;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description WebVTT subtitle track for HLS session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/vtt": string;
                 };
             };
             /** @description Validation Error */

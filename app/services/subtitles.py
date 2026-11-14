@@ -5,15 +5,19 @@ resolves an opaque id against the live sidecar list next to the video, which
 means a stale id 404s instead of serving a renamed or replaced file.
 """
 
+import asyncio
 import base64
 import binascii
 import html
 import json
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from app.services.scanner.walker import find_sidecar_subtitles
+
+logger = logging.getLogger("hearth.subtitles")
 
 SUPPORTED_SUFFIXES = frozenset({".srt", ".ass", ".ssa", ".vtt"})
 
@@ -194,6 +198,53 @@ def _format_vtt_time(total_ms: int) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{millis:03d}"
 
 
+async def extract_embedded_subtitle(
+    video_path: Path | str,
+    subtitle_stream_index: int,
+    fmt: str = "webvtt",
+    output_path: Path | None = None,
+) -> str:
+    """Extract an embedded subtitle track to WebVTT or ASS using FFmpeg."""
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "warning",
+        "-y",
+        "-i",
+        str(video_path),
+        "-map",
+        f"0:s:{subtitle_stream_index}",
+        "-f",
+        fmt,
+        str(output_path) if output_path else "-",
+    ]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE if not output_path else asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+        if proc.returncode != 0:
+            logger.warning(
+                "ffmpeg subtitle extraction failed (exit %d): %s",
+                proc.returncode,
+                stderr.decode("utf-8", errors="replace"),
+            )
+            return "WEBVTT\n\n" if fmt == "webvtt" else ""
+        if output_path and output_path.exists():
+            return await asyncio.to_thread(output_path.read_text, "utf-8", "replace")
+        return (
+            stdout.decode("utf-8", errors="replace")
+            if stdout
+            else ("WEBVTT\n\n" if fmt == "webvtt" else "")
+        )
+    except (OSError, TimeoutError) as exc:
+        logger.warning("ffmpeg subtitle extraction error: %s", exc)
+        return "WEBVTT\n\n" if fmt == "webvtt" else ""
+
+
 __all__ = [
     "SUPPORTED_SUFFIXES",
     "SubtitleRef",
@@ -202,5 +253,6 @@ __all__ = [
     "decode_subtitle_id",
     "discover_subtitles",
     "encode_subtitle_id",
+    "extract_embedded_subtitle",
     "subtitle_language",
 ]

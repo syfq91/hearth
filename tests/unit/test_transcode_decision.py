@@ -718,7 +718,7 @@ TEST_MATRIX = [
         "vaapi",
     ),
     (
-        "39_ass_styled_subtitle_forces_burn_in_for_styling",
+        "39_ass_text_subtitle_converts_to_vtt",
         _make_probe(
             "mkv",
             "h264",
@@ -735,11 +735,11 @@ TEST_MATRIX = [
         UserLimits(),
         _vaapi_caps(),
         PlaybackOptions(subtitle_track_index=2),
-        "transcode_hls",
-        "transcode",
+        "remux_hls",
         "copy",
-        "burn_in",
-        "vaapi",
+        "copy",
+        "sidecar_vtt",
+        "none",
     ),
     (
         "40_unselected_subtitles_do_not_interfere",
@@ -966,7 +966,10 @@ def test_subtitle_stream_index_is_relative_to_subtitles() -> None:
         False,
         "aac",
         2,
-        [{"codec": "ass", "language": "eng"}, {"codec": "ass", "language": "jpn"}],
+        [
+            {"codec": "hdmv_pgs_subtitle", "language": "eng"},
+            {"codec": "hdmv_pgs_subtitle", "language": "jpn"},
+        ],
     )
     # Selecting stream index 3 (the 2nd subtitle stream, relative index 1)
     plan = evaluate_playback_plan(
@@ -1157,3 +1160,164 @@ def test_decision_audit_acceptance_5_function_purity(monkeypatch: pytest.MonkeyP
     plan2 = evaluate_playback_plan(probe, caps, user_limits, server_caps, opts)
 
     assert plan1 == plan2
+
+
+# ==============================================================================
+# T10 (P2): Subtitle Pipeline Acceptance Tests (§3.5, §3.3)
+# ==============================================================================
+
+
+def test_t10_srt_on_vtt_capable_client_stays_remux_or_direct_stream() -> None:
+    """SRT on a client with VTT support stays Remux/DirectStream when eligible."""
+    probe = _make_probe(
+        "mkv",
+        "h264",
+        "High",
+        1920,
+        1080,
+        3_000_000,
+        False,
+        "aac",
+        2,
+        [{"codec": "subrip", "language": "eng"}],
+    )
+    chrome = BUILTIN_PRESETS["chrome"]
+    plan = evaluate_playback_plan(
+        probe,
+        chrome,
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(subtitle_track_index=2),
+    )
+    assert plan.video_action == "copy"
+    assert plan.mode in ("direct_stream", "remux", "remux_hls")
+    assert TranscodeReason.SubtitleBurnInRequired not in plan.reasons
+    assert plan.subtitle_action == "sidecar_vtt"
+
+
+def test_t10_pgs_forces_burn_in_and_transcode() -> None:
+    """PGS -> Transcode with burn-in and filter path points at the symlink."""
+    probe = _make_probe(
+        "mp4",
+        "h264",
+        "High",
+        1920,
+        1080,
+        3_000_000,
+        False,
+        "aac",
+        2,
+        [{"codec": "hdmv_pgs_subtitle", "language": "eng"}],
+    )
+    chrome = BUILTIN_PRESETS["chrome"]
+    plan = evaluate_playback_plan(
+        probe,
+        chrome,
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(subtitle_track_index=2),
+    )
+    assert plan.mode == "transcode_hls"
+    assert plan.video_action == "transcode"
+    assert TranscodeReason.SubtitleBurnInRequired in plan.reasons
+    assert plan.subtitle_action == "burn_in"
+
+
+def test_t10_ass_on_vtt_client_converts_without_video_transcode() -> None:
+    """Text subtitles (ASS) on client with VTT support convert to WebVTT; no video transcode."""
+    probe = _make_probe(
+        "mp4",
+        "h264",
+        "High",
+        1920,
+        1080,
+        3_000_000,
+        False,
+        "aac",
+        2,
+        [{"codec": "ass", "language": "jpn"}],
+    )
+    chrome = BUILTIN_PRESETS["chrome"]
+    plan = evaluate_playback_plan(
+        probe,
+        chrome,
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(subtitle_track_index=2),
+    )
+    assert plan.video_action == "copy"
+    assert plan.mode == "direct_play"
+    assert TranscodeReason.SubtitleBurnInRequired not in plan.reasons
+    assert plan.subtitle_action == "sidecar_vtt"
+
+
+def test_t10_ass_delivered_externally_when_profile_lists_ass_external() -> None:
+    """If profile lists ass as External, deliver ASS to capable renderer instead."""
+    from app.services.transcode.profile import SubtitleProfile
+
+    probe = _make_probe(
+        "mp4",
+        "h264",
+        "High",
+        1920,
+        1080,
+        3_000_000,
+        False,
+        "aac",
+        2,
+        [{"codec": "ass", "language": "jpn"}],
+    )
+    caps = ClientCapabilities(
+        containers=["mp4"],
+        video_codecs=["h264"],
+        video_profiles=["high"],
+        audio_codecs=["aac"],
+        subtitle_profiles=[SubtitleProfile(format="ass", method="External")],
+    )
+    plan = evaluate_playback_plan(
+        probe,
+        caps,
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(subtitle_track_index=2),
+    )
+    assert plan.video_action == "copy"
+    assert plan.mode == "direct_play"
+    assert TranscodeReason.SubtitleBurnInRequired not in plan.reasons
+    assert plan.subtitle_action in ("external_ass", "sidecar_vtt")
+
+
+def test_t10_client_lacking_text_method_uses_burn_in() -> None:
+    """Any client lacking a text method uses burn-in (SubtitleBurnInRequired)."""
+    from app.services.transcode.profile import SubtitleProfile
+
+    probe = _make_probe(
+        "mp4",
+        "h264",
+        "High",
+        1920,
+        1080,
+        3_000_000,
+        False,
+        "aac",
+        2,
+        [{"codec": "subrip", "language": "eng"}],
+    )
+    caps = ClientCapabilities(
+        containers=["mp4"],
+        video_codecs=["h264"],
+        video_profiles=["high"],
+        audio_codecs=["aac"],
+        subtitle_formats=[],
+        subtitle_profiles=[SubtitleProfile(format="vtt", method="Encode")],
+    )
+    plan = evaluate_playback_plan(
+        probe,
+        caps,
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(subtitle_track_index=2),
+    )
+    assert plan.video_action == "transcode"
+    assert TranscodeReason.SubtitleBurnInRequired in plan.reasons
+    assert plan.subtitle_action == "burn_in"
