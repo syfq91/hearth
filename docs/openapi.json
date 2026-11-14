@@ -4529,6 +4529,28 @@
             ],
             "title": "Command"
           },
+          "embedded_subtitle_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedded Subtitle Format"
+          },
+          "embedded_subtitle_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedded Subtitle Url"
+          },
           "embedded_subtitles": {
             "items": {
               "$ref": "#/components/schemas/ProbeStream"
@@ -13040,6 +13062,156 @@
         "summary": "Get Attachment",
         "tags": [
           "media"
+        ]
+      }
+    },
+    "/api/v1/media/{file_id}/subtitles/{stream_index}.ass": {
+      "get": {
+        "description": "Serve an embedded subtitle stream as ASS for client-side rendering.",
+        "operationId": "get_embedded_subtitle_ass_api_v1_media__file_id__subtitles__stream_index__ass_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "title": "File Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "stream_index",
+            "required": true,
+            "schema": {
+              "title": "Stream Index",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/x-ssa": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Embedded subtitle extracted as ASS/SSA"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Embedded Subtitle Ass",
+        "tags": [
+          "subtitles"
+        ]
+      }
+    },
+    "/api/v1/media/{file_id}/subtitles/{stream_index}.vtt": {
+      "get": {
+        "description": "Serve an embedded (in-container) subtitle stream as WebVTT.\n\nLets direct-play clients render text subtitles without a transcode session.",
+        "operationId": "get_embedded_subtitle_vtt_api_v1_media__file_id__subtitles__stream_index__vtt_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "title": "File Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "stream_index",
+            "required": true,
+            "schema": {
+              "title": "Stream Index",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/vtt": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Embedded subtitle extracted as WebVTT"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Embedded Subtitle Vtt",
+        "tags": [
+          "subtitles"
         ]
       }
     },

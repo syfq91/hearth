@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Container font attachment extraction and serving (`GET /api/v1/media/{file_id}/attachments/{idx}`), exposing embedded fonts in MKV files with disk caching for client-side ASS/SSA WebAssembly rendering (Phase 1 of video player overhaul).
+- Embedded subtitle delivery (`GET /api/v1/media/{file_id}/subtitles/{index}.vtt` and `.ass`) plus `embedded_subtitle_url`/`embedded_subtitle_format` on playback-info, so direct-play clients and client-side ASS renderers can show text subtitles without a transcode session.
 - Subtitle burn-in fallback parameter (`force_burn_in_subtitles`) on `POST /api/v1/items/{id}/playback-info` allowing clients to cleanly recover from WebAssembly crashes without stream teardown.
 - Comprehensive video transcoding pipeline overhaul:
   - **Atomic segment writes (T01)**: Implemented `-hls_flags temp_file` with atomic renaming and `.tmp` route rejection to eliminate partial segment reads.

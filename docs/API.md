@@ -232,6 +232,8 @@ When playing media files containing embedded fonts (typically Matroska `.mkv` fi
 ```
 Clients rendering ASS subtitles client-side (via WebAssembly/JASSUB) supply these attachment URLs to the font loader.
 
+When an embedded subtitle is selected, `PlaybackInfoResponse` may also include `embedded_subtitle_url` and `embedded_subtitle_format` (`vtt` or `ass`). This is populated when the server is not delivering the subtitle inside an HLS manifest: direct-play `sidecar_vtt` tracks and client-rendered `external_ass` tracks. Clients load that URL directly (`text/vtt` into a native text track, `text/x-ssa` into JASSUB). For HLS `sidecar_vtt` delivery the master playlist advertises the rendition instead, and these fields are null.
+
 If a client encounters an unrecoverable client-side subtitle crash, it can re-request playback negotiation with `force_burn_in_subtitles: true` in the `PlaybackInfoRequest` body (or `?forceBurnInSubtitles=true`), which bypasses external subtitle profiles and forces FFmpeg server-side subtitle burn-in.
 
 ---
@@ -327,6 +329,8 @@ If a client encounters an unrecoverable client-side subtitle crash, it can re-re
 | | `/api/v1/hls/{session_id}/subtitles.vtt` | GET | Viewer | HLS WebVTT subtitle track |
 | | `/api/v1/hls/{session_id}/stop` | POST | Viewer | Terminate active transcode session |
 | | `/api/v1/subtitles/{id}.vtt` | GET | Viewer | WebVTT subtitle track |
+| | `/api/v1/media/{file_id}/subtitles/{index}.vtt` | GET | Viewer | Embedded subtitle extracted as WebVTT |
+| | `/api/v1/media/{file_id}/subtitles/{index}.ass` | GET | Viewer | Embedded subtitle extracted as ASS/SSA |
 | | `/api/v1/media/{file_id}/attachments/{idx}` | GET | Viewer | Container font attachment stream |
 | | `/api/v1/images/{id}` | GET | Viewer | Cached artwork variant generator |
 | **Books** | `/api/v1/books` | GET | User | List books with keyset pagination |

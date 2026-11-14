@@ -612,3 +612,105 @@ async def test_playback_info_force_burn_in_subtitles(
     assert data["plan"]["subtitle_action"] == "burn_in"
     if data.get("session_id"):
         await api_client.post(f"/api/v1/hls/{data['session_id']}/stop", headers=_bearer(admin))
+
+
+async def test_playback_info_delivers_embedded_text_subtitle_on_direct_play(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    _, item_id, file_ids, _ = await _seed(db_settings, db_sessionmaker, sidecar=False)
+
+    streams_json = {
+        "container": "mp4",
+        "duration_seconds": 100.0,
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "profile": "High",
+                "width": 1920,
+                "height": 1080,
+                "pix_fmt": "yuv420p",
+            },
+            {"index": 1, "codec_type": "audio", "codec_name": "aac", "channels": 2},
+            {
+                "index": 2,
+                "codec_type": "subtitle",
+                "codec_name": "subrip",
+                "tags": {"language": "eng"},
+            },
+        ],
+        "chapters": [],
+    }
+    async with db_sessionmaker() as session:
+        media_file = await session.get(MediaFile, file_ids[0])
+        assert media_file is not None
+        media_file.streams_json = streams_json
+        await session.commit()
+
+    res = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={"capabilities": {"preset": "chrome"}, "subtitle_track_index": 2},
+        headers=_bearer(admin),
+    )
+    assert res.status_code == 200, res.text
+    data = res.json()
+
+    assert data["mode"] == "direct_play"
+    assert data["plan"]["subtitle_action"] == "sidecar_vtt"
+    assert data["embedded_subtitle_format"] == "vtt"
+    url = data["embedded_subtitle_url"]
+    assert url is not None
+    assert url.startswith(f"/api/v1/media/{file_ids[0]}/subtitles/0.vtt?token=")
+
+    served = await api_client.get(url)
+    assert served.status_code == 200, served.text
+    assert served.headers["content-type"].startswith("text/vtt")
+
+
+async def test_embedded_subtitle_endpoint_rejects_out_of_range_streams(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    _, item_id, file_ids, _ = await _seed(db_settings, db_sessionmaker, sidecar=False)
+
+    async with db_sessionmaker() as session:
+        media_file = await session.get(MediaFile, file_ids[0])
+        assert media_file is not None
+        media_file.streams_json = {
+            "container": "mp4",
+            "duration_seconds": 100.0,
+            "streams": [
+                {
+                    "index": 0,
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "profile": "High",
+                    "width": 1920,
+                    "height": 1080,
+                },
+                {"index": 2, "codec_type": "subtitle", "codec_name": "ass"},
+            ],
+        }
+        await session.commit()
+
+    headers = _bearer(admin)
+    valid = await api_client.get(f"/api/v1/media/{file_ids[0]}/subtitles/0.vtt", headers=headers)
+    assert valid.status_code == 200, valid.text
+
+    missing = await api_client.get(f"/api/v1/media/{file_ids[0]}/subtitles/1.vtt", headers=headers)
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "subtitle_not_found"
+
+    unknown_file = await api_client.get(
+        "/api/v1/media/does-not-exist/subtitles/0.vtt", headers=headers
+    )
+    assert unknown_file.status_code == 404
+
+    no_auth = await api_client.get(f"/api/v1/media/{file_ids[0]}/subtitles/0.vtt")
+    assert no_auth.status_code == 401

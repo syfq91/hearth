@@ -1654,6 +1654,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/media/{file_id}/subtitles/{stream_index}.ass": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Embedded Subtitle Ass
+         * @description Serve an embedded subtitle stream as ASS for client-side rendering.
+         */
+        get: operations["get_embedded_subtitle_ass_api_v1_media__file_id__subtitles__stream_index__ass_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media/{file_id}/subtitles/{stream_index}.vtt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Embedded Subtitle Vtt
+         * @description Serve an embedded (in-container) subtitle stream as WebVTT.
+         *
+         *     Lets direct-play clients render text subtitles without a transcode session.
+         */
+        get: operations["get_embedded_subtitle_vtt_api_v1_media__file_id__subtitles__stream_index__vtt_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/metadata/search": {
         parameters: {
             query?: never;
@@ -4017,6 +4059,10 @@ export interface components {
             audio_streams?: components["schemas"]["ProbeStream"][];
             /** Command */
             command?: string[] | null;
+            /** Embedded Subtitle Format */
+            embedded_subtitle_format?: string | null;
+            /** Embedded Subtitle Url */
+            embedded_subtitle_url?: string | null;
             /** Embedded Subtitles */
             embedded_subtitles?: components["schemas"]["ProbeStream"][];
             /** Expires At */
@@ -8033,6 +8079,76 @@ export interface operations {
                     "font/ttf": string;
                     "font/woff": string;
                     "font/woff2": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_embedded_subtitle_ass_api_v1_media__file_id__subtitles__stream_index__ass_get: {
+        parameters: {
+            query?: {
+                /** @description Media access token */
+                token?: string | null;
+            };
+            header?: never;
+            path: {
+                file_id: string;
+                stream_index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Embedded subtitle extracted as ASS/SSA */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/x-ssa": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_embedded_subtitle_vtt_api_v1_media__file_id__subtitles__stream_index__vtt_get: {
+        parameters: {
+            query?: {
+                /** @description Media access token */
+                token?: string | null;
+            };
+            header?: never;
+            path: {
+                file_id: string;
+                stream_index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Embedded subtitle extracted as WebVTT */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/vtt": string;
                 };
             };
             /** @description Validation Error */

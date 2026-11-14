@@ -150,6 +150,8 @@ class PlaybackInfoResponse(BaseModel):
     audio_streams: list[ProbeStream] = Field(default_factory=list)
     embedded_subtitles: list[ProbeStream] = Field(default_factory=list)
     attachments: list[AttachmentResponse] = Field(default_factory=list)
+    embedded_subtitle_url: str | None = None
+    embedded_subtitle_format: str | None = None
     reasons: list[str] = Field(default_factory=list)
     expires_at: datetime | None = None
     plan: TranscodePlan | None = None
@@ -408,6 +410,8 @@ async def playback_info(
         for att in probe_res.font_attachments
     ]
 
+    embedded_url, embedded_format = _embedded_subtitle_delivery(plan, media_file, encoded_token)
+
     if plan.mode == "direct_play":
         return PlaybackInfoResponse(
             mode="direct_play",
@@ -418,6 +422,8 @@ async def playback_info(
             audio_streams=audio_streams,
             embedded_subtitles=embedded_subtitles,
             attachments=attachments,
+            embedded_subtitle_url=embedded_url,
+            embedded_subtitle_format=embedded_format,
             reasons=plan.reasons,
             expires_at=expires_at,
             plan=plan,
@@ -447,6 +453,8 @@ async def playback_info(
         audio_streams=audio_streams,
         embedded_subtitles=embedded_subtitles,
         attachments=attachments,
+        embedded_subtitle_url=embedded_url,
+        embedded_subtitle_format=embedded_format,
         reasons=plan.reasons,
         expires_at=expires_at,
         plan=plan,
@@ -612,6 +620,28 @@ async def _load_state(session: AsyncSession, user_id: str, item_id: str) -> User
 # an asyncio.Lock is sufficient; each section drops its pre-lock read snapshot
 # first so it sees what the previous writer committed.
 _STATE_LOCK = asyncio.Lock()
+
+
+def _embedded_subtitle_delivery(
+    plan: TranscodePlan, media_file: MediaFile, encoded_token: str
+) -> tuple[str | None, str | None]:
+    """Return a URL for the selected embedded subtitle when the server does not
+    deliver it inside the HLS manifest.
+
+    ``sidecar_vtt`` during direct play has no HLS session to carry a subtitle
+    rendition, so the client fetches the converted WebVTT directly. HLS delivery
+    of ``sidecar_vtt`` is handled by the master playlist instead.
+    """
+    if plan.subtitle_action != "sidecar_vtt" or plan.subtitle_stream_index is None:
+        return None, None
+    if plan.mode != "direct_play":
+        return None, None
+    fmt = "vtt"
+    url = (
+        f"/api/v1/media/{media_file.id}/subtitles/"
+        f"{plan.subtitle_stream_index}.{fmt}?token={encoded_token}"
+    )
+    return url, fmt
 
 
 def _select_file(item: MediaItem, file_id: str | None) -> MediaFile:
