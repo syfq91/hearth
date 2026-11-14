@@ -131,6 +131,10 @@ export class HlsEngine {
 		}
 	}
 
+	public setQualityLevel(levelIndex: number): void {
+		this.currentLevel = levelIndex;
+	}
+
 	public get levels(): Level[] {
 		return this.hls?.levels ?? [];
 	}

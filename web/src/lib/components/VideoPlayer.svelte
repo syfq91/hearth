@@ -1,22 +1,26 @@
 <script lang="ts">
-	import videojs from 'video.js';
-	import type Player from 'video.js/dist/types/player';
-	import 'video.js/dist/video-js.css';
-	import type JASSUB from 'jassub';
-	import { ArrowLeft } from '@lucide/svelte';
-	import { api } from '../api/client';
-	import { detectBrowserCapabilities } from '../capabilities';
-	import { installVhsRetryInterceptor, sendStopBeacon } from '../video-resilience';
-	import { toAss } from '../video-subtitles';
 	import {
-		addAudioMenuButton,
-		addInfoButton,
-		addSubtitleMenuButton,
-		type AudioMenuHandle,
-		type InfoButtonHandle,
-		type SubtitleMenuChoice,
-		type SubtitleMenuHandle
-	} from '../video-audio-menu';
+		ArrowLeft,
+		Play,
+		Pause,
+		RotateCcw,
+		RotateCw,
+		Volume2,
+		Volume1,
+		VolumeX,
+		Maximize,
+		Minimize,
+		PictureInPicture2,
+		SlidersHorizontal,
+		Info,
+		Scan
+	} from '@lucide/svelte';
+	import { api } from '../api/client';
+	import { detectBrowserCapabilities, getCapabilitiesWithBurnInFallback } from '../capabilities';
+	import { sendStopBeacon } from '../video-resilience';
+	import { HlsEngine, isHlsSupported, isNativeHlsSupported, type HlsQualityLevel } from '../player/hls-engine';
+	import { SubtitleManager } from '../player/subtitles.svelte';
+	import SubtitleSyncControl from './SubtitleSyncControl.svelte';
 	import type { PlaybackInfoResponse } from '../api/types';
 
 	interface Props {
@@ -32,18 +36,58 @@
 
 	let containerEl = $state<HTMLDivElement | null>(null);
 	let videoEl = $state<HTMLVideoElement | null>(null);
-	let player: Player | null = null;
-	let jassubInstance: JASSUB | null = null;
-	let hasJassub = $state(false);
+	let seekbarEl = $state<HTMLDivElement | null>(null);
+
+	let hlsEngine: HlsEngine | null = null;
+	let subtitleManager = $state<SubtitleManager | null>(null);
 
 	let info = $state<PlaybackInfoResponse | null>(null);
 	let loadError = $state<string | null>(null);
 	let loading = $state(true);
-	let audioTrackIndex = $state<number | null>(null);
-	/** Embedded subtitle stream handed to the transcode plan, if any. */
-	let embeddedSubtitleIndex = $state<number | null>(null);
+	let isWaiting = $state(false);
 
-	/** Server-side HLS session for `info`; plain so re-planning cannot loop effects. */
+	let audioTrackIndex = $state<number | null>(null);
+	let subtitleChoice = $state<string>('');
+	let embeddedSubtitleIndex = $state<number | null>(null);
+	let forceBurnIn = $state(false);
+
+	// Aspect ratio mode: 'contain' | 'cover' | 'fill'
+	let aspectRatio = $state<'contain' | 'cover' | 'fill'>('contain');
+
+	// Subtitle sync modal
+	let showSubSync = $state(false);
+	let currentSubOffset = $state(0);
+
+	// Timing and duration
+	let currentTime = $state(0);
+	let rawDuration = $state(0);
+	let expectedDuration = $state(0);
+	let bufferedRanges = $state<{ startPct: number; widthPct: number }[]>([]);
+
+	let isPaused = $state(true);
+	let volume = $state(1);
+	let isMuted = $state(false);
+	let playbackRate = $state(1);
+
+	// Rendition quality levels for HLS
+	let levels = $state<HlsQualityLevel[]>([]);
+	let qualityLevel = $state(-1); // -1 = Auto ABR
+
+	// OSD activity state
+	let isUserActive = $state(true);
+	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
+	let showModeBadge = $state(false);
+
+	// Fullscreen & PiP states
+	let isFullscreen = $state(false);
+	let isPip = $state(false);
+
+	// Seekbar hover state
+	let isHoveringSeekbar = $state(false);
+	let hoverTime = $state(0);
+	let hoverPct = $state(0);
+
+	// Session management
 	let sessionId: string | null = null;
 	let sessionMediaToken: string | null = null;
 	let resumeApplied = false;
@@ -51,23 +95,23 @@
 	let lastReportedMs = 0;
 	let destroyed = false;
 	let focusTaken = false;
-	let syncingTracks = false;
 
 	let lastItemId = '';
 	let lastAudioTrack: number | null = null;
 	let lastSubChoice = '';
-	let expectedDuration = 0;
 
-	/** HLS rendition list for the quality selector (empty = not applicable). */
-	let levels = $state<{ index: number; label: string }[]>([]);
-	/** Selected rendition index, or -1 for auto. */
-	let qualityLevel = $state(-1);
+	const REPORT_INTERVAL_MS = 10_000;
 
-	let isUserActive = $state(true);
-	let isPaused = $state(true);
-	/** Whether the direct/transcode badge is shown (toggled by the info button). */
-	let showModeBadge = $state(false);
-	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
+	const duration = $derived.by(() => {
+		if (rawDuration > 0 && Number.isFinite(rawDuration)) return rawDuration;
+		if (expectedDuration > 0) return expectedDuration;
+		return 0;
+	});
+
+	const progressPct = $derived.by(() => {
+		if (duration <= 0) return 0;
+		return Math.min(100, Math.max(0, (currentTime / duration) * 100));
+	});
 
 	function triggerActivity(): void {
 		isUserActive = true;
@@ -79,55 +123,17 @@
 		}
 	}
 
-	/**
-	 * Subtitle choice in the select: `ext:<id>` for a sidecar file the browser
-	 * renders from a `<track>`, `emb:<index>` for an embedded stream the
-	 * server must mux into the plan, or empty for off.
-	 */
-	let subtitleChoice = $state('');
-
-	// Progress checkpoints (docs/API.md §4: resume and next-up depend on
-	// them): every 10s of playback (T11), immediately on pause, and on unload.
-	const REPORT_INTERVAL_MS = 10_000;
-
-	async function report(state: 'playing' | 'paused' | 'stopped'): Promise<void> {
-		if (!player || player.isDisposed()) return;
-		const cur = player.currentTime() ?? 0;
-		const dur = player.duration();
-		const position_ms = Math.max(0, Math.floor(cur * 1000));
-		const rawDuration =
-			typeof dur === 'number' && Number.isFinite(dur) && dur > 0
-				? dur
-				: expectedDuration > 0
-					? expectedDuration
-					: undefined;
-		const duration_ms = rawDuration ? Math.floor(rawDuration * 1000) : undefined;
-		lastReportedMs = Math.max(lastReportedMs, position_ms);
-		try {
-			await api.post(`/items/${itemId}/progress`, {
-				body: { position_ms, duration_ms, state }
-			});
-		} catch {
-			/* progress is best-effort; never block playback on it */
+	function formatTime(seconds: number): string {
+		if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+		const totalSecs = Math.floor(seconds);
+		const hrs = Math.floor(totalSecs / 3600);
+		const mins = Math.floor((totalSecs % 3600) / 60);
+		const secs = totalSecs % 60;
+		const paddedSecs = secs.toString().padStart(2, '0');
+		if (hrs > 0) {
+			return `${hrs}:${mins.toString().padStart(2, '0')}:${paddedSecs}`;
 		}
-	}
-
-	function syncDuration(): void {
-		if (!player || player.isDisposed() || expectedDuration <= 0) return;
-		const dur = player.duration();
-		if (!dur || !Number.isFinite(dur) || (info?.mode !== 'direct_play' && dur < expectedDuration)) {
-			player.duration(expectedDuration);
-		}
-	}
-
-	function handleTimeUpdate(): void {
-		if (!player || player.isDisposed()) return;
-		const cur = player.currentTime() ?? 0;
-		const positionMs = Math.floor(cur * 1000);
-		if (positionMs - lastReportedMs >= REPORT_INTERVAL_MS) {
-			lastReportedMs = positionMs;
-			void report('playing');
-		}
+		return `${mins}:${paddedSecs}`;
 	}
 
 	function formatBitrate(bitsPerSecond: number | undefined): string {
@@ -136,226 +142,266 @@
 		return mbps >= 1 ? `${mbps.toFixed(1)} Mbps` : `${Math.round(bitsPerSecond / 1000)} kbps`;
 	}
 
-	function updateQualityLevels(): void {
-		if (!player || player.isDisposed()) return;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const ql = (player as any).qualityLevels?.();
-		if (!ql || ql.length <= 1) {
-			levels = [];
-			qualityLevel = -1;
-			return;
-		}
-		const parsed: { index: number; label: string }[] = [];
-		for (let i = 0; i < ql.length; i += 1) {
-			const lvl = ql[i];
-			parsed.push({
-				index: i,
-				label: lvl.height
-					? `${lvl.height}p (${formatBitrate(lvl.bitrate)})`
-					: `${formatBitrate(lvl.bitrate)}`
+	async function report(state: 'playing' | 'paused' | 'stopped'): Promise<void> {
+		if (!videoEl || destroyed) return;
+		const cur = videoEl.currentTime ?? 0;
+		const dur = duration;
+		const position_ms = Math.max(0, Math.floor(cur * 1000));
+		const duration_ms = dur > 0 ? Math.floor(dur * 1000) : undefined;
+		lastReportedMs = Math.max(lastReportedMs, position_ms);
+		try {
+			await api.post(`/items/${itemId}/progress`, {
+				body: { position_ms, duration_ms, state }
 			});
+		} catch {
+			/* progress is best-effort */
 		}
-		levels = parsed;
 	}
 
-	/** Apply the quality select: -1 returns to ABR. */
-	function applyQuality(): void {
-		if (!player || player.isDisposed()) return;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const ql = (player as any).qualityLevels?.();
-		if (!ql) return;
-		for (let i = 0; i < ql.length; i += 1) {
-			ql[i].enabled = qualityLevel === -1 || qualityLevel === i;
+	function updateBufferedRanges(): void {
+		if (!videoEl || duration <= 0) {
+			bufferedRanges = [];
+			return;
 		}
+		const buf = videoEl.buffered;
+		const ranges: { startPct: number; widthPct: number }[] = [];
+		for (let i = 0; i < buf.length; i++) {
+			const start = buf.start(i);
+			const end = buf.end(i);
+			const startPct = Math.max(0, Math.min(100, (start / duration) * 100));
+			const endPct = Math.max(0, Math.min(100, (end / duration) * 100));
+			ranges.push({
+				startPct,
+				widthPct: Math.max(0, endPct - startPct)
+			});
+		}
+		bufferedRanges = ranges;
 	}
 
 	function applyResume(): void {
-		if (resumeApplied || !player || player.isDisposed()) return;
+		if (resumeApplied || !videoEl) return;
 		const targetMs = resumePositionMs > 0 ? resumePositionMs : startAtMs;
 		if (targetMs <= 0) return;
 		resumeApplied = true;
-		const dur = player.duration() ?? expectedDuration;
+		const dur = duration;
 		const durationMs = dur * 1000;
 		// Near the end the user wants a rewatch prompt, not a jump to credits.
-		if (resumePositionMs <= 0 && Number.isFinite(durationMs) && durationMs > 30_000 && durationMs - targetMs < 30_000) return;
-		player.currentTime(targetMs / 1000);
+		if (resumePositionMs <= 0 && Number.isFinite(durationMs) && durationMs > 30_000 && durationMs - targetMs < 30_000) {
+			return;
+		}
+		videoEl.currentTime = targetMs / 1000;
+		currentTime = targetMs / 1000;
 	}
 
 	function togglePlay(): void {
-		if (!player || player.isDisposed()) return;
-		if (player.paused()) {
-			void player.play()?.catch(() => {});
+		if (!videoEl) return;
+		if (videoEl.paused) {
+			void videoEl.play().catch(() => {});
 		} else {
-			player.pause();
+			videoEl.pause();
 		}
 	}
 
 	function seekBy(deltaSeconds: number): void {
-		if (!player || player.isDisposed()) return;
-		const cur = player.currentTime() ?? 0;
-		player.currentTime(Math.max(0, cur + deltaSeconds));
+		if (!videoEl) return;
+		const cur = videoEl.currentTime ?? 0;
+		const maxTime = duration > 0 ? duration : Number.POSITIVE_INFINITY;
+		const nextTime = Math.max(0, Math.min(maxTime, cur + deltaSeconds));
+		videoEl.currentTime = nextTime;
+		currentTime = nextTime;
+		triggerActivity();
+		subtitleManager?.renderManualFrame(true);
+	}
+
+	function handleSeek(targetSeconds: number): void {
+		if (!videoEl) return;
+		const maxTime = duration > 0 ? duration : Number.POSITIVE_INFINITY;
+		const nextTime = Math.max(0, Math.min(maxTime, targetSeconds));
+		videoEl.currentTime = nextTime;
+		currentTime = nextTime;
+		subtitleManager?.renderManualFrame(true);
+	}
+
+	function handleSeekbarClick(e: MouseEvent): void {
+		if (!seekbarEl || duration <= 0) return;
+		const rect = seekbarEl.getBoundingClientRect();
+		const clickX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+		const pct = clickX / rect.width;
+		handleSeek(pct * duration);
+	}
+
+	function handleSeekbarMouseMove(e: MouseEvent): void {
+		if (!seekbarEl || duration <= 0) return;
+		const rect = seekbarEl.getBoundingClientRect();
+		const hoverX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+		hoverPct = (hoverX / rect.width) * 100;
+		hoverTime = (hoverX / rect.width) * duration;
+	}
+
+	function toggleMute(): void {
+		if (!videoEl) return;
+		videoEl.muted = !videoEl.muted;
+		isMuted = videoEl.muted;
+	}
+
+	function handleVolumeInput(newVol: number): void {
+		if (!videoEl) return;
+		volume = Math.max(0, Math.min(1, newVol));
+		videoEl.volume = volume;
+		if (volume > 0 && isMuted) {
+			videoEl.muted = false;
+			isMuted = false;
+		}
+	}
+
+	function handlePlaybackRateChange(newRate: number): void {
+		if (!videoEl) return;
+		playbackRate = newRate;
+		videoEl.playbackRate = newRate;
+	}
+
+	function cycleAspectRatio(): void {
+		if (aspectRatio === 'contain') {
+			aspectRatio = 'cover';
+		} else if (aspectRatio === 'cover') {
+			aspectRatio = 'fill';
+		} else {
+			aspectRatio = 'contain';
+		}
+		if (subtitleManager) {
+			subtitleManager.resize();
+		}
+	}
+
+	function toggleFullscreen(): void {
+		if (!containerEl) return;
+		if (document.fullscreenElement) {
+			void document.exitFullscreen().catch(() => {});
+		} else {
+			void containerEl.requestFullscreen().catch(() => {});
+		}
+	}
+
+	function togglePip(): void {
+		if (!videoEl) return;
+		if (document.pictureInPictureElement) {
+			void document.exitPictureInPicture().catch(() => {});
+		} else if (document.pictureInPictureEnabled && videoEl.requestPictureInPicture) {
+			void videoEl.requestPictureInPicture().catch(() => {});
+		}
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
-		// Keys starting inside the control bar buttons or menus are left to Video.js
-		if (
-			(event.target as HTMLElement)?.closest('.vjs-control-bar') ||
-			(event.target as HTMLElement)?.closest('.vjs-menu')
-		) {
+		// Ignore keys starting inside text/number inputs
+		const targetTag = (event.target as HTMLElement)?.tagName?.toLowerCase();
+		if (targetTag === 'input' && (event.target as HTMLInputElement).type !== 'range') {
 			return;
 		}
+
 		switch (event.key) {
 			case ' ':
 			case 'k':
 				event.preventDefault();
-				event.stopPropagation();
 				togglePlay();
 				break;
 			case 'ArrowRight':
 			case 'l':
 				event.preventDefault();
-				event.stopPropagation();
 				seekBy(10);
 				break;
 			case 'ArrowLeft':
 			case 'j':
 				event.preventDefault();
-				event.stopPropagation();
 				seekBy(-10);
+				break;
+			case 'ArrowUp':
+				event.preventDefault();
+				handleVolumeInput(volume + 0.05);
+				break;
+			case 'ArrowDown':
+				event.preventDefault();
+				handleVolumeInput(volume - 0.05);
+				break;
+			case 'm':
+				event.preventDefault();
+				toggleMute();
 				break;
 			case 'f':
 				event.preventDefault();
-				event.stopPropagation();
-				if (player?.isFullscreen()) {
-					void player.exitFullscreen();
-				} else {
-					void player?.requestFullscreen();
-				}
+				toggleFullscreen();
+				break;
+			case 'p':
+				event.preventDefault();
+				togglePip();
+				break;
+			case 's':
+				event.preventDefault();
+				showSubSync = !showSubSync;
+				break;
+			case 'i':
+				event.preventDefault();
+				showModeBadge = !showModeBadge;
 				break;
 			default:
 				break;
 		}
 	}
 
-	function renderJassubFrame(repaint = true): void {
-		if (!jassubInstance || !videoEl || !hasJassub) return;
-		const curTime = videoEl.currentTime;
-		const w = videoEl.videoWidth || videoEl.clientWidth;
-		const h = videoEl.videoHeight || videoEl.clientHeight;
-		if (w > 0 && h > 0) {
-			void jassubInstance.manualRender(
-				{
-					mediaTime: curTime,
-					width: w,
-					height: h,
-					expectedDisplayTime: performance.now()
-				},
-				repaint
-			);
-		}
-	}
-
-	async function destroyJassub(): Promise<void> {
-		hasJassub = false;
-		if (jassubInstance) {
-			const instance = jassubInstance;
-			jassubInstance = null;
-			try {
-				await instance.destroy();
-			} catch {
-				/* ignore */
-			}
-		}
+	function handleSubtitleCrash(error: unknown): void {
+		console.warn('[VideoPlayer] Subtitle engine crashed, initiating burn-in fallback recovery:', error);
+		forceBurnIn = true;
+		void startPlayback({ forceBurnIn: true });
 	}
 
 	async function applySubtitleChoice(): Promise<void> {
-		if (!player || player.isDisposed()) return;
+		if (!subtitleManager) return;
+
 		const externalId = subtitleChoice.startsWith('ext:')
 			? subtitleChoice.slice('ext:'.length)
 			: null;
-		const isEmbedded = subtitleChoice.startsWith('emb:');
 
-		await destroyJassub();
-
-		syncingTracks = true;
-		try {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const tracks = player.textTracks() as any;
-			for (let i = 0; i < tracks.length; i += 1) {
-				const track = tracks[i];
-				if (isEmbedded) {
-					if (track.id?.startsWith('ext:')) {
-						track.mode = 'disabled';
-					} else if (track.kind === 'subtitles') {
-						track.mode = 'showing';
-					}
-				} else if (externalId) {
-					track.mode = track.id === subtitleChoice ? 'showing' : 'disabled';
-				} else {
-					track.mode = 'disabled';
-				}
-			}
-
-			if (!externalId || !videoEl) return;
-
-			const selectedTrack = (info?.subtitles ?? []).find((t) => t.id === externalId);
-			if (!selectedTrack) return;
-
-			// JASSUB is only needed for ASS/SSA styling; standard SRT/VTT are rendered natively
-			if (selectedTrack.format !== 'ass' && selectedTrack.format !== 'ssa') {
-				return;
-			}
-
-			const delimiter = selectedTrack.url.includes('?') ? '&' : '?';
-			const fetchUrl = `${selectedTrack.url}${delimiter}raw=true`;
-
-			try {
-				const res = await fetch(fetchUrl);
-				if (!res.ok) throw new Error(`HTTP ${res.status}`);
-				const text = await res.text();
-				const subContent = toAss(text);
-
-				if (subtitleChoice === `ext:${externalId}` && videoEl) {
-					const { default: JASSUBConstructor } = await import('jassub');
-					const instance = new JASSUBConstructor({
-						video: videoEl,
-						subContent
-					});
-					await instance.ready;
-
-					if (subtitleChoice === `ext:${externalId}` && videoEl) {
-						jassubInstance = instance;
-						hasJassub = true;
-						renderJassubFrame(true);
-					} else {
-						void instance.destroy();
-					}
-				}
-			} catch (err) {
-				console.warn('JASSUB initialization failed, falling back to native text track:', err);
-				await destroyJassub();
-				hasJassub = false;
-			}
-		} finally {
-			syncingTracks = false;
+		if (!externalId) {
+			await subtitleManager.clearTrack();
+			return;
 		}
+
+		const selectedTrack = (info?.subtitles ?? []).find((t) => t.id === externalId);
+		if (!selectedTrack) {
+			await subtitleManager.clearTrack();
+			return;
+		}
+
+		// Build font attachment URLs for JASSUB font catalog
+		const tokenQuery = sessionMediaToken ? `?token=${encodeURIComponent(sessionMediaToken)}` : '';
+		const fontUrls = (info?.attachments ?? []).map(
+			(att) => `/api/v1/media/${info?.file?.id}/attachments/${att.index}${tokenQuery}`
+		);
+
+		const transcodeOffset =
+			info?.mode !== 'direct_play' && resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
+
+		await subtitleManager.loadTrack(
+			{
+				id: selectedTrack.id,
+				url: selectedTrack.url,
+				format: selectedTrack.format,
+				language: selectedTrack.language,
+				label: selectedTrack.name || selectedTrack.language || 'Subtitles'
+			},
+			fontUrls,
+			transcodeOffset
+		);
 	}
 
-	function getSourceType(mode: string, url: string): string {
-		if (mode !== 'direct_play' || url.includes('.m3u8')) {
-			return 'application/x-mpegURL';
-		}
-		if (url.includes('.webm')) return 'video/webm';
-		if (url.includes('.ogg')) return 'video/ogg';
-		return 'video/mp4';
-	}
-
-	/** (Re)start playback with the current track choices. */
-	async function startPlayback(): Promise<void> {
+	async function startPlayback(options: { forceBurnIn?: boolean } = {}): Promise<void> {
 		destroyed = false;
 		loading = true;
 		loadError = null;
 		expectedDuration = 0;
+
+		if (options.forceBurnIn) {
+			forceBurnIn = true;
+		}
 
 		const previousSession = sessionId;
 		const previousToken = sessionMediaToken;
@@ -369,7 +415,7 @@
 			? Number.parseInt(subtitleChoice.slice('emb:'.length), 10)
 			: null;
 
-		const cur = player && !player.isDisposed() ? player.currentTime() ?? 0 : 0;
+		const cur = videoEl?.currentTime ?? 0;
 		if (cur > 0) {
 			resumePositionMs = Math.floor(cur * 1000);
 		} else if (startAtMs > 0) {
@@ -377,14 +423,19 @@
 		}
 		const offsetSeconds = resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
 
+		const clientCapabilities = forceBurnIn
+			? getCapabilitiesWithBurnInFallback()
+			: detectBrowserCapabilities();
+
 		let response: PlaybackInfoResponse;
 		try {
 			response = await api.post<PlaybackInfoResponse>(`/items/${itemId}/playback-info`, {
 				body: {
-					capabilities: detectBrowserCapabilities(),
+					capabilities: clientCapabilities,
 					audio_track_index: audioTrackIndex,
 					subtitle_track_index: embeddedSubtitleIndex,
-					start_time_offset_seconds: offsetSeconds
+					start_time_offset_seconds: offsetSeconds,
+					force_burn_in_subtitles: forceBurnIn
 				}
 			});
 		} catch (e) {
@@ -404,43 +455,48 @@
 				sessionMediaToken = null;
 			}
 		}
+
 		await attachSource(response);
 	}
 
 	async function attachSource(response: PlaybackInfoResponse): Promise<void> {
-		if (!player || player.isDisposed()) return;
+		if (!videoEl) return;
 		resumeApplied = false;
 		lastReportedMs = 0;
 		levels = [];
 		qualityLevel = -1;
 
-		await destroyJassub();
-
-		syncingTracks = true;
-		try {
-			// Clear previous remote text tracks
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const remoteTracks = player.remoteTextTracks() as any;
-			while (remoteTracks && remoteTracks.length > 0) {
-				player.removeRemoteTextTrack(remoteTracks[0]);
-			}
-
-			// Add external subtitles as remote text tracks
-			for (const track of response.subtitles ?? []) {
-				player.addRemoteTextTrack(
-					{
-						id: `ext:${track.id}`,
-						kind: 'subtitles',
-						src: track.url,
-						srclang: track.language ?? '',
-						label: track.name || track.language || 'Subtitles'
-					},
-					false
-				);
-			}
-		} finally {
-			syncingTracks = false;
+		if (hlsEngine) {
+			hlsEngine.destroy();
+			hlsEngine = null;
 		}
+
+		if (!subtitleManager) {
+			subtitleManager = new SubtitleManager({
+				video: videoEl,
+				onCrash: handleSubtitleCrash
+			});
+
+			// Restore saved user offset from localStorage
+			try {
+				if (typeof window !== 'undefined' && window.localStorage) {
+					const saved = window.localStorage.getItem(`hearth_sub_offset_${itemId}`);
+					if (saved) {
+						const val = Number.parseFloat(saved);
+						if (!Number.isNaN(val)) {
+							currentSubOffset = val;
+							subtitleManager.setOffset(val);
+						}
+					}
+				}
+			} catch {
+				/* ignore localStorage errors */
+			}
+		}
+
+		const transcodeOffset =
+			response.mode !== 'direct_play' && resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
+		subtitleManager.setTranscodingOffset(transcodeOffset);
 
 		const source = response.mode === 'direct_play' ? response.url : response.hls_url;
 		if (!source) {
@@ -449,269 +505,61 @@
 			return;
 		}
 
-		player.src({
-			src: source,
-			type: getSourceType(response.mode, source)
-		});
-
 		expectedDuration = response.file?.duration_seconds ?? 0;
-		syncDuration();
+
+		const isHls = response.mode !== 'direct_play' || source.includes('.m3u8');
+		if (isHls && !isNativeHlsSupported(videoEl) && isHlsSupported()) {
+			hlsEngine = new HlsEngine(videoEl, source, {
+				startPositionSeconds: resumePositionMs > 0 ? resumePositionMs / 1000 : -1,
+				maxBitrate: response.video_stream?.bit_rate ?? undefined,
+				onLevelLoaded: (loadedLevels) => {
+					levels = loadedLevels;
+				},
+				onError: (err) => {
+					console.error('[VideoPlayer] HLS Fatal Error:', err);
+					loadError = `Playback error: ${err.details || 'stream failure'}`;
+				}
+			});
+		} else {
+			videoEl.src = source;
+		}
 
 		loading = false;
-		void player.play()?.catch(() => {
-			/* autoplay blocked: controls are right there */
+		void videoEl.play().catch(() => {
+			/* Autoplay might be blocked by browser policy */
 		});
 
 		void applySubtitleChoice();
 	}
 
-	let audioMenu: AudioMenuHandle | null = null;
-	let subtitleMenu: SubtitleMenuHandle | null = null;
-	let infoButton: InfoButtonHandle | null = null;
-
-	function initPlayer(): void {
-		if (!containerEl || player) return;
-		installVhsRetryInterceptor(videojs);
-
-		const video = document.createElement('video');
-		video.className = 'video-js vjs-default-skin vjs-big-play-centered';
-		video.tabIndex = 0;
-		video.setAttribute('playsinline', '');
-		video.setAttribute('preload', 'metadata');
-		containerEl.appendChild(video);
-		videoEl = video;
-
-		video.addEventListener('keydown', handleKeydown);
-
-		const instance = videojs(video, {
-			controls: true,
-			fill: true,
-			responsive: true,
-			playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
-			controlBar: {
-				skipButtons: {
-					forward: 10,
-					backward: 10
-				},
-				currentTimeDisplay: true,
-				timeDivider: true,
-				durationDisplay: true,
-				remainingTimeDisplay: false,
-				subsCapsButton: false
-			},
-			html5: {
-				vhs: {
-					overrideNative: !videojs.browser.IS_ANY_SAFARI
-				}
-			}
-		});
-
-		player = instance;
-
-		audioMenu = addAudioMenuButton(instance, (index) => {
-			audioTrackIndex = index;
-		});
-
-		subtitleMenu = addSubtitleMenuButton(instance, (choiceId) => {
-			subtitleChoice = choiceId;
-		});
-
-		infoButton = addInfoButton(instance, () => {
-			showModeBadge = !showModeBadge;
-		});
-
-		instance.on('timeupdate', handleTimeUpdate);
-		instance.on('timeupdate', syncDuration);
-		instance.on('timeupdate', () => {
-			if (isPaused) {
-				renderJassubFrame(false);
-			}
-		});
-		instance.on('seeked', () => {
-			renderJassubFrame(true);
-		});
-		instance.on('durationchange', syncDuration);
-		instance.on('loadedmetadata', syncDuration);
-		instance.on('loadedmetadata', () => {
-			if (jassubInstance && hasJassub) {
-				void jassubInstance.resize();
-				renderJassubFrame(true);
-			}
-		});
-		instance.on('canplay', syncDuration);
-		instance.on('loadedmetadata', applyResume);
-		instance.on('canplay', applyResume);
-		instance.on('play', () => {
-			isPaused = false;
-			triggerActivity();
-		});
-		instance.on('pause', () => {
-			isPaused = true;
-			isUserActive = true;
-			if (hideTimeout) clearTimeout(hideTimeout);
-			renderJassubFrame(true);
-			void report('paused');
-		});
-		instance.on('useractive', () => triggerActivity());
-		instance.on('userinactive', () => {
-			if (!isPaused) isUserActive = false;
-		});
-		instance.on('ended', () => {
-			isPaused = true;
-			isUserActive = true;
-			if (hideTimeout) clearTimeout(hideTimeout);
-			void report('stopped');
-			onEnded?.();
-		});
-		instance.on('error', () => {
-			const err = instance.error();
-			if (err) {
-				loadError = `Playback failed: ${err.message || 'unknown error'}`;
-			}
-		});
-
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const textTracks = instance.textTracks() as any;
-		if (textTracks) {
-			textTracks.on('addtrack', () => {
-				if (syncingTracks || !subtitleChoice.startsWith('emb:')) return;
-				for (let i = 0; i < textTracks.length; i += 1) {
-					const track = textTracks[i];
-					if (!track.id?.startsWith('ext:') && track.kind === 'subtitles') {
-						track.mode = 'showing';
-					}
-				}
-			});
-		}
-
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const ql = (instance as any).qualityLevels?.();
-		if (ql) {
-			ql.on('addqualitylevel', updateQualityLevels);
-			ql.on('removequalitylevel', updateQualityLevels);
-		}
-
-
-
-		if (!focusTaken) {
-			focusTaken = true;
-			video.focus({ preventScroll: true });
-		}
-
-		lastItemId = itemId;
-		lastAudioTrack = audioTrackIndex;
-		lastSubChoice = subtitleChoice;
-		void startPlayback();
+	function handleAudioChange(event: Event): void {
+		const val = (event.currentTarget as HTMLSelectElement).value;
+		audioTrackIndex = val === '' ? null : Number.parseInt(val, 10);
 	}
 
-	$effect(() => {
-		if (containerEl && !player) {
-			initPlayer();
-		}
-	});
+	function handleSubtitleChange(event: Event): void {
+		const val = (event.currentTarget as HTMLSelectElement).value;
+		const wasEmbedded = subtitleChoice.startsWith('emb:');
+		const isEmbedded = val.startsWith('emb:');
+		subtitleChoice = val;
 
-	$effect(() => {
-		const currentItem = itemId;
-		const currentAudio = audioTrackIndex;
-		const currentSub = subtitleChoice;
-
-		if (!player) return;
-
-		if (currentItem !== lastItemId) {
-			lastItemId = currentItem;
-			lastAudioTrack = null;
-			audioTrackIndex = null;
-			lastSubChoice = '';
-			subtitleChoice = '';
-			resumePositionMs = 0;
-			info = null;
+		if (isEmbedded || wasEmbedded) {
 			void startPlayback();
-		} else if (currentAudio !== lastAudioTrack) {
-			lastAudioTrack = currentAudio;
-			void startPlayback();
-		} else if (currentSub !== lastSubChoice) {
-			const wasEmbedded = lastSubChoice.startsWith('emb:');
-			const isEmbedded = currentSub.startsWith('emb:');
-			lastSubChoice = currentSub;
-			if (isEmbedded || wasEmbedded) {
-				void startPlayback();
-			} else {
-				void applySubtitleChoice();
-			}
+		} else {
+			void applySubtitleChoice();
 		}
-	});
+	}
 
-	// Take keyboard focus on open so the media keys work immediately
-	$effect(() => {
-		const el = videoEl;
-		if (!el || focusTaken) return;
-		focusTaken = true;
-		el.focus({ preventScroll: true });
-	});
+	function handleQualityChange(event: Event): void {
+		const val = Number.parseInt((event.currentTarget as HTMLSelectElement).value, 10);
+		qualityLevel = val;
+		hlsEngine?.setQualityLevel(val);
+	}
 
-	// Cancel native space on video so our custom handler is sole owner
-	$effect(() => {
-		const el = videoEl;
-		if (!el) return;
-		const cancelNativeSpace = (event: KeyboardEvent) => {
-			if (event.key === ' ' && event.composedPath()[0] === el) {
-				event.preventDefault();
-			}
-		};
-		window.addEventListener('keydown', cancelNativeSpace, true);
-		return () => window.removeEventListener('keydown', cancelNativeSpace, true);
-	});
-
-	// Unload reporting: keep the resume point and stop transcode session when tab is hidden or closed (T11)
-	$effect(() => {
-		const onHide = () => {
-			void report('paused');
-			if (sessionId) {
-				sendStopBeacon(sessionId, sessionMediaToken);
-			}
-		};
-		window.addEventListener('pagehide', onHide);
-		document.addEventListener('visibilitychange', onHide);
-		return () => {
-			window.removeEventListener('pagehide', onHide);
-			document.removeEventListener('visibilitychange', onHide);
-		};
-	});
-
-	// Unmount cleanup
-	$effect(() => {
-		return () => {
-			if (hideTimeout) clearTimeout(hideTimeout);
-			destroyed = true;
-			expectedDuration = 0;
-			void report('stopped');
-			const session = sessionId;
-			const token = sessionMediaToken;
-			if (session) {
-				sendStopBeacon(session, token);
-			}
-			void destroyJassub();
-			if (player && !player.isDisposed()) {
-				player.dispose();
-				player = null;
-				videoEl = null;
-				audioMenu = null;
-				subtitleMenu = null;
-				infoButton = null;
-			}
-		};
-	});
-
-	const availableAudio = $derived(info?.audio_streams ?? []);
-	const availableSubtitles = $derived(info?.subtitles ?? []);
-	const availableEmbeddedSubtitles = $derived(info?.embedded_subtitles ?? []);
-
-	// Keep the control-bar info button state in sync with showModeBadge.
-	$effect(() => {
-		const active = showModeBadge;
-		if (!infoButton) return;
-		infoButton.setActive(active);
-	});
+	function handleOffsetSyncChange(offsetSeconds: number): void {
+		currentSubOffset = offsetSeconds;
+		subtitleManager?.setOffset(offsetSeconds);
+	}
 
 	function getPlaybackDetails(): string {
 		if (!info) return '';
@@ -748,68 +596,207 @@
 		return `${vPart}  ${aPart}`;
 	}
 
-	// Keep the control-bar audio menu in sync with the current playback plan.
 	$effect(() => {
-		const choices = availableAudio;
-		const selected = audioTrackIndex;
-		if (!audioMenu) return;
-		audioMenu.setChoices(
-			choices.length > 1
-				? [
-						{ index: null, label: 'Default audio' },
-						...choices.map((track) => ({
-							index: track.index,
-							label: `${track.title ?? track.language ?? 'Audio'} (${track.codec_name ?? '?'})`
-						}))
-					]
-				: [],
-			selected
-		);
-	});
-
-	// Keep the control-bar subtitle menu in sync with available subtitles.
-	$effect(() => {
-		const extSubs = availableSubtitles;
-		const embSubs = availableEmbeddedSubtitles;
-		const currentSelected = subtitleChoice;
-		if (!subtitleMenu) return;
-
-		if (extSubs.length === 0 && embSubs.length === 0) {
-			subtitleMenu.setChoices([], '');
-			return;
+		if (videoEl && !info && !loadError) {
+			lastItemId = itemId;
+			lastAudioTrack = audioTrackIndex;
+			lastSubChoice = subtitleChoice;
+			void startPlayback();
 		}
-
-		const choices: SubtitleMenuChoice[] = [
-			{ id: '', label: 'Off' },
-			...extSubs.map((track) => ({
-				id: `ext:${track.id}`,
-				label: track.name || track.language || 'Subtitles'
-			})),
-			...embSubs.map((stream) => ({
-				id: `emb:${stream.index}`,
-				label: `${stream.title ?? stream.language ?? 'Subtitle'} (embedded)`
-			}))
-		];
-
-		subtitleMenu.setChoices(choices, currentSelected);
 	});
+
+	$effect(() => {
+		const currentItem = itemId;
+		const currentAudio = audioTrackIndex;
+
+		if (!videoEl || loading) return;
+
+		if (currentItem !== lastItemId) {
+			lastItemId = currentItem;
+			lastAudioTrack = null;
+			audioTrackIndex = null;
+			lastSubChoice = '';
+			subtitleChoice = '';
+			resumePositionMs = 0;
+			info = null;
+			forceBurnIn = false;
+			void startPlayback();
+		} else if (currentAudio !== lastAudioTrack) {
+			lastAudioTrack = currentAudio;
+			void startPlayback();
+		}
+	});
+
+	// Keyboard focus on mount
+	$effect(() => {
+		const el = videoEl;
+		if (!el || focusTaken) return;
+		focusTaken = true;
+		el.focus({ preventScroll: true });
+	});
+
+	// Fullscreen & PiP change listeners
+	$effect(() => {
+		const handleFsChange = () => {
+			isFullscreen = Boolean(document.fullscreenElement);
+			subtitleManager?.resize();
+		};
+		const el = videoEl;
+		const onEnterPip = () => {
+			isPip = true;
+		};
+		const onLeavePip = () => {
+			isPip = false;
+		};
+		document.addEventListener('fullscreenchange', handleFsChange);
+		if (el) {
+			el.addEventListener('enterpictureinpicture', onEnterPip);
+			el.addEventListener('leavepictureinpicture', onLeavePip);
+		}
+		return () => {
+			document.removeEventListener('fullscreenchange', handleFsChange);
+			if (el) {
+				el.removeEventListener('enterpictureinpicture', onEnterPip);
+				el.removeEventListener('leavepictureinpicture', onLeavePip);
+			}
+		};
+	});
+
+	// Page unload & visibility reporting
+	$effect(() => {
+		const onHide = () => {
+			void report('paused');
+			if (sessionId) {
+				sendStopBeacon(sessionId, sessionMediaToken);
+			}
+		};
+		window.addEventListener('pagehide', onHide);
+		document.addEventListener('visibilitychange', onHide);
+		return () => {
+			window.removeEventListener('pagehide', onHide);
+			document.removeEventListener('visibilitychange', onHide);
+		};
+	});
+
+	// Teardown
+	$effect(() => {
+		return () => {
+			if (hideTimeout) clearTimeout(hideTimeout);
+			destroyed = true;
+			void report('stopped');
+			if (sessionId) {
+				sendStopBeacon(sessionId, sessionMediaToken);
+			}
+			hlsEngine?.destroy();
+			hlsEngine = null;
+			void subtitleManager?.destroy();
+			subtitleManager = null;
+		};
+	});
+
+	const availableAudio = $derived(info?.audio_streams ?? []);
+	const availableSubtitles = $derived(info?.subtitles ?? []);
+	const availableEmbeddedSubtitles = $derived(info?.embedded_subtitles ?? []);
 </script>
 
 <svelte:window
 	onpointermove={triggerActivity}
 	onpointerdown={triggerActivity}
-	onkeydown={triggerActivity}
+	onkeydown={(e) => {
+		triggerActivity();
+		handleKeydown(e);
+	}}
 />
 
-<div class="player">
+<div
+	class="player"
+	class:user-inactive={!isPaused && !isUserActive && !loading && !loadError}
+	bind:this={containerEl}
+>
 	{#if loadError}
 		<p class="banner" role="alert">{loadError}</p>
 	{:else if loading}
 		<p class="status" role="status">Preparing playback…</p>
 	{/if}
 
-	<div class="video-container" class:has-jassub={hasJassub} bind:this={containerEl}></div>
+	{#if isWaiting && !loading && !loadError}
+		<div class="buffering-spinner" role="status" aria-label="Buffering"></div>
+	{/if}
 
+	<div class="video-container" class:has-jassub={subtitleManager?.isAss}>
+		<!-- svelte-ignore a11y_media_has_caption -->
+		<video
+			bind:this={videoEl}
+			tabindex="0"
+			playsinline
+			preload="metadata"
+			style="object-fit: {aspectRatio};"
+			onplay={() => {
+				isPaused = false;
+				triggerActivity();
+			}}
+			onpause={() => {
+				isPaused = true;
+				isUserActive = true;
+				if (hideTimeout) clearTimeout(hideTimeout);
+				subtitleManager?.renderManualFrame(true);
+				void report('paused');
+			}}
+			ontimeupdate={() => {
+				if (!videoEl) return;
+				currentTime = videoEl.currentTime;
+				const positionMs = Math.floor(currentTime * 1000);
+				if (positionMs - lastReportedMs >= REPORT_INTERVAL_MS) {
+					lastReportedMs = positionMs;
+					void report('playing');
+				}
+				if (isPaused) {
+					subtitleManager?.renderManualFrame(false);
+				}
+			}}
+			onprogress={updateBufferedRanges}
+			ondurationchange={() => {
+				if (videoEl && Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
+					rawDuration = videoEl.duration;
+				}
+			}}
+			onloadedmetadata={() => {
+				if (videoEl && Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
+					rawDuration = videoEl.duration;
+				}
+				applyResume();
+				subtitleManager?.resize();
+			}}
+			oncanplay={() => {
+				isWaiting = false;
+				applyResume();
+			}}
+			onwaiting={() => {
+				isWaiting = true;
+			}}
+			onplaying={() => {
+				isWaiting = false;
+			}}
+			onseeked={() => {
+				subtitleManager?.renderManualFrame(true);
+			}}
+			onended={() => {
+				isPaused = true;
+				isUserActive = true;
+				if (hideTimeout) clearTimeout(hideTimeout);
+				void report('stopped');
+				onEnded?.();
+			}}
+			onerror={() => {
+				if (videoEl?.error) {
+					loadError = `Playback error: ${videoEl.error.message || 'Media decode failed'}`;
+				}
+			}}
+			onclick={togglePlay}
+		></video>
+	</div>
+
+	<!-- Top Overlay Navigation Bar -->
 	<div class="top-overlay" class:hidden={!isPaused && !isUserActive && !loading && !loadError}>
 		<div class="top-left">
 			<a
@@ -830,27 +817,282 @@
 			<h1 class="player-title" title={title}>{title}</h1>
 		</div>
 
-		<div class="modes">
-			{#if levels.length > 1}
-				<label>
-					<span class="visually-hidden">Quality</span>
-					<select
-						value={qualityLevel}
-						onchange={(event) => {
-							qualityLevel = Number.parseInt(event.currentTarget.value, 10);
-							applyQuality();
-						}}
-					>
-						<option value={-1}>Auto quality</option>
-						{#each levels as level (level.index)}
-							<option value={level.index}>{level.label}</option>
-						{/each}
-					</select>
-				</label>
+		<div class="top-right">
+			{#if info}
+				<button
+					type="button"
+					class="icon-btn"
+					class:active={showModeBadge}
+					onclick={() => (showModeBadge = !showModeBadge)}
+					title="Stream Info / Transcode Status"
+					aria-label="Stream information"
+				>
+					<Info size={20} />
+				</button>
 			{/if}
 		</div>
 	</div>
 
+	<!-- Bottom Overlay Controls Bar -->
+	<div class="bottom-overlay" class:hidden={!isPaused && !isUserActive && !loading && !loadError}>
+		<!-- Seekbar -->
+		<div
+			class="seekbar-container"
+			bind:this={seekbarEl}
+			onclick={handleSeekbarClick}
+			onmouseenter={() => (isHoveringSeekbar = true)}
+			onmouseleave={() => (isHoveringSeekbar = false)}
+			onmousemove={handleSeekbarMouseMove}
+			role="slider"
+			tabindex="0"
+			aria-label="Seek timeline"
+			aria-valuemin="0"
+			aria-valuemax={duration}
+			aria-valuenow={currentTime}
+			aria-valuetext={formatTime(currentTime)}
+			onkeydown={(e) => {
+				if (e.key === 'ArrowRight') seekBy(5);
+				if (e.key === 'ArrowLeft') seekBy(-5);
+			}}
+		>
+			<div class="seekbar-track">
+				{#each bufferedRanges as range}
+					<div
+						class="buffered-bar"
+						style="left: {range.startPct}%; width: {range.widthPct}%;"
+					></div>
+				{/each}
+				<div class="played-bar" style="width: {progressPct}%;"></div>
+				<div class="scrub-thumb" style="left: {progressPct}%;"></div>
+			</div>
+
+			{#if isHoveringSeekbar && duration > 0}
+				<div class="hover-tooltip" style="left: {hoverPct}%;">
+					{formatTime(hoverTime)}
+				</div>
+			{/if}
+		</div>
+
+		<!-- Control Buttons Row -->
+		<div class="controls-row">
+			<div class="controls-left">
+				<button
+					type="button"
+					class="icon-btn play-btn"
+					onclick={togglePlay}
+					title={isPaused ? 'Play (Space/k)' : 'Pause (Space/k)'}
+					aria-label={isPaused ? 'Play' : 'Pause'}
+				>
+					{#if isPaused}
+						<Play size={22} />
+					{:else}
+						<Pause size={22} />
+					{/if}
+				</button>
+
+				<button
+					type="button"
+					class="icon-btn"
+					onclick={() => seekBy(-10)}
+					title="Replay 10 seconds (Left Arrow/j)"
+					aria-label="Replay 10 seconds"
+				>
+					<RotateCcw size={19} />
+				</button>
+
+				<button
+					type="button"
+					class="icon-btn"
+					onclick={() => seekBy(10)}
+					title="Forward 10 seconds (Right Arrow/l)"
+					aria-label="Forward 10 seconds"
+				>
+					<RotateCw size={19} />
+				</button>
+
+				<div class="volume-group">
+					<button
+						type="button"
+						class="icon-btn"
+						onclick={toggleMute}
+						title={isMuted ? 'Unmute (m)' : 'Mute (m)'}
+						aria-label={isMuted ? 'Unmute' : 'Mute'}
+					>
+						{#if isMuted || volume === 0}
+							<VolumeX size={20} />
+						{:else if volume < 0.5}
+							<Volume1 size={20} />
+						{:else}
+							<Volume2 size={20} />
+						{/if}
+					</button>
+					<input
+						type="range"
+						min="0"
+						max="1"
+						step="0.05"
+						value={isMuted ? 0 : volume}
+						oninput={(e) => handleVolumeInput(Number.parseFloat(e.currentTarget.value))}
+						class="volume-slider"
+						aria-label="Volume slider"
+					/>
+				</div>
+
+				<div class="time-display">
+					<span class="time-current">{formatTime(currentTime)}</span>
+					<span class="time-sep">/</span>
+					<span class="time-duration">{formatTime(duration)}</span>
+				</div>
+			</div>
+
+			<div class="controls-right">
+				<!-- Audio selector -->
+				{#if availableAudio.length > 1}
+					<label class="select-label">
+						<span class="visually-hidden">Audio Track</span>
+						<select
+							class="control-select"
+							value={audioTrackIndex ?? ''}
+							onchange={handleAudioChange}
+							aria-label="Select audio track"
+						>
+							<option value="">Default Audio</option>
+							{#each availableAudio as track (track.index)}
+								<option value={track.index}>
+									{track.title ?? track.language ?? 'Audio'} ({track.codec_name ?? '?'})
+								</option>
+							{/each}
+						</select>
+					</label>
+				{/if}
+
+				<!-- Subtitles selector -->
+				{#if availableSubtitles.length > 0 || availableEmbeddedSubtitles.length > 0}
+					<label class="select-label">
+						<span class="visually-hidden">Subtitles</span>
+						<select
+							class="control-select"
+							value={subtitleChoice}
+							onchange={handleSubtitleChange}
+							aria-label="Select subtitle track"
+						>
+							<option value="">Subtitles Off</option>
+							{#each availableSubtitles as track (track.id)}
+								<option value={`ext:${track.id}`}>
+									{track.name || track.language || 'Subtitles'} ({track.format})
+								</option>
+							{/each}
+							{#each availableEmbeddedSubtitles as stream (stream.index)}
+								<option value={`emb:${stream.index}`}>
+									{stream.title ?? stream.language ?? 'Subtitle'} (embedded)
+								</option>
+							{/each}
+						</select>
+					</label>
+
+					<!-- Subtitle Sync Button -->
+					<button
+						type="button"
+						class="icon-btn"
+						class:active={showSubSync}
+						onclick={() => (showSubSync = !showSubSync)}
+						title="Subtitle Sync / Calibration"
+						aria-label="Subtitle synchronization"
+					>
+						<SlidersHorizontal size={18} />
+					</button>
+				{/if}
+
+				<!-- Playback rate -->
+				<label class="select-label">
+					<span class="visually-hidden">Playback Speed</span>
+					<select
+						class="control-select"
+						value={playbackRate}
+						onchange={(e) => handlePlaybackRateChange(Number.parseFloat(e.currentTarget.value))}
+						aria-label="Playback speed"
+					>
+						<option value={0.5}>0.5x</option>
+						<option value={0.75}>0.75x</option>
+						<option value={1}>1x</option>
+						<option value={1.25}>1.25x</option>
+						<option value={1.5}>1.5x</option>
+						<option value={2}>2x</option>
+					</select>
+				</label>
+
+				<!-- Aspect Ratio Selector -->
+				<button
+					type="button"
+					class="icon-btn text-icon-btn"
+					onclick={cycleAspectRatio}
+					title="Aspect Ratio ({aspectRatio})"
+					aria-label="Aspect Ratio {aspectRatio}"
+				>
+					<Scan size={18} />
+					<span class="aspect-label">{aspectRatio}</span>
+				</button>
+
+				<!-- Quality Selector -->
+				{#if levels.length > 1}
+					<label class="select-label">
+						<span class="visually-hidden">Quality</span>
+						<select
+							class="control-select"
+							value={qualityLevel}
+							onchange={handleQualityChange}
+							aria-label="Quality selection"
+						>
+							<option value={-1}>Auto</option>
+							{#each levels as level (level.index)}
+								<option value={level.index}>
+									{level.height}p ({formatBitrate(level.bitrate)})
+								</option>
+							{/each}
+						</select>
+					</label>
+				{/if}
+
+				<!-- Picture in Picture -->
+				<button
+					type="button"
+					class="icon-btn"
+					onclick={togglePip}
+					title="Picture in Picture (p)"
+					aria-label="Picture in picture"
+				>
+					<PictureInPicture2 size={19} />
+				</button>
+
+				<!-- Fullscreen -->
+				<button
+					type="button"
+					class="icon-btn"
+					onclick={toggleFullscreen}
+					title={isFullscreen ? 'Exit Fullscreen (f)' : 'Fullscreen (f)'}
+					aria-label={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+				>
+					{#if isFullscreen}
+						<Minimize size={20} />
+					{:else}
+						<Maximize size={20} />
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Subtitle Sync Control Modal -->
+	{#if showSubSync}
+		<SubtitleSyncControl
+			{itemId}
+			currentOffset={currentSubOffset}
+			onOffsetChange={handleOffsetSyncChange}
+			onClose={() => (showSubSync = false)}
+		/>
+	{/if}
+
+	<!-- Mode Badge Popup -->
 	{#if showModeBadge && info}
 		<div
 			class="mode-badge-popup"
@@ -872,6 +1114,11 @@
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
+		user-select: none;
+	}
+
+	.player.user-inactive {
+		cursor: none;
 	}
 
 	.video-container {
@@ -883,19 +1130,17 @@
 		overflow: hidden;
 		position: relative;
 		margin: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
-	:global(.video-container .video-js) {
-		width: 100% !important;
-		height: 100% !important;
-		background-color: #000;
-		border-radius: 0;
-	}
-
-	:global(.video-container .video-js .vjs-tech) {
-		object-fit: contain;
+	video {
 		width: 100%;
 		height: 100%;
+		background-color: #000;
+		border-radius: 0;
+		outline: none;
 	}
 
 	:global(.video-container .JASSUB) {
@@ -906,154 +1151,6 @@
 		height: 100%;
 		pointer-events: none;
 		z-index: 1;
-	}
-
-	:global(.video-container .vjs-big-play-button) {
-		background-color: rgba(22, 27, 34, 0.85);
-		border-color: var(--border);
-		border-radius: var(--radius);
-		font-size: 2.5em;
-		height: 1.8em;
-		line-height: 1.8em;
-		margin-top: -0.9em;
-		margin-left: -1.5em;
-		width: 3em;
-		transition:
-			background-color 0.2s,
-			border-color 0.2s,
-			transform 0.2s;
-	}
-
-	:global(.video-container .video-js:hover .vjs-big-play-button),
-	:global(.video-container .video-js .vjs-big-play-button:focus) {
-		background-color: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-contrast);
-	}
-
-	:global(.video-container .vjs-control-bar) {
-		/* Video.js defaults to 3em; double it so the bar is easier to tap. */
-		height: 6em;
-		align-items: center;
-		background-color: rgba(14, 17, 22, 0.85);
-		backdrop-filter: blur(8px);
-		z-index: 2;
-	}
-
-	:global(.video-container .vjs-control-bar .vjs-control .vjs-button) {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	:global(.video-container .vjs-control-bar .vjs-button > .vjs-icon-placeholder:before) {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		line-height: 1;
-	}
-
-	:global(.video-container .vjs-control-bar .vjs-playback-rate .vjs-playback-rate-value) {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		line-height: 1;
-	}
-
-	:global(.video-container .vjs-control-bar .vjs-volume-panel) {
-		display: flex;
-		align-items: center;
-	}
-
-	:global(.video-container .vjs-control-bar .vjs-volume-control) {
-		align-items: center;
-	}
-
-	:global(.video-container .video-js:not(.vjs-live) .vjs-current-time),
-	:global(.video-container .video-js:not(.vjs-live) .vjs-time-divider),
-	:global(.video-container .video-js:not(.vjs-live) .vjs-duration) {
-		display: flex;
-		align-items: center;
-	}
-
-	:global(.video-container .video-js .vjs-time-divider) {
-		min-width: auto;
-		padding-left: 0.25rem;
-		padding-right: 0.25rem;
-	}
-
-	:global(.video-container .video-js .vjs-current-time) {
-		padding-right: 0.25rem;
-	}
-
-	:global(.video-container .video-js .vjs-duration) {
-		padding-left: 0.25rem;
-	}
-
-	:global(.video-container .video-js .vjs-remaining-time) {
-		display: none;
-	}
-
-	:global(.video-container .vjs-play-progress) {
-		background-color: var(--accent);
-	}
-
-	:global(.video-container .vjs-volume-level) {
-		background-color: var(--accent);
-	}
-
-	:global(.video-container .vjs-slider) {
-		background-color: rgba(255, 255, 255, 0.2);
-	}
-
-	:global(.video-container .vjs-load-progress) {
-		background: rgba(255, 255, 255, 0.3);
-	}
-
-	:global(.video-container.has-jassub .vjs-text-track-display) {
-		display: none !important;
-	}
-
-	:global(.video-container .vjs-texttrack-settings) {
-		display: none !important;
-	}
-
-	:global(.video-container .vjs-menu-button-popup .vjs-menu) {
-		/* Clear the doubled (6em) control bar. */
-		margin-bottom: 6em;
-	}
-
-	:global(.video-container .vjs-menu-content) {
-		background-color: rgba(14, 17, 22, 0.95) !important;
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-		padding: 0.25rem 0;
-	}
-
-	:global(.video-container .vjs-menu-item) {
-		text-transform: none !important;
-		font-family: inherit;
-		font-size: 0.875rem;
-		padding: 0.4rem 1rem !important;
-		color: var(--text) !important;
-		display: flex;
-		align-items: center;
-		transition:
-			background-color 0.15s ease,
-			color 0.15s ease;
-	}
-
-	:global(.video-container .vjs-menu-item:hover),
-	:global(.video-container .vjs-menu-item:focus) {
-		background-color: var(--surface-2) !important;
-		color: #fff !important;
-	}
-
-	:global(.video-container .vjs-menu-item.vjs-selected) {
-		background-color: rgba(255, 138, 61, 0.15) !important;
-		color: var(--accent) !important;
-		font-weight: 600;
 	}
 
 	.top-overlay {
@@ -1099,6 +1196,12 @@
 		flex: 1;
 	}
 
+	.top-right {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
 	.back-btn {
 		display: inline-flex;
 		align-items: center;
@@ -1137,28 +1240,259 @@
 		text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 	}
 
-	.modes {
+	.bottom-overlay {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		z-index: 10;
 		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		flex-shrink: 0;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding: 1.5rem 1.5rem 1rem;
+		background: linear-gradient(
+			to top,
+			rgba(0, 0, 0, 0.9) 0%,
+			rgba(0, 0, 0, 0.5) 70%,
+			transparent 100%
+		);
+		transition:
+			opacity 0.25s ease,
+			transform 0.25s ease;
 	}
 
-	:global(.video-container .vjs-control-bar .vjs-info-control) {
+	.bottom-overlay.hidden {
+		opacity: 0;
+		pointer-events: none;
+		transform: translateY(0.5rem);
+	}
+
+	.bottom-overlay:hover,
+	.bottom-overlay:focus-within {
+		opacity: 1 !important;
+		pointer-events: auto !important;
+		transform: none !important;
+	}
+
+	.seekbar-container {
+		position: relative;
+		width: 100%;
+		height: 1.25rem;
+		display: flex;
+		align-items: center;
+		cursor: pointer;
+		outline: none;
+	}
+
+	.seekbar-track {
+		position: relative;
+		width: 100%;
+		height: 5px;
+		background: rgba(255, 255, 255, 0.25);
+		border-radius: 3px;
+		transition: height 0.15s ease;
+	}
+
+	.seekbar-container:hover .seekbar-track,
+	.seekbar-container:focus-visible .seekbar-track {
+		height: 8px;
+	}
+
+	.buffered-bar {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		background: rgba(255, 255, 255, 0.4);
+		border-radius: 3px;
+		pointer-events: none;
+	}
+
+	.played-bar {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		background: var(--accent);
+		border-radius: 3px;
+		pointer-events: none;
+	}
+
+	.scrub-thumb {
+		position: absolute;
+		top: 50%;
+		width: 13px;
+		height: 13px;
+		border-radius: 50%;
+		background: #fff;
+		transform: translate(-50%, -50%) scale(0);
+		box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+		pointer-events: none;
+		transition: transform 0.15s ease;
+	}
+
+	.seekbar-container:hover .scrub-thumb,
+	.seekbar-container:focus-visible .scrub-thumb {
+		transform: translate(-50%, -50%) scale(1);
+	}
+
+	.hover-tooltip {
+		position: absolute;
+		bottom: 1.5rem;
+		transform: translateX(-50%);
+		background: rgba(14, 17, 22, 0.95);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		padding: 0.2rem 0.45rem;
+		font-size: 0.75rem;
+		font-family: ui-monospace, monospace;
+		color: #fff;
+		pointer-events: none;
+		white-space: nowrap;
+	}
+
+	.controls-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		width: 100%;
+	}
+
+	.controls-left,
+	.controls-right {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: none;
+		color: var(--text);
+		padding: 0.4rem;
+		border-radius: 6px;
+		cursor: pointer;
+		transition:
+			background 0.15s ease,
+			color 0.15s ease;
+	}
+
+	.icon-btn:hover {
+		background: rgba(255, 255, 255, 0.15);
+		color: #fff;
+	}
+
+	.icon-btn.active {
+		color: var(--accent);
+	}
+
+	.icon-btn:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 1px;
+	}
+
+	.play-btn {
+		padding: 0.5rem;
+	}
+
+	.text-icon-btn {
+		gap: 0.35rem;
+		padding: 0.3rem 0.5rem;
+	}
+
+	.aspect-label {
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+	}
+
+	.volume-group {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+
+	.volume-slider {
+		width: 4.5rem;
+		height: 4px;
+		accent-color: var(--accent);
 		cursor: pointer;
 	}
 
-	:global(.video-container .vjs-control-bar .vjs-info-control.vjs-info-active) {
-		color: var(--accent) !important;
+	.time-display {
+		font-size: 0.825rem;
+		font-family: ui-monospace, monospace;
+		color: var(--muted);
+		margin-left: 0.25rem;
+		white-space: nowrap;
 	}
 
-	:global(.video-container .vjs-control-bar .vjs-info-control:hover) {
-		color: var(--accent);
+	.time-current {
+		color: #fff;
+	}
+
+	.time-sep {
+		margin: 0 0.15rem;
+	}
+
+	.select-label {
+		display: flex;
+		align-items: center;
+	}
+
+	.control-select {
+		background: rgba(22, 27, 34, 0.85);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		padding: 0.3rem 0.55rem;
+		font-size: 0.8rem;
+		color: var(--text);
+		backdrop-filter: blur(4px);
+		cursor: pointer;
+		outline: none;
+		max-width: 9rem;
+		text-overflow: ellipsis;
+	}
+
+	.control-select:focus-visible {
+		border-color: var(--accent);
+		outline: 2px solid var(--accent);
+	}
+
+	.control-select:hover {
+		border-color: var(--accent);
+	}
+
+	.buffering-spinner {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 3.5rem;
+		height: 3.5rem;
+		margin-top: -1.75rem;
+		margin-left: -1.75rem;
+		border: 3px solid rgba(255, 255, 255, 0.2);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+		pointer-events: none;
+		z-index: 5;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.mode-badge-popup {
 		position: absolute;
-		bottom: 6.75em;
+		bottom: 5.5rem;
 		right: 1.5rem;
 		z-index: 15;
 		font-size: 0.825rem;
@@ -1186,15 +1520,6 @@
 
 	.mode-text {
 		white-space: nowrap;
-	}
-
-	select {
-		background: rgba(22, 27, 34, 0.75);
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		padding: 0.35rem 0.6rem;
-		color: var(--text);
-		backdrop-filter: blur(4px);
 	}
 
 	.banner {

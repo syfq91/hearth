@@ -15,9 +15,9 @@ import { toAss } from '../video-subtitles.ts';
 export interface SubtitleTrackItem {
 	id: string;
 	url: string;
-	format?: string;
-	language?: string;
-	label?: string;
+	format?: string | null;
+	language?: string | null;
+	label?: string | null;
 }
 
 export interface SubtitleManagerOptions {
