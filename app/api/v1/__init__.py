@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     admin,
+    attachments,
     auth,
     books,
     collections,
@@ -50,5 +51,6 @@ router.include_router(images.router)
 router.include_router(stream.router)
 router.include_router(hls.router)
 router.include_router(subtitles.router)
+router.include_router(attachments.router)
 
 __all__ = ["router"]

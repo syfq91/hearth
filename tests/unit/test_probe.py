@@ -284,4 +284,3 @@ def test_font_attachments_fallback_from_streams() -> None:
     assert len(res.font_attachments) == 1
     assert res.font_attachments[0].index == 1
     assert res.font_attachments[0].filename == "anime.woff2"
-

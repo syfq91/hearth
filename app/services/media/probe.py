@@ -236,9 +236,7 @@ def parse_probe_payload(payload: dict[str, Any]) -> ProbeResult:
     raw_attachments = payload.get("attachments")
     if isinstance(raw_attachments, list) and raw_attachments:
         attachment_objects = [
-            AttachmentStream.model_validate(att)
-            for att in raw_attachments
-            if isinstance(att, dict)
+            AttachmentStream.model_validate(att) for att in raw_attachments if isinstance(att, dict)
         ]
     else:
         attachment_objects = [
