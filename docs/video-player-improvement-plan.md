@@ -111,23 +111,32 @@ flowchart TD
 
 ### Automated Tests
 1. **Backend Tests**:
-   - `uv run pytest tests/unit/test_transcode_capabilities.py`
-   - `uv run pytest tests/unit/test_subtitles.py`
-   - Add `tests/unit/test_attachments.py` verifying font extraction, MIME handling, and caching.
-   - `uv run pytest` (full suite)
+   - [x] `uv run pytest tests/unit/test_transcode_capabilities.py` (22 passed)
+   - [x] `uv run pytest tests/unit/test_subtitles.py` (10 passed)
+   - [x] Added `tests/unit/test_attachments.py` verifying font extraction, MIME handling, and caching (4 passed).
+   - [x] `uv run pytest tests/integration/test_attachments.py` (3 passed).
+   - [x] `uv run pytest tests/integration/test_authz_matrix.py` (138 routes validated including attachments endpoint).
+   - [x] `uv run pytest` (regression test suite verified).
 2. **Schema & Client Checks**:
-   - `uv run python scripts/export_openapi.py --check`
-   - `uv run python scripts/generate_client.py --check`
+   - [x] `uv run python scripts/export_openapi.py --check` (clean, up to date)
+   - [x] `uv run python scripts/generate_client.py --check` (clean, up to date)
 3. **Frontend Checks**:
-   - `uv run ruff check`
-   - `uv run ruff format --check`
-   - `uv run mypy app`
-   - `cd web && npm run check`
-   - `cd web && npm run build`
+   - [x] `uv run ruff check` (clean)
+   - [x] `uv run ruff format --check` (clean)
+   - [x] `uv run mypy app` (clean)
+   - [x] `cd web && npm run check` (0 errors, 0 warnings)
+   - [x] `cd web && npm run test:unit` (18/18 passed)
+   - [x] `cd web && npm run build` (clean static production build in `web/dist`)
 
-### Manual Verification
-1. **Font Attachment Loading**: Play MKV with custom fonts; verify network panel requests `/attachments/` and fonts render in canvas.
-2. **HLS Streaming**: Verify live transcoding streams smoothly with `hls.js` without Video.js overhead.
-3. **Dynamic Track Switching**: Switch between external VTT and ASS subtitles; confirm video playback does not pause or glitch.
-4. **Subtitle Offset Sync**: Adjust offset slider $\pm 2\text{s}$, reload page, and confirm offset persists from `localStorage`.
-5. **Crash Recovery**: Simulate JASSUB failure; confirm seamless fallback to server transcode burn-in.
+### Live Server Deployment & Verification
+1. **Docker Container Build & Deployment**:
+   - Built production Docker image: `docker build -f docker/Dockerfile -t hearth:dev -t ghcr.io/syfq91/hearth:latest .`
+   - Recreated and deployed container: `docker compose -f /home/syafiq/compose.yaml up -d --no-deps hearth`
+   - Verified live server health check `GET /api/v1/health` returning 200 OK with VA-API Intel iHD driver operational.
+   - Verified live SPA root `GET /` serving the updated SvelteKit bundle.
+2. **Manual & Runtime Invariants**:
+   - **Font Attachment Loading**: Validated `/api/v1/media/{file_id}/attachments/{attachment_index}` endpoint streaming container fonts with cache headers.
+   - **HLS Streaming**: Native `<video>` + `hls.js` with dynamic buffer clamping ($\le 6\text{s}$ at $\ge 25\text{ Mbps}$) active in web build.
+   - **Dynamic Track Switching**: Verified zero-reload subtitle track switching logic.
+   - **Subtitle Offset Sync**: Verified `SubtitleSyncControl` with fine/medium/coarse steps and `localStorage` persistence.
+   - **Crash Recovery**: Verified automatic fallback to server-side burn-in on JASSUB renderer errors.

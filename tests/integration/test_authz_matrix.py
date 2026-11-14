@@ -124,6 +124,7 @@ POLICY: dict[tuple[str, str], str] = {
     ("GET", "/api/v1/libraries/{library_id}/folders"): "auth",
     ("GET", "/api/v1/libraries/{library_id}/items"): "auth",
     ("POST", "/api/v1/libraries/{library_id}/scan"): "admin",
+    ("GET", "/api/v1/media/{file_id}/attachments/{attachment_index}"): "media",
     ("GET", "/api/v1/metadata/search"): "admin",
     ("GET", "/api/v1/music/most-played"): "auth",
     ("GET", "/api/v1/music/random"): "auth",
@@ -259,7 +260,7 @@ def _policy_of_route(route: Any) -> str:
         stack.extend(dependency.dependencies)
     if "require_admin" in names:
         return "admin"
-    if "get_viewer" in names:
+    if names & {"get_viewer", "get_stop_session_viewer"}:
         return "media"
     if names & {"require_user", "get_current_user", "get_events_user"}:
         return "auth"
