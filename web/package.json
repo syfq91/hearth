@@ -18,7 +18,6 @@
 		"@sveltejs/kit": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.2.0",
 		"@types/node": "^24.19.2",
-		"@types/video.js": "^7.3.58",
 		"svelte": "^5.57.1",
 		"svelte-check": "^4.6.0",
 		"typescript": "^6.0.3",
@@ -35,7 +34,6 @@
 		"foliate-js": "^1.0.1",
 		"hls.js": "^1.7.4",
 		"jassub": "^2.5.26",
-		"pdfjs-dist": "^6.4.299",
-		"video.js": "^8.24.2"
+		"pdfjs-dist": "^6.4.299"
 	}
 }
