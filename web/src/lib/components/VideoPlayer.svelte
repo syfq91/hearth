@@ -348,9 +348,38 @@
 	}
 
 	function handleSubtitleCrash(error: unknown): void {
-		console.warn('[VideoPlayer] Subtitle engine crashed, initiating burn-in fallback recovery:', error);
-		forceBurnIn = true;
-		void startPlayback({ forceBurnIn: true });
+		console.warn('[VideoPlayer] Subtitle engine crashed, recovering:', error);
+
+		if (subtitleChoice.startsWith('emb:')) {
+			// Embedded streams can be rendered server-side by FFmpeg.
+			forceBurnIn = true;
+			void startPlayback({ forceBurnIn: true });
+			return;
+		}
+
+		// External sidecars cannot be burned in. Fall back to the server-side
+		// WebVTT conversion and render it as a native text track.
+		const externalId = subtitleChoice.startsWith('ext:')
+			? subtitleChoice.slice('ext:'.length)
+			: null;
+		const track = externalId
+			? (info?.subtitles ?? []).find((t) => t.id === externalId)
+			: null;
+		if (!track || !subtitleManager) return;
+
+		const transcodeOffset =
+			info?.mode !== 'direct_play' && resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
+		void subtitleManager.loadTrack(
+			{
+				id: track.id,
+				url: track.url,
+				format: 'vtt',
+				language: track.language,
+				label: track.name || track.language || 'Subtitles'
+			},
+			[],
+			transcodeOffset
+		);
 	}
 
 	async function applySubtitleChoice(): Promise<void> {
