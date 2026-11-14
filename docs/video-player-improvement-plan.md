@@ -99,12 +99,11 @@ flowchart TD
 
 ---
 
-### Phase 4: Dependency Cleanup & Verification
+### Phase 4: Dependency Cleanup & Verification *(Completed)*
 
-#### [MODIFY] `web/package.json`
-- Remove `video.js` and `@types/video.js`.
-- Add `hls.js` (`npm install hls.js`).
-- Verify bundle size reduction and static build sanity (`npm run check && npm run build`).
+- [x] **Remove Legacy Dependencies**: Removed `video.js` and `@types/video.js` from `web/package.json` and deleted `web/src/lib/video-audio-menu.ts`.
+- [x] **Add Modern Dependencies**: Added `hls.js` to `web/package.json` dependencies.
+- [x] **Bundle Size & Build Sanity**: Verified static SPA build sanity and bundle size reduction (watch route bundle reduced by 100 kB from 727 kB to 627 kB) with zero errors and zero warnings across `svelte-check` and `test:unit`.
 
 ---
 
