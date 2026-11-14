@@ -86,24 +86,16 @@ flowchart TD
 
 ---
 
-### Phase 3: Player UI, OSD & Svelte 5 Migration
+### Phase 3: Player UI, OSD & Svelte 5 Migration *(Completed)*
 
-#### [MODIFY] `web/src/lib/components/VideoPlayer.svelte`
-- Remove `video.js` and `video-js.css` imports.
-- Re-implement player controls using native HTML5 and Svelte 5 runes:
-  - Custom timeline seekbar with buffered progress visualization.
-  - Play/pause, volume slider, fullscreen, quality picker, and track menus.
-  - Full TV spatial navigation (D-pad focus via `spatial-focus.ts`).
-  - Native picture-in-picture (`requestPictureInPicture()`).
-- Implement dynamic aspect ratio toggle (`contain`, `cover`, `fill`) that applies `object-fit` and calls `subtitleManager.resize()`.
-- Dynamic subtitle track switching: switching between external VTT and ASS tracks swaps renderers without reloading the video stream.
-- Automated crash recovery: on JASSUB error, automatically calls `startPlayback({ forceBurnIn: true })` at the current timestamp.
-
-#### [NEW] `web/src/lib/components/SubtitleSyncControl.svelte`
-- Svelte 5 component for manual subtitle offset calibration:
-  - Sliders and steppers ($\pm 50\text{ ms}$, $\pm 250\text{ ms}$, $\pm 1000\text{ ms}$).
-  - Persists offset per `itemId` in `localStorage` under `hearth_sub_offset_{itemId}`.
-  - Debounced real-time update of JASSUB's `timeOffset`.
+- [x] **SubtitleSyncControl Component**: Created `web/src/lib/components/SubtitleSyncControl.svelte` with fine/medium/coarse steppers ($\pm 50\text{ ms}$, $\pm 250\text{ ms}$, $\pm 1000\text{ ms}$), interactive slider, reset button, and automatic persistence per `itemId` in `localStorage` under `hearth_sub_offset_{itemId}`.
+- [x] **VideoPlayer Svelte 5 & Native Migration**: Replaced `video.js` in `web/src/lib/components/VideoPlayer.svelte` with native `<video>` element, `HlsEngine`, and custom Svelte 5 reactive OSD:
+  - Timeline seekbar with real-time buffered range progress segments and scrub tooltip.
+  - Controls row with play/pause, 10s skip backward/forward, volume slider, mute, speed selector, aspect ratio toggle, rendition quality selector, PiP, and fullscreen.
+  - Dynamic aspect ratio mode switching (`contain`, `cover`, `fill`) with automatic JASSUB canvas overlay resizing.
+  - Zero-reload external subtitle track switching (swapping between VTT and ASS dynamically without restarting playback).
+  - Automated JASSUB crash recovery to server-side subtitle burn-in (`force_burn_in_subtitles: true`).
+  - Full keyboard accessibility and TV spatial D-pad navigation compatibility.
 
 ---
 
