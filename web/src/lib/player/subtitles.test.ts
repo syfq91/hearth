@@ -8,7 +8,7 @@ if (typeof (globalThis as any).$state === 'undefined') {
 
 import { SubtitleManager } from './subtitles.svelte.ts';
 
-test('SubtitleManager computes effectiveOffset correctly', () => {
+test('SubtitleManager applies only the user offset', () => {
 	const mockVideo = {
 		appendChild: () => {},
 		removeChild: () => {},
@@ -18,16 +18,13 @@ test('SubtitleManager computes effectiveOffset correctly', () => {
 	} as unknown as HTMLVideoElement;
 
 	const manager = new SubtitleManager({ video: mockVideo });
-	assert.strictEqual(manager.effectiveOffset, 0);
-
-	manager.setTranscodingOffset(12.5);
-	assert.strictEqual(manager.effectiveOffset, 12.5);
+	assert.strictEqual(manager.userOffsetSeconds, 0);
 
 	manager.setOffset(-1.2);
-	assert.strictEqual(manager.effectiveOffset, 11.3);
+	assert.strictEqual(manager.userOffsetSeconds, -1.2);
 
 	manager.setOffset(0.5);
-	assert.strictEqual(manager.effectiveOffset, 13.0);
+	assert.strictEqual(manager.userOffsetSeconds, 0.5);
 });
 
 test('SubtitleManager loads and clears native track elements', async () => {

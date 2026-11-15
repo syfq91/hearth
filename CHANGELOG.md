@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dynamically split `JASSUB` in the video player route, loading WebAssembly assets only when ASS/SSA subtitles are rendered.
 
 ### Fixed
+- Enabling a subtitle track mid-playback no longer shifts it by the resume position. The client treated the playback resume point as a subtitle time offset on top of JASSUB, but the HLS pipeline already rebases segment timestamps with `-output_ts_offset`, so `video.currentTime` is on the media timeline; ASS tracks toggled at 20:00 were rendered 20 minutes late.
 - Concurrent progress and favorite writes no longer fail with `RuntimeError: ... is bound to a different event loop` after the ASGI lifespan restarts (uvicorn reload, or a new test session). The process-wide playback state lock was a plain `asyncio.Lock`, which binds to the first loop that contends on it; it now follows the running loop.
 - The hardware capability probe now runs its encoder smoke tests concurrently and is bounded by `HEARTH_TRANSCODE_CAPABILITY_PROBE_TIMEOUT_SECONDS` (default 20s), so a wedged driver can no longer delay API startup past the container health-check window.
 - `HEARTH_TRANSCODE_VAINFO_TIMEOUT_SECONDS` (default 15s) replaces the hardcoded 5s VA-API probe deadline, and the encoder smoke-test deadline now defaults to 15s. Low-power iGPUs needed 2.5-4.5s for the first driver initialisation, so both deadlines previously expired on ordinary hardware.

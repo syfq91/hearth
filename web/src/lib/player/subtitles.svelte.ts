@@ -4,7 +4,7 @@
  * Coordinates:
  * 1. WebAssembly client-side ASS/SSA subtitle rendering using JASSUB.
  * 2. Dynamic container font attachment feeding (MediaAttachments).
- * 3. Transcoding offset compensation + user sync calibration (effectiveOffset).
+ * 3. User sync calibration applied to whichever renderer is active.
  * 4. Zero-reload track switching between external WebVTT and ASS subtitles.
  * 5. Crash reporting for laddered fallback to server burn-in.
  */
@@ -35,15 +35,10 @@ export class SubtitleManager {
 	public isAss = $state(false);
 	public isLoading = $state(false);
 	public userOffsetSeconds = $state(0);
-	public transcodingOffsetSeconds = $state(0);
 
 	constructor(options: SubtitleManagerOptions) {
 		this.video = options.video;
 		this.onCrash = options.onCrash;
-	}
-
-	public get effectiveOffset(): number {
-		return this.transcodingOffsetSeconds + this.userOffsetSeconds;
 	}
 
 	/**
@@ -52,31 +47,16 @@ export class SubtitleManager {
 	public setOffset(offsetSeconds: number): void {
 		this.userOffsetSeconds = offsetSeconds;
 		if (this.jassubInstance) {
-			this.jassubInstance.timeOffset = this.effectiveOffset;
+			this.jassubInstance.timeOffset = this.userOffsetSeconds;
 			this.renderManualFrame(true);
-		}
-	}
-
-	/**
-	 * Set the server transcoding offset (when transcode begins after 0s).
-	 */
-	public setTranscodingOffset(offsetSeconds: number): void {
-		this.transcodingOffsetSeconds = offsetSeconds;
-		if (this.jassubInstance) {
-			this.jassubInstance.timeOffset = this.effectiveOffset;
 		}
 	}
 
 	/**
 	 * Load and render a subtitle track without reloading the video stream.
 	 */
-	public async loadTrack(
-		track: SubtitleTrackItem,
-		fontUrls: string[] = [],
-		transcodingOffsetSeconds = 0
-	): Promise<void> {
+	public async loadTrack(track: SubtitleTrackItem, fontUrls: string[] = []): Promise<void> {
 		this.isLoading = true;
-		this.transcodingOffsetSeconds = transcodingOffsetSeconds;
 
 		await this.clearTrack();
 		this.activeTrackId = track.id;
@@ -101,7 +81,7 @@ export class SubtitleManager {
 					video: this.video,
 					subContent,
 					fonts: fontUrls,
-					timeOffset: this.effectiveOffset,
+					timeOffset: this.userOffsetSeconds,
 					prescaleFactor: 0.8,
 					prescaleHeightLimit: 1080,
 					maxRenderHeight: 2160,

@@ -12,7 +12,7 @@ Following an architectural review of the Jellyfin Web Video Player specification
 2. **On-the-Fly Font Attachment Extraction with Disk Cache**: MKV container font attachments (`application/x-truetype-font`, `font/otf`, `font/ttf`, `font/woff`, `font/woff2`) will be extracted on demand via FFmpeg into a dedicated cache directory (`HEARTH_TRANSCODE_DIR/fonts/{file_id}_{idx}.{ext}`) and served to JASSUB so styled typography renders accurately.
 3. **Structured Subtitle Capability Negotiation**: Extend `detectBrowserCapabilities()` to supply explicit `subtitle_profiles` (`vtt`, `ass`, `ssa`) with `method: "external"` to `/api/v1/items/{id}/playback-info`.
 4. **Automated Error Recovery Ladder**: If JASSUB/WASM fails to load or crashes during playback, the client will catch the error and automatically re-negotiate playback with `force_burn_in_subtitles: true`, resuming at the exact playback position with FFmpeg server-side burn-in.
-5. **Subtitle Timing & Sync Offset (LocalStorage Persisted)**: Compensate for HLS transcode start offsets ($\text{transcodingOffsetSeconds} + \text{userSyncOffsetSeconds}$) and provide a user-facing OSD Subtitle Sync control ($\pm 5.0\text{ s}$), persisting offsets in browser `localStorage` per item ID.
+5. **Subtitle Timing & Sync Offset (LocalStorage Persisted)**: Provide a user-facing OSD Subtitle Sync control ($\pm 5.0\text{ s}$), persisting offsets in browser `localStorage` per item ID. The HLS pipeline rebases segment timestamps with `-output_ts_offset`, so `video.currentTime` is already on the media timeline; no transcode-offset compensation is needed.
 6. **High-Bitrate 4K Buffer Optimization**: In `hls.js`, clamp maximum buffer length to 6 seconds for streams $\ge 25\text{ Mbps}$ on Chromium and Firefox to avoid browser memory exhaustion.
 7. **Aspect Ratio Controls**: Support runtime aspect ratio selection (`contain`, `cover`, `fill`) with automatic `jassub.resize()` and canvas coordinate recalculation.
 8. **Font Bundling**: Rely on JASSUB's bundled `default.woff2` alongside extracted container fonts for now (server-wide fallback font directory deferred).
@@ -81,7 +81,7 @@ flowchart TD
 
 - [x] **Capabilities Subtitle Profiles**: Extended `detectBrowserCapabilities()` in `web/src/lib/capabilities.ts` to emit rich client subtitle profiles (`vtt`, `ass`, `ssa` via `external`) and added `burn_in_fallback` capability builder for recovery negotiation.
 - [x] **Native HLS Engine Wrapper**: Implemented `HlsEngine` in `web/src/lib/player/hls-engine.ts` with `hls.js`, dynamic high-bitrate buffer clamping (6s for $\ge 25\text{ Mbps}$ on Chromium/Firefox), Safari native fallback, and 503 retry interceptor. Tested in `web/src/lib/player/hls-engine.test.ts`.
-- [x] **Subtitle Subsystem Controller**: Implemented `SubtitleManager` in `web/src/lib/player/subtitles.svelte.ts` coordinating JASSUB WASM rendering, container font attachments, effective sync offset compensation, WebVTT `<track>` elements, and error reporting. Tested in `web/src/lib/player/subtitles.test.ts`.
+- [x] **Subtitle Subsystem Controller**: Implemented `SubtitleManager` in `web/src/lib/player/subtitles.svelte.ts` coordinating JASSUB WASM rendering, container font attachments, user sync offset application, WebVTT `<track>` elements, and error reporting. Tested in `web/src/lib/player/subtitles.test.ts`.
 - [x] **Unit Testing & Svelte Validation**: All 18 unit tests passing via `npm run test:unit`, `npm run check` reports 0 errors and 0 warnings, and static production build succeeds.
 
 ---

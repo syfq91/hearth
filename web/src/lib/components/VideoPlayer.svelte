@@ -368,8 +368,6 @@
 			: null;
 		if (!track || !subtitleManager) return;
 
-		const transcodeOffset =
-			info?.mode !== 'direct_play' && resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
 		void subtitleManager.loadTrack(
 			{
 				id: track.id,
@@ -378,8 +376,7 @@
 				language: track.language,
 				label: track.name || track.language || 'Subtitles'
 			},
-			[],
-			transcodeOffset
+			[]
 		);
 	}
 
@@ -390,8 +387,6 @@
 		// play and HLS, so reuse them instead of rebuilding the URL from
 		// sessionMediaToken (which is only populated from an HLS URL).
 		const fontUrls = attachmentFontUrls(info?.attachments);
-		const transcodeOffset =
-			info?.mode !== 'direct_play' && resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
 
 		if (subtitleChoice.startsWith('emb:')) {
 			// Embedded tracks are delivered by the server when they cannot ride
@@ -411,8 +406,7 @@
 					language: stream?.language,
 					label: stream?.title || stream?.language || 'Subtitles'
 				},
-				fontUrls,
-				transcodeOffset
+				fontUrls
 			);
 			return;
 		}
@@ -440,8 +434,7 @@
 				language: selectedTrack.language,
 				label: selectedTrack.name || selectedTrack.language || 'Subtitles'
 			},
-			fontUrls,
-			transcodeOffset
+			fontUrls
 		);
 	}
 
@@ -545,10 +538,6 @@
 				/* ignore localStorage errors */
 			}
 		}
-
-		const transcodeOffset =
-			response.mode !== 'direct_play' && resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
-		subtitleManager.setTranscodingOffset(transcodeOffset);
 
 		const source = response.mode === 'direct_play' ? response.url : response.hls_url;
 		if (!source) {
