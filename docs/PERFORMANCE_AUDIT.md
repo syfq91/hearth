@@ -860,3 +860,25 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 
 **Phase 3 — Verification**
 9. `EXPLAIN QUERY PLAN` on shelf/search/next-up paths; `cProfile`/wall-time on first scan; bundle analyzer before/after; load-test via `scripts/` before claiming gains.
+
+### 7.21 ✅ Playback start latency on low-power Intel hosts
+
+**Location:** [`app/services/transcode/capabilities.py`](file:///home/syafiq/code/hearth/app/services/transcode/capabilities.py), [`app/services/transcode/session.py`](file:///home/syafiq/code/hearth/app/services/transcode/session.py), [`app/services/transcode/builder.py`](file:///home/syafiq/code/hearth/app/services/transcode/builder.py), [`app/api/v1/hls.py`](file:///home/syafiq/code/hearth/app/api/v1/hls.py)
+
+Measured on a Celeron J4005 (2 cores, UHD 600) with a 1080p source, timing from process spawn to `media.m3u8` + `init.mp4` (the response point of `master.m3u8`):
+
+| Path | Before | After |
+|---|---|---|
+| VA-API transcode, first segment | 4.16 s | 1.1–2.3 s |
+| VA-API transcode, API busy | 13.6–14.3 s | 1.1–3.2 s |
+| Software `libx264`, easy content | 7.0 s | 7.0 s |
+| Software `libx264`, complex content | 27.5 s | 27.5 s |
+| Remux (`-c:v copy`) | 0.5 s | 0.5 s |
+
+Root causes found:
+
+1. The VA-API probe cached a timeout as "no hardware encoder" for the life of the process. `vainfo` took 2.8–4.4 s against a hardcoded 5 s deadline, and the `h264_vaapi` smoke test took 2.5–4.1 s against a 5 s default, so a boot-time coin flip decided between GPU and CPU encoding until restart. Timeouts now mark the probe inconclusive and re-run it in the background (§7.13), and both deadlines default to 15 s.
+2. The master playlist blocks on a complete segment, so playback could not start until 4 s of media were encoded. Video transcodes now force a keyframe at 2 s, anchoring later keyframes to the same grid, which keeps 4 s segments, seeking and subtitle offsets intact.
+3. `nice(10)` on the ffmpeg process starved the first segment whenever the API or worker shared the CPU. Hardware sessions now keep default priority; software encodes still yield.
+
+The probe still runs serially inside `_cache_lock` and `create_session` still spawns under the session lock (§7.13 remains open for those).
