@@ -480,3 +480,96 @@ def test_builder_forced_keyframes_copy_mode(tmp_path: Path) -> None:
     assert "-sc_threshold" not in cmd
     assert "-g" not in cmd
     assert "-keyint_min" not in cmd
+
+
+def test_builder_short_first_segment_anchors_keyframes(tmp_path: Path) -> None:
+    """A 2s opener keeps 4s segments afterwards by anchoring the keyframe grid."""
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        segment_duration=4,
+        first_segment_duration=2.0,
+    )
+    assert cmd[cmd.index("-force_key_frames") + 1] == "expr:gte(t,2+n_forced*4)"
+    assert cmd[cmd.index("-hls_time") + 1] == "2"
+
+
+def test_builder_short_first_segment_vaapi(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="h264_vaapi",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="vaapi",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        segment_duration=4,
+        first_segment_duration=2.0,
+        fps=24.0,
+    )
+    assert cmd[cmd.index("-force_key_frames") + 1] == "expr:gte(t,2+n_forced*4)"
+    assert cmd[cmd.index("-hls_time") + 1] == "2"
+    # The GOP bound still tracks the regular segment duration.
+    assert cmd[cmd.index("-g") + 1] == "96"
+
+
+def test_builder_short_first_segment_ignored_for_copy(tmp_path: Path) -> None:
+    """Stream copies cannot force keyframes, so the opening segment stays full length."""
+    plan = TranscodePlan(
+        mode="remux_hls",
+        video_action="copy",
+        video_codec="copy",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        segment_duration=4,
+        first_segment_duration=2.0,
+    )
+    assert "-force_key_frames" not in cmd
+    assert cmd[cmd.index("-hls_time") + 1] == "4"
+
+
+def test_builder_short_first_segment_ignored_when_not_shorter(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        segment_duration=4,
+        first_segment_duration=4.0,
+    )
+    assert cmd[cmd.index("-force_key_frames") + 1] == "expr:gte(t,n_forced*4)"
+    assert cmd[cmd.index("-hls_time") + 1] == "4"

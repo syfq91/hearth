@@ -154,16 +154,18 @@ async def test_seek_forward_terminates_old_and_spawns_with_correct_ss_and_start_
     # 2. New process is active
     assert session.process is new_proc
 
-    # 3. New command line contains correct -ss, -start_number, and -output_ts_offset
+    # 3. New command line contains correct -ss, -start_number, and -output_ts_offset.
+    # The grid opens with a 2s segment, so segment 3 (which contains 12s) starts
+    # at 2 + 2 * 4 = 10s and the process must resume from that boundary.
     cmd = session.cmd
     assert "-ss" in cmd
-    assert cmd[cmd.index("-ss") + 1] == "12"
+    assert cmd[cmd.index("-ss") + 1] == "10"
 
     assert "-start_number" in cmd
     assert cmd[cmd.index("-start_number") + 1] == "3"
 
     assert "-output_ts_offset" in cmd
-    assert cmd[cmd.index("-output_ts_offset") + 1] == "12"
+    assert cmd[cmd.index("-output_ts_offset") + 1] == "10"
 
     # 4. INV-8: seg_000.m4s was NOT unlinked or deleted
     assert seg0.exists()

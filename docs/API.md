@@ -209,7 +209,7 @@ The server returns the optimal playback method, stream URLs, active audio/subtit
 ### 3.3 Transcode Session Lifecycle and HLS Delivery
 When `method` is `transcode_hls` or `remux_hls`:
 1. **Master Playlist**: `GET /api/v1/hls/{session_id}/master.m3u8` delays responding until ffmpeg emits the first segment, eliminating player race conditions.
-2. **Media Playlist**: `GET /api/v1/hls/{session_id}/media.m3u8` rewrites segment URLs to preserve media access tokens across child requests.
+2. **Media Playlist**: `GET /api/v1/hls/{session_id}/media.m3u8` rewrites segment URLs to preserve media access tokens across child requests. Video transcodes open with a shorter first segment (`HEARTH_TRANSCODE_FIRST_SEGMENT_DURATION_SECONDS`, default 2s) so playback can start before a full segment is encoded; `#EXT-X-TARGETDURATION` reports the longest segment, and every later segment keeps the configured duration.
 3. **Segments**: Init (`init.mp4`) and media chunks (`seg_0.m4s`, `seg_1.m4s`, ...) are served with `Cache-Control`.
 4. **Seeking**: Client seeking initiates a new playback-info or seek request; ffmpeg restarts with `-ss` seeking on keyframes.
 5. **Idle Reaper**: An active transcode process is automatically reaped if no segment requests arrive within 60 seconds.

@@ -259,23 +259,17 @@ async def get_media_playlist(
 
     if session.duration_seconds > 0:
         duration = session.duration_seconds
-        seg_dur = settings.transcode_segment_duration_seconds
-        total_segments = max(1, math.ceil(duration / seg_dur))
+        total_segments = session.segment_count(duration)
         lines = [
             "#EXTM3U",
             "#EXT-X-VERSION:7",
-            f"#EXT-X-TARGETDURATION:{seg_dur}",
+            f"#EXT-X-TARGETDURATION:{session.playlist_target_duration}",
             "#EXT-X-MEDIA-SEQUENCE:0",
             "#EXT-X-PLAYLIST-TYPE:VOD",
             f'#EXT-X-MAP:URI="init.mp4{token_suffix}"',
         ]
         for i in range(total_segments):
-            if i == total_segments - 1:
-                d = duration - i * seg_dur
-                if d <= 0:
-                    d = float(seg_dur)
-            else:
-                d = float(seg_dur)
+            d = session.segment_duration_at(i, duration)
             lines.append(f"#EXTINF:{d:.3f},")
             lines.append(f"seg_{i:03d}.m4s{token_suffix}")
         lines.append("#EXT-X-ENDLIST")
@@ -491,9 +485,7 @@ async def get_media_segment(
         segment_index = int(segment_file.split(".")[0].split("_")[1]) if "_" in segment_file else 0
 
         if session.duration_seconds > 0:
-            total_segments = max(
-                1, math.ceil(session.duration_seconds / settings.transcode_segment_duration_seconds)
-            )
+            total_segments = session.segment_count(session.duration_seconds)
             if segment_index < 0 or segment_index >= total_segments:
                 raise NotFoundError("Segment out of range", code="segment_out_of_range")
 

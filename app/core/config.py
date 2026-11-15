@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     transcode_max_sw_sessions: int = 4
     transcode_idle_timeout_seconds: float = 60.0
     transcode_segment_duration_seconds: int = 4
+    # Encode a shorter opening segment so the player can start before a full
+    # segment exists. 0, or any value >= the segment duration, disables it.
+    transcode_first_segment_duration_seconds: float = 2.0
     transcode_first_segment_timeout_seconds: float = 30.0
     transcode_segment_wait_timeout_seconds: float = 10.0
     transcode_audio_bitrate_kbps: int = 192

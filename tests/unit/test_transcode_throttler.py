@@ -104,10 +104,11 @@ async def test_throttler_pause_at_lead_60_and_resume_at_lead_20(tmp_path: Path) 
     manager = SessionManager(session.settings)
     manager.sessions[session.id] = session
 
-    # 1. 16 segments of 4s = 64s encoded time. With 0s served, lead = 64s (>= 60s)
+    # 1. 16 segments (2s opener + 4s each) = 62s encoded. With 0s served,
+    # lead = 62s (>= 60s).
     _create_segments(session, 16)
-    assert session.encoded_time_seconds == 64.0
-    assert session.compute_lead() == 64.0
+    assert session.encoded_time_seconds == 62.0
+    assert session.compute_lead() == 62.0
     assert not session.is_paused
 
     await manager.throttle_sessions()
@@ -119,11 +120,11 @@ async def test_throttler_pause_at_lead_60_and_resume_at_lead_20(tmp_path: Path) 
     await manager.throttle_sessions()
     assert len(proc.signals_received) == 1
 
-    # 3. Client requests segment 11 (served end = 12 * 4 = 48s).
-    # Lead becomes 64s - 48s = 16s (<= 20s).
+    # 3. Client requests segment 11 (served end = 2 + 11 * 4 = 46s).
+    # Lead becomes 62s - 46s = 16s (<= 20s).
     session.record_served_segment(11)
 
-    assert session.last_served_segment_end == 48.0
+    assert session.last_served_segment_end == 46.0
     assert session.compute_lead() == 16.0
     assert session.is_paused is False
     assert proc.signals_received == [signal.SIGSTOP, signal.SIGCONT]
@@ -140,9 +141,9 @@ async def test_throttler_hysteresis_band(tmp_path: Path) -> None:
     manager = SessionManager(session.settings)
     manager.sessions[session.id] = session
 
-    # 10 segments of 4s = 40s encoded. Lead = 40s.
+    # 10 segments (2s opener + 4s each) = 38s encoded. Lead = 38s.
     _create_segments(session, 10)
-    assert session.compute_lead() == 40.0
+    assert session.compute_lead() == 38.0
 
     # Running session stays running
     await manager.throttle_sessions()

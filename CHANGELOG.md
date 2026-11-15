@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- Video transcodes now open with a shorter 2s HLS segment (`HEARTH_TRANSCODE_FIRST_SEGMENT_DURATION_SECONDS`) instead of waiting for a full 4s segment before the master playlist responds. Keyframes stay anchored to the 2s-offset grid, so later segments keep their configured duration and seeking/subtitles stay aligned. Measured on a Celeron J4005 with VA-API, the first segment arrives in 1.6-2.3s instead of 4.2-4.9s.
 - Converted HTTP middlewares (`RequestSizeLimitMiddleware`, `RequestIDMiddleware`, `SecurityHeadersMiddleware`) to pure ASGI middleware to remove context-switch and streaming wrapper overhead.
 - Optimized `GET /items/{id}` ETags to derive from item and watch state timestamps, short-circuiting 304 Not Modified responses before model detail generation.
 - Optimized `GET /home/recently-added` to evaluate deduplicated lightweight scalar tuples before loading full ORM models and selectin relationships.

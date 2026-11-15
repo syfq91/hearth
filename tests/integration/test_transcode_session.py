@@ -237,11 +237,12 @@ async def test_session_seeking(tmp_path: Path) -> None:
             start_offset=0.0,
         )
 
-        # Seek to 60 seconds
+        # Seek to 60 seconds. With a 2s opener the grid is 2, 6, 10, ..., so
+        # 60s falls in segment 15, which begins at 2 + 14 * 4 = 58s.
         await session.seek(60.0)
         assert session.start_offset == 60.0
         assert "-ss" in session.cmd
-        assert session.cmd[session.cmd.index("-ss") + 1] == "60"
+        assert session.cmd[session.cmd.index("-ss") + 1] == "58"
 
         await manager.stop_all()
 

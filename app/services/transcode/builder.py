@@ -58,11 +58,26 @@ def build_ffmpeg_hls_command(
     start_offset: float = 0.0,
     start_number: int = 0,
     segment_duration: int = 4,
+    first_segment_duration: float = 0.0,
     audio_bitrate_kbps: int = 192,
     hls_flags: str | None = None,
     fps: float = 24.0,
 ) -> list[str]:
-    """Produce argument list for ffmpeg executing HLS fMP4 delivery."""
+    """Produce argument list for ffmpeg executing HLS fMP4 delivery.
+
+    ``first_segment_duration`` shortens only the opening segment so the client
+    can start before a full segment is encoded. It applies to video transcodes
+    (which can force keyframes) and is ignored for stream copies, where segment
+    boundaries follow the source keyframes.
+    """
+    short_first = plan.video_action == "transcode" and 0 < first_segment_duration < segment_duration
+    keyframe_expr = (
+        f"expr:gte(t,{first_segment_duration:g}+n_forced*{segment_duration})"
+        if short_first
+        else f"expr:gte(t,n_forced*{segment_duration})"
+    )
+    hls_time = f"{first_segment_duration:g}" if short_first else str(segment_duration)
+
     cmd: list[str] = [
         ffmpeg_binary,
         "-hide_banner",
@@ -131,7 +146,7 @@ def build_ffmpeg_hls_command(
         cmd.extend(
             [
                 "-force_key_frames",
-                f"expr:gte(t,n_forced*{segment_duration})",
+                keyframe_expr,
                 "-g",
                 str(gop),
                 "-keyint_min",
@@ -179,7 +194,7 @@ def build_ffmpeg_hls_command(
                 "-pix_fmt",
                 "yuv420p",
                 "-force_key_frames",
-                f"expr:gte(t,n_forced*{segment_duration})",
+                keyframe_expr,
                 "-sc_threshold",
                 "0",
             ]
@@ -221,7 +236,7 @@ def build_ffmpeg_hls_command(
             "-hls_segment_type",
             "fmp4",
             "-hls_time",
-            str(segment_duration),
+            hls_time,
         ]
     )
     if start_number > 0:

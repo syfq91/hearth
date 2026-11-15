@@ -65,10 +65,14 @@ class TranscodeSession:
         self.source_audio = source_audio
         self.source_fps = source_fps
         self.segment_duration = settings.transcode_segment_duration_seconds
+        # A short opening segment gets the client playing sooner. Stream copies
+        # cannot force keyframes, so they keep a uniform grid.
+        configured_first = settings.transcode_first_segment_duration_seconds
+        self.first_segment_duration = float(self.segment_duration)
+        if plan.video_action == "transcode" and 0 < configured_first < self.segment_duration:
+            self.first_segment_duration = float(configured_first)
         self._seek_lock = asyncio.Lock()
-        self.current_start_segment = (
-            int(start_offset // self.segment_duration) if self.segment_duration > 0 else 0
-        )
+        self.current_start_segment = self.segment_index_at(start_offset)
 
         self.created_at = utcnow()
         self.last_activity_at = utcnow()
@@ -190,18 +194,67 @@ class TranscodeSession:
         return (utcnow() - self.created_at).total_seconds()
 
     @property
+    def short_first_segment(self) -> bool:
+        """Whether segment 0 is shorter than the rest of the grid."""
+        return 0 < self.first_segment_duration < self.segment_duration
+
+    def segment_start(self, index: int) -> float:
+        """Media timestamp where segment ``index`` begins."""
+        if index <= 0 or self.segment_duration <= 0:
+            return 0.0
+        if self.short_first_segment:
+            return self.first_segment_duration + (index - 1) * self.segment_duration
+        return float(index * self.segment_duration)
+
+    def segment_end(self, index: int) -> float:
+        """Media timestamp where segment ``index`` ends."""
+        return self.segment_start(index + 1)
+
+    def segment_index_at(self, offset: float) -> int:
+        """Index of the segment that contains ``offset`` seconds."""
+        if offset <= 0 or self.segment_duration <= 0:
+            return 0
+        if self.short_first_segment:
+            if offset < self.first_segment_duration:
+                return 0
+            return 1 + int((offset - self.first_segment_duration) // self.segment_duration)
+        return int(offset // self.segment_duration)
+
+    def segment_count(self, duration: float) -> int:
+        """Number of segments needed to cover ``duration`` seconds of media."""
+        if duration <= 0 or self.segment_duration <= 0:
+            return 1
+        if self.short_first_segment:
+            if duration <= self.first_segment_duration:
+                return 1
+            remaining = duration - self.first_segment_duration
+            return 1 + int(math.ceil(remaining / self.segment_duration))
+        return max(1, int(math.ceil(duration / self.segment_duration)))
+
+    def segment_duration_at(self, index: int, total_duration: float) -> float:
+        """Nominal duration of segment ``index``, clamped by the media length."""
+        if total_duration <= 0:
+            return float(self.segment_duration)
+        end = min(self.segment_end(index), total_duration)
+        duration = end - self.segment_start(index)
+        if duration <= 0:
+            return float(self.segment_duration)
+        return duration
+
+    @property
+    def playlist_target_duration(self) -> int:
+        """HLS target duration: the longest segment in the grid."""
+        return max(1, int(math.ceil(self.segment_duration)))
+
+    @property
     def encoded_time_seconds(self) -> float:
         """Highest contiguous timestamp in seconds transcoded so far from current served point."""
         if not self.output_dir.exists():
             return self.start_offset
-        seg_idx = (
-            int(self.last_served_segment_end // self.segment_duration)
-            if self.segment_duration > 0
-            else 0
-        )
+        seg_idx = self.segment_index_at(self.last_served_segment_end)
         while (self.output_dir / f"seg_{seg_idx:03d}.m4s").exists():
             seg_idx += 1
-        return float(seg_idx * self.segment_duration)
+        return self.segment_start(seg_idx)
 
     def compute_lead(self) -> float:
         """Lookahead delta between encoded time and client consumption in seconds."""
@@ -268,7 +321,7 @@ class TranscodeSession:
 
     def record_served_segment(self, segment_index: int) -> None:
         """Record a segment requested by a client and resume if throttling lead dropped."""
-        seg_end = float((segment_index + 1) * self.segment_duration)
+        seg_end = self.segment_end(segment_index)
         if seg_end > self.last_served_segment_end:
             self.last_served_segment_end = seg_end
         if self.is_paused and self.compute_lead() <= 20.0:
@@ -285,11 +338,16 @@ class TranscodeSession:
             return
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        start_seg = (
-            int(self.start_offset // self.segment_duration) if self.segment_duration > 0 else 0
-        )
+        start_seg = self.segment_index_at(self.start_offset)
         self.current_start_segment = start_seg
-        cmd_offset = start_seg * self.segment_duration
+        cmd_offset = self.segment_start(start_seg)
+        # The short opening segment only applies when ffmpeg starts at the
+        # beginning of the grid; a mid-file start already begins on a keyframe.
+        first_segment_duration = (
+            self.first_segment_duration
+            if self.short_first_segment and start_seg == 0
+            else float(self.segment_duration)
+        )
         self.cmd = build_ffmpeg_hls_command(
             self.plan,
             self.input_path,
@@ -299,6 +357,7 @@ class TranscodeSession:
             start_offset=cmd_offset,
             start_number=start_seg,
             segment_duration=self.segment_duration,
+            first_segment_duration=first_segment_duration,
             audio_bitrate_kbps=self.settings.transcode_audio_bitrate_kbps,
         )
 
@@ -445,7 +504,7 @@ class TranscodeSession:
             )
 
             if not near_active:
-                seek_offset = segment_index * self.segment_duration
+                seek_offset = self.segment_start(segment_index)
                 logger.info(
                     "seeking transcode session %s to segment %d (offset %.1fs)",
                     self.id,
@@ -488,9 +547,7 @@ class TranscodeSession:
             )
             return
 
-        target_seg = (
-            int(offset_seconds // self.segment_duration) if self.segment_duration > 0 else 0
-        )
+        target_seg = self.segment_index_at(offset_seconds)
         target_file = self.output_dir / f"seg_{target_seg:03d}.m4s"
 
         if target_file.exists() and target_file.stat().st_size > 0:
@@ -515,7 +572,7 @@ class TranscodeSession:
                 )
                 return
 
-            seek_offset = float(target_seg * self.segment_duration)
+            seek_offset = self.segment_start(target_seg)
             logger.info(
                 "seeking session %s to %gs (aligned segment %d, offset %.1fs)",
                 self.id,

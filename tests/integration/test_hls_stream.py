@@ -220,7 +220,17 @@ async def test_hls_vod_playlist_and_segment_seeking(
     assert f"seg_001.m4s?token={encoded_token}" in media_text
     assert f"seg_002.m4s?token={encoded_token}" in media_text
     assert f"seg_003.m4s?token={encoded_token}" in media_text
-    assert "#EXTINF:2.500," in media_text
+    # 14.5s of media: 2s opener, three 4s segments, then a 0.5s tail.
+    assert "#EXT-X-TARGETDURATION:4" in media_text
+    assert [line for line in media_text.splitlines() if line.startswith("#EXTINF")] == [
+        "#EXTINF:2.000,",
+        "#EXTINF:4.000,",
+        "#EXTINF:4.000,",
+        "#EXTINF:4.000,",
+        "#EXTINF:0.500,",
+    ]
+    assert f"seg_004.m4s?token={encoded_token}" in media_text
+    assert f"seg_005.m4s?token={encoded_token}" not in media_text
 
     # Pre-populate seg_002 to simulate seek completion
     (out_dir / "seg_002.m4s").write_bytes(b"\x00\x00\x00\x10moof_seek")
@@ -696,15 +706,17 @@ async def test_hls_throttling_integration(
     )
     encoded_token = quote(token, safe="")
 
-    # 1. Lead is 64s >= 60s -> throttle_sessions pauses session
-    assert session.compute_lead() == 64.0
+    # 1. 16 segments (2s opener + 4s each) = 62s encoded. Lead is 62s
+    # (>= 60s), so throttle_sessions pauses the session.
+    assert session.compute_lead() == 62.0
     await manager.throttle_sessions()
     assert session.is_paused is True
 
-    # 2. Client requests seg_011.m4s -> served end becomes 12 * 4 = 48s, lead becomes 16s <= 20s
+    # 2. Client requests seg_011.m4s -> served end becomes 2 + 11 * 4 = 46s,
+    # lead becomes 16s (<= 20s).
     seg_res = await api_client.get(f"/api/v1/hls/{session_id}/seg_011.m4s?token={encoded_token}")
     assert seg_res.status_code == 200
-    assert session.last_served_segment_end == 48.0
+    assert session.last_served_segment_end == 46.0
     assert session.compute_lead() == 16.0
     # Immediate resume upon client catchup
     assert session.is_paused is False
