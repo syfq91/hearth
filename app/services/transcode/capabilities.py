@@ -13,6 +13,7 @@ Inconclusive probes are therefore flagged and re-run in the background.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import re
 from typing import NamedTuple
@@ -20,6 +21,7 @@ from typing import NamedTuple
 from pydantic import BaseModel, Field
 
 from app.core.config import Settings
+from app.core.locks import LoopAwareLock
 from app.core.system import _run, run_command
 
 logger = logging.getLogger("hearth.transcode.capabilities")
@@ -174,8 +176,11 @@ async def _run_test_encode(
 
 
 _cached_capabilities: ServerTranscodeCapabilities | None = None
-_cache_lock = asyncio.Lock()
+# The probe state is process-global, but its lock and retry task belong to the
+# loop that is driving them: tests and reload workers can use more than one.
+_cache_lock = LoopAwareLock()
 _retry_task: asyncio.Task[None] | None = None
+_retry_task_loop: asyncio.AbstractEventLoop | None = None
 _retry_attempt = 0
 
 
@@ -351,18 +356,21 @@ async def probe_transcode_capabilities(
 
 def _schedule_probe_retry(settings: Settings) -> None:
     """Start a bounded background retry when the cached probe was inconclusive."""
-    global _retry_task
+    global _retry_task, _retry_task_loop
 
     if settings.transcode_capability_probe_retries <= 0:
-        return
-    if _retry_task is not None and not _retry_task.done():
-        return
-    if _retry_attempt >= settings.transcode_capability_probe_retries:
         return
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return
+    # A task left behind by a closed loop can never finish; do not let it
+    # suppress a retry on the loop that is actually running.
+    if _retry_task is not None and not _retry_task.done() and _retry_task_loop is loop:
+        return
+    if _retry_attempt >= settings.transcode_capability_probe_retries:
+        return
+    _retry_task_loop = loop
     _retry_task = loop.create_task(
         _probe_retry_loop(settings), name="hearth-capability-probe-retry"
     )
@@ -407,11 +415,15 @@ def _reset_retry_state() -> None:
 
 def reset_transcode_capabilities_cache() -> None:
     """Clear cached capabilities and pending retries for test isolation."""
-    global _cached_capabilities, _retry_task, _retry_attempt
+    global _cached_capabilities, _retry_task, _retry_task_loop, _retry_attempt
 
     if _retry_task is not None and not _retry_task.done():
-        _retry_task.cancel()
+        # The task may belong to a closed loop; cancelling then is a no-op that
+        # can still raise.
+        with contextlib.suppress(RuntimeError):
+            _retry_task.cancel()
     _retry_task = None
+    _retry_task_loop = None
     _retry_attempt = 0
     _cached_capabilities = None
 

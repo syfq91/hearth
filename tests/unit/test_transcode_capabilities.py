@@ -327,3 +327,64 @@ async def test_probe_budget_marks_result_inconclusive(tmp_path: Path) -> None:
     assert "timed out" in (caps.error or "")
 
     reset_transcode_capabilities_cache()
+
+
+@pytest.mark.asyncio
+@pytest.mark.filterwarnings("ignore:coroutine 'sleep' was never awaited:RuntimeWarning")
+async def test_stale_retry_task_from_closed_loop_does_not_block(tmp_path: Path) -> None:
+    """A retry task left behind by a closed loop must not suppress new retries."""
+    import asyncio
+
+    from app.services.transcode import capabilities as capabilities_mod
+
+    reset_transcode_capabilities_cache()
+    fake_dev = tmp_path / "renderD128"
+    fake_dev.touch()
+
+    # A task that belongs to a loop that will never run again (as happens when
+    # one ASGI lifespan/test loop is replaced by another).
+    stale_loop = asyncio.new_event_loop()
+    stale_task = stale_loop.create_task(asyncio.sleep(60))
+    stale_loop.close()
+    assert stale_task.done() is False
+
+    settings = Settings(
+        render_device=fake_dev,
+        transcode_capability_probe_retries=1,
+        transcode_capability_probe_retry_delay_seconds=0.01,
+    )
+
+    vainfo_calls = 0
+
+    async def mock_run(cmd: list[str], timeout: float = 5.0) -> CommandOutcome:
+        nonlocal vainfo_calls
+        if cmd[0] == settings.vainfo_binary:
+            vainfo_calls += 1
+            if vainfo_calls == 1:
+                return CommandOutcome("timeout", -1, "", "")
+            return CommandOutcome("ok", 0, SAMPLE_INTEL_VAINFO, "")
+        if "-filters" in cmd:
+            return CommandOutcome("ok", 0, "tonemap_vaapi", "")
+        return CommandOutcome("ok", 0, "", "")
+
+    capabilities_mod._retry_task = stale_task
+    capabilities_mod._retry_task_loop = stale_loop
+
+    with patch(
+        "app.services.transcode.capabilities.run_command",
+        new=AsyncMock(side_effect=mock_run),
+    ):
+        first = await probe_transcode_capabilities(settings)
+        assert first.probe_incomplete is True
+
+        deadline = asyncio.get_running_loop().time() + 5.0
+        while asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(0.02)
+            refreshed = await probe_transcode_capabilities(settings)
+            if not refreshed.probe_incomplete:
+                break
+
+    assert refreshed.available is True
+    assert refreshed.can_vaapi_encode("h264") is True
+
+    reset_transcode_capabilities_cache()

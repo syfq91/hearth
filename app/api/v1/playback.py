@@ -4,7 +4,6 @@ The auto-watched decision lives in :mod:`app.services.playback_state`; these
 routes only load the item, enforce library access and persist the result.
 """
 
-import asyncio
 import contextlib
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +30,7 @@ from app.core.deps import (
     user_can_access_library,
 )
 from app.core.errors import NotFoundError
+from app.core.locks import LoopAwareLock
 from app.core.tokens import create_media_token
 from app.db.base import utcnow
 from app.db.models import (
@@ -617,10 +617,11 @@ async def _load_state(session: AsyncSession, user_id: str, item_id: str) -> User
 # module lock serializing every state write covers both that race and the WAL
 # read-to-write upgrade failure a concurrent writer would otherwise cause (an
 # INSERT variant cannot help: a transaction that has already read cannot take
-# the write lock once another writer commits). The API runs one event loop, so
-# an asyncio.Lock is sufficient; each section drops its pre-lock read snapshot
-# first so it sees what the previous writer committed.
-_STATE_LOCK = asyncio.Lock()
+# the write lock once another writer commits). Each section drops its pre-lock
+# read snapshot first so it sees what the previous writer committed.
+# LoopAwareLock keeps the lock usable if the ASGI lifespan restarts on a new
+# event loop; a plain asyncio.Lock binds to the first loop that contends on it.
+_STATE_LOCK = LoopAwareLock()
 
 
 def _embedded_subtitle_delivery(

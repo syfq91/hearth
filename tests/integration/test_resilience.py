@@ -414,3 +414,60 @@ async def test_resilience_sqlite_lock_contention(
     for r in results:
         if isinstance(r, Exception):
             raise r
+
+
+@pytest.mark.asyncio
+async def test_progress_writes_survive_playback_lock_from_old_loop(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    """Regression: the playback state lock must follow the running event loop.
+
+    A module-level ``asyncio.Lock`` binds to the first loop that contends on it
+    and then raises ``RuntimeError`` from a later loop, which surfaced as 500s
+    on progress writes once an ASGI lifespan had been replaced.
+    """
+    from app.api.v1 import playback
+
+    setup_res = await api_client.post(
+        "/api/v1/auth/setup", json={"username": "admin", "password": "correct horse"}
+    )
+    assert setup_res.status_code == 201
+    headers = {"Authorization": f"Bearer {setup_res.json()['access_token']}"}
+
+    async with db_sessionmaker() as session:
+        lib = Library(name="Stale Lock Lib", type="movie")
+        session.add(lib)
+        await session.flush()
+        session.add(
+            MediaItem(
+                id="stale-lock-item",
+                library_id=lib.id,
+                type="movie",
+                title="Stale Lock",
+                sort_title="Stale Lock",
+            )
+        )
+        await session.commit()
+
+    # Simulate a lock left behind by a previous (closed) event loop.
+    stale_loop = asyncio.new_event_loop()
+    playback._STATE_LOCK._lock = asyncio.Lock()
+    playback._STATE_LOCK._loop = stale_loop
+    try:
+
+        async def write(position: int) -> httpx.Response:
+            return await api_client.post(
+                "/api/v1/items/stale-lock-item/progress",
+                headers=headers,
+                json={"position_ms": position, "state": "playing"},
+            )
+
+        responses = await asyncio.gather(*(write(i * 1000) for i in range(10)))
+    finally:
+        playback._STATE_LOCK._lock = None
+        playback._STATE_LOCK._loop = None
+        stale_loop.close()
+
+    assert [response.status_code for response in responses] == [200] * 10
