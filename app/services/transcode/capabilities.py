@@ -212,14 +212,16 @@ async def _probe_once(
         )
 
     # Run vainfo
+    vainfo_timeout = settings.transcode_vainfo_timeout_seconds
     vainfo_res = await run_command(
         [settings.vainfo_binary, "--display", "drm", "--device", device_label],
-        timeout=5.0,
+        timeout=vainfo_timeout,
     )
     if vainfo_res.state == "timeout":
         logger.warning(
-            "vainfo timed out after 5s; treating hardware encoding as unavailable "
+            "vainfo timed out after %gs; treating hardware encoding as unavailable "
             "and retrying the probe in the background",
+            vainfo_timeout,
             extra={"render_device": device_label, "event": "capability_probe_timeout"},
         )
         return (

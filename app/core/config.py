@@ -45,7 +45,11 @@ class Settings(BaseSettings):
     transcode_first_segment_timeout_seconds: float = 30.0
     transcode_segment_wait_timeout_seconds: float = 10.0
     transcode_audio_bitrate_kbps: int = 192
-    transcode_test_encode_timeout_seconds: float = 5.0
+    # Slow iGPUs (for example Intel Gen9.5 on a Celeron) can take several
+    # seconds to initialise the driver for the first time; deadlines tighter
+    # than that are reported as inconclusive rather than unsupported.
+    transcode_vainfo_timeout_seconds: float = 15.0
+    transcode_test_encode_timeout_seconds: float = 15.0
     # A timed-out hardware probe is inconclusive, not a verdict. Retry in the
     # background so a slow iGPU initialisation cannot demote the whole process
     # to software encoding until the next restart.

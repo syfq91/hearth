@@ -240,7 +240,7 @@ async def test_probe_test_encode_timeout_is_inconclusive(tmp_path: Path) -> None
     assert caps.available is True
     assert caps.probe_incomplete is True
     assert caps.can_vaapi_encode("h264") is False
-    assert caps.codecs["h264"].test_encode_error == "ffmpeg timed out after 5s"
+    assert caps.codecs["h264"].test_encode_error == "ffmpeg timed out after 15s"
     # hevc still verified, so the probe is only partially inconclusive
     assert caps.can_vaapi_encode("hevc") is True
 
