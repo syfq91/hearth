@@ -135,6 +135,33 @@ test('overlapping loads mount only the newest track', async () => {
 	}
 });
 
+test('native tracks carry the sync offset as a shifted document', async () => {
+	const env = mockTrackEnvironment();
+	try {
+		const manager = new SubtitleManager({ video: env.video });
+		manager.setOffset(-0.5);
+		await manager.loadTrack({ id: 'ext:a', url: '/sub.vtt?token=x', format: 'vtt' });
+		assert.strictEqual(env.appended[0].src, '/sub.vtt?token=x&shift_ms=500');
+	} finally {
+		env.restore();
+	}
+});
+
+test('changing the offset remounts a native track', async () => {
+	const env = mockTrackEnvironment();
+	try {
+		const manager = new SubtitleManager({ video: env.video });
+		await manager.loadTrack({ id: 'ext:a', url: '/sub.vtt', format: 'vtt' });
+		manager.setOffset(1);
+		await new Promise((resolve) => setTimeout(resolve, 250));
+
+		assert.strictEqual(env.appended.length, 2);
+		assert.strictEqual(env.appended[1].src, '/sub.vtt?shift_ms=-1000');
+	} finally {
+		env.restore();
+	}
+});
+
 test('clearing during a pending load mounts nothing', async () => {
 	const env = mockTrackEnvironment();
 	try {

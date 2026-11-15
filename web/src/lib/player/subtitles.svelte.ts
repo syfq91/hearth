@@ -34,6 +34,10 @@ export class SubtitleManager {
 	private loadGeneration = 0;
 	/** Serializes mounts and clears so only one track is ever attached. */
 	private switchChain: Promise<void> = Promise.resolve();
+	/** The mounted track, kept so an offset change can remount a native track. */
+	private activeTrack: SubtitleTrackItem | null = null;
+	private activeFontUrls: string[] = [];
+	private offsetRemountTimer: ReturnType<typeof setTimeout> | null = null;
 
 	public activeTrackId = $state<string | null>(null);
 	public isAss = $state(false);
@@ -49,11 +53,39 @@ export class SubtitleManager {
 	 * Update user subtitle timing sync offset (in seconds).
 	 */
 	public setOffset(offsetSeconds: number): void {
+		if (this.userOffsetSeconds === offsetSeconds) return;
 		this.userOffsetSeconds = offsetSeconds;
 		if (this.jassubInstance) {
 			this.jassubInstance.timeOffset = this.userOffsetSeconds;
 			this.renderManualFrame(true);
+			return;
 		}
+		// Native text tracks resolve cues against their own timestamps, so the
+		// only way to shift them is to re-fetch the document with a new shift.
+		this.scheduleOffsetRemount();
+	}
+
+	private scheduleOffsetRemount(): void {
+		const track = this.activeTrack;
+		if (!track || this.isAss) return;
+		if (this.offsetRemountTimer) clearTimeout(this.offsetRemountTimer);
+		this.offsetRemountTimer = setTimeout(() => {
+			this.offsetRemountTimer = null;
+			if (this.isAss || this.activeTrack?.id !== track.id) return;
+			void this.loadTrack(track, this.activeFontUrls);
+		}, 200);
+	}
+
+	/**
+	 * Native cue times are adjusted server-side. JASSUB's positive timeOffset
+	 * renders subtitles earlier, so a native shift uses the opposite sign to
+	 * keep both renderers consistent.
+	 */
+	private nativeTrackUrl(track: SubtitleTrackItem): string {
+		const shiftMs = -Math.round(this.userOffsetSeconds * 1000);
+		if (shiftMs === 0) return track.url;
+		const separator = track.url.includes('?') ? '&' : '?';
+		return `${track.url}${separator}shift_ms=${shiftMs}`;
 	}
 
 	/**
@@ -79,6 +111,8 @@ export class SubtitleManager {
 		await this.detach();
 		if (generation !== this.loadGeneration) return;
 		this.activeTrackId = track.id;
+		this.activeTrack = track;
+		this.activeFontUrls = fontUrls;
 
 		const format = (track.format || '').toLowerCase();
 		if (format === 'ass' || format === 'ssa') {
@@ -132,7 +166,7 @@ export class SubtitleManager {
 			el.kind = 'subtitles';
 			el.label = track.label || track.language || 'Subtitles';
 			el.srclang = track.language || '';
-			el.src = track.url;
+			el.src = this.nativeTrackUrl(track);
 			el.default = true;
 
 			this.video.appendChild(el);
@@ -160,6 +194,12 @@ export class SubtitleManager {
 	private async detach(): Promise<void> {
 		this.activeTrackId = null;
 		this.isAss = false;
+		this.activeTrack = null;
+		this.activeFontUrls = [];
+		if (this.offsetRemountTimer) {
+			clearTimeout(this.offsetRemountTimer);
+			this.offsetRemountTimer = null;
+		}
 
 		if (this.activeTrackElement) {
 			try {

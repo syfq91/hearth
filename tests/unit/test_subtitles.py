@@ -134,6 +134,36 @@ def test_ass_text_is_html_escaped() -> None:
     assert "5 &lt; 6 &amp; 7 &gt; 4" in document
 
 
+def test_webvtt_shift_moves_cue_boundaries() -> None:
+    source = "WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nHello\n"
+    shifted = convert_to_webvtt(source, ".vtt", shift_ms=1500)
+    assert shifted == "WEBVTT\n\n00:00:02.500 --> 00:00:04.000\nHello\n"
+
+
+def test_webvtt_shift_is_applied_to_srt_and_ass() -> None:
+    srt = "1\n00:00:05,000 --> 00:00:06,000\nHi\n"
+    assert "00:00:04.000 --> 00:00:05.000" in convert_to_webvtt(srt, ".srt", shift_ms=-1000)
+
+    ass = "[Events]\nFormat: Start, End, Text\nDialogue: 0:00:05.00,0:00:06.00,Hi\n"
+    assert "00:00:04.000 --> 00:00:05.000" in convert_to_webvtt(ass, ".ass", shift_ms=-1000)
+
+
+def test_webvtt_shift_clamps_at_zero_and_leaves_metadata_alone() -> None:
+    source = (
+        "WEBVTT\n"
+        "X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:900000\n\n"
+        "00:00:00.500 --> 00:00:01.500\nHi\n"
+    )
+    shifted = convert_to_webvtt(source, ".vtt", shift_ms=-2000)
+    assert "X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:900000" in shifted
+    assert "00:00:00.000 --> 00:00:00.000" in shifted
+
+
+def test_webvtt_shift_zero_is_a_no_op() -> None:
+    source = "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi\n"
+    assert convert_to_webvtt(source, ".vtt", shift_ms=0) == source
+
+
 def test_unsupported_formats_are_rejected() -> None:
     with pytest.raises(ValueError):
         convert_to_webvtt("text", ".sub")

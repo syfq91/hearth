@@ -234,6 +234,8 @@ Clients rendering ASS subtitles client-side (via WebAssembly/JASSUB) supply thes
 
 When an embedded subtitle is selected, `PlaybackInfoResponse` may also include `embedded_subtitle_url` and `embedded_subtitle_format` (`vtt` or `ass`). This is populated when the server is not delivering the subtitle inside an HLS manifest: direct-play `sidecar_vtt` tracks and client-rendered `external_ass` tracks. Clients load that URL directly (`text/vtt` into a native text track, `text/x-ssa` into JASSUB). For HLS `sidecar_vtt` delivery the master playlist advertises the rendition instead, and these fields are null.
 
+Both WebVTT subtitle endpoints — `/api/v1/subtitles/{id}.vtt` and `/api/v1/media/{file_id}/subtitles/{index}.vtt` — accept `shift_ms` (default `0`, range ±60 000). It rewrites every cue boundary by that many milliseconds, positive shifting cues later and clamping at zero; header metadata and cue text are preserved. Native `<track>` elements cannot be shifted at display time, so a client applies its user subtitle calibration by re-fetching the document with `shift_ms` instead of only adjusting `JASSUB.timeOffset`.
+
 If a client encounters an unrecoverable client-side subtitle crash, it can re-request playback negotiation with `force_burn_in_subtitles: true` in the `PlaybackInfoRequest` body (or `?forceBurnInSubtitles=true`), which bypasses external subtitle profiles and forces FFmpeg server-side subtitle burn-in.
 
 ---

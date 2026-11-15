@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `shift_ms` query parameter on the WebVTT subtitle endpoints (`/api/v1/subtitles/{id}.vtt` and `/api/v1/media/{file_id}/subtitles/{index}.vtt`) that rewrites cue boundaries, so the user's subtitle timing calibration also applies to native `<track>` playback instead of only to JASSUB. The web player re-fetches the track (debounced) when the offset changes.
 - Container font attachment extraction and serving (`GET /api/v1/media/{file_id}/attachments/{idx}`), exposing embedded fonts in MKV files with disk caching for client-side ASS/SSA WebAssembly rendering (Phase 1 of video player overhaul).
 - Embedded subtitle delivery (`GET /api/v1/media/{file_id}/subtitles/{index}.vtt` and `.ass`) plus `embedded_subtitle_url`/`embedded_subtitle_format` on playback-info, so direct-play clients and client-side ASS renderers can show text subtitles without a transcode session.
 - Subtitle burn-in fallback parameter (`force_burn_in_subtitles`) on `POST /api/v1/items/{id}/playback-info` allowing clients to cleanly recover from WebAssembly crashes without stream teardown.
@@ -46,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dynamically split `JASSUB` in the video player route, loading WebAssembly assets only when ASS/SSA subtitles are rendered.
 
 ### Fixed
+- Switching subtitle tracks no longer races. Two overlapping loads could both pass the active-track check (it was assigned after `await clearTrack()`) and append two `<track>` elements; the superseded element was never removed because only the newest one was tracked, producing doubled or garbled cues. Mounts are now serialized and tagged with a generation that is re-checked after every await.
 - Enabling a subtitle track mid-playback no longer shifts it by the resume position. The client treated the playback resume point as a subtitle time offset on top of JASSUB, but the HLS pipeline already rebases segment timestamps with `-output_ts_offset`, so `video.currentTime` is on the media timeline; ASS tracks toggled at 20:00 were rendered 20 minutes late.
 - Concurrent progress and favorite writes no longer fail with `RuntimeError: ... is bound to a different event loop` after the ASGI lifespan restarts (uvicorn reload, or a new test session). The process-wide playback state lock was a plain `asyncio.Lock`, which binds to the first loop that contends on it; it now follows the running loop.
 - The hardware capability probe now runs its encoder smoke tests concurrently and is bounded by `HEARTH_TRANSCODE_CAPABILITY_PROBE_TIMEOUT_SECONDS` (default 20s), so a wedged driver can no longer delay API startup past the container health-check window.

@@ -22,6 +22,7 @@ logger = logging.getLogger("hearth.subtitles")
 SUPPORTED_SUFFIXES = frozenset({".srt", ".ass", ".ssa", ".vtt"})
 
 _SRT_TIME = re.compile(r"(\d+):(\d{1,2}):(\d{1,2})[,.](\d{1,3})")
+_VTT_TIME = re.compile(r"(\d{2,}):(\d{2}):(\d{2})\.(\d{3})")
 _ASS_TIME = re.compile(r"^\s*(\d+):(\d{1,2}):(\d{1,2})[.,](\d{1,3})\s*$")
 _ASS_OVERRIDE = re.compile(r"\{[^}]*\}")
 _ASS_EVENTS = re.compile(r"^\s*\[events\]\s*$", re.IGNORECASE)
@@ -92,8 +93,13 @@ def decode_subtitle_bytes(data: bytes) -> str:
     return data.decode("utf-8", errors="replace")
 
 
-def convert_to_webvtt(content: str, suffix: str) -> str:
-    """Convert SRT, ASS/SSA or VTT content to a WebVTT document."""
+def convert_to_webvtt(content: str, suffix: str, shift_ms: int = 0) -> str:
+    """Convert SRT, ASS/SSA or VTT content to a WebVTT document.
+
+    ``shift_ms`` moves every cue boundary by that many milliseconds (positive
+    shifts cues later), which is how clients apply a per-track sync offset to
+    native text tracks.
+    """
     extension = suffix.casefold()
     if extension not in SUPPORTED_SUFFIXES:
         raise ValueError(f"Unsupported subtitle format: {suffix}")
@@ -102,13 +108,43 @@ def convert_to_webvtt(content: str, suffix: str) -> str:
     if extension == ".ass" or extension == ".ssa":
         cues = _ass_cues(text)
         body = "\n\n".join(cues)
-        return f"WEBVTT\n\n{body}\n" if body else "WEBVTT\n\n"
+        return shift_webvtt(f"WEBVTT\n\n{body}\n" if body else "WEBVTT\n\n", shift_ms)
 
     if extension == ".vtt" and text.lstrip().startswith("WEBVTT"):
-        return _normalize_timestamps(text)
+        return shift_webvtt(_normalize_timestamps(text), shift_ms)
 
     body = _normalize_timestamps(text).lstrip("\n")
-    return f"WEBVTT\n\n{body}" if body else "WEBVTT\n\n"
+    document = f"WEBVTT\n\n{body}" if body else "WEBVTT\n\n"
+    return shift_webvtt(document, shift_ms)
+
+
+def shift_webvtt(document: str, shift_ms: int) -> str:
+    """Shift every cue boundary in a WebVTT document by ``shift_ms``.
+
+    Only timing lines are rewritten, so header metadata (for example
+    ``X-TIMESTAMP-MAP``) and cue text are left untouched. Clamping at zero can
+    merge a cue into the start of the track, which is the expected result for a
+    sync calibration of a few seconds.
+    """
+    if shift_ms == 0:
+        return document
+
+    def shift_line(line: str) -> str:
+        if "-->" not in line:
+            return line
+
+        def replace(match: re.Match[str]) -> str:
+            hours, minutes, seconds, millis = match.groups()
+            total_ms = (
+                (int(hours) * 3600 + int(minutes) * 60 + int(seconds)) * 1000
+                + int(millis)
+                + shift_ms
+            )
+            return _format_vtt_time(max(0, total_ms))
+
+        return _VTT_TIME.sub(replace, line)
+
+    return "\n".join(shift_line(line) for line in document.split("\n"))
 
 
 def _normalize_newlines(content: str) -> str:
@@ -254,5 +290,6 @@ __all__ = [
     "discover_subtitles",
     "encode_subtitle_id",
     "extract_embedded_subtitle",
+    "shift_webvtt",
     "subtitle_language",
 ]

@@ -13169,6 +13169,20 @@
             }
           },
           {
+            "description": "Shift cue timestamps by this many milliseconds; positive is later.",
+            "in": "query",
+            "name": "shift_ms",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Shift cue timestamps by this many milliseconds; positive is later.",
+              "maximum": 60000,
+              "minimum": -60000,
+              "title": "Shift Ms",
+              "type": "integer"
+            }
+          },
+          {
             "description": "Media access token",
             "in": "query",
             "name": "token",
@@ -15323,6 +15337,20 @@
               "default": false,
               "title": "Raw",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Shift cue timestamps by this many milliseconds; positive is later.",
+            "in": "query",
+            "name": "shift_ms",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Shift cue timestamps by this many milliseconds; positive is later.",
+              "maximum": 60000,
+              "minimum": -60000,
+              "title": "Shift Ms",
+              "type": "integer"
             }
           },
           {

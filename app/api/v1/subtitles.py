@@ -3,7 +3,7 @@
 import asyncio
 from pathlib import Path
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,7 @@ from app.services.subtitles import (
     decode_subtitle_id,
     discover_subtitles,
     extract_embedded_subtitle,
+    shift_webvtt,
 )
 
 _SUBTITLE_HEADERS = {
@@ -85,7 +86,7 @@ def _probe_result(media_file: MediaFile) -> ProbeResult:
 
 
 async def _embedded_subtitle_response(
-    media_file: MediaFile, stream_index: int, fmt: str
+    media_file: MediaFile, stream_index: int, fmt: str, shift_ms: int = 0
 ) -> Response:
     """Extract one embedded subtitle stream as WebVTT or ASS.
 
@@ -100,7 +101,11 @@ async def _embedded_subtitle_response(
     content = await extract_embedded_subtitle(Path(media_file.path), stream_index, fmt=fmt)
     if fmt == "ass":
         return Response(content=content, media_type="text/x-ssa", headers=_SUBTITLE_HEADERS)
-    return Response(content=content, media_type="text/vtt", headers=_SUBTITLE_HEADERS)
+    return Response(
+        content=shift_webvtt(content, shift_ms),
+        media_type="text/vtt",
+        headers=_SUBTITLE_HEADERS,
+    )
 
 
 @router.get(
@@ -118,13 +123,19 @@ async def get_embedded_subtitle_vtt(
     stream_index: int,
     viewer: ViewerDep,
     session: SessionDep,
+    shift_ms: int = Query(
+        default=0,
+        ge=-60_000,
+        le=60_000,
+        description="Shift cue timestamps by this many milliseconds; positive is later.",
+    ),
 ) -> Response:
     """Serve an embedded (in-container) subtitle stream as WebVTT.
 
     Lets direct-play clients render text subtitles without a transcode session.
     """
     media_file, _roots = await _authorized_media_file(session, viewer, file_id)
-    return await _embedded_subtitle_response(media_file, stream_index, "vtt")
+    return await _embedded_subtitle_response(media_file, stream_index, "vtt", shift_ms)
 
 
 @router.get(
@@ -164,6 +175,12 @@ async def get_subtitle(
     settings: SettingsDep,
     session: SessionDep,
     raw: bool = False,
+    shift_ms: int = Query(
+        default=0,
+        ge=-60_000,
+        le=60_000,
+        description="Shift cue timestamps by this many milliseconds; positive is later.",
+    ),
 ) -> Response:
     """Return a sidecar subtitle as WebVTT.
 
@@ -213,7 +230,7 @@ async def get_subtitle(
         )
 
     try:
-        document = convert_to_webvtt(decoded, sidecar.suffix)
+        document = convert_to_webvtt(decoded, sidecar.suffix, shift_ms)
     except ValueError:
         raise NotFoundError(_NOT_FOUND, code="subtitle_not_found") from None
 

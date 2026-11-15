@@ -8135,6 +8135,8 @@ export interface operations {
     get_embedded_subtitle_vtt_api_v1_media__file_id__subtitles__stream_index__vtt_get: {
         parameters: {
             query?: {
+                /** @description Shift cue timestamps by this many milliseconds; positive is later. */
+                shift_ms?: number;
                 /** @description Media access token */
                 token?: string | null;
             };
@@ -9303,6 +9305,8 @@ export interface operations {
         parameters: {
             query?: {
                 raw?: boolean;
+                /** @description Shift cue timestamps by this many milliseconds; positive is later. */
+                shift_ms?: number;
                 /** @description Media access token */
                 token?: string | null;
             };
