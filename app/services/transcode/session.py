@@ -375,12 +375,17 @@ class TranscodeSession:
             with contextlib.suppress(Exception):
                 os.nice(10)
 
+        # Hardware sessions do the heavy lifting on the GPU, so keeping the
+        # process at default priority costs the API nothing and avoids starving
+        # the first segment on small CPUs. Software encodes still yield.
+        preexec_fn = None if self.is_hardware else _set_nice
+
         try:
             self.process = await asyncio.create_subprocess_exec(
                 *self.cmd,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
-                preexec_fn=_set_nice,
+                preexec_fn=preexec_fn,
             )
             self._monitor_task = asyncio.create_task(self._monitor_stderr())
         except Exception:
