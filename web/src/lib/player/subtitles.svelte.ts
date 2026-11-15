@@ -30,6 +30,10 @@ export class SubtitleManager {
 	private jassubInstance: JASSUB | null = null;
 	private activeTrackElement: HTMLTrackElement | null = null;
 	private onCrash?: (error: unknown) => void;
+	/** Bumped on every mount/clear so a superseded async load cannot mount. */
+	private loadGeneration = 0;
+	/** Serializes mounts and clears so only one track is ever attached. */
+	private switchChain: Promise<void> = Promise.resolve();
 
 	public activeTrackId = $state<string | null>(null);
 	public isAss = $state(false);
@@ -54,18 +58,30 @@ export class SubtitleManager {
 
 	/**
 	 * Load and render a subtitle track without reloading the video stream.
+	 *
+	 * Calls are serialized and tagged with a generation: a load superseded by a
+	 * newer selection or by {@link clearTrack} bails out after every await, so
+	 * an overlapping switch cannot leave two tracks mounted.
 	 */
-	public async loadTrack(track: SubtitleTrackItem, fontUrls: string[] = []): Promise<void> {
+	public loadTrack(track: SubtitleTrackItem, fontUrls: string[] = []): Promise<void> {
+		const generation = ++this.loadGeneration;
 		this.isLoading = true;
+		const run = this.switchChain.then(() => this.mount(track, fontUrls, generation));
+		this.switchChain = run.catch(() => {});
+		return run;
+	}
 
-		await this.clearTrack();
+	private async mount(
+		track: SubtitleTrackItem,
+		fontUrls: string[],
+		generation: number
+	): Promise<void> {
+		await this.detach();
+		if (generation !== this.loadGeneration) return;
 		this.activeTrackId = track.id;
 
 		const format = (track.format || '').toLowerCase();
-		const isAssFormat = format === 'ass' || format === 'ssa';
-
-		if (isAssFormat) {
-			this.isAss = true;
+		if (format === 'ass' || format === 'ssa') {
 			try {
 				const delimiter = track.url.includes('?') ? '&' : '?';
 				const fetchUrl = `${track.url}${delimiter}raw=true`;
@@ -73,10 +89,12 @@ export class SubtitleManager {
 				if (!res.ok) throw new Error(`HTTP ${res.status} fetching subtitles`);
 				const text = await res.text();
 				const subContent = toAss(text);
-
-				if (this.activeTrackId !== track.id) return;
+				if (generation !== this.loadGeneration) return;
 
 				const { default: JASSUBConstructor } = await import('jassub');
+				if (generation !== this.loadGeneration) return;
+
+				this.isAss = true;
 				const instance = new JASSUBConstructor({
 					video: this.video,
 					subContent,
@@ -90,45 +108,56 @@ export class SubtitleManager {
 				});
 
 				await instance.ready;
-				if (this.activeTrackId === track.id) {
-					this.jassubInstance = instance;
-					this.renderManualFrame(true);
-				} else {
+				if (generation !== this.loadGeneration) {
 					void instance.destroy();
+					return;
 				}
+				this.jassubInstance = instance;
+				this.renderManualFrame(true);
 			} catch (err) {
 				console.error('[SubtitleManager] Failed to initialize JASSUB:', err);
-				await this.clearTrack();
-				this.onCrash?.(err);
+				if (generation === this.loadGeneration) {
+					await this.detach();
+					this.onCrash?.(err);
+				}
 			} finally {
-				this.isLoading = false;
+				if (generation === this.loadGeneration) this.isLoading = false;
 			}
-		} else {
-			// WebVTT / native text track
-			this.isAss = false;
-			try {
-				const el = document.createElement('track');
-				el.kind = 'subtitles';
-				el.label = track.label || track.language || 'Subtitles';
-				el.srclang = track.language || '';
-				el.src = track.url;
-				el.default = true;
+			return;
+		}
 
-				this.video.appendChild(el);
-				el.track.mode = 'showing';
-				this.activeTrackElement = el;
-			} catch (err) {
-				console.error('[SubtitleManager] Failed to mount native text track:', err);
-			} finally {
-				this.isLoading = false;
-			}
+		// WebVTT / native text track
+		try {
+			const el = document.createElement('track');
+			el.kind = 'subtitles';
+			el.label = track.label || track.language || 'Subtitles';
+			el.srclang = track.language || '';
+			el.src = track.url;
+			el.default = true;
+
+			this.video.appendChild(el);
+			el.track.mode = 'showing';
+			this.activeTrackElement = el;
+		} catch (err) {
+			console.error('[SubtitleManager] Failed to mount native text track:', err);
+		} finally {
+			if (generation === this.loadGeneration) this.isLoading = false;
 		}
 	}
 
 	/**
 	 * Clear any currently active JASSUB or native subtitle track.
 	 */
-	public async clearTrack(): Promise<void> {
+	public clearTrack(): Promise<void> {
+		++this.loadGeneration;
+		this.isLoading = false;
+		const run = this.switchChain.then(() => this.detach());
+		this.switchChain = run.catch(() => {});
+		return run;
+	}
+
+	/** Remove whatever is mounted. Callers must be on the switch chain. */
+	private async detach(): Promise<void> {
 		this.activeTrackId = null;
 		this.isAss = false;
 
@@ -142,9 +171,9 @@ export class SubtitleManager {
 			this.activeTrackElement = null;
 		}
 
-		if (this.jassubInstance) {
-			const inst = this.jassubInstance;
-			this.jassubInstance = null;
+		const inst = this.jassubInstance;
+		this.jassubInstance = null;
+		if (inst) {
 			try {
 				await inst.destroy();
 			} catch {

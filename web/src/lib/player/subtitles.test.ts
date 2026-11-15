@@ -84,3 +84,68 @@ test('SubtitleManager loads and clears native track elements', async () => {
 		(globalThis as any).document = origDocument;
 	}
 });
+
+function mockTrackEnvironment() {
+	const appended: any[] = [];
+	const removed: any[] = [];
+	const video = {
+		appendChild: (child: any) => {
+			appended.push(child);
+			child.track.mode = 'disabled';
+		},
+		removeChild: (child: any) => {
+			removed.push(child);
+		},
+		currentTime: 0
+	} as unknown as HTMLVideoElement;
+	const origDocument = (globalThis as any).document;
+	(globalThis as any).document = {
+		createElement: () => ({
+			kind: '',
+			label: '',
+			srclang: '',
+			src: '',
+			default: false,
+			track: { mode: 'disabled' }
+		})
+	};
+	return {
+		video,
+		appended,
+		removed,
+		restore: () => {
+			(globalThis as any).document = origDocument;
+		}
+	};
+}
+
+test('overlapping loads mount only the newest track', async () => {
+	const env = mockTrackEnvironment();
+	try {
+		const manager = new SubtitleManager({ video: env.video });
+		const first = manager.loadTrack({ id: 'ext:a', url: 'a.vtt', format: 'vtt' });
+		const second = manager.loadTrack({ id: 'ext:b', url: 'b.vtt', format: 'vtt' });
+		await Promise.all([first, second]);
+
+		assert.strictEqual(manager.activeTrackId, 'ext:b');
+		assert.strictEqual(env.appended.length, 1);
+		assert.strictEqual(env.appended[0].src, 'b.vtt');
+	} finally {
+		env.restore();
+	}
+});
+
+test('clearing during a pending load mounts nothing', async () => {
+	const env = mockTrackEnvironment();
+	try {
+		const manager = new SubtitleManager({ video: env.video });
+		const load = manager.loadTrack({ id: 'ext:a', url: 'a.vtt', format: 'vtt' });
+		const cleared = manager.clearTrack();
+		await Promise.all([load, cleared]);
+
+		assert.strictEqual(manager.activeTrackId, null);
+		assert.strictEqual(env.appended.length, 0);
+	} finally {
+		env.restore();
+	}
+});
