@@ -102,6 +102,7 @@
 	let lastSubChoice = '';
 
 	const REPORT_INTERVAL_MS = 10_000;
+	const HIDE_DELAY_MS = 3000;
 
 	const duration = $derived.by(() => {
 		if (rawDuration > 0 && Number.isFinite(rawDuration)) return rawDuration;
@@ -114,14 +115,32 @@
 		return Math.min(100, Math.max(0, (currentTime / duration) * 100));
 	});
 
+	function scheduleHide(): void {
+		if (hideTimeout) clearTimeout(hideTimeout);
+		hideTimeout = null;
+		if (isPaused) return;
+		hideTimeout = setTimeout(() => {
+			isUserActive = false;
+		}, HIDE_DELAY_MS);
+	}
+
 	function triggerActivity(): void {
 		isUserActive = true;
-		if (hideTimeout) clearTimeout(hideTimeout);
-		if (!isPaused) {
-			hideTimeout = setTimeout(() => {
-				isUserActive = false;
-			}, 3000);
+		scheduleHide();
+	}
+
+	function toggleControls(): void {
+		if (isPaused) {
+			isUserActive = true;
+			return;
 		}
+		if (isUserActive) {
+			isUserActive = false;
+			if (hideTimeout) clearTimeout(hideTimeout);
+			hideTimeout = null;
+			return;
+		}
+		triggerActivity();
 	}
 
 	function formatTime(seconds: number): string {
@@ -756,7 +775,6 @@
 
 <svelte:window
 	onpointermove={triggerActivity}
-	onpointerdown={triggerActivity}
 	onkeydown={(e) => {
 		triggerActivity();
 		handleKeydown(e);
@@ -849,12 +867,18 @@
 					loadError = `Playback error: ${videoEl.error.message || 'Media decode failed'}`;
 				}
 			}}
-			onclick={togglePlay}
+			onclick={toggleControls}
 		></video>
 	</div>
 
 	<!-- Top Overlay Navigation Bar -->
-	<div class="top-overlay" class:hidden={!isPaused && !isUserActive && !loading && !loadError}>
+	<div
+		class="top-overlay"
+		class:hidden={!isPaused && !isUserActive && !loading && !loadError}
+		onpointerdown={triggerActivity}
+		role="navigation"
+		aria-label="Player navigation"
+	>
 		<div class="top-left">
 			<a
 				href="/"
@@ -876,7 +900,14 @@
 	</div>
 
 	<!-- Bottom Overlay Controls Bar -->
-	<div class="bottom-overlay" class:hidden={!isPaused && !isUserActive && !loading && !loadError}>
+	<div
+		class="bottom-overlay"
+		class:hidden={!isPaused && !isUserActive && !loading && !loadError}
+		onpointerdown={triggerActivity}
+		role="toolbar"
+		aria-label="Player controls"
+		tabindex="-1"
+	>
 		<!-- Seekbar -->
 		<div
 			class="seekbar-container"
