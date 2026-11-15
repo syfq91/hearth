@@ -4706,6 +4706,11 @@ export interface components {
              * @default false
              */
             force_software: boolean;
+            /**
+             * Probe Incomplete
+             * @default false
+             */
+            probe_incomplete: boolean;
             /** Render Device */
             render_device: string;
             /** Software Encoders */

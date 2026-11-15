@@ -3,17 +3,26 @@
 Probes the render device, parses vainfo profiles, tests actual 1-second encodes
 via ffmpeg for supported codecs, and caches the result for playback decisions
 and admin diagnostics.
+
+Probe timeouts are not conclusive: a slow iGPU can take several seconds to
+initialise, and treating one slow probe as "no hardware encoder" silently
+demotes every later session to software encoding for the life of the process.
+Inconclusive probes are therefore flagged and re-run in the background.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
+from typing import NamedTuple
 
 from pydantic import BaseModel, Field
 
 from app.core.config import Settings
-from app.core.system import _run
+from app.core.system import _run, run_command
+
+logger = logging.getLogger("hearth.transcode.capabilities")
 
 _VAAPI_DRIVER_RE = re.compile(r"Driver version:\s*(.+)")
 _PROFILE_LINE_RE = re.compile(r"\s*(VAProfile\w+)\s*:\s*(VAEntrypoint\w+)")
@@ -57,6 +66,10 @@ class ServerTranscodeCapabilities(BaseModel):
     tonemap_vaapi: bool = False
     software_encoders: list[str] = Field(default_factory=lambda: ["libx264", "aac"])
     error: str | None = None
+    # True when the probe timed out instead of conclusively reporting that the
+    # device or an encoder is unavailable. The result is still used for the
+    # current decisions, but it is re-probed in the background.
+    probe_incomplete: bool = False
 
     def can_vaapi_encode(self, codec: str) -> bool:
         """Return True if hardware encoding is supported and verified for codec."""
@@ -115,12 +128,20 @@ async def _check_tonemap_vaapi(ffmpeg_binary: str, timeout: float = 3.0) -> bool
     return returncode == 0 and "tonemap_vaapi" in stdout
 
 
+class TestEncodeResult(NamedTuple):
+    """Outcome of a hardware encoder smoke test."""
+
+    ok: bool
+    timed_out: bool
+    error: str | None
+
+
 async def _run_test_encode(
     ffmpeg_binary: str,
     device: str,
     encoder_name: str,
     timeout: float = 5.0,
-) -> tuple[bool, str | None]:
+) -> TestEncodeResult:
     """Execute a 1-second null encode to verify the hardware encoder actually works."""
     cmd = [
         ffmpeg_binary,
@@ -140,116 +161,232 @@ async def _run_test_encode(
         "null",
         "-",
     ]
-    res = await _run(cmd, timeout=timeout)
-    if res is None:
-        return False, f"ffmpeg timed out after {timeout:g}s"
-    returncode, stdout, stderr = res
-    if returncode != 0:
-        err = (stderr or stdout).strip().splitlines()
-        msg = err[0] if err else f"ffmpeg exited with {returncode}"
-        return False, msg
-    return True, None
+    outcome = await run_command(cmd, timeout=timeout)
+    if outcome.state == "timeout":
+        return TestEncodeResult(False, True, f"ffmpeg timed out after {timeout:g}s")
+    if outcome.state == "missing":
+        return TestEncodeResult(False, False, f"{ffmpeg_binary} not found")
+    if outcome.returncode != 0:
+        err = (outcome.stderr or outcome.stdout).strip().splitlines()
+        msg = err[0] if err else f"ffmpeg exited with {outcome.returncode}"
+        return TestEncodeResult(False, False, msg)
+    return TestEncodeResult(True, False, None)
 
 
 _cached_capabilities: ServerTranscodeCapabilities | None = None
 _cache_lock = asyncio.Lock()
+_retry_task: asyncio.Task[None] | None = None
+_retry_attempt = 0
+
+
+async def _probe_once(
+    settings: Settings,
+) -> tuple[ServerTranscodeCapabilities, bool]:
+    """Probe the render device.
+
+    Returns the capabilities and whether the probe was inconclusive because a
+    step timed out. Only conclusive results are safe to remember indefinitely.
+    """
+    device_path = settings.render_device
+    device_label = str(device_path)
+
+    if settings.transcode_force_software:
+        return (
+            ServerTranscodeCapabilities(
+                render_device=device_label,
+                available=False,
+                force_software=True,
+                error="forced software mode",
+            ),
+            False,
+        )
+
+    if not device_path.exists():
+        return (
+            ServerTranscodeCapabilities(
+                render_device=device_label,
+                available=False,
+                error="render device not present",
+            ),
+            False,
+        )
+
+    # Run vainfo
+    vainfo_res = await run_command(
+        [settings.vainfo_binary, "--display", "drm", "--device", device_label],
+        timeout=5.0,
+    )
+    if vainfo_res.state == "timeout":
+        logger.warning(
+            "vainfo timed out after 5s; treating hardware encoding as unavailable "
+            "and retrying the probe in the background",
+            extra={"render_device": device_label, "event": "capability_probe_timeout"},
+        )
+        return (
+            ServerTranscodeCapabilities(
+                render_device=device_label,
+                available=False,
+                error="vainfo timed out; probe will retry",
+                probe_incomplete=True,
+            ),
+            True,
+        )
+    if (
+        vainfo_res.state == "missing"
+        or vainfo_res.returncode != 0
+        or "VAProfile" not in vainfo_res.stdout
+    ):
+        err = "vainfo unavailable or failed"
+        if vainfo_res.state == "ok" and (vainfo_res.stderr or vainfo_res.stdout):
+            lines = (vainfo_res.stderr or vainfo_res.stdout).strip().splitlines()
+            err = lines[-1] if lines else err
+        return (
+            ServerTranscodeCapabilities(
+                render_device=device_label,
+                available=False,
+                error=err,
+            ),
+            False,
+        )
+
+    stdout = vainfo_res.stdout
+    driver_match = _VAAPI_DRIVER_RE.search(stdout)
+    driver_version = driver_match.group(1).strip() if driver_match else None
+
+    parsed_codecs = parse_vainfo_output(stdout)
+    codecs: dict[str, CodecCapability] = {}
+    incomplete = False
+
+    # For any codec that vainfo reports encode, run a test encode
+    for codec_name, (decode, encode) in parsed_codecs.items():
+        test_ok = False
+        test_err = None
+        if encode and codec_name in _FFMPEG_ENCODER_NAMES:
+            encoder = _FFMPEG_ENCODER_NAMES[codec_name]
+            result = await _run_test_encode(
+                settings.ffmpeg_binary,
+                device_label,
+                encoder,
+                timeout=settings.transcode_test_encode_timeout_seconds,
+            )
+            test_ok = result.ok
+            test_err = result.error
+            if result.timed_out:
+                incomplete = True
+        codecs[codec_name] = CodecCapability(
+            codec=codec_name,
+            decode=decode,
+            encode=encode,
+            test_encode_ok=test_ok,
+            test_encode_error=test_err,
+        )
+
+    tonemap = await _check_tonemap_vaapi(settings.ffmpeg_binary)
+
+    caps = ServerTranscodeCapabilities(
+        render_device=device_label,
+        available=True,
+        driver_version=driver_version,
+        codecs=codecs,
+        tonemap_vaapi=tonemap,
+        probe_incomplete=incomplete,
+    )
+    return caps, incomplete
 
 
 async def probe_transcode_capabilities(
     settings: Settings,
     force_refresh: bool = False,
 ) -> ServerTranscodeCapabilities:
-    """Probe system VAAPI capability and test hardware encoders."""
+    """Probe system VAAPI capability and test hardware encoders.
+
+    Caches the result. A probe that timed out is cached but flagged, and a
+    background retry replaces it as soon as the device answers, so a transient
+    boot-time timeout cannot permanently demote the process to software
+    encoding.
+    """
     global _cached_capabilities
 
     async with _cache_lock:
         if _cached_capabilities is not None and not force_refresh:
-            return _cached_capabilities
+            cached = _cached_capabilities
+            if cached.probe_incomplete:
+                _schedule_probe_retry(settings)
+            return cached
 
-        device_path = settings.render_device
-        device_label = str(device_path)
-        force_software = settings.transcode_force_software
-
-        if force_software:
-            caps = ServerTranscodeCapabilities(
-                render_device=device_label,
-                available=False,
-                force_software=True,
-                error="forced software mode",
-            )
-            _cached_capabilities = caps
-            return caps
-
-        if not device_path.exists():
-            caps = ServerTranscodeCapabilities(
-                render_device=device_label,
-                available=False,
-                error="render device not present",
-            )
-            _cached_capabilities = caps
-            return caps
-
-        # Run vainfo
-        vainfo_res = await _run(
-            [settings.vainfo_binary, "--display", "drm", "--device", device_label],
-            timeout=5.0,
-        )
-        if vainfo_res is None or vainfo_res[0] != 0 or "VAProfile" not in vainfo_res[1]:
-            err = "vainfo unavailable or failed"
-            if vainfo_res and (vainfo_res[2] or vainfo_res[1]):
-                lines = (vainfo_res[2] or vainfo_res[1]).strip().splitlines()
-                err = lines[-1] if lines else err
-            caps = ServerTranscodeCapabilities(
-                render_device=device_label,
-                available=False,
-                error=err,
-            )
-            _cached_capabilities = caps
-            return caps
-
-        _, stdout, _ = vainfo_res
-        driver_match = _VAAPI_DRIVER_RE.search(stdout)
-        driver_version = driver_match.group(1).strip() if driver_match else None
-
-        parsed_codecs = parse_vainfo_output(stdout)
-        codecs: dict[str, CodecCapability] = {}
-
-        # For any codec that vainfo reports encode, run a test encode
-        for codec_name, (decode, encode) in parsed_codecs.items():
-            test_ok = False
-            test_err = None
-            if encode and codec_name in _FFMPEG_ENCODER_NAMES:
-                encoder = _FFMPEG_ENCODER_NAMES[codec_name]
-                test_ok, test_err = await _run_test_encode(
-                    settings.ffmpeg_binary,
-                    device_label,
-                    encoder,
-                    timeout=settings.transcode_test_encode_timeout_seconds,
-                )
-            codecs[codec_name] = CodecCapability(
-                codec=codec_name,
-                decode=decode,
-                encode=encode,
-                test_encode_ok=test_ok,
-                test_encode_error=test_err,
-            )
-
-        tonemap = await _check_tonemap_vaapi(settings.ffmpeg_binary)
-
-        caps = ServerTranscodeCapabilities(
-            render_device=device_label,
-            available=True,
-            driver_version=driver_version,
-            codecs=codecs,
-            tonemap_vaapi=tonemap,
-        )
+        caps, incomplete = await _probe_once(settings)
         _cached_capabilities = caps
+        if incomplete:
+            _schedule_probe_retry(settings)
+        else:
+            _reset_retry_state()
         return caps
 
 
+def _schedule_probe_retry(settings: Settings) -> None:
+    """Start a bounded background retry when the cached probe was inconclusive."""
+    global _retry_task
+
+    if settings.transcode_capability_probe_retries <= 0:
+        return
+    if _retry_task is not None and not _retry_task.done():
+        return
+    if _retry_attempt >= settings.transcode_capability_probe_retries:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    _retry_task = loop.create_task(
+        _probe_retry_loop(settings), name="hearth-capability-probe-retry"
+    )
+
+
+async def _probe_retry_loop(settings: Settings) -> None:
+    """Re-probe with linear backoff until conclusive or out of attempts."""
+    global _retry_attempt
+
+    total = settings.transcode_capability_probe_retries
+    for attempt in range(1, total + 1):
+        _retry_attempt = attempt
+        await asyncio.sleep(settings.transcode_capability_probe_retry_delay_seconds * attempt)
+        try:
+            caps = await probe_transcode_capabilities(settings, force_refresh=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("transcode capability probe retry failed")
+            continue
+        if not caps.probe_incomplete:
+            logger.info(
+                "transcode capability probe recovered on retry %d",
+                attempt,
+                extra={"event": "capability_probe_recovered", "attempt": attempt},
+            )
+            _retry_attempt = 0
+            return
+
+    logger.warning(
+        "transcode capability probe still inconclusive after %d retries; "
+        "hardware encoding stays disabled until the API restarts",
+        total,
+        extra={"event": "capability_probe_exhausted", "attempts": total},
+    )
+
+
+def _reset_retry_state() -> None:
+    global _retry_attempt
+    _retry_attempt = 0
+
+
 def reset_transcode_capabilities_cache() -> None:
-    """Clear cached capabilities for test isolation."""
-    global _cached_capabilities
+    """Clear cached capabilities and pending retries for test isolation."""
+    global _cached_capabilities, _retry_task, _retry_attempt
+
+    if _retry_task is not None and not _retry_task.done():
+        _retry_task.cancel()
+    _retry_task = None
+    _retry_attempt = 0
     _cached_capabilities = None
 
 

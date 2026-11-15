@@ -10,17 +10,32 @@ import asyncio
 import re
 import sqlite3
 from pathlib import Path
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from pydantic import BaseModel
 
 ComponentState = Literal["ok", "unavailable", "not_initialized", "error"]
+CommandState = Literal["ok", "timeout", "missing"]
 
 _PROBE_TIMEOUT_SECONDS = 5.0
 _FFMPEG_VERSION_RE = re.compile(r"ffmpeg version (\S+)")
 _VAAPI_DRIVER_RE = re.compile(r"Driver version:\s*(.+)")
 
 type CommandOutput = tuple[int, str, str]
+
+
+class CommandOutcome(NamedTuple):
+    """Result of a bounded subprocess run.
+
+    ``state`` distinguishes a timeout from a missing binary from a completed
+    run, because callers such as the hardware capability probe must not treat a
+    slow probe as conclusive evidence that a feature is unsupported.
+    """
+
+    state: CommandState
+    returncode: int
+    stdout: str
+    stderr: str
 
 
 class ComponentHealth(BaseModel):
@@ -43,12 +58,12 @@ class VaapiHealth(ComponentHealth):
     driver: str | None = None
 
 
-async def _run(command: list[str], timeout: float) -> CommandOutput | None:
-    """Run an argument-list command with a timeout.
+async def run_command(command: list[str], timeout: float) -> CommandOutcome:
+    """Run an argument-list command with a timeout, reporting why it ended.
 
-    Returns ``None`` when the binary is missing or the call times out. Callers
-    decide how to report that; this helper never raises for environmental
-    failures.
+    Never raises for environmental failures: a missing binary, a timeout, or a
+    non-zero exit are all returned as data so callers can decide whether the
+    result is conclusive.
     """
     try:
         process = await asyncio.create_subprocess_exec(
@@ -57,20 +72,34 @@ async def _run(command: list[str], timeout: float) -> CommandOutput | None:
             stderr=asyncio.subprocess.PIPE,
         )
     except (FileNotFoundError, PermissionError, NotADirectoryError):
-        return None
+        return CommandOutcome("missing", -1, "", "")
 
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
     except TimeoutError:
         process.kill()
         await process.wait()
-        return None
+        return CommandOutcome("timeout", -1, "", "")
 
-    return (
+    return CommandOutcome(
+        "ok",
         process.returncode or 0,
         stdout.decode(errors="replace"),
         stderr.decode(errors="replace"),
     )
+
+
+async def _run(command: list[str], timeout: float) -> CommandOutput | None:
+    """Run an argument-list command with a timeout.
+
+    Returns ``None`` when the binary is missing or the call times out. Callers
+    decide how to report that; this helper never raises for environmental
+    failures.
+    """
+    outcome = await run_command(command, timeout)
+    if outcome.state != "ok":
+        return None
+    return outcome.returncode, outcome.stdout, outcome.stderr
 
 
 async def probe_ffmpeg(

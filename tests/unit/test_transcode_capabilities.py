@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.core.config import Settings
+from app.core.system import CommandOutcome
 from app.services.transcode.capabilities import (
     CodecCapability,
     ServerTranscodeCapabilities,
@@ -130,12 +131,15 @@ async def test_probe_vainfo_failure(tmp_path: Path) -> None:
 
     settings = Settings(render_device=fake_dev, transcode_force_software=False)
     with patch(
-        "app.services.transcode.capabilities._run",
-        new=AsyncMock(return_value=(1, "", "libva error: vaGetDriverName() failed")),
+        "app.services.transcode.capabilities.run_command",
+        new=AsyncMock(
+            return_value=CommandOutcome("ok", 1, "", "libva error: vaGetDriverName() failed")
+        ),
     ):
         caps = await probe_transcode_capabilities(settings)
         assert caps.available is False
         assert "libva error" in (caps.error or "")
+        assert caps.probe_incomplete is False
 
     reset_transcode_capabilities_cache()
 
@@ -148,19 +152,22 @@ async def test_probe_success_with_test_encodes(tmp_path: Path) -> None:
 
     settings = Settings(render_device=fake_dev, transcode_force_software=False)
 
-    async def mock_run(cmd: list[str], timeout: float = 5.0) -> tuple[int, str, str]:
+    async def mock_run(cmd: list[str], timeout: float = 5.0) -> CommandOutcome:
         if cmd[0] == settings.vainfo_binary:
-            return 0, SAMPLE_INTEL_VAINFO, ""
+            return CommandOutcome("ok", 0, SAMPLE_INTEL_VAINFO, "")
         if "-filters" in cmd:
-            return 0, "... tonemap_vaapi ...", ""
+            return CommandOutcome("ok", 0, "... tonemap_vaapi ...", "")
         if "-f" in cmd and "null" in cmd:
             # test encode
             if "h264_vaapi" in cmd or "hevc_vaapi" in cmd:
-                return 0, "", ""
-            return 1, "", "av1_vaapi not supported by hardware"
-        return 0, "", ""
+                return CommandOutcome("ok", 0, "", "")
+            return CommandOutcome("ok", 1, "", "av1_vaapi not supported by hardware")
+        return CommandOutcome("ok", 0, "", "")
 
-    with patch("app.services.transcode.capabilities._run", new=AsyncMock(side_effect=mock_run)):
+    with patch(
+        "app.services.transcode.capabilities.run_command",
+        new=AsyncMock(side_effect=mock_run),
+    ):
         caps = await probe_transcode_capabilities(settings)
         assert caps.available is True
         assert caps.driver_version == "Intel iHD driver for Intel(R) Gen Graphics - 23.1.1"
@@ -169,9 +176,120 @@ async def test_probe_success_with_test_encodes(tmp_path: Path) -> None:
         assert caps.can_vaapi_encode("hevc") is True
         assert caps.can_vaapi_encode("av1") is False
         assert caps.can_vaapi_decode("vp9") is True
+        assert caps.probe_incomplete is False
 
         # Test caching
         cached_caps = await probe_transcode_capabilities(settings)
         assert cached_caps is caps
+
+    reset_transcode_capabilities_cache()
+
+
+@pytest.mark.asyncio
+async def test_probe_vainfo_timeout_is_inconclusive(tmp_path: Path) -> None:
+    """A slow vainfo must not be cached as a hardware verdict."""
+    reset_transcode_capabilities_cache()
+    fake_dev = tmp_path / "renderD128"
+    fake_dev.touch()
+
+    settings = Settings(
+        render_device=fake_dev,
+        transcode_capability_probe_retries=0,
+    )
+
+    with patch(
+        "app.services.transcode.capabilities.run_command",
+        new=AsyncMock(return_value=CommandOutcome("timeout", -1, "", "")),
+    ):
+        caps = await probe_transcode_capabilities(settings)
+
+    assert caps.available is False
+    assert caps.probe_incomplete is True
+    assert "timed out" in (caps.error or "")
+
+    reset_transcode_capabilities_cache()
+
+
+@pytest.mark.asyncio
+async def test_probe_test_encode_timeout_is_inconclusive(tmp_path: Path) -> None:
+    """A timed-out encoder smoke test flags the probe for a retry."""
+    reset_transcode_capabilities_cache()
+    fake_dev = tmp_path / "renderD128"
+    fake_dev.touch()
+
+    settings = Settings(
+        render_device=fake_dev,
+        transcode_capability_probe_retries=0,
+    )
+
+    async def mock_run(cmd: list[str], timeout: float = 5.0) -> CommandOutcome:
+        if cmd[0] == settings.vainfo_binary:
+            return CommandOutcome("ok", 0, SAMPLE_INTEL_VAINFO, "")
+        if "-filters" in cmd:
+            return CommandOutcome("ok", 0, "tonemap_vaapi", "")
+        if "h264_vaapi" in cmd:
+            return CommandOutcome("timeout", -1, "", "")
+        return CommandOutcome("ok", 0, "", "")
+
+    with patch(
+        "app.services.transcode.capabilities.run_command",
+        new=AsyncMock(side_effect=mock_run),
+    ):
+        caps = await probe_transcode_capabilities(settings)
+
+    assert caps.available is True
+    assert caps.probe_incomplete is True
+    assert caps.can_vaapi_encode("h264") is False
+    assert caps.codecs["h264"].test_encode_error == "ffmpeg timed out after 5s"
+    # hevc still verified, so the probe is only partially inconclusive
+    assert caps.can_vaapi_encode("hevc") is True
+
+    reset_transcode_capabilities_cache()
+
+
+@pytest.mark.asyncio
+async def test_probe_retry_recovers_hardware_encoding(tmp_path: Path) -> None:
+    """The background retry replaces a timed-out probe with a working one."""
+    import asyncio
+
+    reset_transcode_capabilities_cache()
+    fake_dev = tmp_path / "renderD128"
+    fake_dev.touch()
+
+    settings = Settings(
+        render_device=fake_dev,
+        transcode_capability_probe_retries=1,
+        transcode_capability_probe_retry_delay_seconds=0.01,
+    )
+
+    vainfo_calls = 0
+
+    async def mock_run(cmd: list[str], timeout: float = 5.0) -> CommandOutcome:
+        nonlocal vainfo_calls
+        if cmd[0] == settings.vainfo_binary:
+            vainfo_calls += 1
+            if vainfo_calls == 1:
+                return CommandOutcome("timeout", -1, "", "")
+            return CommandOutcome("ok", 0, SAMPLE_INTEL_VAINFO, "")
+        if "-filters" in cmd:
+            return CommandOutcome("ok", 0, "tonemap_vaapi", "")
+        return CommandOutcome("ok", 0, "", "")
+
+    with patch(
+        "app.services.transcode.capabilities.run_command",
+        new=AsyncMock(side_effect=mock_run),
+    ):
+        first = await probe_transcode_capabilities(settings)
+        assert first.probe_incomplete is True
+
+        for _ in range(100):
+            await asyncio.sleep(0.01)
+            refreshed = await probe_transcode_capabilities(settings)
+            if not refreshed.probe_incomplete:
+                break
+
+    assert refreshed.available is True
+    assert refreshed.can_vaapi_encode("h264") is True
+    assert vainfo_calls >= 2
 
     reset_transcode_capabilities_cache()

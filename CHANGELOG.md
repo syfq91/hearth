@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dynamically split `JASSUB` in the video player route, loading WebAssembly assets only when ASS/SSA subtitles are rendered.
 
 ### Fixed
+- A slow hardware capability probe no longer demotes the process to software encoding until restart. On low-power iGPUs (for example a Celeron J4005) `vainfo` can take close to the probe deadline; the timeout was cached as "no hardware encoder", after which every session used `libx264` and the first HLS segment took ~27s instead of ~4s. Timed-out probes are now flagged as inconclusive (`probe_incomplete` on the admin capability response) and re-run in the background up to `HEARTH_TRANSCODE_CAPABILITY_PROBE_RETRIES` times.
 - Client-side ASS/SSA rendering now loads container fonts during direct play. The player rebuilt attachment URLs from an HLS-only media token, so font requests were unauthenticated and JASSUB silently fell back to its bundled font; it now uses the token-scoped `attachments[].url` returned by playback-info.
 - MKV files are no longer treated as WebM for direct-play negotiation. ffprobe reports both containers as `matroska,webm`, so clients that only claim WebM support were handed `video/x-matroska` bytes; the playback decision now disambiguates them using the real file extension and remuxes MKV instead.
 

@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     transcode_segment_wait_timeout_seconds: float = 10.0
     transcode_audio_bitrate_kbps: int = 192
     transcode_test_encode_timeout_seconds: float = 5.0
+    # A timed-out hardware probe is inconclusive, not a verdict. Retry in the
+    # background so a slow iGPU initialisation cannot demote the whole process
+    # to software encoding until the next restart.
+    transcode_capability_probe_retries: int = 3
+    transcode_capability_probe_retry_delay_seconds: float = 5.0
 
     # Authentication. When secret_key is unset a random key is generated once
     # and persisted in data_dir with mode 0600.

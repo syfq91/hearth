@@ -6188,6 +6188,11 @@
             "title": "Force Software",
             "type": "boolean"
           },
+          "probe_incomplete": {
+            "default": false,
+            "title": "Probe Incomplete",
+            "type": "boolean"
+          },
           "render_device": {
             "title": "Render Device",
             "type": "string"

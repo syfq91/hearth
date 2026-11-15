@@ -100,6 +100,8 @@ environment. MusicBrainz and Open Library do not require API keys.
 | `HEARTH_TRANSCODE_FIRST_SEGMENT_TIMEOUT_SECONDS` | `30` | Max wait time for initial/seek segment production |
 | `HEARTH_TRANSCODE_SEGMENT_WAIT_TIMEOUT_SECONDS` | `10` | Bounded wait time for individual HLS segment delivery |
 | `HEARTH_TRANSCODE_SEGMENT_DURATION_SECONDS` | `4` | Target segment duration in seconds |
+| `HEARTH_TRANSCODE_CAPABILITY_PROBE_RETRIES` | `3` | Background re-probes after an inconclusive hardware probe (0 disables retries) |
+| `HEARTH_TRANSCODE_CAPABILITY_PROBE_RETRY_DELAY_SECONDS` | `5` | Base delay between probe retries; attempt *n* waits *n* x this value |
 | `HEARTH_WATCHED_THRESHOLD` | `0.90` | Fraction of an item that counts as watched |
 | `HEARTH_STREAM_CHUNK_BYTES` | `524288` | Direct-play read size (512 KiB) |
 
