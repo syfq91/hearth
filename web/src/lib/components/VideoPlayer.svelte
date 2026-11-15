@@ -20,6 +20,7 @@
 	import { sendStopBeacon } from '../video-resilience';
 	import { HlsEngine, isHlsSupported, isNativeHlsSupported, type HlsQualityLevel } from '../player/hls-engine';
 	import { SubtitleManager } from '../player/subtitles.svelte';
+	import { attachmentFontUrls } from '../video-subtitles';
 	import SubtitleSyncControl from './SubtitleSyncControl.svelte';
 	import type { PlaybackInfoResponse } from '../api/types';
 
@@ -385,11 +386,10 @@
 	async function applySubtitleChoice(): Promise<void> {
 		if (!subtitleManager) return;
 
-		// Build font attachment URLs for JASSUB font catalog
-		const tokenQuery = sessionMediaToken ? `?token=${encodeURIComponent(sessionMediaToken)}` : '';
-		const fontUrls = (info?.attachments ?? []).map(
-			(att) => `/api/v1/media/${info?.file?.id}/attachments/${att.index}${tokenQuery}`
-		);
+		// Font attachment URLs already carry the media token for both direct
+		// play and HLS, so reuse them instead of rebuilding the URL from
+		// sessionMediaToken (which is only populated from an HLS URL).
+		const fontUrls = attachmentFontUrls(info?.attachments);
 		const transcodeOffset =
 			info?.mode !== 'direct_play' && resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
 

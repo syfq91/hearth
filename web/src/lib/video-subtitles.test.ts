@@ -1,6 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { toAss, toAssTimestamp } from './video-subtitles.ts';
+import { attachmentFontUrls, toAss, toAssTimestamp } from './video-subtitles.ts';
+
+test('attachmentFontUrls keeps the server token for direct play and HLS', () => {
+	const urls = attachmentFontUrls([
+		{ url: '/api/v1/media/file-1/attachments/2?token=media-token' },
+		{ url: '/api/v1/media/file-1/attachments/3?token=media-token' }
+	]);
+	assert.deepEqual(urls, [
+		'/api/v1/media/file-1/attachments/2?token=media-token',
+		'/api/v1/media/file-1/attachments/3?token=media-token'
+	]);
+	assert.deepEqual(attachmentFontUrls(undefined), []);
+});
 
 test('toAssTimestamp converts mm:ss.ms and hh:mm:ss.ms', () => {
 	assert.equal(toAssTimestamp('01:23.456'), '0:01:23.45');

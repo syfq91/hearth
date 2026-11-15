@@ -2,6 +2,17 @@
  * Subtitle format conversion helpers for ASS/SSA and WebVTT playback.
  */
 
+/**
+ * Font URLs for JASSUB, taken verbatim from the playback-info attachment list.
+ * The server builds these with a scoped media token, so they work for direct
+ * play (no HLS token exists) as well as HLS sessions.
+ */
+export function attachmentFontUrls(
+	attachments: ReadonlyArray<{ url: string }> | null | undefined
+): string[] {
+	return (attachments ?? []).map((att) => att.url);
+}
+
 export function toAssTimestamp(ts: string): string {
 	const parts = ts.trim().replace(',', '.').split(':');
 	let h = 0;

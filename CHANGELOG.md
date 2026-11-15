@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated web client home page to fetch all shelves in a single request, eliminating client-side API waterfalls.
 - Dynamically split `JASSUB` in the video player route, loading WebAssembly assets only when ASS/SSA subtitles are rendered.
 
+### Fixed
+- Client-side ASS/SSA rendering now loads container fonts during direct play. The player rebuilt attachment URLs from an HLS-only media token, so font requests were unauthenticated and JASSUB silently fell back to its bundled font; it now uses the token-scoped `attachments[].url` returned by playback-info.
+
 ### Removed
 - Removed AMD hardware transcoding support and `mesa-va-drivers` from the container image; VA-API hardware acceleration is dedicated to Intel QuickSync, with automatic fallback to CPU software transcoding (`libx264`).
 - Removed AMD compose device (`/dev/kfd`) and `VIDEO_GID` configurations from `docker/compose.yaml`.
