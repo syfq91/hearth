@@ -1195,13 +1195,12 @@
 				<!-- Aspect Ratio Selector -->
 				<button
 					type="button"
-					class="icon-btn text-icon-btn"
+					class="icon-btn"
 					onclick={cycleAspectRatio}
 					title="Aspect Ratio ({aspectRatio})"
 					aria-label="Aspect Ratio {aspectRatio}"
 				>
 					<Scan size={18} />
-					<span class="aspect-label">{aspectRatio}</span>
 				</button>
 
 				<!-- Quality Selector -->
@@ -1576,18 +1575,6 @@
 
 	.play-btn {
 		padding: 0.5rem;
-	}
-
-	.text-icon-btn {
-		gap: 0.35rem;
-		padding: 0.3rem 0.5rem;
-	}
-
-	.aspect-label {
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		font-weight: 600;
-		letter-spacing: 0.04em;
 	}
 
 	.volume-group {
