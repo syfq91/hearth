@@ -791,9 +791,11 @@
 					lastReportedMs = positionMs;
 					void report('playing');
 				}
-				if (isPaused) {
-					subtitleManager?.renderManualFrame(false);
-				}
+				// Reconcile the cue every tick. JASSUB drives itself from
+				// requestVideoFrameCallback, but that loop stalls on background
+				// tabs, PiP transitions and hls.js media swaps, leaving the
+				// last frame on screen.
+				subtitleManager?.renderManualFrame(false);
 			}}
 			onprogress={updateBufferedRanges}
 			ondurationchange={() => {

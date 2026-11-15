@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dynamically split `JASSUB` in the video player route, loading WebAssembly assets only when ASS/SSA subtitles are rendered.
 
 ### Fixed
+- Subtitles no longer freeze on the last cue when JASSUB's `requestVideoFrameCallback` loop stalls (background tab, PiP transition, hls.js media swap). The player now reconciles the rendered cue on every `timeupdate`, not only while paused.
 - Switching subtitle tracks no longer races. Two overlapping loads could both pass the active-track check (it was assigned after `await clearTrack()`) and append two `<track>` elements; the superseded element was never removed because only the newest one was tracked, producing doubled or garbled cues. Mounts are now serialized and tagged with a generation that is re-checked after every await.
 - Enabling a subtitle track mid-playback no longer shifts it by the resume position. The client treated the playback resume point as a subtitle time offset on top of JASSUB, but the HLS pipeline already rebases segment timestamps with `-output_ts_offset`, so `video.currentTime` is on the media timeline; ASS tracks toggled at 20:00 were rendered 20 minutes late.
 - Concurrent progress and favorite writes no longer fail with `RuntimeError: ... is bound to a different event loop` after the ASGI lifespan restarts (uvicorn reload, or a new test session). The process-wide playback state lock was a plain `asyncio.Lock`, which binds to the first loop that contends on it; it now follows the running loop.
