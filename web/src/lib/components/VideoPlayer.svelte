@@ -13,7 +13,10 @@
 		PictureInPicture2,
 		SlidersHorizontal,
 		Info,
-		Scan
+		Scan,
+		Languages,
+		Captions,
+		Gauge
 	} from '@lucide/svelte';
 	import { api } from '../api/client';
 	import { detectBrowserCapabilities, getCapabilitiesWithBurnInFallback } from '../capabilities';
@@ -78,6 +81,7 @@
 	let isUserActive = $state(true);
 	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
 	let showModeBadge = $state(false);
+	let openMenu = $state<'audio' | 'subtitle' | 'speed' | null>(null);
 
 	// Fullscreen & PiP states
 	let isFullscreen = $state(false);
@@ -103,6 +107,7 @@
 
 	const REPORT_INTERVAL_MS = 10_000;
 	const HIDE_DELAY_MS = 3000;
+	const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 
 	const duration = $derived.by(() => {
 		if (rawDuration > 0 && Number.isFinite(rawDuration)) return rawDuration;
@@ -121,6 +126,7 @@
 		if (isPaused) return;
 		hideTimeout = setTimeout(() => {
 			isUserActive = false;
+			openMenu = null;
 		}, HIDE_DELAY_MS);
 	}
 
@@ -132,14 +138,21 @@
 	function toggleControls(): void {
 		if (isPaused) {
 			isUserActive = true;
+			openMenu = null;
 			return;
 		}
 		if (isUserActive) {
 			isUserActive = false;
+			openMenu = null;
 			if (hideTimeout) clearTimeout(hideTimeout);
 			hideTimeout = null;
 			return;
 		}
+		triggerActivity();
+	}
+
+	function toggleMenu(menu: 'audio' | 'subtitle' | 'speed'): void {
+		openMenu = openMenu === menu ? null : menu;
 		triggerActivity();
 	}
 
@@ -361,6 +374,12 @@
 			case 'i':
 				event.preventDefault();
 				showModeBadge = !showModeBadge;
+				break;
+			case 'Escape':
+				if (openMenu) {
+					event.preventDefault();
+					openMenu = null;
+				}
 				break;
 			default:
 				break;
@@ -596,14 +615,14 @@
 		void applySubtitleChoice();
 	}
 
-	function handleAudioChange(event: Event): void {
-		const val = (event.currentTarget as HTMLSelectElement).value;
-		audioTrackIndex = val === '' ? null : Number.parseInt(val, 10);
+	function selectAudioTrack(value: string): void {
+		audioTrackIndex = value === '' ? null : Number.parseInt(value, 10);
+		openMenu = null;
 	}
 
-	function handleSubtitleChange(event: Event): void {
-		const val = (event.currentTarget as HTMLSelectElement).value;
-		subtitleChoice = val;
+	function selectSubtitle(value: string): void {
+		subtitleChoice = value;
+		openMenu = null;
 
 		// Burned-in cues are part of the video stream; only a fresh session
 		// without subtitles can remove them.
@@ -613,8 +632,8 @@
 		}
 
 		// Bitmap subtitle tracks cannot be rendered by the client.
-		if (val.startsWith('emb:')) {
-			const index = Number.parseInt(val.slice('emb:'.length), 10);
+		if (value.startsWith('emb:')) {
+			const index = Number.parseInt(value.slice('emb:'.length), 10);
 			if (!embeddedSubtitleUrl(index)) {
 				void startPlayback();
 				return;
@@ -622,6 +641,11 @@
 		}
 
 		void applySubtitleChoice();
+	}
+
+	function selectPlaybackRate(rate: number): void {
+		handlePlaybackRateChange(rate);
+		openMenu = null;
 	}
 
 	function handleQualityChange(event: Event): void {
@@ -908,6 +932,94 @@
 		aria-label="Player controls"
 		tabindex="-1"
 	>
+		{#if openMenu}
+			<div
+				class="control-menu"
+				role="menu"
+				aria-label={openMenu === 'audio'
+					? 'Audio tracks'
+					: openMenu === 'subtitle'
+						? 'Subtitle tracks'
+						: 'Playback speed'}
+			>
+				{#if openMenu === 'audio'}
+					<div class="menu-heading" role="presentation">Audio</div>
+					<button
+						type="button"
+						role="menuitemradio"
+						aria-checked={audioTrackIndex === null}
+						class="menu-item"
+						class:selected={audioTrackIndex === null}
+						onclick={() => selectAudioTrack('')}
+					>
+						Default audio
+					</button>
+					{#each availableAudio as track (track.index)}
+						<button
+							type="button"
+							role="menuitemradio"
+							aria-checked={audioTrackIndex === track.index}
+							class="menu-item"
+							class:selected={audioTrackIndex === track.index}
+							onclick={() => selectAudioTrack(String(track.index))}
+						>
+							{track.title ?? track.language ?? 'Audio'} ({track.codec_name ?? '?'})
+						</button>
+					{/each}
+				{:else if openMenu === 'subtitle'}
+					<div class="menu-heading" role="presentation">Subtitles</div>
+					<button
+						type="button"
+						role="menuitemradio"
+						aria-checked={subtitleChoice === ''}
+						class="menu-item"
+						class:selected={subtitleChoice === ''}
+						onclick={() => selectSubtitle('')}
+					>
+						Subtitles off
+					</button>
+					{#each availableSubtitles as track (track.id)}
+						<button
+							type="button"
+							role="menuitemradio"
+							aria-checked={subtitleChoice === `ext:${track.id}`}
+							class="menu-item"
+							class:selected={subtitleChoice === `ext:${track.id}`}
+							onclick={() => selectSubtitle(`ext:${track.id}`)}
+						>
+							{track.name || track.language || 'Subtitles'} ({track.format})
+						</button>
+					{/each}
+					{#each availableEmbeddedSubtitles as stream (stream.index)}
+						<button
+							type="button"
+							role="menuitemradio"
+							aria-checked={subtitleChoice === `emb:${stream.index}`}
+							class="menu-item"
+							class:selected={subtitleChoice === `emb:${stream.index}`}
+							onclick={() => selectSubtitle(`emb:${stream.index}`)}
+						>
+							{stream.title ?? stream.language ?? 'Subtitle'} (embedded)
+						</button>
+					{/each}
+				{:else}
+					<div class="menu-heading" role="presentation">Playback speed</div>
+					{#each PLAYBACK_RATES as rate (rate)}
+						<button
+							type="button"
+							role="menuitemradio"
+							aria-checked={playbackRate === rate}
+							class="menu-item"
+							class:selected={playbackRate === rate}
+							onclick={() => selectPlaybackRate(rate)}
+						>
+							{rate}x
+						</button>
+					{/each}
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Seekbar -->
 		<div
 			class="seekbar-container"
@@ -1021,54 +1133,44 @@
 			<div class="controls-right">
 				<!-- Audio selector -->
 				{#if availableAudio.length > 1}
-					<label class="select-label">
-						<span class="visually-hidden">Audio Track</span>
-						<select
-							class="control-select"
-							value={audioTrackIndex ?? ''}
-							onchange={handleAudioChange}
-							aria-label="Select audio track"
-						>
-							<option value="">Default Audio</option>
-							{#each availableAudio as track (track.index)}
-								<option value={track.index}>
-									{track.title ?? track.language ?? 'Audio'} ({track.codec_name ?? '?'})
-								</option>
-							{/each}
-						</select>
-					</label>
+					<button
+						type="button"
+						class="icon-btn"
+						class:active={openMenu === 'audio' || audioTrackIndex !== null}
+						onclick={() => toggleMenu('audio')}
+						title="Audio track"
+						aria-label="Select audio track"
+						aria-haspopup="menu"
+						aria-expanded={openMenu === 'audio'}
+					>
+						<Languages size={18} />
+					</button>
 				{/if}
 
 				<!-- Subtitles selector -->
 				{#if availableSubtitles.length > 0 || availableEmbeddedSubtitles.length > 0}
-					<label class="select-label">
-						<span class="visually-hidden">Subtitles</span>
-						<select
-							class="control-select"
-							value={subtitleChoice}
-							onchange={handleSubtitleChange}
-							aria-label="Select subtitle track"
-						>
-							<option value="">Subtitles Off</option>
-							{#each availableSubtitles as track (track.id)}
-								<option value={`ext:${track.id}`}>
-									{track.name || track.language || 'Subtitles'} ({track.format})
-								</option>
-							{/each}
-							{#each availableEmbeddedSubtitles as stream (stream.index)}
-								<option value={`emb:${stream.index}`}>
-									{stream.title ?? stream.language ?? 'Subtitle'} (embedded)
-								</option>
-							{/each}
-						</select>
-					</label>
+					<button
+						type="button"
+						class="icon-btn"
+						class:active={openMenu === 'subtitle' || subtitleChoice !== ''}
+						onclick={() => toggleMenu('subtitle')}
+						title="Subtitles"
+						aria-label="Select subtitle track"
+						aria-haspopup="menu"
+						aria-expanded={openMenu === 'subtitle'}
+					>
+						<Captions size={19} />
+					</button>
 
 					<!-- Subtitle Sync Button -->
 					<button
 						type="button"
 						class="icon-btn"
 						class:active={showSubSync}
-						onclick={() => (showSubSync = !showSubSync)}
+						onclick={() => {
+							openMenu = null;
+							showSubSync = !showSubSync;
+						}}
 						title="Subtitle Sync / Calibration"
 						aria-label="Subtitle synchronization"
 					>
@@ -1077,22 +1179,18 @@
 				{/if}
 
 				<!-- Playback rate -->
-				<label class="select-label">
-					<span class="visually-hidden">Playback Speed</span>
-					<select
-						class="control-select"
-						value={playbackRate}
-						onchange={(e) => handlePlaybackRateChange(Number.parseFloat(e.currentTarget.value))}
-						aria-label="Playback speed"
-					>
-						<option value={0.5}>0.5x</option>
-						<option value={0.75}>0.75x</option>
-						<option value={1}>1x</option>
-						<option value={1.25}>1.25x</option>
-						<option value={1.5}>1.5x</option>
-						<option value={2}>2x</option>
-					</select>
-				</label>
+				<button
+					type="button"
+					class="icon-btn"
+					class:active={openMenu === 'speed' || playbackRate !== 1}
+					onclick={() => toggleMenu('speed')}
+					title="Playback speed"
+					aria-label="Playback speed"
+					aria-haspopup="menu"
+					aria-expanded={openMenu === 'speed'}
+				>
+					<Gauge size={18} />
+				</button>
 
 				<!-- Aspect Ratio Selector -->
 				<button
@@ -1547,6 +1645,59 @@
 
 	.control-select:hover {
 		border-color: var(--accent);
+	}
+
+	.control-menu {
+		position: absolute;
+		right: 1.5rem;
+		bottom: 100%;
+		z-index: 20;
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+		min-width: 11rem;
+		max-width: min(20rem, 80vw);
+		max-height: min(50vh, 22rem);
+		overflow-y: auto;
+		margin-bottom: 0.4rem;
+		padding: 0.4rem;
+		background: rgba(14, 17, 22, 0.96);
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+		backdrop-filter: blur(10px);
+	}
+
+	.menu-heading {
+		padding: 0.3rem 0.6rem 0.2rem;
+		font-size: 0.7rem;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--muted);
+	}
+
+	.menu-item {
+		background: transparent;
+		border: none;
+		border-radius: 6px;
+		padding: 0.45rem 0.6rem;
+		color: var(--text);
+		font-size: 0.85rem;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.menu-item:hover,
+	.menu-item:focus-visible {
+		background: rgba(255, 255, 255, 0.12);
+		color: #fff;
+		outline: none;
+	}
+
+	.menu-item.selected {
+		color: var(--accent);
+		font-weight: 600;
 	}
 
 	.buffering-spinner {
