@@ -767,7 +767,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 
 - Worker polls `GROUP BY` + `claim()` every 1 s idle (86k/day); slots-full sleeps full 1 s → new job latency up to 1 s.
 - SSE polls `SELECT ... WHERE updated_at > since LIMIT 100` every 1 s per client with `sleep(min(0.1, ...))` (10 wakeups/s/client); `jobs.updated_at` has no index → full scan per poll.
-- Transcode `wait_for_first_segment` / `ensure_segment` poll with `sleep(0.1/0.05)` + `glob` per call; `create_session` holds `_lock` across ffmpeg spawn; `capabilities.py:218` runs 4 test encodes serially (≤20 s) under `_cache_lock`.
+- Transcode `wait_for_first_segment` / `ensure_segment` poll with `sleep(0.1/0.05)` + `glob` per call; `create_session` holds `_lock` across ffmpeg spawn. Capability smoke tests now run concurrently under `_cache_lock` with an overall 20 s budget (§7.21).
 
 **Impact:** Idle CPU/DB load; SSE scales poorly; first-playback decisions can block ~20 s.
 **Recommendation:** Idle backoff 1s→2s→5s (reset on claim); SSE poll 2–3 s + `Index(ix_jobs_updated_at)`; reserve transcode slot under lock but spawn outside; `asyncio.Event` on first segment; `gather` test encodes (VAAPI handles 4 concurrent).

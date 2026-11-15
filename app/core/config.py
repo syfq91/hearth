@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     # than that are reported as inconclusive rather than unsupported.
     transcode_vainfo_timeout_seconds: float = 15.0
     transcode_test_encode_timeout_seconds: float = 15.0
+    # Overall budget for one capability probe. Startup waits on it, so a wedged
+    # driver must not hold the API hostage; the probe is flagged inconclusive
+    # and retried in the background when the budget expires.
+    transcode_capability_probe_timeout_seconds: float = 20.0
     # A timed-out hardware probe is inconclusive, not a verdict. Retry in the
     # background so a slow iGPU initialisation cannot demote the whole process
     # to software encoding until the next restart.

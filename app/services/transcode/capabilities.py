@@ -259,28 +259,37 @@ async def _probe_once(
     codecs: dict[str, CodecCapability] = {}
     incomplete = False
 
-    # For any codec that vainfo reports encode, run a test encode
-    for codec_name, (decode, encode) in parsed_codecs.items():
-        test_ok = False
-        test_err = None
-        if encode and codec_name in _FFMPEG_ENCODER_NAMES:
-            encoder = _FFMPEG_ENCODER_NAMES[codec_name]
-            result = await _run_test_encode(
+    # For any codec that vainfo reports encode, run a test encode. The smoke
+    # tests are independent, so run them together: the driver initialises once
+    # and the probe does not take four deadline windows in a row.
+    encoders = {
+        codec_name: _FFMPEG_ENCODER_NAMES[codec_name]
+        for codec_name, (_decode, encode) in parsed_codecs.items()
+        if encode and codec_name in _FFMPEG_ENCODER_NAMES
+    }
+    test_results = await asyncio.gather(
+        *(
+            _run_test_encode(
                 settings.ffmpeg_binary,
                 device_label,
                 encoder,
                 timeout=settings.transcode_test_encode_timeout_seconds,
             )
-            test_ok = result.ok
-            test_err = result.error
-            if result.timed_out:
-                incomplete = True
+            for encoder in encoders.values()
+        )
+    )
+    results_by_codec = dict(zip(encoders, test_results, strict=True))
+
+    for codec_name, (decode, encode) in parsed_codecs.items():
+        result = results_by_codec.get(codec_name)
+        if result is not None and result.timed_out:
+            incomplete = True
         codecs[codec_name] = CodecCapability(
             codec=codec_name,
             decode=decode,
             encode=encode,
-            test_encode_ok=test_ok,
-            test_encode_error=test_err,
+            test_encode_ok=bool(result and result.ok),
+            test_encode_error=result.error if result else None,
         )
 
     tonemap = await _check_tonemap_vaapi(settings.ffmpeg_binary)
@@ -316,7 +325,22 @@ async def probe_transcode_capabilities(
                 _schedule_probe_retry(settings)
             return cached
 
-        caps, incomplete = await _probe_once(settings)
+        try:
+            async with asyncio.timeout(settings.transcode_capability_probe_timeout_seconds):
+                caps, incomplete = await _probe_once(settings)
+        except TimeoutError:
+            logger.warning(
+                "transcode capability probe exceeded %gs; retrying in the background",
+                settings.transcode_capability_probe_timeout_seconds,
+                extra={"event": "capability_probe_budget_exceeded"},
+            )
+            caps = ServerTranscodeCapabilities(
+                render_device=str(settings.render_device),
+                available=False,
+                error="capability probe timed out; probe will retry",
+                probe_incomplete=True,
+            )
+            incomplete = True
         _cached_capabilities = caps
         if incomplete:
             _schedule_probe_retry(settings)

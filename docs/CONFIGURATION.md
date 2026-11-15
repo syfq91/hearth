@@ -103,6 +103,7 @@ environment. MusicBrainz and Open Library do not require API keys.
 | `HEARTH_TRANSCODE_FIRST_SEGMENT_DURATION_SECONDS` | `2` | Shorter opening segment for video transcodes (startup latency); `0` or >= segment duration disables it |
 | `HEARTH_TRANSCODE_VAINFO_TIMEOUT_SECONDS` | `15` | Deadline for `vainfo`; a timeout marks the probe inconclusive and triggers a retry |
 | `HEARTH_TRANSCODE_TEST_ENCODE_TIMEOUT_SECONDS` | `15` | Deadline for each hardware encoder smoke test |
+| `HEARTH_TRANSCODE_CAPABILITY_PROBE_TIMEOUT_SECONDS` | `20` | Overall budget for one probe; expiry marks it inconclusive and schedules a retry |
 | `HEARTH_TRANSCODE_CAPABILITY_PROBE_RETRIES` | `3` | Background re-probes after an inconclusive hardware probe (0 disables retries) |
 | `HEARTH_TRANSCODE_CAPABILITY_PROBE_RETRY_DELAY_SECONDS` | `5` | Base delay between probe retries; attempt *n* waits *n* x this value |
 | `HEARTH_WATCHED_THRESHOLD` | `0.90` | Fraction of an item that counts as watched |

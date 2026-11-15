@@ -80,6 +80,11 @@ async def run_command(command: list[str], timeout: float) -> CommandOutcome:
         process.kill()
         await process.wait()
         return CommandOutcome("timeout", -1, "", "")
+    except asyncio.CancelledError:
+        # The caller (for example an overall probe budget) gave up on us; do
+        # not leave the child running.
+        process.kill()
+        raise
 
     return CommandOutcome(
         "ok",

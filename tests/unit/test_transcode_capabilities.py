@@ -282,8 +282,9 @@ async def test_probe_retry_recovers_hardware_encoding(tmp_path: Path) -> None:
         first = await probe_transcode_capabilities(settings)
         assert first.probe_incomplete is True
 
-        for _ in range(100):
-            await asyncio.sleep(0.01)
+        deadline = asyncio.get_running_loop().time() + 5.0
+        while asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(0.02)
             refreshed = await probe_transcode_capabilities(settings)
             if not refreshed.probe_incomplete:
                 break
@@ -291,5 +292,38 @@ async def test_probe_retry_recovers_hardware_encoding(tmp_path: Path) -> None:
     assert refreshed.available is True
     assert refreshed.can_vaapi_encode("h264") is True
     assert vainfo_calls >= 2
+
+    reset_transcode_capabilities_cache()
+
+
+@pytest.mark.asyncio
+async def test_probe_budget_marks_result_inconclusive(tmp_path: Path) -> None:
+    """A wedged driver must not block startup past the probe budget."""
+    import asyncio
+
+    reset_transcode_capabilities_cache()
+    fake_dev = tmp_path / "renderD128"
+    fake_dev.touch()
+
+    settings = Settings(
+        render_device=fake_dev,
+        transcode_capability_probe_retries=0,
+        transcode_capability_probe_timeout_seconds=0.05,
+        transcode_vainfo_timeout_seconds=30.0,
+    )
+
+    async def slow_run(cmd: list[str], timeout: float = 5.0) -> CommandOutcome:
+        await asyncio.sleep(5.0)
+        return CommandOutcome("ok", 0, SAMPLE_INTEL_VAINFO, "")
+
+    with patch(
+        "app.services.transcode.capabilities.run_command",
+        new=AsyncMock(side_effect=slow_run),
+    ):
+        caps = await probe_transcode_capabilities(settings)
+
+    assert caps.available is False
+    assert caps.probe_incomplete is True
+    assert "timed out" in (caps.error or "")
 
     reset_transcode_capabilities_cache()
