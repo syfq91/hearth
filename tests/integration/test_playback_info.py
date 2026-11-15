@@ -31,13 +31,15 @@ async def _seed(
     *,
     versions: int = 1,
     sidecar: bool = True,
+    suffix: str = "mp4",
+    container: str = "mp4",
 ) -> tuple[str, str, list[str], Path]:
     root = settings.media_dir / f"Movies {uuid.uuid4().hex[:8]}"
     root.mkdir()
     paths: list[Path] = []
     for index in range(versions):
-        name = "The Matrix (1999).mp4" if index == 0 else f"The Matrix (1999) - v{index + 1}.mp4"
-        path = root / name
+        stem = "The Matrix (1999)" if index == 0 else f"The Matrix (1999) - v{index + 1}"
+        path = root / f"{stem}.{suffix}"
         path.write_bytes(b"video" * 100)
         paths.append(path)
     if sidecar:
@@ -69,7 +71,7 @@ async def _seed(
                 size_bytes=stat.st_size,
                 mtime=stat.st_mtime,
                 partial_hash=uuid.uuid4().hex * 2,
-                container="mp4",
+                container=container,
                 duration_seconds=8160.0 - index,
             )
             session.add(media_file)
@@ -154,6 +156,67 @@ async def test_playback_info_accepts_the_full_capability_profile(
         headers=_bearer(admin),
     )
     assert invalid.status_code == 422
+
+
+async def test_playback_info_does_not_direct_play_mkv_for_webm_only_clients(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    """MKV and WebM share ffprobe's ``matroska,webm`` demuxer alias.
+
+    The file extension must decide: a WebM-only client gets an HLS remux
+    instead of ``video/x-matroska`` bytes.
+    """
+    admin = await _setup(api_client)
+    _, item_id, file_ids, _ = await _seed(
+        db_settings,
+        db_sessionmaker,
+        sidecar=False,
+        suffix="mkv",
+        container="matroska,webm",
+    )
+    streams_json = {
+        "container": "matroska,webm",
+        "duration_seconds": 8160.0,
+        "bit_rate": 4_000_000,
+        "size_bytes": 500,
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+            },
+            {"index": 1, "codec_type": "audio", "codec_name": "aac", "channels": 2},
+        ],
+        "chapters": [],
+    }
+    async with db_sessionmaker() as session:
+        media_file = await session.get(MediaFile, file_ids[0])
+        assert media_file is not None
+        media_file.streams_json = streams_json
+        await session.commit()
+
+    response = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={
+            "capabilities": {
+                "containers": ["mp4", "webm"],
+                "video_codecs": ["h264"],
+                "audio_codecs": ["aac"],
+            }
+        },
+        headers=_bearer(admin),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["mode"] == "remux_hls"
+    assert "ContainerNotSupported" in body["reasons"]
+    assert body["url"] is None
+
+    await api_client.post(f"/api/v1/hls/{body['session_id']}/stop", headers=_bearer(admin))
 
 
 async def test_playback_info_selects_a_requested_version(

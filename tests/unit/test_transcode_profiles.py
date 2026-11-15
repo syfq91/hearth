@@ -92,6 +92,17 @@ def test_supports_container_helper() -> None:
     assert caps.supports_container("mkv") is False
 
 
+def test_supports_container_disambiguates_matroska_from_webm() -> None:
+    # ffprobe reports both Matroska and WebM as "matroska,webm".
+    webm_only = ClientCapabilities(containers=["mp4", "webm"])
+    assert webm_only.supports_container("matroska,webm", extension=".webm") is True
+    assert webm_only.supports_container("matroska,webm", extension=".mkv") is False
+
+    mkv_client = ClientCapabilities(containers=["mp4", "mkv"])
+    assert mkv_client.supports_container("matroska,webm", extension=".mkv") is True
+    assert mkv_client.supports_container("matroska,webm", extension=".webm") is False
+
+
 def test_supports_video_codec_and_profile_helper() -> None:
     caps = ClientCapabilities(
         video_codecs=["h264", "hevc"],

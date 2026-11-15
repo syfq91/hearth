@@ -385,6 +385,7 @@ async def playback_info(
         server_caps,
         playback_options,
         user_agent=user_agent,
+        file_extension=Path(media_file.path).suffix,
     )
 
     file_resp = PlaybackFileResponse(

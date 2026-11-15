@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Client-side ASS/SSA rendering now loads container fonts during direct play. The player rebuilt attachment URLs from an HLS-only media token, so font requests were unauthenticated and JASSUB silently fell back to its bundled font; it now uses the token-scoped `attachments[].url` returned by playback-info.
+- MKV files are no longer treated as WebM for direct-play negotiation. ffprobe reports both containers as `matroska,webm`, so clients that only claim WebM support were handed `video/x-matroska` bytes; the playback decision now disambiguates them using the real file extension and remuxes MKV instead.
 
 ### Removed
 - Removed AMD hardware transcoding support and `mesa-va-drivers` from the container image; VA-API hardware acceleration is dedicated to Intel QuickSync, with automatic fallback to CPU software transcoding (`libx264`).

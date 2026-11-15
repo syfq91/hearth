@@ -1022,6 +1022,42 @@ def test_decision_audit_acceptance_1_remux() -> None:
     }
 
 
+def test_decision_mkv_is_not_direct_played_by_a_webm_only_client() -> None:
+    """MKV and WebM share the ``matroska,webm`` demuxer name.
+
+    A client that only claims WebM support must not be handed MKV bytes as a
+    direct-play stream; the real file extension is the discriminator.
+    """
+    probe = _make_probe(container="matroska,webm", a_codec="aac")
+    caps = ClientCapabilities(
+        containers=["mp4", "webm"],
+        video_codecs=["h264"],
+        audio_codecs=["aac"],
+    )
+
+    mkv = evaluate_playback_plan(
+        probe,
+        caps,
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(),
+        file_extension=".mkv",
+    )
+    assert mkv.mode == "remux_hls"
+    assert Container in mkv.reasons
+
+    webm = evaluate_playback_plan(
+        probe,
+        caps,
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(),
+        file_extension=".webm",
+    )
+    assert webm.mode == "direct_play"
+    assert webm.reasons == []
+
+
 def test_decision_audit_acceptance_2_transcode_hevc() -> None:
     """2. (MP4, HEVC) on an H.264-only client -> Transcode.
 

@@ -47,16 +47,29 @@ class ClientCapabilities(BaseModel):
     hdr: bool = False
     hls_fmp4: bool = False
 
-    def supports_container(self, container: str) -> bool:
+    def supports_container(self, container: str, *, extension: str | None = None) -> bool:
         """Check if container extension/name is supported.
 
         ffprobe reports ``format_name`` as the comma-joined list of demuxer
         aliases (``mov,mp4,m4a,3gp,3g2,mj2`` for a plain mp4), so the stored
         container can name several formats; any supported alias matches.
+
+        ``extension`` disambiguates aliases that share one demuxer but are
+        distinct client-facing containers. Matroska and WebM both report
+        ``matroska,webm``, so without the real file extension a WebM-capable
+        client would be considered able to direct-play MKV.
         """
         supported = {c.lower().lstrip(".") for c in self.containers}
-        for alias in container.lower().lstrip(".").split(","):
-            target = alias.strip()
+        aliases = [
+            alias.strip() for alias in container.lower().lstrip(".").split(",") if alias.strip()
+        ]
+        suffix = extension.lower().lstrip(".") if extension else None
+        if suffix == "mkv" and "matroska" in aliases:
+            aliases = ["matroska", "mkv"]
+        elif suffix == "webm" and "webm" in aliases:
+            aliases = ["webm"]
+
+        for target in aliases:
             # Handle mp4/mov/m4v aliases
             normalized = "mp4" if target in ("mov", "m4v") else target
             if target in supported or normalized in supported:

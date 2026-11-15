@@ -111,11 +111,16 @@ def evaluate_playback_plan(
     server_caps: ServerTranscodeCapabilities,
     options: PlaybackOptions | None = None,
     user_agent: str | None = None,
+    file_extension: str | None = None,
 ) -> TranscodePlan:
     """Evaluate media file against client and server constraints to form a TranscodePlan.
 
     Pure function adhering to INV-3 (no filesystem, clock, or network access).
     Computes the full union of failure reasons per §3.3 before selecting the delivery mode.
+
+    ``file_extension`` is the real file suffix (``.mkv``, ``.webm``). It
+    disambiguates containers whose ffprobe ``format_name`` aliases are shared,
+    because Matroska and WebM both report ``matroska,webm``.
     """
     opts = options or PlaybackOptions()
     resolved_client = resolve_client_capabilities(capabilities, user_agent=user_agent)
@@ -312,7 +317,9 @@ def evaluate_playback_plan(
         audio_codec_target = "copy"
 
     # 6. Check Container Compatibility
-    container_supported = resolved_client.supports_container(file_streams.container)
+    container_supported = resolved_client.supports_container(
+        file_streams.container, extension=file_extension
+    )
     if not container_supported:
         _add_reason(reasons, TranscodeReason.ContainerNotSupported)
 
