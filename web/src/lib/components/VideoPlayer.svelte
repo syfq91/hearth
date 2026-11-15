@@ -106,7 +106,7 @@
 	let lastSubChoice = '';
 
 	const REPORT_INTERVAL_MS = 10_000;
-	const HIDE_DELAY_MS = 3000;
+	const HIDE_DELAY_MS = 1500;
 	const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 
 	const duration = $derived.by(() => {
@@ -1355,8 +1355,8 @@
 			transparent 100%
 		);
 		transition:
-			opacity 0.25s ease,
-			transform 0.25s ease;
+			opacity 0.15s ease,
+			transform 0.15s ease;
 	}
 
 	.top-overlay.hidden {
@@ -1435,8 +1435,8 @@
 			transparent 100%
 		);
 		transition:
-			opacity 0.25s ease,
-			transform 0.25s ease;
+			opacity 0.15s ease,
+			transform 0.15s ease;
 	}
 
 	.bottom-overlay.hidden {
