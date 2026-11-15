@@ -729,6 +729,10 @@ async def test_playback_info_delivers_embedded_text_subtitle_on_direct_play(
     assert url is not None
     assert url.startswith(f"/api/v1/media/{file_ids[0]}/subtitles/0.vtt?token=")
 
+    urls = data["embedded_subtitle_urls"]
+    assert [(entry["index"], entry["format"]) for entry in urls] == [(2, "vtt")]
+    assert urls[0]["url"].startswith(f"/api/v1/media/{file_ids[0]}/subtitles/0.vtt?token=")
+
     served = await api_client.get(url)
     assert served.status_code == 200, served.text
     assert served.headers["content-type"].startswith("text/vtt")

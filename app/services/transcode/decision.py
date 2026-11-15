@@ -20,6 +20,11 @@ ActionType = Literal["copy", "transcode"]
 SubtitleAction = Literal["none", "sidecar_vtt", "burn_in", "external_ass"]
 HwAccelMode = Literal["vaapi", "none"]
 
+# Image-based subtitles cannot be converted to text; they must be burned in.
+BITMAP_SUBTITLE_CODECS = frozenset(
+    {"hdmv_pgs_subtitle", "dvd_subtitle", "dvdsub", "vobsub", "pgs", "pgssub", "xsub"}
+)
+
 
 class TranscodeReason(StrEnum):
     """Reason why direct play is not possible per §3.3."""
@@ -164,11 +169,8 @@ def evaluate_playback_plan(
     if sub_stream is not None:
         subtitle_index = sub_stream_index
         c_name = (sub_stream.codec_name or "").lower()
-        bitmap_codecs = frozenset(
-            {"hdmv_pgs_subtitle", "dvd_subtitle", "dvdsub", "vobsub", "pgs", "pgssub", "xsub"}
-        )
 
-        if opts.force_burn_in_subtitles or c_name in bitmap_codecs:
+        if opts.force_burn_in_subtitles or c_name in BITMAP_SUBTITLE_CODECS:
             subtitle_action = "burn_in"
             _add_reason(reasons, TranscodeReason.SubtitleBurnInRequired)
         else:

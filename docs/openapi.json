@@ -2116,6 +2116,30 @@
         "title": "DiskUsage",
         "type": "object"
       },
+      "EmbeddedSubtitleUrl": {
+        "description": "A client-renderable URL for one embedded subtitle stream.",
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "url",
+          "format"
+        ],
+        "title": "EmbeddedSubtitleUrl",
+        "type": "object"
+      },
       "EpisodeDetail": {
         "description": "Complete detail response for an episode.",
         "properties": {
@@ -4550,6 +4574,13 @@
               }
             ],
             "title": "Embedded Subtitle Url"
+          },
+          "embedded_subtitle_urls": {
+            "items": {
+              "$ref": "#/components/schemas/EmbeddedSubtitleUrl"
+            },
+            "title": "Embedded Subtitle Urls",
+            "type": "array"
           },
           "embedded_subtitles": {
             "items": {

@@ -2,7 +2,8 @@
 
 from types import SimpleNamespace
 
-from app.api.v1.playback import _embedded_subtitle_delivery
+from app.api.v1.playback import _embedded_subtitle_delivery, _embedded_subtitle_urls
+from app.services.media.probe import ProbeStream
 from app.services.transcode.decision import PlaybackMode, SubtitleAction, TranscodePlan
 
 FILE = SimpleNamespace(id="018f0000-0000-7000-8000-000000000000")
@@ -41,6 +42,23 @@ def test_external_ass_is_served_for_client_rendering() -> None:
         url, fmt = _embedded_subtitle_delivery(_plan(mode, "external_ass", 1), FILE, "tok")
         assert url == f"{PREFIX}1.ass?token=tok"
         assert fmt == "ass"
+
+
+def _subtitle_stream(index: int, codec: str) -> ProbeStream:
+    return ProbeStream(index=index, codec_type="subtitle", codec_name=codec)
+
+
+def test_embedded_subtitle_urls_skip_bitmap_tracks_and_keep_the_selector_index() -> None:
+    streams = [
+        _subtitle_stream(2, "subrip"),
+        _subtitle_stream(3, "hdmv_pgs_subtitle"),
+        _subtitle_stream(4, "ass"),
+    ]
+    urls = _embedded_subtitle_urls(streams, FILE, "tok")
+
+    assert [(entry.index, entry.format) for entry in urls] == [(2, "vtt"), (4, "ass")]
+    assert urls[0].url == f"{PREFIX}0.vtt?token=tok"
+    assert urls[1].url == f"{PREFIX}2.ass?token=tok"
 
 
 def test_burn_in_and_off_subtitles_have_no_direct_url() -> None:

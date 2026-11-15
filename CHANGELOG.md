@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `embedded_subtitle_urls` on playback-info: a client-renderable URL and format for every embedded text subtitle stream, keyed by the container stream index. The web player now switches embedded text tracks mid-playback without tearing down and re-creating the HLS session; only bitmap tracks (which require burn-in) still renegotiate.
 - `shift_ms` query parameter on the WebVTT subtitle endpoints (`/api/v1/subtitles/{id}.vtt` and `/api/v1/media/{file_id}/subtitles/{index}.vtt`) that rewrites cue boundaries, so the user's subtitle timing calibration also applies to native `<track>` playback instead of only to JASSUB. The web player re-fetches the track (debounced) when the offset changes.
 - Container font attachment extraction and serving (`GET /api/v1/media/{file_id}/attachments/{idx}`), exposing embedded fonts in MKV files with disk caching for client-side ASS/SSA WebAssembly rendering (Phase 1 of video player overhaul).
 - Embedded subtitle delivery (`GET /api/v1/media/{file_id}/subtitles/{index}.vtt` and `.ass`) plus `embedded_subtitle_url`/`embedded_subtitle_format` on playback-info, so direct-play clients and client-side ASS renderers can show text subtitles without a transcode session.

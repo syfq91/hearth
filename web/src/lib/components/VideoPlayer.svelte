@@ -380,6 +380,10 @@
 		);
 	}
 
+	function embeddedSubtitleUrl(index: number) {
+		return (info?.embedded_subtitle_urls ?? []).find((entry) => entry.index === index) ?? null;
+	}
+
 	async function applySubtitleChoice(): Promise<void> {
 		if (!subtitleManager) return;
 
@@ -389,20 +393,20 @@
 		const fontUrls = attachmentFontUrls(info?.attachments);
 
 		if (subtitleChoice.startsWith('emb:')) {
-			// Embedded tracks are delivered by the server when they cannot ride
-			// the HLS manifest (direct play, or ASS rendered client-side).
-			const url = info?.embedded_subtitle_url;
+			const index = Number.parseInt(subtitleChoice.slice('emb:'.length), 10);
+			const entry = embeddedSubtitleUrl(index);
+			// Bitmap tracks have no client-renderable URL; they need burn-in.
+			const url = entry?.url ?? info?.embedded_subtitle_url;
 			if (!url) {
 				await subtitleManager.clearTrack();
 				return;
 			}
-			const index = Number.parseInt(subtitleChoice.slice('emb:'.length), 10);
 			const stream = (info?.embedded_subtitles ?? []).find((s) => s.index === index);
 			await subtitleManager.loadTrack(
 				{
 					id: subtitleChoice,
 					url,
-					format: info?.embedded_subtitle_format,
+					format: entry?.format ?? info?.embedded_subtitle_format,
 					language: stream?.language,
 					label: stream?.title || stream?.language || 'Subtitles'
 				},
@@ -580,15 +584,25 @@
 
 	function handleSubtitleChange(event: Event): void {
 		const val = (event.currentTarget as HTMLSelectElement).value;
-		const wasEmbedded = subtitleChoice.startsWith('emb:');
-		const isEmbedded = val.startsWith('emb:');
 		subtitleChoice = val;
 
-		if (isEmbedded || wasEmbedded) {
+		// Burned-in cues are part of the video stream; only a fresh session
+		// without subtitles can remove them.
+		if (info?.plan?.subtitle_action === 'burn_in') {
 			void startPlayback();
-		} else {
-			void applySubtitleChoice();
+			return;
 		}
+
+		// Bitmap subtitle tracks cannot be rendered by the client.
+		if (val.startsWith('emb:')) {
+			const index = Number.parseInt(val.slice('emb:'.length), 10);
+			if (!embeddedSubtitleUrl(index)) {
+				void startPlayback();
+				return;
+			}
+		}
+
+		void applySubtitleChoice();
 	}
 
 	function handleQualityChange(event: Event): void {

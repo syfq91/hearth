@@ -3235,6 +3235,18 @@ export interface components {
             used_bytes: number;
         };
         /**
+         * EmbeddedSubtitleUrl
+         * @description A client-renderable URL for one embedded subtitle stream.
+         */
+        EmbeddedSubtitleUrl: {
+            /** Format */
+            format: string;
+            /** Index */
+            index: number;
+            /** Url */
+            url: string;
+        };
+        /**
          * EpisodeDetail
          * @description Complete detail response for an episode.
          */
@@ -4063,6 +4075,8 @@ export interface components {
             embedded_subtitle_format?: string | null;
             /** Embedded Subtitle Url */
             embedded_subtitle_url?: string | null;
+            /** Embedded Subtitle Urls */
+            embedded_subtitle_urls?: components["schemas"]["EmbeddedSubtitleUrl"][];
             /** Embedded Subtitles */
             embedded_subtitles?: components["schemas"]["ProbeStream"][];
             /** Expires At */

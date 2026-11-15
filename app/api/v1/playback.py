@@ -52,6 +52,7 @@ from app.services.ratings import is_rating_permitted
 from app.services.scrobbling.listenbrainz import enqueue_scrobble
 from app.services.transcode.capabilities import probe_transcode_capabilities
 from app.services.transcode.decision import (
+    BITMAP_SUBTITLE_CODECS,
     PlaybackOptions,
     TranscodePlan,
     UserLimits,
@@ -133,6 +134,15 @@ class PlaybackFileResponse(BaseModel):
     size_bytes: int
 
 
+class EmbeddedSubtitleUrl(BaseModel):
+    """A client-renderable URL for one embedded subtitle stream."""
+
+    # Container stream index, matching the client's ``emb:<index>`` selector.
+    index: int
+    url: str
+    format: str
+
+
 class PlaybackInfoResponse(BaseModel):
     """A playback decision plus URLs the client can use directly.
 
@@ -149,6 +159,9 @@ class PlaybackInfoResponse(BaseModel):
     video_stream: ProbeStream | None = None
     audio_streams: list[ProbeStream] = Field(default_factory=list)
     embedded_subtitles: list[ProbeStream] = Field(default_factory=list)
+    # Text tracks a client can mount itself, so embedded subtitles can be
+    # switched mid-playback without renegotiating the stream.
+    embedded_subtitle_urls: list[EmbeddedSubtitleUrl] = Field(default_factory=list)
     attachments: list[AttachmentResponse] = Field(default_factory=list)
     embedded_subtitle_url: str | None = None
     embedded_subtitle_format: str | None = None
@@ -412,6 +425,7 @@ async def playback_info(
     ]
 
     embedded_url, embedded_format = _embedded_subtitle_delivery(plan, media_file, encoded_token)
+    embedded_subtitle_urls = _embedded_subtitle_urls(embedded_subtitles, media_file, encoded_token)
 
     if plan.mode == "direct_play":
         return PlaybackInfoResponse(
@@ -422,6 +436,7 @@ async def playback_info(
             video_stream=probe_res.primary_video,
             audio_streams=audio_streams,
             embedded_subtitles=embedded_subtitles,
+            embedded_subtitle_urls=embedded_subtitle_urls,
             attachments=attachments,
             embedded_subtitle_url=embedded_url,
             embedded_subtitle_format=embedded_format,
@@ -453,6 +468,7 @@ async def playback_info(
         video_stream=probe_res.primary_video,
         audio_streams=audio_streams,
         embedded_subtitles=embedded_subtitles,
+        embedded_subtitle_urls=embedded_subtitle_urls,
         attachments=attachments,
         embedded_subtitle_url=embedded_url,
         embedded_subtitle_format=embedded_format,
@@ -647,6 +663,32 @@ def _embedded_subtitle_delivery(
         f"{plan.subtitle_stream_index}.{fmt}?token={encoded_token}"
     )
     return url, fmt
+
+
+def _embedded_subtitle_urls(
+    embedded_subtitles: list[ProbeStream], media_file: MediaFile, encoded_token: str
+) -> list[EmbeddedSubtitleUrl]:
+    """Describe the client-renderable text tracks of a file.
+
+    The ordinal in the URL matches ``0:s:<n>`` (subtitle streams only), while
+    ``index`` stays the container stream index the client uses in ``emb:<n>``.
+    """
+    urls: list[EmbeddedSubtitleUrl] = []
+    for ordinal, stream in enumerate(embedded_subtitles):
+        codec = (stream.codec_name or "").lower()
+        if codec in BITMAP_SUBTITLE_CODECS:
+            continue
+        fmt = "ass" if codec in {"ass", "ssa"} else "vtt"
+        urls.append(
+            EmbeddedSubtitleUrl(
+                index=stream.index,
+                url=(
+                    f"/api/v1/media/{media_file.id}/subtitles/{ordinal}.{fmt}?token={encoded_token}"
+                ),
+                format=fmt,
+            )
+        )
+    return urls
 
 
 def _select_file(item: MediaItem, file_id: str | None) -> MediaFile:
