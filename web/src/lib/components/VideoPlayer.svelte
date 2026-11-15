@@ -873,21 +873,6 @@
 			</a>
 			<h1 class="player-title" title={title}>{title}</h1>
 		</div>
-
-		<div class="top-right">
-			{#if info}
-				<button
-					type="button"
-					class="icon-btn"
-					class:active={showModeBadge}
-					onclick={() => (showModeBadge = !showModeBadge)}
-					title="Stream Info / Transcode Status"
-					aria-label="Stream information"
-				>
-					<Info size={20} />
-				</button>
-			{/if}
-		</div>
 	</div>
 
 	<!-- Bottom Overlay Controls Bar -->
@@ -1110,6 +1095,20 @@
 					</label>
 				{/if}
 
+				<!-- Stream Info -->
+				{#if info}
+					<button
+						type="button"
+						class="icon-btn"
+						class:active={showModeBadge}
+						onclick={() => (showModeBadge = !showModeBadge)}
+						title="Stream Info / Transcode Status"
+						aria-label="Stream information"
+					>
+						<Info size={19} />
+					</button>
+				{/if}
+
 				<!-- Picture in Picture -->
 				<button
 					type="button"
@@ -1251,12 +1250,6 @@
 		gap: 1rem;
 		min-width: 0;
 		flex: 1;
-	}
-
-	.top-right {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
 	}
 
 	.back-btn {
