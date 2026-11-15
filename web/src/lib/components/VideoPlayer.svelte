@@ -659,39 +659,64 @@
 		subtitleManager?.setOffset(offsetSeconds);
 	}
 
-	function getPlaybackDetails(): string {
-		if (!info) return '';
-		const vStream = info.video_stream;
-		const vSrcRaw = vStream?.codec_name ?? 'video';
-		const vSrc = vSrcRaw === 'hevc' ? 'x265' : vSrcRaw;
+	function codecLabel(name: string | null | undefined): string {
+		const raw = name ?? 'unknown';
+		if (raw === 'hevc') return 'x265';
+		if (raw === 'h264') return 'x264';
+		return raw;
+	}
 
-		const activeAudio =
+	function targetVideoLabel(codec: string | undefined): string {
+		switch (codec) {
+			case 'libx264':
+				return 'x264';
+			case 'h264_vaapi':
+				return 'vaapi x264';
+			case 'hevc_vaapi':
+				return 'vaapi x265';
+			case 'h264_qsv':
+				return 'qsv x264';
+			case 'hevc_qsv':
+				return 'qsv x265';
+			default:
+				return codec ?? 'transcode';
+		}
+	}
+
+	function activeAudioStream() {
+		if (!info) return undefined;
+		return (
 			(audioTrackIndex !== null
 				? (info.audio_streams ?? []).find((s) => s.index === audioTrackIndex)
 				: null) ??
 			(info.audio_streams ?? []).find((s) => s.is_default) ??
-			info.audio_streams?.[0];
-		const aSrc = activeAudio?.codec_name ?? 'audio';
+			info.audio_streams?.[0]
+		);
+	}
 
-		if (info.mode === 'direct_play') {
-			return `${vSrc} · ${aSrc} (direct play)`;
-		}
+	function playbackModeDetail(): string {
+		if (!info) return '';
+		if (info.mode === 'direct_play') return 'Direct play';
+		if (info.mode === 'remux_hls') return 'Remux';
+		return 'Transcoding';
+	}
 
+	function videoStreamDetail(): string {
+		if (!info) return '';
+		const src = codecLabel(info.video_stream?.codec_name);
+		if (info.mode === 'direct_play') return src;
 		const plan = info.plan;
-		const vAction = plan?.video_action ?? 'transcode';
-		let vDst = plan?.video_codec ?? 'transcode';
-		if (vDst === 'libx264') vDst = 'x264';
-		else if (vDst === 'h264_vaapi') vDst = 'vaapi_h264';
-		else if (vDst === 'hevc_vaapi') vDst = 'vaapi_hevc';
-		else if (vDst === 'h264_qsv') vDst = 'qsv_x264';
+		if ((plan?.video_action ?? 'transcode') === 'copy') return `${src} > copy`;
+		return `${src} > ${targetVideoLabel(plan?.video_codec)}`;
+	}
 
-		const aAction = plan?.audio_action ?? 'transcode';
-		const aDst = plan?.audio_codec ?? 'aac';
-
-		const vPart = vAction === 'copy' ? `${vSrc} > copy` : `${vSrc} > ${vDst}`;
-		const aPart = aAction === 'copy' ? `${aSrc} > ${aSrc}` : `${aSrc} > ${aDst}`;
-
-		return `${vPart}  ${aPart}`;
+	function audioStreamDetail(): string {
+		if (!info) return '';
+		const src = codecLabel(activeAudioStream()?.codec_name ?? 'audio');
+		if (info.mode === 'direct_play') return src;
+		const plan = info.plan;
+		if ((plan?.audio_action ?? 'transcode') === 'copy') return `${src} > copy`;
+		return `${src} > ${plan?.audio_codec ?? 'aac'}`;
 	}
 
 	$effect(() => {
@@ -1284,7 +1309,9 @@
 			role="status"
 			title={(info.reasons ?? []).join('\n')}
 		>
-			<span class="mode-text">{getPlaybackDetails()}</span>
+			<span class="mode-line mode-headline">{playbackModeDetail()}</span>
+			<span class="mode-line">{videoStreamDetail()}</span>
+			<span class="mode-line">{audioStreamDetail()}</span>
 		</div>
 	{/if}
 </div>
@@ -1711,9 +1738,12 @@
 
 	.mode-badge-popup {
 		position: absolute;
-		bottom: 5.5rem;
+		top: 4.5rem;
 		right: 1.5rem;
 		z-index: 15;
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
 		font-size: 0.825rem;
 		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 		font-weight: 500;
@@ -1721,8 +1751,8 @@
 		color: #fff;
 		background: rgba(14, 17, 22, 0.9);
 		border: 1px solid var(--border);
-		border-radius: 999px;
-		padding: 0.35rem 0.85rem;
+		border-radius: 10px;
+		padding: 0.55rem 0.8rem;
 		backdrop-filter: blur(8px);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 		pointer-events: auto;
@@ -1734,11 +1764,16 @@
 	.mode-badge-popup.hidden {
 		opacity: 0;
 		pointer-events: none;
-		transform: translateY(0.5rem);
+		transform: translateY(-0.5rem);
 	}
 
-	.mode-text {
+	.mode-line {
 		white-space: nowrap;
+	}
+
+	.mode-headline {
+		font-weight: 700;
+		color: var(--accent);
 	}
 
 	.banner {
