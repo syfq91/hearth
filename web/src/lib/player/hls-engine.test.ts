@@ -30,6 +30,23 @@ test('isNativeHlsSupported inspects HTMLMediaElement canPlayType', () => {
 	assert.strictEqual(isNativeHlsSupported(mockVideoFalse), false);
 });
 
+test('HlsEngine reports stream stats', () => {
+	const mockVideo = {
+		canPlayType: () => '',
+		addEventListener: () => {},
+		removeEventListener: () => {}
+	} as unknown as HTMLVideoElement;
+
+	const engine = new HlsEngine(mockVideo, 'http://localhost/stream.m3u8', {
+		maxBitrate: 8_000_000
+	});
+	const stats = engine.getStats();
+	assert.strictEqual(typeof stats.levelBitrate, 'number');
+	assert.strictEqual(typeof stats.bandwidthEstimate, 'number');
+	assert.strictEqual(typeof stats.measuredBitrate, 'number');
+	engine.destroy();
+});
+
 test('HlsEngine initializes with high-bitrate buffer clamping', () => {
 	const mockVideo = {
 		canPlayType: () => '',

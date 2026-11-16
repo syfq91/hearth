@@ -24,6 +24,16 @@ export interface HlsEngineOptions {
 	maxBitrate?: number;
 	onLevelLoaded?: (levels: HlsQualityLevel[]) => void;
 	onError?: (error: ErrorData) => void;
+	onStats?: (stats: HlsStreamStats) => void;
+}
+
+export interface HlsStreamStats {
+	/** Nominal bitrate of the rendition currently playing, bits/s. */
+	levelBitrate: number;
+	/** hls.js smoothed bandwidth estimate, bits/s. */
+	bandwidthEstimate: number;
+	/** Throughput measured for the last fully loaded segment, bits/s. */
+	measuredBitrate: number;
 }
 
 export function isHlsSupported(): boolean {
@@ -43,6 +53,7 @@ export class HlsEngine {
 	private destroyed = false;
 	private mediaRecoveryAttempts = 0;
 	private networkRecoveryAttempts = 0;
+	private lastMeasuredBitrate = 0;
 	private readonly MAX_RECOVERY_ATTEMPTS = 3;
 
 	constructor(
@@ -91,6 +102,24 @@ export class HlsEngine {
 				bitrate: lvl.bitrate
 			}));
 			options.onLevelLoaded?.(levels);
+			this.emitStats(options);
+		});
+
+		this.hls.on(Events.LEVEL_SWITCHED, () => {
+			if (this.destroyed) return;
+			this.emitStats(options);
+		});
+
+		this.hls.on(Events.FRAG_LOADED, (_event, data) => {
+			if (this.destroyed) return;
+			// Throughput of the segment just fetched; hls.js only exposes it on
+			// the fragment's loader stats.
+			const stats = data.frag.stats;
+			const elapsedMs = stats.loading.end - stats.loading.first;
+			if (elapsedMs > 0 && stats.loaded > 0) {
+				this.lastMeasuredBitrate = (stats.loaded * 8000) / elapsedMs;
+			}
+			this.emitStats(options);
 		});
 
 		this.hls.on(Events.ERROR, (_event, data: ErrorData) => {
@@ -147,6 +176,20 @@ export class HlsEngine {
 
 	public get levels(): Level[] {
 		return this.hls?.levels ?? [];
+	}
+
+	public getStats(): HlsStreamStats {
+		const current = this.hls?.currentLevel ?? -1;
+		const level = current >= 0 ? this.hls?.levels?.[current] : undefined;
+		return {
+			levelBitrate: level?.bitrate ?? 0,
+			bandwidthEstimate: this.hls?.bandwidthEstimate ?? 0,
+			measuredBitrate: this.lastMeasuredBitrate
+		};
+	}
+
+	private emitStats(options: HlsEngineOptions): void {
+		options.onStats?.(this.getStats());
 	}
 
 	public destroy(): void {

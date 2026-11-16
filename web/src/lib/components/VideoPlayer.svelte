@@ -18,7 +18,13 @@
 	import { api } from '../api/client';
 	import { detectBrowserCapabilities, getCapabilitiesWithBurnInFallback } from '../capabilities';
 	import { sendStopBeacon } from '../video-resilience';
-	import { HlsEngine, isHlsSupported, isNativeHlsSupported, type HlsQualityLevel } from '../player/hls-engine';
+	import {
+		HlsEngine,
+		isHlsSupported,
+		isNativeHlsSupported,
+		type HlsQualityLevel,
+		type HlsStreamStats
+	} from '../player/hls-engine';
 	import { SubtitleManager } from '../player/subtitles.svelte';
 	import { attachmentFontUrls } from '../video-subtitles';
 	import SubtitleSyncControl from './SubtitleSyncControl.svelte';
@@ -75,6 +81,7 @@
 	// Rendition quality levels for HLS
 	let levels = $state<HlsQualityLevel[]>([]);
 	let qualityLevel = $state(-1); // -1 = Auto ABR
+	let streamStats = $state<HlsStreamStats | null>(null);
 
 	// OSD activity state
 	let isUserActive = $state(true);
@@ -178,6 +185,25 @@
 		const mbps = bitsPerSecond / 1_000_000;
 		return mbps >= 1 ? `${mbps.toFixed(1)} Mbps` : `${Math.round(bitsPerSecond / 1000)} kbps`;
 	}
+
+	/** Nominal bitrate of what is actually being delivered to the player. */
+	const streamBitrate = $derived.by(() => {
+		if (streamStats?.levelBitrate) return streamStats.levelBitrate;
+		const planBitrate = info?.plan?.target_bitrate;
+		if (planBitrate) return planBitrate;
+		const videoBitrate = info?.video_stream?.bit_rate ?? 0;
+		const audioBitrate = activeAudioStream()?.bit_rate ?? 0;
+		const probed = videoBitrate + audioBitrate;
+		if (probed > 0) return probed;
+		// Direct play often probes no per-stream bitrate; derive it from the file.
+		const sizeBytes = info?.file?.size_bytes ?? 0;
+		const durationSecs = info?.file?.duration_seconds ?? 0;
+		if (sizeBytes > 0 && durationSecs > 0) return (sizeBytes * 8) / durationSecs;
+		return 0;
+	});
+
+	/** Throughput actually achieved fetching HLS segments. */
+	const streamThroughput = $derived(streamStats?.measuredBitrate ?? 0);
 
 	async function report(state: 'playing' | 'paused' | 'stopped'): Promise<void> {
 		if (!videoEl || destroyed) return;
@@ -576,6 +602,7 @@
 		lastReportedMs = 0;
 		levels = [];
 		qualityLevel = -1;
+		streamStats = null;
 
 		if (hlsEngine) {
 			hlsEngine.destroy();
@@ -621,6 +648,9 @@
 				maxBitrate: response.video_stream?.bit_rate ?? undefined,
 				onLevelLoaded: (loadedLevels) => {
 					levels = loadedLevels;
+				},
+				onStats: (stats) => {
+					streamStats = stats;
 				},
 				onError: (err) => {
 					console.error('[VideoPlayer] HLS Fatal Error:', err);
@@ -1354,6 +1384,11 @@
 			<span class="mode-line mode-headline">{playbackModeDetail()}</span>
 			<span class="mode-line">{videoStreamDetail()}</span>
 			<span class="mode-line">{audioStreamDetail()}</span>
+			<span class="mode-line">
+				{formatBitrate(streamBitrate)}{#if streamThroughput}
+					· net {formatBitrate(streamThroughput)}
+				{/if}
+			</span>
 		</div>
 	{/if}
 </div>
