@@ -1237,7 +1237,9 @@
 				>
 					<RotateCw size={19} />
 				</button>
+			</div>
 
+			<div class="controls-right">
 				<div class="volume-group">
 					<button
 						type="button"
@@ -1265,9 +1267,7 @@
 						aria-label="Volume slider"
 					/>
 				</div>
-			</div>
 
-			<div class="controls-right">
 				<!-- Audio selector -->
 				{#if availableAudio.length > 1}
 					<button
