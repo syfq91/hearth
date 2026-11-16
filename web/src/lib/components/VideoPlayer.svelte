@@ -26,6 +26,8 @@
 	import { attachmentFontUrls } from '../video-subtitles';
 	import SubtitleSyncControl from './SubtitleSyncControl.svelte';
 	import type { PlaybackInfoResponse } from '../api/types';
+	import { session } from '../auth.svelte';
+	import { resolveAutoSubtitle } from '../languages';
 
 	interface Props {
 		itemId: string;
@@ -536,6 +538,24 @@
 		if (audioTrackIndex === null && response.plan?.audio_stream_index != null) {
 			audioTrackIndex = response.plan.audio_stream_index;
 			lastAudioTrack = audioTrackIndex;
+		}
+		if (subtitleChoice === '') {
+			const activeAudio =
+				(response.audio_streams ?? []).find((s) => s.index === audioTrackIndex) ??
+				(response.audio_streams ?? []).find((s) => s.is_default) ??
+				response.audio_streams?.[0];
+			const autoSub = resolveAutoSubtitle({
+				subtitles: response.subtitles,
+				embeddedSubtitles: response.embedded_subtitles,
+				activeAudio,
+				preferredAudioLanguage: session.user?.preferred_audio_language,
+				preferredSubtitleLanguage: session.user?.preferred_subtitle_language,
+				subtitleMode: session.user?.subtitle_mode
+			});
+			if (autoSub) {
+				subtitleChoice = autoSub;
+				lastSubChoice = autoSub;
+			}
 		}
 		sessionId = response.session_id ?? null;
 		if (response.hls_url) {

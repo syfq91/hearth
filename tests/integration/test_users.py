@@ -233,16 +233,31 @@ async def test_user_playback_preferences_audio_language(
     assert pref_res.status_code == 200
     assert pref_res.json()["preferred_audio_language"] is None
     assert pref_res.json()["preferred_subtitle_language"] is None
+    assert pref_res.json()["subtitle_mode"] == "smart"
 
     patch_res = await api_client.patch(
         "/api/v1/users/me/preferences",
-        json={"preferred_audio_language": "ja", "preferred_subtitle_language": "en"},
+        json={
+            "preferred_audio_language": "ja",
+            "preferred_subtitle_language": "en",
+            "subtitle_mode": "always",
+        },
         headers=_bearer(admin),
     )
     assert patch_res.status_code == 200
     assert patch_res.json()["preferred_audio_language"] == "ja"
+    assert patch_res.json()["preferred_subtitle_language"] == "en"
+    assert patch_res.json()["subtitle_mode"] == "always"
 
     me = await api_client.get("/api/v1/auth/me", headers=_bearer(admin))
     assert me.status_code == 200
     assert me.json()["preferred_audio_language"] == "ja"
     assert me.json()["preferred_subtitle_language"] == "en"
+    assert me.json()["subtitle_mode"] == "always"
+
+    bad_mode = await api_client.patch(
+        "/api/v1/users/me/preferences",
+        json={"subtitle_mode": "invalid_mode"},
+        headers=_bearer(admin),
+    )
+    assert bad_mode.status_code == 422

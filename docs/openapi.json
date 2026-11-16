@@ -7451,6 +7451,16 @@
             "title": "Role",
             "type": "string"
           },
+          "subtitle_mode": {
+            "default": "smart",
+            "enum": [
+              "always",
+              "never",
+              "smart"
+            ],
+            "title": "Subtitle Mode",
+            "type": "string"
+          },
           "username": {
             "maxLength": 64,
             "minLength": 1,
@@ -7544,6 +7554,11 @@
             "title": "Role",
             "type": "string"
           },
+          "subtitle_mode": {
+            "default": "smart",
+            "title": "Subtitle Mode",
+            "type": "string"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -7592,6 +7607,11 @@
               }
             ],
             "title": "Preferred Subtitle Language"
+          },
+          "subtitle_mode": {
+            "default": "smart",
+            "title": "Subtitle Mode",
+            "type": "string"
           }
         },
         "title": "UserPreferencesResponse",
@@ -7622,6 +7642,22 @@
               }
             ],
             "title": "Preferred Subtitle Language"
+          },
+          "subtitle_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "always",
+                  "never",
+                  "smart"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle Mode"
           }
         },
         "title": "UserPreferencesUpdate",
@@ -7692,6 +7728,11 @@
           },
           "role": {
             "title": "Role",
+            "type": "string"
+          },
+          "subtitle_mode": {
+            "default": "smart",
+            "title": "Subtitle Mode",
             "type": "string"
           },
           "username": {
@@ -7812,6 +7853,22 @@
               }
             ],
             "title": "Role"
+          },
+          "subtitle_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "always",
+                  "never",
+                  "smart"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle Mode"
           },
           "username": {
             "anyOf": [

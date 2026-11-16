@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findMatchingSubtitleTrack, matchesLanguage } from './languages.ts';
+import { findMatchingSubtitleTrack, matchesLanguage, resolveAutoSubtitle } from './languages.ts';
 
 test('matchesLanguage matches exact and 2-to-3 letter codes', () => {
 	assert.equal(matchesLanguage('en', 'Audio', 'en'), true);
@@ -29,4 +29,65 @@ test('findMatchingSubtitleTrack finds external or embedded match', () => {
 	assert.equal(findMatchingSubtitleTrack(subs, emb, 'ja'), 'emb:2');
 	assert.equal(findMatchingSubtitleTrack(subs, emb, 'de'), null);
 	assert.equal(findMatchingSubtitleTrack(subs, emb, undefined), null);
+});
+
+test('resolveAutoSubtitle respects never, always, and smart modes', () => {
+	const subs = [{ id: 'sub1', name: 'English', language: 'en' }];
+	const emb = [{ index: 2, title: 'Japanese', language: 'ja' }];
+
+	// never mode
+	assert.equal(
+		resolveAutoSubtitle({
+			subtitles: subs,
+			embeddedSubtitles: emb,
+			subtitleMode: 'never',
+			preferredSubtitleLanguage: 'en'
+		}),
+		null
+	);
+
+	// always mode
+	assert.equal(
+		resolveAutoSubtitle({
+			subtitles: subs,
+			embeddedSubtitles: emb,
+			subtitleMode: 'always',
+			preferredSubtitleLanguage: 'ja'
+		}),
+		'emb:2'
+	);
+	assert.equal(
+		resolveAutoSubtitle({
+			subtitles: subs,
+			embeddedSubtitles: emb,
+			subtitleMode: 'always'
+		}),
+		'ext:sub1'
+	);
+
+	// smart mode: same language -> no subtitle
+	assert.equal(
+		resolveAutoSubtitle({
+			subtitles: subs,
+			embeddedSubtitles: emb,
+			activeAudio: { language: 'en', title: 'English' },
+			preferredAudioLanguage: 'en',
+			preferredSubtitleLanguage: 'en',
+			subtitleMode: 'smart'
+		}),
+		null
+	);
+
+	// smart mode: foreign audio -> auto show matching subtitle
+	assert.equal(
+		resolveAutoSubtitle({
+			subtitles: subs,
+			embeddedSubtitles: emb,
+			activeAudio: { language: 'ja', title: 'Japanese' },
+			preferredAudioLanguage: 'en',
+			preferredSubtitleLanguage: 'en',
+			subtitleMode: 'smart'
+		}),
+		'ext:sub1'
+	);
 });

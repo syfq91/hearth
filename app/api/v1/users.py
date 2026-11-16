@@ -21,6 +21,7 @@ from app.services.transcode.session import get_session_manager
 router = APIRouter(prefix="/users", tags=["users"])
 
 Role = Literal["admin", "user"]
+SubtitleMode = Literal["always", "never", "smart"]
 
 
 class UserCreate(BaseModel):
@@ -32,6 +33,7 @@ class UserCreate(BaseModel):
     max_rating: str | None = Field(default=None, max_length=16)
     preferred_audio_language: str | None = Field(default=None, max_length=16)
     preferred_subtitle_language: str | None = Field(default=None, max_length=16)
+    subtitle_mode: SubtitleMode = "smart"
     library_ids: list[str] = Field(default_factory=list)
 
 
@@ -44,6 +46,7 @@ class UserUpdate(BaseModel):
     max_rating: str | None = Field(default=None, max_length=16)
     preferred_audio_language: str | None = Field(default=None, max_length=16)
     preferred_subtitle_language: str | None = Field(default=None, max_length=16)
+    subtitle_mode: SubtitleMode | None = None
     library_ids: list[str] | None = None
 
 
@@ -62,11 +65,13 @@ class ListenBrainzTokenRequest(BaseModel):
 class UserPreferencesResponse(BaseModel):
     preferred_audio_language: str | None = None
     preferred_subtitle_language: str | None = None
+    subtitle_mode: str = "smart"
 
 
 class UserPreferencesUpdate(BaseModel):
     preferred_audio_language: str | None = Field(default=None, max_length=16)
     preferred_subtitle_language: str | None = Field(default=None, max_length=16)
+    subtitle_mode: SubtitleMode | None = None
 
 
 class UserDetail(BaseModel):
@@ -79,6 +84,7 @@ class UserDetail(BaseModel):
     max_rating: str | None
     preferred_audio_language: str | None = None
     preferred_subtitle_language: str | None = None
+    subtitle_mode: str = "smart"
     created_at: datetime
     updated_at: datetime
     library_ids: list[str]
@@ -105,6 +111,7 @@ async def _detail(session: AsyncSession, user: User) -> UserDetail:
         max_rating=user.max_rating,
         preferred_audio_language=user.preferred_audio_language,
         preferred_subtitle_language=user.preferred_subtitle_language,
+        subtitle_mode=user.subtitle_mode,
         created_at=user.created_at,
         updated_at=user.updated_at,
         library_ids=await _grants_by_user(session, user.id),
@@ -189,6 +196,7 @@ async def create_user(
         max_rating=payload.max_rating,
         preferred_audio_language=payload.preferred_audio_language,
         preferred_subtitle_language=payload.preferred_subtitle_language,
+        subtitle_mode=payload.subtitle_mode,
     )
     session.add(user)
     try:
@@ -254,6 +262,7 @@ async def get_my_preferences(user: RequireUser) -> UserPreferencesResponse:
     return UserPreferencesResponse(
         preferred_audio_language=user.preferred_audio_language,
         preferred_subtitle_language=user.preferred_subtitle_language,
+        subtitle_mode=user.subtitle_mode,
     )
 
 
@@ -278,6 +287,8 @@ async def update_my_preferences(
             else None
         )
         db_user.preferred_subtitle_language = sub_val or None
+    if payload.subtitle_mode is not None:
+        db_user.subtitle_mode = payload.subtitle_mode
     await session.commit()
     await session.refresh(db_user)
     return UserResponse.model_validate(db_user)
@@ -356,6 +367,8 @@ async def update_user(
         user.preferred_audio_language = payload.preferred_audio_language
     if "preferred_subtitle_language" in changes:
         user.preferred_subtitle_language = payload.preferred_subtitle_language
+    if payload.subtitle_mode is not None:
+        user.subtitle_mode = payload.subtitle_mode
 
     if payload.library_ids is not None:
         library_ids = await _validate_library_ids(session, payload.library_ids)

@@ -8,6 +8,7 @@
 	/* ---- Playback preferences ---- */
 	let preferredAudio = $state('');
 	let preferredSubtitle = $state('');
+	let subtitleMode = $state<'always' | 'never' | 'smart'>('smart');
 	let prefBusy = $state(false);
 	let prefMessage = $state<string | null>(null);
 	let prefError = $state<string | null>(null);
@@ -16,6 +17,7 @@
 		if (user) {
 			preferredAudio = user.preferred_audio_language ?? '';
 			preferredSubtitle = user.preferred_subtitle_language ?? '';
+			subtitleMode = (user.subtitle_mode as 'always' | 'never' | 'smart') ?? 'smart';
 		}
 	});
 
@@ -28,7 +30,8 @@
 			await api.patch('/users/me/preferences', {
 				body: {
 					preferred_audio_language: preferredAudio || null,
-					preferred_subtitle_language: preferredSubtitle || null
+					preferred_subtitle_language: preferredSubtitle || null,
+					subtitle_mode: subtitleMode
 				}
 			});
 			await reloadUser();
@@ -147,6 +150,14 @@
 					{#each COMMON_LANGUAGES as lang}
 						<option value={lang.code}>{lang.label} ({lang.code})</option>
 					{/each}
+				</select>
+			</label>
+			<label>
+				<span>Subtitle display</span>
+				<select bind:value={subtitleMode}>
+					<option value="smart">Smart (when audio is foreign)</option>
+					<option value="always">Always show</option>
+					<option value="never">Never show</option>
 				</select>
 			</label>
 			<button type="submit" disabled={prefBusy}>

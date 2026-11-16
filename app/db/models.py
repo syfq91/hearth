@@ -26,7 +26,10 @@ class User(TimestampMixin, Base):
     """A local account. Usernames are stored lowercase and compared exactly."""
 
     __tablename__ = "users"
-    __table_args__ = (CheckConstraint("role IN ('admin', 'user')", name="role"),)
+    __table_args__ = (
+        CheckConstraint("role IN ('admin', 'user')", name="role"),
+        CheckConstraint("subtitle_mode IN ('always', 'never', 'smart')", name="subtitle_mode"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
@@ -43,6 +46,7 @@ class User(TimestampMixin, Base):
     preferred_subtitle_language: Mapped[str | None] = mapped_column(
         String(16), default=None, nullable=True
     )
+    subtitle_mode: Mapped[str] = mapped_column(String(16), default="smart", nullable=False)
     # Incremented on password reset or forced logout so old access tokens die.
     token_version: Mapped[int] = mapped_column(Integer, default=0)
     last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), default=None)

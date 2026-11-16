@@ -92,3 +92,54 @@ export function findMatchingSubtitleTrack(
 	}
 	return null;
 }
+
+export interface AutoSubtitleOptions {
+	subtitles?: Array<{ id: string; name?: string | null; language?: string | null }> | null;
+	embeddedSubtitles?: Array<{ index: number; title?: string | null; language?: string | null }> | null;
+	activeAudio?: { language?: string | null; title?: string | null } | null;
+	preferredAudioLanguage?: string | null;
+	preferredSubtitleLanguage?: string | null;
+	subtitleMode?: 'always' | 'never' | 'smart' | string | null;
+}
+
+export function resolveAutoSubtitle(opts: AutoSubtitleOptions): string | null {
+	const mode = opts.subtitleMode ?? 'smart';
+	if (mode === 'never') return null;
+
+	const allSubs = opts.subtitles ?? [];
+	const allEmb = opts.embeddedSubtitles ?? [];
+	if (allSubs.length === 0 && allEmb.length === 0) return null;
+
+	// Check forced track first
+	const forcedExternal = allSubs.find((t) => (t.name ?? '').toLowerCase().includes('forced'));
+	if (forcedExternal) return `ext:${forcedExternal.id}`;
+	const forcedEmbedded = allEmb.find((s) => (s.title ?? '').toLowerCase().includes('forced'));
+	if (forcedEmbedded) return `emb:${forcedEmbedded.index}`;
+
+	if (mode === 'always') {
+		const match = findMatchingSubtitleTrack(allSubs, allEmb, opts.preferredSubtitleLanguage);
+		if (match) return match;
+		if (allSubs.length > 0) return `ext:${allSubs[0].id}`;
+		if (allEmb.length > 0) return `emb:${allEmb[0].index}`;
+		return null;
+	}
+
+	if (mode === 'smart' && opts.preferredAudioLanguage) {
+		const matches = matchesLanguage(
+			opts.activeAudio?.language,
+			opts.activeAudio?.title,
+			opts.preferredAudioLanguage
+		);
+		if (!matches) {
+			const match = findMatchingSubtitleTrack(
+				allSubs,
+				allEmb,
+				opts.preferredSubtitleLanguage ?? opts.preferredAudioLanguage
+			);
+			if (match) return match;
+			if (allSubs.length > 0) return `ext:${allSubs[0].id}`;
+			if (allEmb.length > 0) return `emb:${allEmb[0].index}`;
+		}
+	}
+	return null;
+}

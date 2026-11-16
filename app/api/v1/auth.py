@@ -75,6 +75,7 @@ class UserResponse(BaseModel):
     max_rating: str | None
     preferred_audio_language: str | None = None
     preferred_subtitle_language: str | None = None
+    subtitle_mode: str = "smart"
     created_at: datetime
 
 

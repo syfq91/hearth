@@ -5164,6 +5164,12 @@ export interface components {
              * @enum {string}
              */
             role: "admin" | "user";
+            /**
+             * Subtitle Mode
+             * @default smart
+             * @enum {string}
+             */
+            subtitle_mode: "always" | "never" | "smart";
             /** Username */
             username: string;
         };
@@ -5198,6 +5204,11 @@ export interface components {
             /** Role */
             role: string;
             /**
+             * Subtitle Mode
+             * @default smart
+             */
+            subtitle_mode: string;
+            /**
              * Updated At
              * Format: date-time
              */
@@ -5211,6 +5222,11 @@ export interface components {
             preferred_audio_language?: string | null;
             /** Preferred Subtitle Language */
             preferred_subtitle_language?: string | null;
+            /**
+             * Subtitle Mode
+             * @default smart
+             */
+            subtitle_mode: string;
         };
         /** UserPreferencesUpdate */
         UserPreferencesUpdate: {
@@ -5218,6 +5234,8 @@ export interface components {
             preferred_audio_language?: string | null;
             /** Preferred Subtitle Language */
             preferred_subtitle_language?: string | null;
+            /** Subtitle Mode */
+            subtitle_mode?: ("always" | "never" | "smart") | null;
         };
         /** UserResponse */
         UserResponse: {
@@ -5242,6 +5260,11 @@ export interface components {
             preferred_subtitle_language?: string | null;
             /** Role */
             role: string;
+            /**
+             * Subtitle Mode
+             * @default smart
+             */
+            subtitle_mode: string;
             /** Username */
             username: string;
         };
@@ -5263,6 +5286,8 @@ export interface components {
             preferred_subtitle_language?: string | null;
             /** Role */
             role?: ("admin" | "user") | null;
+            /** Subtitle Mode */
+            subtitle_mode?: ("always" | "never" | "smart") | null;
             /** Username */
             username?: string | null;
         };
