@@ -9,9 +9,9 @@ This plan is written to be executed by an autonomous coding agent working in a g
 - Work one phase at a time. Do not start a phase until the previous phase's acceptance criteria all pass. Never skip ahead to "nice to have" features.
 - Work in small vertical slices. Each task should end with code, tests and a commit. Commit messages use Conventional Commits (`feat:`, `fix:`, `test:`, `chore:`).
 - Tests first for logic, tests alongside for I/O. Pure logic (playback decision engine, filename parsing, ffmpeg argument building) is written test-first. Everything else gets tests in the same commit.
-- Keep a living log. Maintain `docs/planning/PROGRESS.md` (phase, task, status, open questions) and `docs/decisions/DECISIONS.md` (one short entry per non-obvious decision: context, choice, alternatives). Update both at the end of every task.
-- Never invent hardware behavior. VAAPI results must come from running the real probe. If no GPU is available in the environment, build against the interface, use the software fallback, and mark the hardware acceptance items as "needs manual verification" in `PROGRESS.md`. Do not claim they pass.
-- Ask or record, do not guess, on ambiguity. If a requirement is unclear, choose the simplest option consistent with this plan, record it in `DECISIONS.md`, and continue.
+- Keep a living log. Maintain `docs/planning/progress.md` (phase, task, status, open questions) and `docs/decisions/decisions.md` (one short entry per non-obvious decision: context, choice, alternatives). Update both at the end of every task.
+- Never invent hardware behavior. VAAPI results must come from running the real probe. If no GPU is available in the environment, build against the interface, use the software fallback, and mark the hardware acceptance items as "needs manual verification" in `progress.md`. Do not claim they pass.
+- Ask or record, do not guess, on ambiguity. If a requirement is unclear, choose the simplest option consistent with this plan, record it in `decisions.md`, and continue.
 - Security by default. No secrets in the repo, media mounted read-only, no shell string interpolation for subprocesses (always argument lists), all path inputs validated against library roots.
 - Definition of done for every task: lint clean (`ruff`), type check clean (`mypy`), tests green (`pytest`), migrations included if the schema changed, docs updated if behavior changed.
 
@@ -61,7 +61,7 @@ hearth/
     unit/ integration/ e2e/
     fixtures/               # generated tiny media, never real copyrighted media
   docker/                   # Dockerfile, compose.yaml, compose.dev.yaml, entrypoint.sh
-  docs/                     # PROGRESS.md, DECISIONS.md, ARCHITECTURE.md, API.md
+  docs/                     # progress.md, decisions.md, architecture.md, api.md
   scripts/                  # dev helpers, fixture generators
   pyproject.toml
 ```
@@ -98,7 +98,7 @@ hearth/
 - [ ] Add the Typer CLI with `api`, `worker`, `migrate` and `create-admin` commands (stubs allowed for the last two).
 - [ ] Write the Dockerfile (multi-stage, non-root user, `tini` as init, ffmpeg plus VAAPI drivers `intel-media-va-driver-non-free`, `vainfo`, `libva-drm2`). Write `compose.yaml` with the `/dev/dri` device, `group_add` render GID, read-only media mounts, tmpfs for `/transcode`, and `/config` volume.
 - [ ] Add GitHub Actions workflow.
-- [ ] Write `docs/development/ARCHITECTURE.md` (a copy of the section 2 layout plus a module diagram) and the first `PROGRESS.md`.
+- [ ] Write `docs/development/architecture.md` (a copy of the section 2 layout plus a module diagram) and the first `progress.md`.
 
 **Deliverables:** green CI, `docker compose up` serves `/api/v1/health`.
 
@@ -246,7 +246,7 @@ hearth/
 ### Tasks
 
 - [ ] Models: `Author`, `Book`, `BookSeries`, with `MediaFile` per format. Formats: EPUB, PDF, CBZ, CBR (via `rarfile` or `unrar`, optional), and MOBI/AZW3 as download-only (optional conversion via Calibre CLI is out of scope for the initial build).
-- [ ] Readers: EPUB metadata from OPF using `ebooklib` or direct zip and XML parsing, cover extraction, series metadata (`calibre:series`), PDF metadata via `pypdf` with first-page cover rendering (`pdfium` or `pymupdf`, record licensing choice in `DECISIONS.md`), and comic metadata from `ComicInfo.xml` plus the first image as cover.
+- [ ] Readers: EPUB metadata from OPF using `ebooklib` or direct zip and XML parsing, cover extraction, series metadata (`calibre:series`), PDF metadata via `pypdf` with first-page cover rendering (`pdfium` or `pymupdf`, record licensing choice in `decisions.md`), and comic metadata from `ComicInfo.xml` plus the first image as cover.
 - [ ] Provider: Open Library (search by ISBN or title and author) with Google Books as a fallback. Local OPF and `cover.jpg` always win.
 - [ ] Native API: books, authors, series, search, download (`/api/v1/books/{id}/file/{format}`), and per-book reading progress (`locator` string, percentage, device name, timestamp, last write wins).
 - [ ] Comic page serving: `GET /api/v1/books/{id}/pages/{n}` extracting the nth image from CBZ/CBR with caching and resizing, so web readers do not download whole archives.
@@ -287,7 +287,7 @@ hearth/
 ### Acceptance criteria
 
 - [ ] Decision engine matrix passes. Builder snapshot tests pass for every pipeline.
-- [ ] On a machine with VAAPI: a 4K HEVC HDR fixture transcodes to 1080p H.264 SDR at faster than 1.0x speed, and `intel_gpu_top` (or equivalent) shows GPU use. Record results in `docs/development/HARDWARE_TESTS.md`.
+- [ ] On a machine with VAAPI: a 4K HEVC HDR fixture transcodes to 1080p H.264 SDR at faster than 1.0x speed, and `intel_gpu_top` (or equivalent) shows GPU use. Record results in `docs/development/hardware-tests.md`.
 - [ ] On a machine without VAAPI: the same file plays through the software path.
 - [ ] Seeking mid-stream works, killing the browser tab ends ffmpeg within the idle timeout, and no orphan ffmpeg processes remain after 20 start/stop cycles (automated test).
 - [ ] Exceeding the concurrency cap returns a clean error, not a hang.
@@ -310,7 +310,7 @@ hearth/
 - [ ] Real-time events: extend SSE with scan progress, library updated, and now playing (admin view).
 - [ ] API hardening pass: consistent pagination, field selection, ETags on item detail, input validation limits, CORS configuration, request size limits, and OpenAPI examples.
 - [ ] Generate the typed API client artifact (`openapi-typescript` or `openapi-python-client`) as a build step, ready for Phase 9.
-- [ ] Write `docs/development/API.md` with authentication flows and the playback-info contract.
+- [ ] Write `docs/development/api.md` with authentication flows and the playback-info contract.
 
 ### Acceptance criteria
 
@@ -326,7 +326,7 @@ hearth/
 
 ### Step 1: Decision (the agent produces a recommendation, the human decides).
 
-Write `docs/development/FRONTEND_DECISION.md` comparing at least three options (for example React with Vite, SvelteKit as an SPA, Vue with Vite) against these criteria: HLS playback support, ability to handle D-pad and remote navigation on TV browsers, ecosystem for EPUB and PDF readers, bundle size, the typed client generation story, and long-term maintainability for a small project. End with a recommendation and stop and wait for approval before building.
+Write `docs/development/frontend-decision.md` comparing at least three options (for example React with Vite, SvelteKit as an SPA, Vue with Vite) against these criteria: HLS playback support, ability to handle D-pad and remote navigation on TV browsers, ecosystem for EPUB and PDF readers, bundle size, the typed client generation story, and long-term maintainability for a small project. End with a recommendation and stop and wait for approval before building.
 
 ### Step 2: Build (after approval).
 
@@ -356,12 +356,12 @@ Write `docs/development/FRONTEND_DECISION.md` comparing at least three options (
 - [ ] Observability: optional Prometheus `/metrics` endpoint (off by default), structured logs, an admin log viewer, and clear error messages when ffmpeg or VAAPI fails.
 - [ ] Documentation: README quick start, compose examples for Intel, a hardware transcoding guide (finding the render GID, verifying with `vainfo`, common errors), reverse proxy examples (Caddy and Traefik with TLS), backup and upgrade guide, and a troubleshooting FAQ.
 - [ ] Release engineering: semantic versioning, multi-arch image build (amd64 at minimum), published image with a tagged release, changelog, and a migration compatibility test from the previous release.
-- [ ] Final acceptance run: fresh install on the real server, a real library of each media type, and a full manual checklist stored in `docs/development/RELEASE_CHECKLIST.md`.
+- [ ] Final acceptance run: fresh install on the real server, a real library of each media type, and a full manual checklist stored in `docs/development/release-checklist.md`.
 
 ### Acceptance criteria
 
-- [ ] Every item in `RELEASE_CHECKLIST.md` is checked off, with any hardware-dependent items verified by a human.
-- [ ] No open high-severity issues in `PROGRESS.md`.
+- [ ] Every item in `release-checklist.md` is checked off, with any hardware-dependent items verified by a human.
+- [ ] No open high-severity issues in `progress.md`.
 
 ---
 
@@ -413,10 +413,10 @@ ffmpeg -init_hw_device vaapi=va:/dev/dri/renderD128 -f lavfi -i testsrc=d=1:s=12
 
 | Risk | Mitigation |
 | --- | --- |
-| VAAPI behavior differs per GPU generation | Probe with real test encodes, always keep a software fallback, record results per GPU in `HARDWARE_TESTS.md` |
+| VAAPI behavior differs per GPU generation | Probe with real test encodes, always keep a software fallback, record results per GPU in `hardware-tests.md` |
 | Bad metadata matches frustrate users | Local sidecar override, confidence thresholds, manual match tools from Phase 2 |
 | Client codec diversity | Table-driven decision engine, conservative default profile, debug panel in the test player |
 | SQLite write contention | Short transactions, WAL, single-writer pattern for scans |
 | Network mounts are slow or flaky | Timeouts, concurrency caps, mass-deletion safeguard, scheduled rescans in addition to inotify |
 | Scope creep across four media types | Strict phase gates; native API keeps all media types focused and consistent |
-| Licensing (PDF rendering libraries, provider terms) | Record each dependency choice in `DECISIONS.md` and include attribution in the About endpoint |
+| Licensing (PDF rendering libraries, provider terms) | Record each dependency choice in `decisions.md` and include attribution in the About endpoint |

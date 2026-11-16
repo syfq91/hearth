@@ -101,10 +101,10 @@ This checklist documents the full manual and automated verification required bef
 - [x] **Disaster Restore**: Backup restoration into fresh container restores catalog and user states identically.
 - [x] **Documentation**:
   - [x] Quick start in `README.md`.
-  - [x] `docs/guides/HARDWARE_TRANSCODING.md`.
-  - [x] `docs/guides/REVERSE_PROXY.md` with Caddy, Traefik, and Nginx.
-  - [x] `docs/guides/BACKUP_AND_UPGRADE.md`.
-  - [x] `docs/guides/TROUBLESHOOTING.md`.
+  - [x] `docs/guides/hardware-transcoding.md`.
+  - [x] `docs/guides/reverse-proxy.md` with Caddy, Traefik, and Nginx.
+  - [x] `docs/guides/backup-and-upgrade.md`.
+  - [x] `docs/guides/troubleshooting.md`.
 
 ---
 
@@ -122,6 +122,6 @@ This checklist documents the full manual and automated verification required bef
 
 - **Automated Verification:** 100% of integration, resilience, security, migration, and unit tests passing.
 - **Physical Hardware Items:**
-  - Intel QuickSync VA-API: Verified on host `/dev/dri/renderD128` (documented in `docs/development/HARDWARE_TESTS.md`).
+  - Intel QuickSync VA-API: Verified on host `/dev/dri/renderD128` (documented in `docs/development/hardware-tests.md`).
 - **High-Severity Issues:** None open.
 - **Conclusion:** Ready for `1.0.0` release.

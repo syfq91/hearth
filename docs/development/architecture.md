@@ -77,7 +77,7 @@ plugins/               built-in standalone plugins (TMDB, MusicBrainz, Open Libr
 tests/
   unit/ integration/ e2e/ fixtures/
 docker/                Dockerfile, compose.yaml
-docs/                  PROGRESS.md, DECISIONS.md, ARCHITECTURE.md, openapi.json
+docs/                  progress.md, decisions.md, architecture.md, openapi.json
 scripts/               dev helpers, OpenAPI export
 ```
 
@@ -205,4 +205,4 @@ themselves never create or migrate it.
   Python 3.12, then builds the image and asserts the CPU-only health contract
   and non-root identity.
 - Hardware verification is manual on the real server; results are recorded in
-  `docs/planning/PROGRESS.md`.
+  `docs/planning/progress.md`.

@@ -7,7 +7,7 @@
 
 Hearth's web client currently implements video playback in `web/src/lib/components/VideoPlayer.svelte` via `video.js` (and Video.js HTTP Streaming / VHS) alongside a rudimentary JASSUB integration for external ASS subtitles.
 
-Following an architectural review of the Jellyfin Web Video Player specification ([Jellyfin Video Player Implementation Guide](../reference/JELLYFIN_VIDEO_PLAYER_IMPLEMENTATION_GUIDE.md)), several critical improvements have been decided:
+Following an architectural review of the Jellyfin Web Video Player specification ([Jellyfin Video Player Implementation Guide](../reference/jellyfin-video-player-implementation-guide.md)), several critical improvements have been decided:
 1. **Migration from Video.js to Native `<video>` + `hls.js`**: Replace the heavyweight Video.js dependency with a lean, reactive architecture: native `<HTMLVideoElement>` for DirectPlay/Safari and `hls.js` for HLS streams. Svelte 5 runes (`$state`, `$derived`, `$effect`) and custom accessible UI components will directly manage the player OSD, volume, timeline, spatial D-pad navigation, and controls.
 2. **On-the-Fly Font Attachment Extraction with Disk Cache**: MKV container font attachments (`application/x-truetype-font`, `font/otf`, `font/ttf`, `font/woff`, `font/woff2`) will be extracted on demand via FFmpeg into a dedicated cache directory (`HEARTH_TRANSCODE_DIR/fonts/{file_id}_{idx}.{ext}`) and served to JASSUB so styled typography renders accurately.
 3. **Structured Subtitle Capability Negotiation**: Extend `detectBrowserCapabilities()` to supply explicit `subtitle_profiles` (`vtt`, `ass`, `ssa`) with `method: "external"` to `/api/v1/items/{id}/playback-info`.

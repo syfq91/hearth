@@ -1,7 +1,7 @@
 # Hearth web UI
 
 The first usable Hearth frontend: a **SvelteKit single-page app** (Svelte 5,
-TypeScript strict, Vite) selected in `docs/development/FRONTEND_DECISION.md` and built
+TypeScript strict, Vite) selected in `docs/development/frontend-decision.md` and built
 during Phase 9.
 
 ## How it fits together
@@ -19,7 +19,7 @@ during Phase 9.
   an SPA fallback (`app/core/spa.py`) when the directory exists, and the
   Docker image always contains it (`docker/Dockerfile`, `web` stage).
 - **Build target**: `es2019` so the bundle parses on 2020+ TV browsers
-  (Chromium M69+; see the engine table in `docs/development/FRONTEND_DECISION.md` §4.3).
+  (Chromium M69+; see the engine table in `docs/development/frontend-decision.md` §4.3).
 
 ## Scripts
 

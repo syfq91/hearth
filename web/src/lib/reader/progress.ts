@@ -1,7 +1,7 @@
 /**
  * Reading-progress sync for the EPUB/PDF/comic readers.
  *
- * Contract (docs/development/READER_INTEGRATION.md §5): debounce `PUT /books/{id}/progress`
+ * Contract (docs/development/reader-integration.md §5): debounce `PUT /books/{id}/progress`
  * by 1500ms, and flush immediately on `visibilitychange`/`pagehide` using a
  * keepalive request so a closed tab still lands its last locator.
  */

@@ -9,13 +9,13 @@ index is `docs/README.md`.
 
 Read these before making non-trivial changes:
 
-- `docs/development/ARCHITECTURE.md` — runtime topology, module layout, request lifecycle.
-- `docs/development/DEVELOPMENT.md` — the canonical local setup and command list.
-- `docs/development/API.md` — HTTP conventions, auth, playback contract.
-- `docs/decisions/DECISIONS.md` — ADRs; check before re-litigating a design choice.
-- `docs/planning/PROGRESS.md` — phase history, not a current TODO list.
-- `docs/development/PERFORMANCE_AUDIT.md` — performance benchmarks and optimization log.
-- `docs/planning/PLAN.md` — phased implementation plan.
+- `docs/development/architecture.md` — runtime topology, module layout, request lifecycle.
+- `docs/development/development.md` — the canonical local setup and command list.
+- `docs/development/api.md` — HTTP conventions, auth, playback contract.
+- `docs/decisions/decisions.md` — ADRs; check before re-litigating a design choice.
+- `docs/planning/progress.md` — phase history, not a current TODO list.
+- `docs/development/performance-audit.md` — performance benchmarks and optimization log.
+- `docs/planning/plan.md` — phased implementation plan.
 
 ## Stack
 
@@ -129,7 +129,7 @@ build), `container` (image smoke/health/non-root/backup-restore), and `e2e`
    `docs/openapi.json` and `packages/client/src/schema.d.ts`.
 5. If the web app changed: `cd web && npm run check && npm run build`.
 6. If you changed a user-visible behavior or contract, update the relevant
-   docs (`docs/development/API.md`, `docs/guides/CONFIGURATION.md`, `CHANGELOG.md`, ADRs).
+   docs (`docs/development/api.md`, `docs/guides/configuration.md`, `CHANGELOG.md`, ADRs).
 
 A change is not complete while a CI check it affects is red.
 
@@ -225,7 +225,7 @@ tools/testplayer/     standalone developer player served at /testplayer/
 
 - Add `HEARTH_*` settings as fields on `Settings` in `app/core/config.py`.
   The prefix is applied automatically.
-- Document operator-facing variables in `docs/guides/CONFIGURATION.md`, and keep
+- Document operator-facing variables in `docs/guides/configuration.md`, and keep
   `.env.example`/Compose examples consistent where relevant.
 - Settings are cached per process. Tests pass an explicit `Settings` to
   `create_app`; do not call `get_settings()` in test paths that need isolation.
@@ -234,7 +234,7 @@ tools/testplayer/     standalone developer player served at /testplayer/
 
 - Always use `asyncio.create_subprocess_exec` with an argument list. Never use a
   shell or string interpolation (see the security boundaries in
-  `docs/development/ARCHITECTURE.md`).
+  `docs/development/architecture.md`).
 - Use `asyncio.to_thread` for blocking filesystem or CPU work.
 - Resolve and validate paths before opening files; reject traversal and paths
   outside the registered library root.
@@ -306,13 +306,13 @@ tools/testplayer/     standalone developer player served at /testplayer/
 
 - User-facing overview stays in `README.md`; developer and operator detail goes
   in `docs/`.
-- Any change to HTTP behavior updates `docs/development/API.md`; any new/changed setting
-  updates `docs/guides/CONFIGURATION.md`.
+- Any change to HTTP behavior updates `docs/development/api.md`; any new/changed setting
+  updates `docs/guides/configuration.md`.
 - Significant design or security decisions get an ADR appended to
-  `docs/decisions/DECISIONS.md` using the existing format: title, Date, Status, Context,
+  `docs/decisions/decisions.md` using the existing format: title, Date, Status, Context,
   Decision, Alternatives Considered, with the next sequential number.
 - Record notable changes in `CHANGELOG.md` (Keep a Changelog, SemVer).
-- `docs/development/FRONTEND_DECISION.md` records the SvelteKit choice; do not reopen it
+- `docs/development/frontend-decision.md` records the SvelteKit choice; do not reopen it
   without an explicit product decision.
 
 ## Git and pull requests

@@ -10,12 +10,12 @@ Day-to-day deployment and maintenance.
 
 | Document | Contents |
 | --- | --- |
-| [Configuration](guides/CONFIGURATION.md) | Environment variables, secrets, data locations |
-| [Hardware Transcoding](guides/HARDWARE_TRANSCODING.md) | GPU setup, VAAPI drivers, render GIDs |
-| [Backup and Upgrade](guides/BACKUP_AND_UPGRADE.md) | Backups, restores, upgrades, rollback |
-| [Reverse Proxy](guides/REVERSE_PROXY.md) | TLS and streaming through Caddy, Traefik, Nginx |
-| [Troubleshooting](guides/TROUBLESHOOTING.md) | Playback, scanning, permissions, database locks |
-| [Plugins](guides/PLUGINS.md) | Plugin system overview and developer guide |
+| [Configuration](guides/configuration.md) | Environment variables, secrets, data locations |
+| [Hardware Transcoding](guides/hardware-transcoding.md) | GPU setup, VAAPI drivers, render GIDs |
+| [Backup and Upgrade](guides/backup-and-upgrade.md) | Backups, restores, upgrades, rollback |
+| [Reverse Proxy](guides/reverse-proxy.md) | TLS and streaming through Caddy, Traefik, Nginx |
+| [Troubleshooting](guides/troubleshooting.md) | Playback, scanning, permissions, database locks |
+| [Plugins](guides/plugins.md) | Plugin system overview and developer guide |
 
 ## Development
 
@@ -23,14 +23,14 @@ Architecture, local workflows, and the HTTP contract.
 
 | Document | Contents |
 | --- | --- |
-| [Development](development/DEVELOPMENT.md) | Local setup, tests, generated artifacts |
-| [Architecture](development/ARCHITECTURE.md) | Runtime topology, module layout, request lifecycle |
-| [API Reference](development/API.md) | REST API, authentication, playback contract, examples |
-| [Performance Audit](development/PERFORMANCE_AUDIT.md) | Benchmarks and optimization log |
-| [Frontend Decision](development/FRONTEND_DECISION.md) | SvelteKit selection and frontend constraints |
-| [Reader Integration](development/READER_INTEGRATION.md) | EPUB, PDF, and comic reader contract |
-| [Hardware Tests](development/HARDWARE_TESTS.md) | VAAPI benchmark results |
-| [Release Checklist](development/RELEASE_CHECKLIST.md) | Release acceptance checklist |
+| [Development](development/development.md) | Local setup, tests, generated artifacts |
+| [Architecture](development/architecture.md) | Runtime topology, module layout, request lifecycle |
+| [API Reference](development/api.md) | REST API, authentication, playback contract, examples |
+| [Performance Audit](development/performance-audit.md) | Benchmarks and optimization log |
+| [Frontend Decision](development/frontend-decision.md) | SvelteKit selection and frontend constraints |
+| [Reader Integration](development/reader-integration.md) | EPUB, PDF, and comic reader contract |
+| [Hardware Tests](development/hardware-tests.md) | VAAPI benchmark results |
+| [Release Checklist](development/release-checklist.md) | Release acceptance checklist |
 
 ## Planning and history
 
@@ -39,10 +39,10 @@ current TODO list.
 
 | Document | Contents |
 | --- | --- |
-| [Implementation Plan](planning/PLAN.md) | Phased architecture and agent implementation plan |
-| [Progress](planning/PROGRESS.md) | Phase history and completed work |
-| [Plugin System Plan](planning/PLAN_PLUGIN_SYSTEM.md) | Plugin architecture and rollout plan |
-| [Video Playback and Transcoding Plan](planning/video_playback_transcoding.md) | HLS playback/transcoding work plan |
+| [Implementation Plan](planning/plan.md) | Phased architecture and agent implementation plan |
+| [Progress](planning/progress.md) | Phase history and completed work |
+| [Plugin System Plan](planning/plan-plugin-system.md) | Plugin architecture and rollout plan |
+| [Video Playback and Transcoding Plan](planning/video-playback-transcoding.md) | HLS playback/transcoding work plan |
 | [Video Player Improvement Plan](planning/video-player-improvement-plan.md) | Web player and ASS subtitle improvements |
 
 ## Design
@@ -51,7 +51,7 @@ UI design system and static mockups.
 
 | Document | Contents |
 | --- | --- |
-| [Design System](design/DESIGN.md) | Colors, typography, spacing, and component tokens |
+| [Design System](design/design-system.md) | Colors, typography, spacing, and component tokens |
 | `design/*.html` | Reference mockups for login, setup, home, library, and admin |
 
 ## Reference
@@ -60,16 +60,16 @@ Background material used to design Hearth's playback and transcoding stack.
 
 | Document | Contents |
 | --- | --- |
-| [Jellyfin Video Player Guide](reference/JELLYFIN_VIDEO_PLAYER_IMPLEMENTATION_GUIDE.md) | Jellyfin player architecture and subtitle handling |
-| [Ferrofin Transcoding](reference/ferrofin_transcoding.md) | Transcoding design notes from Ferrofin |
-| [Ferrofin Video Playback](reference/ferrofin_video_playback.md) | Client/server playback contract from Ferrofin |
+| [Jellyfin Video Player Guide](reference/jellyfin-video-player-implementation-guide.md) | Jellyfin player architecture and subtitle handling |
+| [Ferrofin Transcoding](reference/ferrofin-transcoding.md) | Transcoding design notes from Ferrofin |
+| [Ferrofin Video Playback](reference/ferrofin-video-playback.md) | Client/server playback contract from Ferrofin |
 
 ## Decisions and notices
 
 | Document | Contents |
 | --- | --- |
-| [Decisions](decisions/DECISIONS.md) | Architecture decision records (ADRs) |
-| [Attribution](ATTRIBUTION.md) | TMDB and third-party notices |
+| [Decisions](decisions/decisions.md) | Architecture decision records (ADRs) |
+| [Attribution](attribution.md) | TMDB and third-party notices |
 
 ## Generated artifacts
 

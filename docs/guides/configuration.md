@@ -129,7 +129,7 @@ Media is mounted read-only. Library paths added in Hearth must resolve inside
 
 ## Related guides
 
-- [Hardware Transcoding](HARDWARE_TRANSCODING.md) — GPU drivers, render GIDs, verification
-- [Backup and Upgrade](BACKUP_AND_UPGRADE.md) — what `/config` holds and how to restore it
-- [Reverse Proxy](REVERSE_PROXY.md) — TLS, streaming, and SSE through Caddy, Traefik, or Nginx
-- [Troubleshooting](TROUBLESHOOTING.md) — permission, playback, and database-lock issues
+- [Hardware Transcoding](hardware-transcoding.md) — GPU drivers, render GIDs, verification
+- [Backup and Upgrade](backup-and-upgrade.md) — what `/config` holds and how to restore it
+- [Reverse Proxy](reverse-proxy.md) — TLS, streaming, and SSE through Caddy, Traefik, or Nginx
+- [Troubleshooting](troubleshooting.md) — permission, playback, and database-lock issues

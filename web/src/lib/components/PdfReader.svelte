@@ -4,7 +4,7 @@
 	 *
 	 * Each page is rendered to a canvas at device-pixel-ratio resolution, and
 	 * the locator is `page:<n>` with percentage = page / total
-	 * (docs/development/READER_INTEGRATION.md §3). The document is fetched once with the
+	 * (docs/development/reader-integration.md §3). The document is fetched once with the
 	 * bearer token, then parsed in memory.
 	 */
 	import { onMount } from 'svelte';

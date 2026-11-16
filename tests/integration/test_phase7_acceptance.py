@@ -4,7 +4,7 @@ Criteria:
 1. Decision engine matrix passes. Builder snapshot tests pass for every pipeline.
 2. On a machine with VAAPI: a 4K HEVC HDR fixture transcodes to 1080p H.264 SDR at faster
    than 1.0x speed, and GPU usage is verified. Results recorded in
-   docs/development/HARDWARE_TESTS.md.
+   docs/development/hardware-tests.md.
 3. On a machine without VAAPI: the same file plays through the software path.
 4. Seeking mid-stream works, killing the browser tab ends ffmpeg within the idle timeout,
    and no orphan ffmpeg processes remain after 20 start/stop cycles (automated test).
@@ -200,8 +200,8 @@ async def test_criterion_2_vaapi_4k_hdr_transcode_speed(
     final_speed = speeds[-1] if speeds else 1.5
     assert final_speed >= 1.0, f"Expected transcode speed >= 1.0x, got {final_speed}x"
 
-    # Record benchmark in docs/development/HARDWARE_TESTS.md
-    hw_docs = Path(__file__).resolve().parents[2] / "docs" / "development" / "HARDWARE_TESTS.md"
+    # Record benchmark in docs/development/hardware-tests.md
+    hw_docs = Path(__file__).resolve().parents[2] / "docs" / "development" / "hardware-tests.md"
     report = (
         "# Hardware Benchmark Results\n\n"
         f"- **Date:** 2026-10-27\n"

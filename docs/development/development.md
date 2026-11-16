@@ -2,7 +2,7 @@
 
 This guide covers running Hearth from source, the test and lint commands, and
 the generated artifacts that must be kept in sync. For the runtime design, see
-[ARCHITECTURE.md](ARCHITECTURE.md); for the HTTP contract, see [API.md](API.md).
+[architecture.md](architecture.md); for the HTTP contract, see [api.md](api.md).
 
 ## Prerequisites
 
@@ -130,7 +130,7 @@ locally before opening a pull request.
 
 ## Where things live
 
-See the module layout in [ARCHITECTURE.md](ARCHITECTURE.md). The short version:
+See the module layout in [architecture.md](architecture.md). The short version:
 
 | Path | Contents |
 | --- | --- |

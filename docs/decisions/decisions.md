@@ -197,7 +197,7 @@
 - **Date:** 2026-10-21
 - **Status:** Accepted
 - **Context:** Metadata is optional external data. A missing key, network outage or provider error must never fail a scan, and repeated scans must not hammer TMDB. NFO files are user intent and must win when present.
-- **Decision:** `MetadataProvider` exposes `search`, `fetch_details`, `fetch_images` and returns normalized `MovieMetadata`/`ProviderImage` models. `LocalProvider` parses Kodi-style NFO and local sidecar images/subtitles; remote URLs in NFO images are ignored so an NFO cannot trigger arbitrary downloads. `TMDBProvider` supports a v3 key or v4 bearer token, paces requests, retries 429 once with `Retry-After`, maps 401/403 to `ProviderUnavailable`, and caches successful JSON responses in `provider_cache` with a TTL. Credentials and request URLs are never included in errors or logs. Matching will treat `ProviderError`/`ProviderUnavailable` as retryable and leave items pending; that policy lands with the matcher. TMDB attribution is in `docs/ATTRIBUTION.md` and `GET /api/v1/about`.
+- **Decision:** `MetadataProvider` exposes `search`, `fetch_details`, `fetch_images` and returns normalized `MovieMetadata`/`ProviderImage` models. `LocalProvider` parses Kodi-style NFO and local sidecar images/subtitles; remote URLs in NFO images are ignored so an NFO cannot trigger arbitrary downloads. `TMDBProvider` supports a v3 key or v4 bearer token, paces requests, retries 429 once with `Retry-After`, maps 401/403 to `ProviderUnavailable`, and caches successful JSON responses in `provider_cache` with a TTL. Credentials and request URLs are never included in errors or logs. Matching will treat `ProviderError`/`ProviderUnavailable` as retryable and leave items pending; that policy lands with the matcher. TMDB attribution is in `docs/attribution.md` and `GET /api/v1/about`.
 - **Alternatives Considered:** Calling TMDB on every scan (slow and rate-limited), caching only in memory (lost on worker restart), trusting NFO artwork URLs (SSRF risk), failing scans on provider errors (violates the Phase 2 acceptance criterion), fetching images inside the provider (couples network I/O to metadata mapping and complicates caching).
 
 ## ADR 026: Matching, Scoring and Retry Policy
@@ -492,7 +492,7 @@
 
 - **Date:** 2026-10-27
 - **Status:** Accepted
-- **Context:** Phase 6 requires reading embedded metadata and cover images from EPUB, CBZ, CBR, and PDF book files in-process. For PDF first-page cover rendering, the plan suggests `pdfium` or `pymupdf` and requires recording the licensing choice in `DECISIONS.md`.
+- **Context:** Phase 6 requires reading embedded metadata and cover images from EPUB, CBZ, CBR, and PDF book files in-process. For PDF first-page cover rendering, the plan suggests `pdfium` or `pymupdf` and requires recording the licensing choice in `decisions.md`.
 - **Decision:**
   - EPUB: Parse metadata and Calibre series tags directly from `META-INF/container.xml` and the OPF package via standard library `zipfile` and `xml.etree.ElementTree`. Extract cover images referenced by `<meta name="cover">` or `<item properties="cover-image">`.
   - CBZ: Parse `ComicInfo.xml` and sort image entries using natural alphanumeric ordering (`1`, `2`, `10`), treating the first image as the cover.
@@ -648,13 +648,13 @@
 ## ADR 063: Frontend Framework Selection (Phase 9, Step 1)
 
 - **Date:** 2026-10-28
-- **Status:** Accepted — approved by the human on 2026-10-28 as **Option B: SvelteKit as an SPA**, overriding the agent's React recommendation (the plan assigns the final choice to the human; full evidence in `docs/development/FRONTEND_DECISION.md`).
+- **Status:** Accepted — approved by the human on 2026-10-28 as **Option B: SvelteKit as an SPA**, overriding the agent's React recommendation (the plan assigns the final choice to the human; full evidence in `docs/development/frontend-decision.md`).
 - **Context:** Phases 0–8 delivered an API-first backend with a stable OpenAPI schema, a generated typed client (`packages/client/src/schema.d.ts`), HLS fMP4 playback and framework-agnostic reader integrations (foliate-js, pdf.js). Phase 9 requires choosing a frontend before scaffolding `web/`, judged on HLS playback, TV D-pad navigation, EPUB/PDF reader ecosystem, bundle size, typed client generation, and long-term maintainability for a small project.
 - **Decision:** Build **SvelteKit as a client-only SPA** with `@sveltejs/adapter-static` (SPA mode, `ssr = false`), Svelte 5 (runes), TypeScript strict, Vite build target ES2019 for 2020+ TV Chromium, an in-house Svelte spatial-focus action for 10-foot mode (no dedicated Svelte TV library exists), foliate-js/pdf.js integrated directly as web components, and FastAPI serving `web/dist` at `/` with an SPA fallback. Scorecard evidence: React 27/30, Vue 25/30, SvelteKit 24/30; bundle sizes measured locally (React 67.4 KB vs Vue 25.8 KB vs Svelte 16.0 KB gzip app shell; hls.js 181.7 KB and pdf.js 137.6 KB lazy-loaded under any option).
 - **Alternatives Considered:**
   - React 19 + Vite (agent's recommendation, 27/30): deepest TV/reader ecosystem and library availability; declined by the human in favor of Svelte's smaller runtime and developer experience.
   - Vue 3 + Vite (25/30): calmest, most stable core and smallest mainstream runtime; runner-up, reversal trigger recorded in the decision doc.
-  - SolidJS, Angular, Astro, vanilla TS + Web Components: set aside for ecosystem weight, ceremony, or hand-rolled scope reasons documented in `docs/development/FRONTEND_DECISION.md` §3.
+  - SolidJS, Angular, Astro, vanilla TS + Web Components: set aside for ecosystem weight, ceremony, or hand-rolled scope reasons documented in `docs/development/frontend-decision.md` §3.
 
 ## ADR 064: Remove AMD Hardware Transcoding Support
 

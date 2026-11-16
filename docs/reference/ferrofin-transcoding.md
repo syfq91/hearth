@@ -14,7 +14,7 @@ except where they touch the transcode path.
 > For the end-to-end video playback protocol — `PlaybackInfo` negotiation,
 > direct/progressive/HLS URLs, session keep-alive, seeking, subtitles,
 > trickplay, and intro segments — see
-> [`Ferrofin Video Playback`](ferrofin_video_playback.md). This document is the encoder
+> [`Ferrofin Video Playback`](ferrofin-video-playback.md). This document is the encoder
 > and plan reference underneath it.
 
 ## Mental model

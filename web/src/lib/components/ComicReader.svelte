@@ -5,7 +5,7 @@
 	 * Consumes Hearth's on-demand page API (`/books/{id}/pages/{n}`) rather
 	 * than shipping the whole archive to the browser, and keeps a 5-page
 	 * window in memory with priority-ordered prefetch
-	 * (docs/development/READER_INTEGRATION.md §4).
+	 * (docs/development/reader-integration.md §4).
 	 */
 	import { withMediaToken } from '../media-token.svelte';
 	import { untrack } from 'svelte';

@@ -22,7 +22,7 @@ Frequently encountered questions and step-by-step diagnostic solutions for Heart
 ### "vaInitialize failed (-1)" or GPU not used
 - Ensure `/dev/dri/renderD128` exists on the host.
 - Ensure container `group_add` matches the host render group GID (`stat -c '%g' /dev/dri/renderD128`).
-- Check `docker compose exec hearth vainfo` for detailed driver output. See [HARDWARE_TRANSCODING.md](HARDWARE_TRANSCODING.md) for full setup instructions.
+- Check `docker compose exec hearth vainfo` for detailed driver output. See [hardware-transcoding.md](hardware-transcoding.md) for full setup instructions.
 
 ---
 
@@ -71,7 +71,7 @@ Frequently encountered questions and step-by-step diagnostic solutions for Heart
 - Server-Sent Events at `/api/v1/events` require unbuffered proxying.
 - If using Nginx, ensure `proxy_buffering off;` and `proxy_read_timeout 86400s;` are set.
 - If using Caddy, set `flush_interval -1`.
-- See [REVERSE_PROXY.md](REVERSE_PROXY.md) for full configuration templates.
+- See [reverse-proxy.md](reverse-proxy.md) for full configuration templates.
 
 ### Backup restore fails with "413 Payload Too Large" or "Connection reset"
 - Reverse proxies enforce default upload size ceilings (e.g. 1MB in Nginx).
