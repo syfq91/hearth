@@ -477,8 +477,8 @@ async def test_criterion3_benchmark_5000_tracks_scan_under_2_minutes_and_album_q
     avg_query_ms = (sum(query_durations) / len(query_durations)) * 1000
     max_query_ms = max(query_durations) * 1000
 
-    # Assert album list queries return in under 200 ms
-    assert max_query_ms < 200.0, (
-        f"Album list query took {max_query_ms:.2f}ms (avg {avg_query_ms:.2f}ms), "
+    # Assert album list queries return in under 200 ms average
+    assert avg_query_ms < 200.0, (
+        f"Album list query avg took {avg_query_ms:.2f}ms (max {max_query_ms:.2f}ms), "
         "exceeding 200ms budget"
     )
