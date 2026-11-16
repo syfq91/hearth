@@ -56,7 +56,7 @@ You need Docker with Compose v2 and a folder containing your media.
 > device. Hearth then transcodes on the CPU automatically.
 
 > **Using a GPU?** Intel QuickSync works out of the box with the default
-> compose configuration — see [Hardware Transcoding](docs/HARDWARE_TRANSCODING.md).
+> compose configuration — see [Hardware Transcoding](docs/guides/HARDWARE_TRANSCODING.md).
 
 ## Add your library
 
@@ -70,7 +70,7 @@ Hearth understands common file and folder naming, embedded tags, and local
 by modular plugins: music comes from MusicBrainz, books from Open Library and Google
 Books, and movies and TV from TMDB. Plugins can be configured and toggled from
 **Admin → Plugins** or via environment variables (e.g. `HEARTH_TMDB_API_KEY`).
-See [Plugins](docs/PLUGINS.md) and [Configuration](docs/CONFIGURATION.md).
+See [Plugins](docs/guides/PLUGINS.md) and [Configuration](docs/guides/CONFIGURATION.md).
 
 ## Everyday use
 
@@ -90,7 +90,7 @@ Hearth probes the GPU at startup and uses VA-API when available:
   software `libx264` is the automatic fallback.
 
 Drivers, permissions, render GIDs, and verification commands are covered in the
-[Hardware Transcoding Guide](docs/HARDWARE_TRANSCODING.md).
+[Hardware Transcoding Guide](docs/guides/HARDWARE_TRANSCODING.md).
 
 ## Running it long-term
 
@@ -98,34 +98,38 @@ Drivers, permissions, render GIDs, and verification commands are covered in the
   `docker compose -f docker/compose.yaml up -d`. Migrations run automatically.
 - **Back up:** use the `hearth backup` command or
   `POST /api/v1/admin/backup`; see
-  [Backup and Upgrade](docs/BACKUP_AND_UPGRADE.md). Back up `/config`, which
+  [Backup and Upgrade](docs/guides/BACKUP_AND_UPGRADE.md). Back up `/config`, which
   holds the database and signing secret.
 - **Put it behind TLS:** ready-made Caddy, Traefik, and Nginx examples are in
-  [Reverse Proxy](docs/REVERSE_PROXY.md).
-- **Something broken?** Start with [Troubleshooting](docs/TROUBLESHOOTING.md).
+  [Reverse Proxy](docs/guides/REVERSE_PROXY.md).
+- **Something broken?** Start with [Troubleshooting](docs/guides/TROUBLESHOOTING.md).
 
 ## Documentation
 
+The [documentation index](docs/README.md) lists every guide, design note, and
+reference document in the repository.
+
 | Guide | What it covers |
 | --- | --- |
-| [Configuration](docs/CONFIGURATION.md) | Environment variables, secrets, data locations |
-| [Hardware Transcoding](docs/HARDWARE_TRANSCODING.md) | GPU setup, VAAPI drivers, render GIDs |
-| [Backup and Upgrade](docs/BACKUP_AND_UPGRADE.md) | Backups, restores, upgrades, rollback |
-| [Reverse Proxy](docs/REVERSE_PROXY.md) | TLS and streaming through Caddy, Traefik, Nginx |
-| [Troubleshooting](docs/TROUBLESHOOTING.md) | Playback, scanning, permissions, database locks |
-| [API Reference](docs/API.md) | REST API, authentication, playback contract, examples |
-| [Development](docs/DEVELOPMENT.md) | Running from source, tests, generated artifacts |
-| [Architecture](docs/ARCHITECTURE.md) | Runtime topology and module layout |
-| [Decisions](docs/DECISIONS.md) | Architecture decision records |
-| [Performance Audit](docs/PERFORMANCE_AUDIT.md) | Codebase performance review, benchmarks, and resolutions |
-| [Implementation Plan](docs/PLAN.md) | Phased architecture and agent implementation plan |
+| [Configuration](docs/guides/CONFIGURATION.md) | Environment variables, secrets, data locations |
+| [Hardware Transcoding](docs/guides/HARDWARE_TRANSCODING.md) | GPU setup, VAAPI drivers, render GIDs |
+| [Backup and Upgrade](docs/guides/BACKUP_AND_UPGRADE.md) | Backups, restores, upgrades, rollback |
+| [Reverse Proxy](docs/guides/REVERSE_PROXY.md) | TLS and streaming through Caddy, Traefik, Nginx |
+| [Troubleshooting](docs/guides/TROUBLESHOOTING.md) | Playback, scanning, permissions, database locks |
+| [Plugins](docs/guides/PLUGINS.md) | Plugin system overview and developer guide |
+| [API Reference](docs/development/API.md) | REST API, authentication, playback contract, examples |
+| [Development](docs/development/DEVELOPMENT.md) | Running from source, tests, generated artifacts |
+| [Architecture](docs/development/ARCHITECTURE.md) | Runtime topology and module layout |
+| [Decisions](docs/decisions/DECISIONS.md) | Architecture decision records |
+| [Performance Audit](docs/development/PERFORMANCE_AUDIT.md) | Codebase performance review, benchmarks, and resolutions |
+| [Implementation Plan](docs/planning/PLAN.md) | Phased architecture and agent implementation plan |
 | [Changelog](CHANGELOG.md) | Release history |
 | [Attribution](docs/ATTRIBUTION.md) | TMDB and third-party notices |
 
 ## Development
 
 Source setup, the test and lint commands, and how to regenerate the OpenAPI
-schema are in the [Development Guide](docs/DEVELOPMENT.md). The short version:
+schema are in the [Development Guide](docs/development/DEVELOPMENT.md). The short version:
 `uv sync`, `uv run hearth api --reload`, and `uv run pytest`.
 
 ## License

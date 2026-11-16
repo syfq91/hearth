@@ -2,7 +2,7 @@
  * Video playback: play, seek with the arrow key, pause, leave, and resume
  * from where playback stopped.
  *
- * Progress checkpoints (docs/API.md §4) are written every 15s of playback and
+ * Progress checkpoints (docs/development/API.md §4) are written every 15s of playback and
  * immediately on pause/unload, so each step pauses before navigating away.
  */
 import { expect, test } from '@playwright/test';

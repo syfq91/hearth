@@ -6,7 +6,7 @@
  *   revoked access token triggers a single-flight refresh and one retry.
  * - The server's unified error envelope (`{"error": {code, message, details}}`)
  *   is surfaced as {@link ApiError}.
- * - Refresh tokens rotate on every use (see docs/API.md §2.3), so the stored
+ * - Refresh tokens rotate on every use (see docs/development/API.md §2.3), so the stored
  *   refresh token is replaced on each successful refresh.
  */
 import type { MediaTokenResponse, TokenPair } from './types';
@@ -219,7 +219,7 @@ export async function mintMediaToken(itemId?: string | null): Promise<MediaToken
 	});
 }
 
-/** SSE endpoint with a query-string token (docs/API.md §5). */
+/** SSE endpoint with a query-string token (docs/development/API.md §5). */
 export function eventsUrl(): string {
 	return `${BASE}/events?token=${encodeURIComponent(accessToken ?? '')}`;
 }

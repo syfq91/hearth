@@ -387,9 +387,9 @@ flowchart LR
   - Tested library-level provider priority ordering overriding default order.
   - Tested plugin enabling/disabling at runtime and graceful fallback to `LocalProvider`.
 - **Documentation**:
-  - Added `ADR 066: Jellyfin-Style Plugin System and Metadata Provider Decoupling` to `docs/DECISIONS.md`.
-  - Documented plugin development guide, manifest specifications, and capability contracts in `docs/PLUGINS.md`.
-  - Updated `docs/ARCHITECTURE.md` and `README.md`.
+  - Added `ADR 066: Jellyfin-Style Plugin System and Metadata Provider Decoupling` to `docs/decisions/DECISIONS.md`.
+  - Documented plugin development guide, manifest specifications, and capability contracts in `docs/guides/PLUGINS.md`.
+  - Updated `docs/development/ARCHITECTURE.md` and `README.md`.
 
 ---
 

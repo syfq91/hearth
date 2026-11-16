@@ -33,10 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Composite `GET /api/v1/home` endpoint returning continue watching, continue reading, next up, recent libraries, and recent albums in a single round-trip.
 - Configurable SQLite connection pool parameters (`HEARTH_DB_POOL_SIZE` and `HEARTH_DB_MAX_OVERFLOW`).
 - Composite database indexes for continue-watching, continue-reading, and favorites.
-- Dedicated [`docs/PERFORMANCE_AUDIT.md`](docs/PERFORMANCE_AUDIT.md) performance review and resolutions log.
+- Dedicated [`docs/development/PERFORMANCE_AUDIT.md`](docs/development/PERFORMANCE_AUDIT.md) performance review and resolutions log.
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- Reorganized documentation into `docs/guides/`, `docs/development/`, `docs/planning/`, `docs/reference/`, `docs/decisions/`, and `docs/design/`, added a `docs/README.md` index, and fixed cross-links and local file references that pointed at the old flat layout.
 - Video player controls: the stream-info toggle moved into the control bar, surface taps toggle the overlay instead of pausing, audio/subtitle/speed selectors became icon menus, the aspect-ratio label was removed, controls auto-hide after 1.5s, and the info popup now shows three lines (playback mode, video path, audio path) in the top-right corner.
 - Hardware-accelerated transcode processes are no longer started with `nice(10)`. Lowering priority starved the first segment whenever the host CPU was busy (measured 14s vs 2.2s to first segment on a 2-core Celeron while the API was active); software encodes still yield to the API and worker.
 - Video transcodes now open with a shorter 2s HLS segment (`HEARTH_TRANSCODE_FIRST_SEGMENT_DURATION_SECONDS`) instead of waiting for a full 4s segment before the master playlist responds. Keyframes stay anchored to the 2s-offset grid, so later segments keep their configured duration and seeking/subtitles stay aligned. Measured on a Celeron J4005 with VA-API, the first segment arrives in 1.6-2.3s instead of 4.2-4.9s.

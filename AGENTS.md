@@ -4,17 +4,18 @@ Hearth is a single-node, self-hosted media server for movies, TV, music, books,
 and comics. It ships as one Docker image and runs a FastAPI API plus a
 background worker against the same SQLite database. This file is the
 agent-facing guide. `README.md` is for end users; `docs/` holds operator guides,
-the API contract, and architecture decisions.
+developer documentation, plans, design notes, and architecture decisions. The
+index is `docs/README.md`.
 
 Read these before making non-trivial changes:
 
-- `docs/ARCHITECTURE.md` — runtime topology, module layout, request lifecycle.
-- `docs/DEVELOPMENT.md` — the canonical local setup and command list.
-- `docs/API.md` — HTTP conventions, auth, playback contract.
-- `docs/DECISIONS.md` — ADRs; check before re-litigating a design choice.
-- `docs/PROGRESS.md` — phase history, not a current TODO list.
-- `docs/PERFORMANCE_AUDIT.md` — performance benchmarks and optimization log.
-- `docs/PLAN.md` — phased implementation plan.
+- `docs/development/ARCHITECTURE.md` — runtime topology, module layout, request lifecycle.
+- `docs/development/DEVELOPMENT.md` — the canonical local setup and command list.
+- `docs/development/API.md` — HTTP conventions, auth, playback contract.
+- `docs/decisions/DECISIONS.md` — ADRs; check before re-litigating a design choice.
+- `docs/planning/PROGRESS.md` — phase history, not a current TODO list.
+- `docs/development/PERFORMANCE_AUDIT.md` — performance benchmarks and optimization log.
+- `docs/planning/PLAN.md` — phased implementation plan.
 
 ## Stack
 
@@ -128,7 +129,7 @@ build), `container` (image smoke/health/non-root/backup-restore), and `e2e`
    `docs/openapi.json` and `packages/client/src/schema.d.ts`.
 5. If the web app changed: `cd web && npm run check && npm run build`.
 6. If you changed a user-visible behavior or contract, update the relevant
-   docs (`docs/API.md`, `docs/CONFIGURATION.md`, `CHANGELOG.md`, ADRs).
+   docs (`docs/development/API.md`, `docs/guides/CONFIGURATION.md`, `CHANGELOG.md`, ADRs).
 
 A change is not complete while a CI check it affects is red.
 
@@ -155,7 +156,14 @@ web/                  SvelteKit SPA; e2e specs in web/e2e
 packages/client/      generated OpenAPI TypeScript definitions
 scripts/              OpenAPI/client generation, e2e runner, load test
 docker/               Dockerfile and Compose
-docs/                 operator guides, API reference, ADRs
+docs/
+  README.md           documentation index
+  guides/             operator guides
+  development/        architecture, API, development, audits
+  planning/           plans, progress history, improvement plans
+  reference/          background playback/transcoding references
+  design/             UI design system and mockups
+  decisions/          architecture decision records
 tools/testplayer/     standalone developer player served at /testplayer/
 ```
 
@@ -217,7 +225,7 @@ tools/testplayer/     standalone developer player served at /testplayer/
 
 - Add `HEARTH_*` settings as fields on `Settings` in `app/core/config.py`.
   The prefix is applied automatically.
-- Document operator-facing variables in `docs/CONFIGURATION.md`, and keep
+- Document operator-facing variables in `docs/guides/CONFIGURATION.md`, and keep
   `.env.example`/Compose examples consistent where relevant.
 - Settings are cached per process. Tests pass an explicit `Settings` to
   `create_app`; do not call `get_settings()` in test paths that need isolation.
@@ -226,7 +234,7 @@ tools/testplayer/     standalone developer player served at /testplayer/
 
 - Always use `asyncio.create_subprocess_exec` with an argument list. Never use a
   shell or string interpolation (see the security boundaries in
-  `docs/ARCHITECTURE.md`).
+  `docs/development/ARCHITECTURE.md`).
 - Use `asyncio.to_thread` for blocking filesystem or CPU work.
 - Resolve and validate paths before opening files; reject traversal and paths
   outside the registered library root.
@@ -298,13 +306,13 @@ tools/testplayer/     standalone developer player served at /testplayer/
 
 - User-facing overview stays in `README.md`; developer and operator detail goes
   in `docs/`.
-- Any change to HTTP behavior updates `docs/API.md`; any new/changed setting
-  updates `docs/CONFIGURATION.md`.
+- Any change to HTTP behavior updates `docs/development/API.md`; any new/changed setting
+  updates `docs/guides/CONFIGURATION.md`.
 - Significant design or security decisions get an ADR appended to
-  `docs/DECISIONS.md` using the existing format: title, Date, Status, Context,
+  `docs/decisions/DECISIONS.md` using the existing format: title, Date, Status, Context,
   Decision, Alternatives Considered, with the next sequential number.
 - Record notable changes in `CHANGELOG.md` (Keep a Changelog, SemVer).
-- `docs/FRONTEND_DECISION.md` records the SvelteKit choice; do not reopen it
+- `docs/development/FRONTEND_DECISION.md` records the SvelteKit choice; do not reopen it
   without an explicit product decision.
 
 ## Git and pull requests

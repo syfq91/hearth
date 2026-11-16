@@ -31,7 +31,7 @@ gains are available with modest effort.
 
 ### 1.1 🟠 Model-Level `lazy="selectin"` on `MediaItem` Causes Over-Fetching — [RESOLVED / MITIGATED]
 
-**Location:** [`app/db/models.py` L235–L289](file:///home/syafiq/code/hearth/app/db/models.py#L235-L289)
+**Location:** [`app/db/models.py` L235–L289](../../app/db/models.py#L235-L289)
 
 *Status: Resolved (Architecturally Mitigated) — `lazy="selectin"` on models is an intentional architectural contract required in async SQLAlchemy to prevent `MissingGreenlet` exceptions when traversing relationships on detached instances across async boundaries (enforced by test suite contracts). Over-fetching in high-volume paths has been mitigated at the route level (e.g. §1.5 scalar tuple querying, §2.1 composite shelf fetching, and targeted column queries) without breaking synchronous model traversal.*
 
@@ -56,7 +56,7 @@ to ORM hydration (implemented in §1.5).
 
 ### 1.2 🟠 Deep `selectin` Chains on `Series` ↔ `Season` ↔ `Episode` — [RESOLVED / MITIGATED]
 
-**Location:** [`app/db/models.py` L309–L385](file:///home/syafiq/code/hearth/app/db/models.py#L309-L385)
+**Location:** [`app/db/models.py` L309–L385](../../app/db/models.py#L309-L385)
 
 *Status: Resolved (Architecturally Mitigated) — TV detail endpoints (`/shows/series/{id}`, `/shows/seasons/{id}`) utilize SQL grouping queries (`Episode.season_id, count(Episode.item_id)`) rather than materializing child episode trees into memory, mitigating cascade concerns while preserving contract traversal safety.*
 
@@ -81,7 +81,7 @@ season lookups at the route level.
 
 ### 1.3 🟡 Connection Pool Oversized for SQLite — [RESOLVED]
 
-**Location:** [`app/db/session.py` L43–L44](file:///home/syafiq/code/hearth/app/db/session.py#L43-L44)
+**Location:** [`app/db/session.py` L43–L44](../../app/db/session.py#L43-L44)
 
 *Status: Resolved — configurable via `HEARTH_DB_POOL_SIZE` (default 5) and `HEARTH_DB_MAX_OVERFLOW` (default 10).*
 
@@ -107,7 +107,7 @@ size only helps if using a thread-per-connection driver.
 
 ### 1.4 🟡 Missing Composite Index on `user_item_state` — [RESOLVED]
 
-**Location:** [`app/db/models.py` L599–L621](file:///home/syafiq/code/hearth/app/db/models.py#L599-L621), migration `0009_state_and_progress_indexes`
+**Location:** [`app/db/models.py` L599–L621](../../app/db/models.py#L599-L621), migration `0009_state_and_progress_indexes`
 
 *Status: Resolved — added `ix_user_item_state_continue` (user_id, played, last_played_at), `ix_user_item_state_favorite` (user_id, favorite, updated_at), and `ix_book_progress_continue` (user_id, completed, updated_at).*
 
@@ -138,7 +138,7 @@ Index("ix_user_item_state_fav", "user_id", "favorite")
 
 ### 1.5 🟡 `recently-added` Fetches 5× the Limit Then Discards — [RESOLVED]
 
-**Location:** [`app/api/v1/home.py` L149](file:///home/syafiq/code/hearth/app/api/v1/home.py#L149)
+**Location:** [`app/api/v1/home.py` L149](../../app/api/v1/home.py#L149)
 
 *Status: Resolved — the endpoint first executes a lightweight scalar tuple query `(MediaItem.id, MediaItem.type, Episode.series_id)` with `outerjoin(Episode)` to perform episode deduplication, and only fetches full ORM objects and selectin relationships for the target page slice.*
 
@@ -163,7 +163,7 @@ MediaItems by ID.
 
 ### 1.6 🟡 Per-Card `session.get()` in `recently-added` Loop — [RESOLVED]
 
-**Location:** [`app/api/v1/home.py` L218](file:///home/syafiq/code/hearth/app/api/v1/home.py#L218)
+**Location:** [`app/api/v1/home.py` L218](../../app/api/v1/home.py#L218)
 
 *Status: Resolved — grouped series item IDs are now batched into a single `watch_states()` query ahead of time.*
 
@@ -183,7 +183,7 @@ response, it fires N individual SELECT queries.
 
 ### 1.7 🔵 `_book_folders()` Loads All Book Files into Memory — [RESOLVED]
 
-**Location:** [`app/api/v1/items.py` L483–L504](file:///home/syafiq/code/hearth/app/api/v1/items.py#L483-L504)
+**Location:** [`app/api/v1/items.py` L483–L504](../../app/api/v1/items.py#L483-L504)
 
 *Status: Resolved — `_book_folders()` accepts a folder filter parameter and filters `MediaFile.path` with SQL LIKE expressions across library roots, avoiding full-table file materialization when browsing subfolders.*
 
@@ -207,13 +207,13 @@ or cache the folder tree in a column/table updated at scan time.
 
 ### 1.8 ⚪ WAL Mode Set Only in Migrations, Not at Connection Time — [VERIFIED / AS-DESIGNED]
 
-**Location:** [`app/db/session.py` L22–L30](file:///home/syafiq/code/hearth/app/db/session.py#L22-L30)
+**Location:** [`app/db/session.py` L22–L30](../../app/db/session.py#L22-L30)
 
 *Status: Verified / As-Designed — WAL is persistent across connections once enabled by migrations (which run on startup).*
 
 The connection pragmas set `foreign_keys`, `busy_timeout`, and `synchronous`,
 but not `journal_mode=WAL`. WAL is set once in migration
-([`app/db/migrate.py` L37](file:///home/syafiq/code/hearth/app/db/migrate.py#L37)),
+([`app/db/migrate.py` L37](../../app/db/migrate.py#L37)),
 which is fine because WAL is persistent across connections. However, if a user
 manually switches it back or starts from a non-migrated DB, the application
 runs without WAL until the next migration.
@@ -227,7 +227,7 @@ runs without WAL until the next migration.
 
 ### 2.1 🟠 Home Page Triggers a Waterfall of API Calls — [RESOLVED]
 
-**Location:** [`web/src/routes/+page.ts` L31–L49](file:///home/syafiq/code/hearth/web/src/routes/+page.ts#L31-L49), [`app/api/v1/home.py`](file:///home/syafiq/code/hearth/app/api/v1/home.py)
+**Location:** [`web/src/routes/+page.ts` L31–L49](../../web/src/routes/+page.ts#L31-L49), [`app/api/v1/home.py`](../../app/api/v1/home.py)
 
 *Status: Resolved — added composite `GET /api/v1/home` endpoint returning `continue_watching`, `continue_reading`, `next_up`, `recent_libraries`, and `recent_albums` in a single response, reducing home page network requests from 5+N to 1.*
 
@@ -258,7 +258,7 @@ session and avoid per-request overhead.
 
 ### 2.2 🟡 `BaseHTTPMiddleware` for All Three Middleware Classes — [RESOLVED]
 
-**Location:** [`app/core/middleware.py` L22, L47, L92](file:///home/syafiq/code/hearth/app/core/middleware.py#L22-L92)
+**Location:** [`app/core/middleware.py` L22, L47, L92](../../app/core/middleware.py#L22-L92)
 
 *Status: Resolved — converted RequestSizeLimitMiddleware, RequestIDMiddleware, and SecurityHeadersMiddleware to pure ASGI middleware, eliminating BaseHTTPMiddleware context switching and streaming wrapper overhead.*
 
@@ -296,7 +296,7 @@ class SecurityHeadersMiddleware:
 
 ### 2.3 🟡 ETag Computation via JSON Serialization + SHA-256 — [RESOLVED]
 
-**Location:** [`app/api/v1/items.py` L440–L442](file:///home/syafiq/code/hearth/app/api/v1/items.py#L440-L442)
+**Location:** [`app/api/v1/items.py` L440–L442](../../app/api/v1/items.py#L440-L442)
 
 *Status: Resolved — computed ETag from item and state timestamps, short-circuiting 304 responses before object detail building and eliminating redundant JSON dumps.*
 
@@ -319,7 +319,7 @@ support for list endpoints.
 
 ### 2.4 🔵 Image Pipeline Instantiated Per Request — [RESOLVED]
 
-**Location:** [`app/api/v1/images.py` L68](file:///home/syafiq/code/hearth/app/api/v1/images.py#L68)
+**Location:** [`app/api/v1/images.py` L68](../../app/api/v1/images.py#L68)
 
 *Status: Resolved — ImagePipeline is now initialized once on application state and injected via `ImagePipelineDep`.*
 
@@ -340,7 +340,7 @@ and inject it as a dependency.
 
 ### 2.5 🔵 Person Search Uses `LIKE '%token%'` Without FTS — [RESOLVED]
 
-**Location:** [`app/api/v1/search.py` L173–L190](file:///home/syafiq/code/hearth/app/api/v1/search.py#L173-L190)
+**Location:** [`app/api/v1/search.py` L173–L190](../../app/api/v1/search.py#L173-L190)
 
 *Status: Resolved — replaced `JOIN ItemPerson JOIN MediaItem` with `DISTINCT` by correlated `EXISTS` subquery, avoiding full table joins and in-memory deduplication across credits.*
 
@@ -363,7 +363,7 @@ the cost since the people table is typically small and the query is limited.
 
 ### 3.1 🟡 Scanner Probes Files Sequentially — [RESOLVED]
 
-**Location:** [`app/services/scanner/scanner.py` L592–L616](file:///home/syafiq/code/hearth/app/services/scanner/scanner.py#L592-L616)
+**Location:** [`app/services/scanner/scanner.py` L592–L616](../../app/services/scanner/scanner.py#L592-L616)
 
 *Status: Resolved — file hashing already uses bounded concurrency via `asyncio.gather` and `asyncio.Semaphore(ffprobe_concurrency)`. Added cooperative cancellation checks inside the hashing tasks.*
 
@@ -383,7 +383,7 @@ already supports concurrency.
 
 ### 3.2 🟡 Image Blurhash Computation in Process Pool — [RESOLVED]
 
-**Location:** [`app/services/images/pipeline.py` L127–L142](file:///home/syafiq/code/hearth/app/services/images/pipeline.py#L127-L142)
+**Location:** [`app/services/images/pipeline.py` L127–L142](../../app/services/images/pipeline.py#L127-L142)
 
 *Status: Resolved — inspect and thumbnail/blurhash computation runs via thread pool, eliminating IPC serialization overhead while reserving the process pool for high-res variant rendering.*
 
@@ -405,7 +405,7 @@ batch approach to amortize the per-task overhead.
 
 ### 3.3 🔵 TMDB Rate Limiter Uses Sleep-Based Pacing — [VERIFIED / AS-DESIGNED]
 
-**Location:** [`app/services/metadata/tmdb.py`](file:///home/syafiq/code/hearth/app/services/metadata/tmdb.py)
+**Location:** [`app/services/metadata/tmdb.py`](../../app/services/metadata/tmdb.py)
 
 *Status: Verified / As-Designed — 20 req/s serialized pacing matches external rate-limit policies and prevents IP blocks during bulk automated scans.*
 
@@ -424,7 +424,7 @@ a token-bucket rate limiter that allows bursts.
 
 ### 3.4 🔵 Streaming: File Handle Opened Per Chunk — [VERIFIED / AS-DESIGNED]
 
-**Location:** [`app/services/streaming.py` L147–L158](file:///home/syafiq/code/hearth/app/services/streaming.py#L147-L158)
+**Location:** [`app/services/streaming.py` L147–L158](../../app/services/streaming.py#L147-L158)
 
 *Status: Verified / As-Designed — chunk dispatch overhead (~100µs) is negligible compared to network bandwidth delivery and provides clean cancellation on client disconnect.*
 
@@ -448,7 +448,7 @@ an `asyncio.Queue`.
 
 ### 4.1 🟡 Large JS Bundle on Reader / Watch Route — [RESOLVED]
 
-**Location:** `web/dist/_app/immutable/nodes/29.*.js` (watch route), [`web/src/lib/components/VideoPlayer.svelte`](file:///home/syafiq/code/hearth/web/src/lib/components/VideoPlayer.svelte)
+**Location:** `web/dist/_app/immutable/nodes/29.*.js` (watch route), [`web/src/lib/components/VideoPlayer.svelte`](../../web/src/lib/components/VideoPlayer.svelte)
 
 *Status: Resolved — verified heavy routes (`/watch/[itemId]` and `/books/[bookId]/read`) are strictly route-split. Further optimized the video player route by lazy-loading `JASSUB` via dynamic `import('jassub')` only when ASS/SSA subtitles are enabled, reducing the initial watch route chunk. Home and library browse pages remain lightweight at ~32 kB total JS.*
 
@@ -456,7 +456,7 @@ an `asyncio.Queue`.
 
 ### 4.2 🟡 Both `@lucide/svelte` and `lucide-svelte` Are Dependencies — [RESOLVED]
 
-**Location:** [`web/package.json` L31, L35](file:///home/syafiq/code/hearth/web/package.json#L31-L35)
+**Location:** [`web/package.json` L31, L35](../../web/package.json#L31-L35)
 
 *Status: Resolved — removed legacy `lucide-svelte` package; all imports use `@lucide/svelte`.*
 
@@ -519,7 +519,7 @@ detail is good but could be supplemented with `max-age` for the common case.
 
 ### 4.6 ⚪ Build Target `es2019` May Include Unnecessary Polyfills — [VERIFIED / AS-DESIGNED]
 
-**Location:** [`web/vite.config.ts` L41](file:///home/syafiq/code/hearth/web/vite.config.ts#L41)
+**Location:** [`web/vite.config.ts` L41](../../web/vite.config.ts#L41)
 
 *Status: Verified / As-Designed — Required for Smart TV browsers running older Chromium engines (M69+).*
 
@@ -537,7 +537,7 @@ serving in the future.
 
 ### 5.1 🔵 Docker HEALTHCHECK Uses `urllib` in Python — [VERIFIED / AS-DESIGNED]
 
-**Location:** [`docker/Dockerfile` L79–L80](file:///home/syafiq/code/hearth/docker/Dockerfile#L79-L80)
+**Location:** [`docker/Dockerfile` L79–L80](../../docker/Dockerfile#L79-L80)
 
 *Status: Verified / As-Designed — avoids installing curl in the minimal container image.*
 
@@ -644,7 +644,7 @@ the connection pragmas for future-proofing.
 
 ### 7.1 🟠 N+1 + unbounded loop in `GET /shows/next-up`
 
-**Location:** [`app/api/v1/shows.py` L398-466](file:///home/syafiq/code/hearth/app/api/v1/shows.py#L398-L466)
+**Location:** [`app/api/v1/shows.py` L398-466](../../app/api/v1/shows.py#L398-L466)
 
 `active_series_rows` is unbounded (no `LIMIT`). Per active series the loop does `session.get(MediaItem)` (which fires 11 `lazy="selectin"` relations), one `Episode` query, one `watch_states()` call, and one `MediaItem.title` scalar — 300–400 sequential round-trips for 50–100 active series, on every `/home` load. `mark_series_watched` / `mark_season_watched` (`shows.py:489-529, 550-569`) share the per-episode `_load_state` loop pattern.
 
@@ -653,7 +653,7 @@ the connection pragmas for future-proofing.
 
 ### 7.2 🟠 Sequential waterfall inside composite `GET /home`
 
-**Location:** [`app/api/v1/home.py` L71-97](file:///home/syafiq/code/hearth/app/api/v1/home.py#L71-L97)
+**Location:** [`app/api/v1/home.py` L71-97](../../app/api/v1/home.py#L71-L97)
 
 `home_overview` awaits `continue_watching`, `continue_reading`, `list_next_up`, `recently_added_albums`, `list_libraries`, then loops per-library `recently_added` — sum of latencies (est. 200–600 ms). The composite endpoint fixed the HTTP waterfall (§2.1) but not the internal one.
 
@@ -662,7 +662,7 @@ the connection pragmas for future-proofing.
 
 ### 7.3 🟠 Unbounded full-table load in collection auto-collect
 
-**Location:** [`app/api/v1/collections.py` L147-152](file:///home/syafiq/code/hearth/app/api/v1/collections.py#L147-L152)
+**Location:** [`app/api/v1/collections.py` L147-152](../../app/api/v1/collections.py#L147-L152)
 
 ```python
 all_movies = await session.scalars(select(MediaItem).where(MediaItem.type == "movie"))
@@ -679,7 +679,7 @@ Loads every movie ORM object (+11 `selectin` tables each, including large `strea
 
 ### 7.4 🟡 `/health` spawns subprocesses on every call, uncached
 
-**Location:** [`app/api/v1/system.py` L74-81](file:///home/syafiq/code/hearth/app/api/v1/system.py#L74-L81), [`app/core/system.py` L76-140](file:///home/syafiq/code/hearth/app/core/system.py#L76-L140)
+**Location:** [`app/api/v1/system.py` L74-81](../../app/api/v1/system.py#L74-L81), [`app/core/system.py` L76-140](../../app/core/system.py#L76-L140)
 
 Each call runs `ffmpeg -version` and `vainfo` (5 s timeout each) plus a SQLite read-only check, with no cache — unlike `probe_transcode_capabilities` which is cached (`capabilities.py:154-167`). Docker `HEALTHCHECK` plus any unauthenticated caller triggers 2 subprocess spawns per request (10–50 ms typical, up to 5 s if `vainfo` hangs).
 
@@ -688,7 +688,7 @@ Each call runs `ffmpeg -version` and `vainfo` (5 s timeout each) plus a SQLite r
 
 ### 7.5 🟡 Argon2id hashing blocks the event loop
 
-**Location:** [`app/core/passwords.py` L12](file:///home/syafiq/code/hearth/app/core/passwords.py#L12), used in `auth.py:226,230`, `users.py:166,328`
+**Location:** [`app/core/passwords.py` L12](../../app/core/passwords.py#L12), used in `auth.py:226,230`, `users.py:166,328`
 
 `verify_password` / `hash_password` are synchronous Argon2id (≈30–80 ms CPU) called directly in async login/reset/create paths. `_dummy_hash()` (`auth.py:90-93`) also blocks on first unknown-user login.
 
@@ -697,7 +697,7 @@ Each call runs `ffmpeg -version` and `vainfo` (5 s timeout each) plus a SQLite r
 
 ### 7.6 🟡 Global playback lock serializes all writes
 
-**Location:** [`app/api/v1/playback.py` L161,380,524](file:///home/syafiq/code/hearth/app/api/v1/playback.py#L161)
+**Location:** [`app/api/v1/playback.py` L161,380,524](../../app/api/v1/playback.py#L161)
 
 One module-level `asyncio.Lock()` guards all users/items, held across DB reads + commit. Rationale (WAL snapshot visibility) is documented; scope is over-broad. Marking a 200-episode series watched = 200 sequential `get`s under the lock.
 
@@ -706,7 +706,7 @@ One module-level `asyncio.Lock()` guards all users/items, held across DB reads +
 
 ### 7.7 🟡 Per-request matcher/provider/httpx construction + sequential fan-out
 
-**Location:** [`app/api/v1/metadata.py` L22-26,73,106](file:///home/syafiq/code/hearth/app/api/v1/metadata.py#L22-L26), [`matching.py` L186-195](file:///home/syafiq/code/hearth/app/services/metadata/matching.py#L186-L195)
+**Location:** [`app/api/v1/metadata.py` L22-26,73,106](../../app/api/v1/metadata.py#L22-L26), [`matching.py` L186-195](../../app/services/metadata/matching.py#L186-L195)
 
 Every admin metadata search builds a new `ImagePipeline` plus ~5 `httpx.AsyncClient`s (no TLS/connection reuse), then calls providers sequentially.
 
@@ -715,7 +715,7 @@ Every admin metadata search builds a new `ImagePipeline` plus ~5 `httpx.AsyncCli
 
 ### 7.8 🔴 Scanner: blocking parse work inside one long DB transaction
 
-**Location:** [`app/services/scanner/scanner.py` L701-1465](file:///home/syafiq/code/hearth/app/services/scanner/scanner.py#L701-L1465), e.g. L720, L771, L808, L962, L1176
+**Location:** [`app/services/scanner/scanner.py` L701-1465](../../app/services/scanner/scanner.py#L701-L1465), e.g. L720, L771, L808, L962, L1176
 
 `_write_changes` runs `read_audio_tags` (`mutagen.File` — opens + parses whole file), `read_book_metadata` (EPUB zip/xml + PDF render at scale 2.0), and `guessit` parsing synchronously on the event loop while holding the single SQLite writer lock. Hash/probe phases are parallel (§3.1 held), but tag/book parsing is not. Holds the writer lock for minutes on 5k-file scans, starves progress, causes `database is locked`.
 
@@ -724,7 +724,7 @@ Every admin metadata search builds a new `ImagePipeline` plus ~5 `httpx.AsyncCli
 
 ### 7.9 🔵 Scanner `_is_cancelled` does a DB session per file
 
-**Location:** [`app/services/scanner/scanner.py` L602,629](file:///home/syafiq/code/hearth/app/services/scanner/scanner.py#L602), [`worker.py` L137-139](file:///home/syafiq/code/hearth/app/services/jobs/worker.py#L137-L139)
+**Location:** [`app/services/scanner/scanner.py` L602,629](../../app/services/scanner/scanner.py#L602), [`worker.py` L137-139](../../app/services/jobs/worker.py#L137-L139)
 
 Each file opens a session + `SELECT Job.cancel_requested`. 5k files = 5k sessions while holding the probe/hash semaphore.
 
@@ -733,7 +733,7 @@ Each file opens a session + `SELECT Job.cancel_requested`. 5k files = 5k session
 
 ### 7.10 🟠 Serial metadata matching; rate-limit lock held across sleep
 
-**Location:** [`app/services/metadata/matching.py` L257,511,782,873](file:///home/syafiq/code/hearth/app/services/metadata/matching.py#L257), [`musicbrainz.py` L344-353](file:///home/syafiq/code/hearth/app/services/metadata/musicbrainz.py#L344-L353), [`tmdb.py` L666-673](file:///home/syafiq/code/hearth/app/services/metadata/tmdb.py#L666-L673)
+**Location:** [`app/services/metadata/matching.py` L257,511,782,873](../../app/services/metadata/matching.py#L257), [`musicbrainz.py` L344-353](../../app/services/metadata/musicbrainz.py#L344-L353), [`tmdb.py` L666-673](../../app/services/metadata/tmdb.py#L666-L673)
 
 `match_pending` loops items serially; top-3 candidate details and season fetches are sequential. MusicBrainz 1 req/s and TMDB 0.05 s throttles hold `_rate_lock` across `sleep`, imposing a hard floor (100 artists+albums ≈ 200 s).
 
@@ -742,7 +742,7 @@ Each file opens a session + `SELECT Job.cancel_requested`. 5k files = 5k session
 
 ### 7.11 🟡 OpenLibrary/GoogleBooks have no cache or throttle
 
-**Location:** [`app/services/metadata/openlibrary.py` L56-163](file:///home/syafiq/code/hearth/app/services/metadata/openlibrary.py#L56-L163), [`googlebooks.py` L55-170](file:///home/syafiq/code/hearth/app/services/metadata/googlebooks.py#L55-L170)
+**Location:** [`app/services/metadata/openlibrary.py` L56-163](../../app/services/metadata/openlibrary.py#L56-L163), [`googlebooks.py` L55-170](../../app/services/metadata/googlebooks.py#L55-L170)
 
 Every `search_book` / `fetch_book_details` hits the network with no `ProviderCache` and no `_throttle` (unlike TMDB/MusicBrainz), with a hard-coded 10 s timeout.
 
@@ -751,7 +751,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 
 ### 7.12 🟡 Image pipeline: serial artwork, memory blow-up, render race
 
-**Location:** [`app/services/images/pipeline.py` L218,322-341,408-416](file:///home/syafiq/code/hearth/app/services/images/pipeline.py#L218)
+**Location:** [`app/services/images/pipeline.py` L218,322-341,408-416](../../app/services/images/pipeline.py#L218)
 
 - `store_for_item:218` downloads artwork serially (TMDB returns 8 images → ~2 s/item).
 - `_download:408` `b"".join(chunks)` holds up to `image_max_download_bytes` (20 MB) × concurrency in RAM; `_read_local:430` `read_bytes()` same.
@@ -763,7 +763,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 
 ### 7.13 🟡 Polling churn: worker idle poll, SSE, transcode loops
 
-**Location:** [`worker.py` L247-259](file:///home/syafiq/code/hearth/app/services/jobs/worker.py#L247-L259), [`config.py` L75](file:///home/syafiq/code/hearth/app/core/config.py#L75), [`events.py` L129-149](file:///home/syafiq/code/hearth/app/api/v1/events.py#L129-L149), [`transcode/session.py` L181-449](file:///home/syafiq/code/hearth/app/services/transcode/session.py#L181-L449)
+**Location:** [`worker.py` L247-259](../../app/services/jobs/worker.py#L247-L259), [`config.py` L75](../../app/core/config.py#L75), [`events.py` L129-149](../../app/api/v1/events.py#L129-L149), [`transcode/session.py` L181-449](../../app/services/transcode/session.py#L181-L449)
 
 - Worker polls `GROUP BY` + `claim()` every 1 s idle (86k/day); slots-full sleeps full 1 s → new job latency up to 1 s.
 - SSE polls `SELECT ... WHERE updated_at > since LIMIT 100` every 1 s per client with `sleep(min(0.1, ...))` (10 wakeups/s/client); `jobs.updated_at` has no index → full scan per poll.
@@ -774,7 +774,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 
 ### 7.14 🟡 NFO/metadata helper loops: O(n²) scans, per-file stats
 
-**Location:** [`app/services/metadata/local.py` L335](file:///home/syafiq/code/hearth/app/services/metadata/local.py#L335), [`_match_series:634`, `_local_details:481`](file:///home/syafiq/code/hearth/app/services/metadata/matching.py#L634)
+**Location:** [`app/services/metadata/local.py` L335](../../app/services/metadata/local.py#L335), [`_match_series:634`, `_local_details:481`](../../app/services/metadata/matching.py#L634)
 
 `sorted(series_dir.glob("**/*.nfo"))` per `fetch_tv_season` walks the tree once per season; per-file `find_series`/`find_movie` re-opens NFO XML for up to 5 files sharing one parent dir; `_first_existing` does 24 `is_file()` stats per lookup.
 
@@ -792,7 +792,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 
 ### 7.16 🟡 Missing indexes + incomplete SQLite pragmas
 
-**Location:** [`app/db/models.py` L148-212](file:///home/syafiq/code/hearth/app/db/models.py#L148-L212), [`app/db/session.py` L22-31](file:///home/syafiq/code/hearth/app/db/session.py#L22-L31)
+**Location:** [`app/db/models.py` L148-212](../../app/db/models.py#L148-L212), [`app/db/session.py` L22-31](../../app/db/session.py#L22-L31)
 
 - `audit_log` `ORDER BY created_at DESC` (`admin.py:253`) — only `(actor_id, action)` indexed.
 - `jobs` `ORDER BY created_at DESC` (`jobs.py:115`) — only `(status, run_after)` indexed.
@@ -863,7 +863,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 
 ### 7.21 ✅ Playback start latency on low-power Intel hosts
 
-**Location:** [`app/services/transcode/capabilities.py`](file:///home/syafiq/code/hearth/app/services/transcode/capabilities.py), [`app/services/transcode/session.py`](file:///home/syafiq/code/hearth/app/services/transcode/session.py), [`app/services/transcode/builder.py`](file:///home/syafiq/code/hearth/app/services/transcode/builder.py), [`app/api/v1/hls.py`](file:///home/syafiq/code/hearth/app/api/v1/hls.py)
+**Location:** [`app/services/transcode/capabilities.py`](../../app/services/transcode/capabilities.py), [`app/services/transcode/session.py`](../../app/services/transcode/session.py), [`app/services/transcode/builder.py`](../../app/services/transcode/builder.py), [`app/api/v1/hls.py`](../../app/api/v1/hls.py)
 
 Measured on a Celeron J4005 (2 cores, UHD 600) with a 1080p source, timing from process spawn to `media.m3u8` + `init.mp4` (the response point of `master.m3u8`):
 

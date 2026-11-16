@@ -14,7 +14,7 @@ This document walks that path end to end and is written so you can implement the
 same behaviour in another app. It focuses on the **protocol and the decision
 logic**, not on ffmpeg argument construction.
 
-> Companion document: [`docs/transcoding.md`](transcoding.md) covers probing,
+> Companion document: [`Ferrofin Transcoding`](ferrofin_transcoding.md) covers probing,
 > encoder selection, hardware acceleration, and the exact ffmpeg/transcode-plan
 > internals. Read that when you need to know *how the bytes are produced*. Read
 > this when you need to know *what the client sends, what the server answers,

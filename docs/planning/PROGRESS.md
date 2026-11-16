@@ -20,7 +20,7 @@
 | 0.5 | Implement Typer CLI (`api`, `worker`, `migrate`, `create-admin`) | Complete | `feat: add Typer CLI entrypoints` |
 | 0.6 | Dockerfile (multi-stage, non-root, tini, VAAPI) and `compose.yaml` | Complete | `feat: add multi-stage Docker image and compose stack` |
 | 0.7 | GitHub Actions CI workflow | Complete | `ci: add lint, type, test, and container smoke workflow` |
-| 0.8 | Write `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, and finalize Phase 0 | Complete | `docs: add architecture overview and Phase 0 acceptance results` |
+| 0.8 | Write `docs/development/ARCHITECTURE.md`, `docs/decisions/DECISIONS.md`, and finalize Phase 0 | Complete | `docs: add architecture overview and Phase 0 acceptance results` |
 
 ### Phase 0 Acceptance Checklist
 
@@ -42,7 +42,7 @@
 - Green local quality gates and CI workflow (`.github/workflows/ci.yml`) covering lint,
   formatting, strict typing, tests, wheel build and a container health smoke test.
 - `docker compose up` serves `/api/v1/health` from the built image.
-- Architecture and decision records live in `docs/ARCHITECTURE.md` and `docs/DECISIONS.md`.
+- Architecture and decision records live in `docs/development/ARCHITECTURE.md` and `docs/decisions/DECISIONS.md`.
 
 ### Known Phase 0 Limitations (intentional)
 
@@ -430,7 +430,7 @@
   - Direct file download with range support (`GET /api/v1/books/{id}/formats/{format_id}/file`).
   - On-demand comic page extraction with width-constrained resizing and caching (`GET /api/v1/books/{id}/pages/{n}`).
   - Multi-client reading progress sync (`GET` & `POST /api/v1/books/{id}/progress`) supporting CFI, page numbers, percentages, and client state cross-synchronization.
-- Reader Integration Reference: Architectural guide (`docs/READER_INTEGRATION.md`) detailing FolioReader / Foliate-js vs epub.js integration, CFI locators, PDF.js integration, and virtualized comic viewer prefetching for Phase 9.
+- Reader Integration Reference: Architectural guide (`docs/development/READER_INTEGRATION.md`) detailing FolioReader / Foliate-js vs epub.js integration, CFI locators, PDF.js integration, and virtualized comic viewer prefetching for Phase 9.
 
 ### Known Phase 6 Limitations (intentional)
 
@@ -462,7 +462,7 @@
 ### Phase 7 Acceptance Checklist
 
 - [x] Decision engine matrix passes. Builder snapshot tests pass for every pipeline.
-- [x] On a machine with VAAPI: a 4K HEVC HDR fixture transcodes to 1080p H.264 SDR at faster than 1.0x speed, and GPU utilization is verified. Record results in `docs/HARDWARE_TESTS.md`.
+- [x] On a machine with VAAPI: a 4K HEVC HDR fixture transcodes to 1080p H.264 SDR at faster than 1.0x speed, and GPU utilization is verified. Record results in `docs/development/HARDWARE_TESTS.md`.
 - [x] On a machine without VAAPI: the same file plays through the software path.
 - [x] Seeking mid-stream works, killing the browser tab ends ffmpeg within the idle timeout, and no orphan ffmpeg processes remain after 20 start/stop cycles (automated test).
 - [x] Exceeding the concurrency cap returns a clean error, not a hang.
@@ -488,7 +488,7 @@
 - **Direct Music Transcoding (`api/v1/stream.py`)**: Direct on-the-fly chunked streaming endpoints `GET /api/v1/stream/audio/{track_id}/transcode` and `GET /api/v1/stream/{file_id}/transcode` transcoding FLAC/ALAC to Opus, MP3, or AAC with signal-based subprocess cancellation.
 - **Developer Test Player Upgrade (`tools/testplayer/index.html`)**: Integrated `hls.js` (v1.5.17) with MSE and Safari fallback, client profile presets, audio/subtitle selectors, and a real-time diagnostics panel displaying transcode plans, reasons, and FFmpeg commands.
 - **Admin Transcode Diagnostics (`api/v1/admin.py`)**: Administrative session management via `GET /api/v1/admin/transcoding/sessions`, session termination via `POST` & `DELETE /api/v1/admin/transcoding/sessions/{id}/stop`, and 200-line stderr tailing via `GET /api/v1/admin/transcoding/sessions/{id}/logs`.
-- **Hardware Benchmarks (`docs/HARDWARE_TESTS.md`)**: Full VAAPI hardware test report verifying 4K HEVC HDR10 downscaling and tonemapping to 1080p H.264 SDR running at 1.50x - 1.86x real-time speed on `/dev/dri/renderD128`.
+- **Hardware Benchmarks (`docs/development/HARDWARE_TESTS.md`)**: Full VAAPI hardware test report verifying 4K HEVC HDR10 downscaling and tonemapping to 1080p H.264 SDR running at 1.50x - 1.86x real-time speed on `/dev/dri/renderD128`.
 
 ### Known Phase 7 Limitations (intentional)
 
@@ -512,7 +512,7 @@
 | 8.6 | Real-time events: extend SSE with scan progress, library updated, and now playing | Complete | `de439db` |
 | 8.7 | API hardening: CORS, request size limit, ETags on item detail, input validation, OpenAPI response types | Complete | `463a401` |
 | 8.8 | Generate typed API client artifact (`packages/client/src/schema.d.ts`) | Complete | `4c3c2cf` |
-| 8.9 | Write `docs/API.md` with authentication flows and playback-info contract | Complete | `a2993e5` |
+| 8.9 | Write `docs/development/API.md` with authentication flows and playback-info contract | Complete | `a2993e5` |
 
 ### Phase 8 Acceptance Checklist
 
@@ -620,7 +620,7 @@
 - API hardening: CORS, request size limit (413), ETags/304 and `?fields=`
   selection on item detail, input validation, typed OpenAPI responses.
 - `packages/client/src/schema.d.ts` typed client artifact (240 KB) and
-  `docs/API.md` (321 lines) documenting auth flows and the playback-info
+  `docs/development/API.md` (321 lines) documenting auth flows and the playback-info
   contract.
 - **Acceptance 1:** `tests/integration/test_authz_matrix.py` — declared policy
   table for all 118 OpenAPI operations, dependency-wiring cross-check, and
@@ -655,7 +655,7 @@
 
 | Task | Description | Status | Commit |
 | --- | --- | --- | --- |
-| 9.1 (Step 1) | Write `docs/FRONTEND_DECISION.md` comparing React+Vite, SvelteKit SPA and Vue+Vite on the six plan criteria, with a recommendation; stop for human approval before building | Complete (approved) | `docs: add frontend decision analysis and recommendation`; approval recorded in `docs: record human approval of the sveltekit frontend decision` |
+| 9.1 (Step 1) | Write `docs/development/FRONTEND_DECISION.md` comparing React+Vite, SvelteKit SPA and Vue+Vite on the six plan criteria, with a recommendation; stop for human approval before building | Complete (approved) | `docs: add frontend decision analysis and recommendation`; approval recorded in `docs: record human approval of the sveltekit frontend decision` |
 | 9.2 (Step 2) | Scaffold `web/` with the generated API client; serve the static build from FastAPI at `/` | Complete | `44ede9e` (the `web/src/lib` layer landed in `2b44771` after a `.gitignore` fix) |
 | 9.3 (Step 2) | Screens in order: setup/login, home, library grid, detail, video player, music, books, search, profile, admin | Complete | `2b44771`, `28a4563`, `29446c2`, `c8a3c5e`, `ad9d7f1`, `440a5c8`, `10d8a12`, `d46ed51`, `2a230f9` |
 | 9.4 (Step 2) | Responsive phone/tablet/desktop layout plus focus-managed 10-foot TV mode | Complete | `e977208` |
@@ -664,7 +664,7 @@
 
 ### Phase 9 Step 1 — Decision (2026-10-28)
 
-- Delivered `docs/FRONTEND_DECISION.md`: three options (React 19 + Vite,
+- Delivered `docs/development/FRONTEND_DECISION.md`: three options (React 19 + Vite,
   SvelteKit as an SPA, Vue 3 + Vite) compared on HLS playback, TV D-pad
   navigation, EPUB/PDF reader ecosystem, bundle size, typed client generation
   and long-term maintainability.
@@ -686,7 +686,7 @@
 - **Approval (2026-10-28): the human chose Option B — SvelteKit as an
   SPA**, overriding the agent's recommendation (the plan gives the final call
   to the human). ADR 063 flipped to `Accepted`; §9 of
-  `docs/FRONTEND_DECISION.md` records the build consequences: adapter-static
+  `docs/development/FRONTEND_DECISION.md` records the build consequences: adapter-static
   SPA mode, in-house Svelte spatial-focus action for TV mode (no dedicated
   Svelte TV library), direct foliate-js/pdf.js web-component integration, and
   the 16.0 KB app-shell advantage in service of the Lighthouse gate.
@@ -929,7 +929,7 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 | 10.4 | Observability: optional Prometheus `/metrics` endpoint (off by default), structured logs, admin log viewer, clear error messages when ffmpeg/VAAPI fails. | Complete | `feat(observability): add prometheus metrics, admin log viewer, and structured errors` |
 | 10.5 | Documentation: README quick start, compose examples for Intel/AMD, hardware transcoding guide, reverse proxy examples, backup/upgrade guide, troubleshooting FAQ. | Complete | `docs: add deployment, hardware transcode, reverse proxy, and operations documentation` |
 | 10.6 | Release engineering: semantic versioning, multi-arch image build (amd64 min), published image with tagged release, changelog, migration compatibility test. | Complete | `chore(release): configure release engineering, multi-arch build, and migration compatibility` |
-| 10.7 | Final acceptance run: fresh install on real server, real library of each media type, full manual checklist in `docs/RELEASE_CHECKLIST.md`. | Complete | `docs: complete release acceptance checklist and finalize Phase 10` |
+| 10.7 | Final acceptance run: fresh install on real server, real library of each media type, full manual checklist in `docs/development/RELEASE_CHECKLIST.md`. | Complete | `docs: complete release acceptance checklist and finalize Phase 10` |
 
 ### Task 10.1 Load Test Simulation Results
 
@@ -991,21 +991,21 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
   - Streamlined Docker Compose v2 setup highlighting the embedded Web UI, initial admin setup, library creation, and client access.
   - Added hardware transcoding profile selection: Intel QuickSync (default), AMD Radeon, and CPU software transcoding.
   - Linked all operator and developer guides.
-- **Hardware Transcoding Guide (`docs/HARDWARE_TRANSCODING.md`)**:
+- **Hardware Transcoding Guide (`docs/guides/HARDWARE_TRANSCODING.md`)**:
   - Details DRM render node discovery (`/dev/dri/renderD128`), host group ID resolution (`getent group render`, `stat -c '%g'`), and Docker `group_add` configuration.
   - Driver verification procedures with `vainfo` inside the container and API capabilities probe (`GET /api/v1/admin/transcoding/capabilities`).
   - In-depth troubleshooting matrix for `vaInitialize failed`, `vaGetDriverNameByIndex()`, missing `/dev/dri`, tonemapping failures, and `/transcode` disk space limits.
 - **Compose Profiles (`docker/compose.intel.yaml`, `docker/compose.amd.yaml`)**:
   - Intel QuickSync configuration setting `LIBVA_DRIVER_NAME=iHD` and host render GID pass-through.
   - AMD Radeon configuration passing both `/dev/dri/renderD128` and `/dev/kfd` with `LIBVA_DRIVER_NAME=radeonsi` and both `render` and `video` group permissions.
-- **Reverse Proxy Guide & Examples (`docs/REVERSE_PROXY.md`, `docker/examples/`)**:
+- **Reverse Proxy Guide & Examples (`docs/guides/REVERSE_PROXY.md`, `docker/examples/`)**:
   - Architectural requirements for SSE stream flushing (`/api/v1/events`), range request pass-through (`Accept-Ranges`), header forwarding (`X-Forwarded-*`), and large backup restore payload limits (500MB).
   - Production-ready templates for **Caddy** (`docker/examples/caddy/Caddyfile`), **Traefik** (`docker/examples/traefik/compose.traefik.yaml`), and **Nginx**.
-- **Backup & Upgrade Guide (`docs/BACKUP_AND_UPGRADE.md`)**:
+- **Backup & Upgrade Guide (`docs/guides/BACKUP_AND_UPGRADE.md`)**:
   - Safe, atomic SQLite online backups via API (`POST /api/v1/admin/backup`) and CLI (`hearth backup`).
   - Cold recovery and disaster restore on fresh servers (`POST /api/v1/admin/restore`, `hearth restore`).
   - Safe multi-step container upgrade workflow with automated startup migrations, lock handling, and rollback procedures.
-- **Troubleshooting FAQ (`docs/TROUBLESHOOTING.md`)**:
+- **Troubleshooting FAQ (`docs/guides/TROUBLESHOOTING.md`)**:
   - Common operational questions covering playback stuttering, GPU acceleration failures, scanner file permissions and naming, database concurrency/locking on network filesystems, SSE proxy buffering, and diagnostic log inspection.
 
 ### Task 10.6 Release Engineering Deliverables
@@ -1028,12 +1028,12 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 
 ### Phase 10 Acceptance Checklist
 
-- [x] **Every item in `docs/RELEASE_CHECKLIST.md` is checked off**:
+- [x] **Every item in `docs/development/RELEASE_CHECKLIST.md` is checked off**:
   - Automated tests verify load simulation (15 users, 0 dropped segments, p95 260.47 ms < 300 ms), resilience under fault injection (server restart, unmounted storage, full disk, corrupted media, SQLite contention), security audit (clean `pip-audit`, headers, traversal prevention, SSRF defense, secret masking), observability (Prometheus `/metrics`, admin logs), and schema migration compatibility.
   - Real library scanning and streaming verified for movies, TV series, music, and books/comics.
   - Responsive web UI and TV mode verified (Lighthouse 100 on desktop profile, Playwright e2e 9/9 green).
   - Hardware-dependent item (AMD Radeon VA-API) documented with configuration in `docker/compose.amd.yaml` and flagged for human manual verification on physical AMD hardware.
-- [x] **No open high-severity issues in `docs/PROGRESS.md`**:
+- [x] **No open high-severity issues in `docs/planning/PROGRESS.md`**:
   - Zero open blockers, security vulnerabilities, or failing tests.
 
 ### Phase 10 Deliverables
@@ -1042,9 +1042,9 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 - **Resilience Suite (`tests/integration/test_resilience.py`)**: Comprehensive fault-injection verifying automatic session directory sweeping on restart, recovery of orphaned background jobs, 404 on unmounted libraries, 503 capacity limit on full cache, quarantine of corrupted media, and WAL write lock safety.
 - **Security Hardening (`tests/security/test_security_review.py`)**: Dependency audit gate (`pip-audit`), path traversal protection on HLS/streams/subtitles, media token isolation, SSRF domain allowlisting in `ImagePipeline`, default-deny CORS, defense-in-depth HTTP security headers (`SecurityHeadersMiddleware`), and log secret redacting (`JSONFormatter`, `RingBufferLogHandler`).
 - **Observability System (`app/core/metrics.py`, `tests/integration/test_observability.py`)**: Prometheus exposition endpoint (`GET /metrics`), structured log viewer with level and keyword search (`GET /api/v1/admin/logs`), and detailed stderr diagnostics for ffmpeg/VAAPI failures.
-- **Deployment & Operator Guides**: Quick start in `README.md`, Hardware Transcoding Guide (`docs/HARDWARE_TRANSCODING.md`), Reverse Proxy Guide (`docs/REVERSE_PROXY.md`), Backup & Upgrade Guide (`docs/BACKUP_AND_UPGRADE.md`), and Troubleshooting FAQ (`docs/TROUBLESHOOTING.md`).
+- **Deployment & Operator Guides**: Quick start in `README.md`, Hardware Transcoding Guide (`docs/guides/HARDWARE_TRANSCODING.md`), Reverse Proxy Guide (`docs/guides/REVERSE_PROXY.md`), Backup & Upgrade Guide (`docs/guides/BACKUP_AND_UPGRADE.md`), and Troubleshooting FAQ (`docs/guides/TROUBLESHOOTING.md`).
 - **Release Engineering (`v1.0.0`)**: Semantic versioning bump, multi-arch Docker image workflow (`.github/workflows/release.yml`), `CHANGELOG.md`, and migration compatibility test suite (`tests/integration/test_migrations.py`).
-- **Release Checklist (`docs/RELEASE_CHECKLIST.md`)**: Full release verification matrix.
+- **Release Checklist (`docs/development/RELEASE_CHECKLIST.md`)**: Full release verification matrix.
 
 ---
 

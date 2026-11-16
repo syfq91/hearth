@@ -10,7 +10,7 @@ Hearth's backend is complete and API-first through Phase 8: a stable OpenAPI
 schema (`docs/openapi.json`, 102 paths / 118 operations), a generated typed
 client artifact (`packages/client/src/schema.d.ts` via `openapi-typescript`),
 HLS fMP4 transcoding with `hls.js`-compatible playlists, native book APIs with
-EPUB/PDF/CBZ readers (`docs/READER_INTEGRATION.md`), and SSE events. Phase 9
+EPUB/PDF/CBZ readers (`docs/development/READER_INTEGRATION.md`), and SSE events. Phase 9
 must choose a frontend framework and build the first usable UI against that
 API, then prove it with Playwright e2e tests in CI, a `docker compose up` →
 watch-a-video first-run flow, and a Lighthouse performance score ≥ 80 on the
@@ -148,7 +148,7 @@ ecosystem is the safety net, not a hard dependency.
 
 ### 5.3 Criterion 3 — Reader ecosystem: slight React advantage, effectively neutral
 
-`docs/READER_INTEGRATION.md` (Phase 6) already fixes the integration contract:
+`docs/development/READER_INTEGRATION.md` (Phase 6) already fixes the integration contract:
 **foliate-js** for EPUB (CFI locators, 1500 ms debounced progress PUTs),
 **pdf.js** for PDF, and a virtualized canvas pipeline for CBZ pages against
 `/api/v1/books/{id}/pages/{n}`. Both libraries are framework-agnostic ES
@@ -214,7 +214,7 @@ Weights are equal; scores are 1–5 per criterion.
   roving tabindex + arrow-key geometry, so 10-foot mode is unit-testable and
   portable rather than coupled to a third-party library.
 - **Auth via bearer tokens in memory + refresh rotation**, matching
-  `docs/API.md`; media tokens minted for `<video>` / `<img>` query strings.
+  `docs/development/API.md`; media tokens minted for `<video>` / `<img>` query strings.
 - **Served by FastAPI** from `web/dist` at `/` with an SPA fallback, so
   `docker compose up` yields the UI at the same origin as the API (no CORS
   in production).
@@ -268,7 +268,7 @@ record as the evidence base). Consequences the build must honor:
   and visible focus rings for the 10-foot layout.
 - **Readers**: foliate-js and pdf.js are web components / ES modules, which
   Svelte hosts natively (no wrapper layer); the integration contract in
-  `docs/READER_INTEGRATION.md` is unchanged.
+  `docs/development/READER_INTEGRATION.md` is unchanged.
 - **Bundle**: keeps the measured 16.0 KB app-shell advantage, the option's
   strongest criterion, in service of the Lighthouse ≥ 80 gate.
 - **Typed client**: `packages/client/src/schema.d.ts` is consumed through a

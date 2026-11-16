@@ -205,4 +205,4 @@ themselves never create or migrate it.
   Python 3.12, then builds the image and asserts the CPU-only health contract
   and non-root identity.
 - Hardware verification is manual on the real server; results are recorded in
-  `docs/PROGRESS.md`.
+  `docs/planning/PROGRESS.md`.
