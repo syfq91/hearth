@@ -11,12 +11,9 @@
 		Maximize,
 		Minimize,
 		PictureInPicture2,
-		SlidersHorizontal,
-		Info,
-		Scan,
 		Languages,
 		Captions,
-		Gauge
+		Settings
 	} from '@lucide/svelte';
 	import { api } from '../api/client';
 	import { detectBrowserCapabilities, getCapabilitiesWithBurnInFallback } from '../capabilities';
@@ -83,7 +80,7 @@
 	let isUserActive = $state(true);
 	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
 	let showModeBadge = $state(false);
-	let openMenu = $state<'audio' | 'subtitle' | 'speed' | null>(null);
+	let openMenu = $state<'audio' | 'subtitle' | 'options' | null>(null);
 
 	// Fullscreen & PiP states
 	let isFullscreen = $state(false);
@@ -110,6 +107,11 @@
 	const REPORT_INTERVAL_MS = 10_000;
 	const HIDE_DELAY_MS = 1500;
 	const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+	const ASPECT_RATIOS = [
+		{ value: 'contain', label: 'Contain (fit)' },
+		{ value: 'cover', label: 'Cover (crop)' },
+		{ value: 'fill', label: 'Fill (stretch)' }
+	] as const;
 
 	const duration = $derived.by(() => {
 		if (rawDuration > 0 && Number.isFinite(rawDuration)) return rawDuration;
@@ -153,7 +155,7 @@
 		triggerActivity();
 	}
 
-	function toggleMenu(menu: 'audio' | 'subtitle' | 'speed'): void {
+	function toggleMenu(menu: 'audio' | 'subtitle' | 'options'): void {
 		openMenu = openMenu === menu ? null : menu;
 		triggerActivity();
 	}
@@ -295,14 +297,8 @@
 		videoEl.playbackRate = newRate;
 	}
 
-	function cycleAspectRatio(): void {
-		if (aspectRatio === 'contain') {
-			aspectRatio = 'cover';
-		} else if (aspectRatio === 'cover') {
-			aspectRatio = 'fill';
-		} else {
-			aspectRatio = 'contain';
-		}
+	function setAspectRatio(mode: 'contain' | 'cover' | 'fill'): void {
+		aspectRatio = mode;
 		if (subtitleManager) {
 			subtitleManager.resize();
 		}
@@ -371,11 +367,15 @@
 				break;
 			case 's':
 				event.preventDefault();
-				showSubSync = !showSubSync;
+				if (showSubSync) {
+					showSubSync = false;
+				} else {
+					openSubtitleSync();
+				}
 				break;
 			case 'i':
 				event.preventDefault();
-				showModeBadge = !showModeBadge;
+				toggleStreamInfo();
 				break;
 			case 'Escape':
 				if (openMenu) {
@@ -670,6 +670,21 @@
 	function selectPlaybackRate(rate: number): void {
 		handlePlaybackRateChange(rate);
 		openMenu = null;
+	}
+
+	function selectAspectRatio(mode: 'contain' | 'cover' | 'fill'): void {
+		setAspectRatio(mode);
+		openMenu = null;
+	}
+
+	function openSubtitleSync(): void {
+		openMenu = null;
+		showSubSync = true;
+	}
+
+	function toggleStreamInfo(): void {
+		openMenu = null;
+		showModeBadge = !showModeBadge;
 	}
 
 	function handleQualityChange(event: Event): void {
@@ -989,7 +1004,7 @@
 					? 'Audio tracks'
 					: openMenu === 'subtitle'
 						? 'Subtitle tracks'
-						: 'Playback speed'}
+						: 'Playback options'}
 			>
 				{#if openMenu === 'audio'}
 					<div class="menu-heading" role="presentation">Audio</div>
@@ -1065,6 +1080,49 @@
 							{rate}x
 						</button>
 					{/each}
+
+					<div class="menu-heading" role="presentation">Aspect ratio</div>
+					{#each ASPECT_RATIOS as option (option.value)}
+						<button
+							type="button"
+							role="menuitemradio"
+							aria-checked={aspectRatio === option.value}
+							class="menu-item"
+							class:selected={aspectRatio === option.value}
+							onclick={() => selectAspectRatio(option.value)}
+						>
+							{option.label}
+						</button>
+					{/each}
+
+					<div class="menu-heading" role="presentation">More</div>
+					{#if availableSubtitles.length > 0 || availableEmbeddedSubtitles.length > 0}
+						<button
+							type="button"
+							role="menuitem"
+							class="menu-item"
+							class:selected={currentSubOffset !== 0}
+							onclick={openSubtitleSync}
+						>
+							Subtitle timing
+							{#if currentSubOffset !== 0}
+								<span class="menu-hint">
+									{currentSubOffset > 0 ? '+' : ''}{currentSubOffset.toFixed(2)}s
+								</span>
+							{/if}
+						</button>
+					{/if}
+					{#if info}
+						<button
+							type="button"
+							role="menuitem"
+							class="menu-item"
+							class:selected={showModeBadge}
+							onclick={toggleStreamInfo}
+						>
+							Stream info
+						</button>
+					{/if}
 				{/if}
 			</div>
 		{/if}
@@ -1210,46 +1268,20 @@
 					>
 						<Captions size={19} />
 					</button>
-
-					<!-- Subtitle Sync Button -->
-					<button
-						type="button"
-						class="icon-btn"
-						class:active={showSubSync}
-						onclick={() => {
-							openMenu = null;
-							showSubSync = !showSubSync;
-						}}
-						title="Subtitle Sync / Calibration"
-						aria-label="Subtitle synchronization"
-					>
-						<SlidersHorizontal size={18} />
-					</button>
 				{/if}
 
-				<!-- Playback rate -->
+				<!-- Playback options: speed, aspect ratio, subtitle timing, stream info -->
 				<button
 					type="button"
 					class="icon-btn"
-					class:active={openMenu === 'speed' || playbackRate !== 1}
-					onclick={() => toggleMenu('speed')}
-					title="Playback speed"
-					aria-label="Playback speed"
+					class:active={openMenu === 'options' || playbackRate !== 1 || aspectRatio !== 'contain'}
+					onclick={() => toggleMenu('options')}
+					title="Playback options"
+					aria-label="Playback options"
 					aria-haspopup="menu"
-					aria-expanded={openMenu === 'speed'}
+					aria-expanded={openMenu === 'options'}
 				>
-					<Gauge size={18} />
-				</button>
-
-				<!-- Aspect Ratio Selector -->
-				<button
-					type="button"
-					class="icon-btn"
-					onclick={cycleAspectRatio}
-					title="Aspect Ratio ({aspectRatio})"
-					aria-label="Aspect Ratio {aspectRatio}"
-				>
-					<Scan size={18} />
+					<Settings size={18} />
 				</button>
 
 				<!-- Quality Selector -->
@@ -1270,20 +1302,6 @@
 							{/each}
 						</select>
 					</label>
-				{/if}
-
-				<!-- Stream Info -->
-				{#if info}
-					<button
-						type="button"
-						class="icon-btn"
-						class:active={showModeBadge}
-						onclick={() => (showModeBadge = !showModeBadge)}
-						title="Stream Info / Transcode Status"
-						aria-label="Stream information"
-					>
-						<Info size={19} />
-					</button>
 				{/if}
 
 				<!-- Picture in Picture -->
@@ -1736,6 +1754,13 @@
 	.menu-item.selected {
 		color: var(--accent);
 		font-weight: 600;
+	}
+
+	.menu-item .menu-hint {
+		margin-left: 0.35rem;
+		font-size: 0.75rem;
+		color: var(--muted);
+		font-family: ui-monospace, monospace;
 	}
 
 	.buffering-spinner {
