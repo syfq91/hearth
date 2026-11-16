@@ -76,6 +76,7 @@ class UserResponse(BaseModel):
     preferred_audio_language: str | None = None
     preferred_subtitle_language: str | None = None
     subtitle_mode: str = "smart"
+    auto_play_next: str = "prompt"
     created_at: datetime
 
 

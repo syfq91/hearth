@@ -2,6 +2,7 @@
 	import VideoPlayer from '../../../lib/components/VideoPlayer.svelte';
 	import { findNextEpisode, type NextEpisode } from '../../../lib/api/next-episode';
 	import { goto } from '$app/navigation';
+	import { session } from '../../../lib/auth.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -33,8 +34,16 @@
 		ended = true;
 		returnFocus = document.activeElement as HTMLElement | null;
 		if (data.item.type !== 'episode') return;
+		const autoPlayMode = session.user?.auto_play_next ?? 'prompt';
+		if (autoPlayMode === 'no') {
+			next = null;
+			return;
+		}
 		try {
 			next = await findNextEpisode(data.item.id);
+			if (next && autoPlayMode === 'yes') {
+				playNext();
+			}
 		} catch {
 			next = null;
 		}

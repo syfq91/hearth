@@ -7381,6 +7381,16 @@
             "title": "Allow Transcode",
             "type": "boolean"
           },
+          "auto_play_next": {
+            "default": "prompt",
+            "enum": [
+              "yes",
+              "no",
+              "prompt"
+            ],
+            "title": "Auto Play Next",
+            "type": "string"
+          },
           "library_ids": {
             "items": {
               "type": "string"
@@ -7480,6 +7490,11 @@
           "allow_transcode": {
             "title": "Allow Transcode",
             "type": "boolean"
+          },
+          "auto_play_next": {
+            "default": "prompt",
+            "title": "Auto Play Next",
+            "type": "string"
           },
           "created_at": {
             "format": "date-time",
@@ -7586,6 +7601,11 @@
       },
       "UserPreferencesResponse": {
         "properties": {
+          "auto_play_next": {
+            "default": "prompt",
+            "title": "Auto Play Next",
+            "type": "string"
+          },
           "preferred_audio_language": {
             "anyOf": [
               {
@@ -7619,6 +7639,22 @@
       },
       "UserPreferencesUpdate": {
         "properties": {
+          "auto_play_next": {
+            "anyOf": [
+              {
+                "enum": [
+                  "yes",
+                  "no",
+                  "prompt"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Play Next"
+          },
           "preferred_audio_language": {
             "anyOf": [
               {
@@ -7668,6 +7704,11 @@
           "allow_transcode": {
             "title": "Allow Transcode",
             "type": "boolean"
+          },
+          "auto_play_next": {
+            "default": "prompt",
+            "title": "Auto Play Next",
+            "type": "string"
           },
           "created_at": {
             "format": "date-time",
@@ -7765,6 +7806,22 @@
               }
             ],
             "title": "Allow Transcode"
+          },
+          "auto_play_next": {
+            "anyOf": [
+              {
+                "enum": [
+                  "yes",
+                  "no",
+                  "prompt"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Play Next"
           },
           "disabled": {
             "anyOf": [

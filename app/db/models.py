@@ -29,6 +29,7 @@ class User(TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint("role IN ('admin', 'user')", name="role"),
         CheckConstraint("subtitle_mode IN ('always', 'never', 'smart')", name="subtitle_mode"),
+        CheckConstraint("auto_play_next IN ('yes', 'no', 'prompt')", name="auto_play_next"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -47,6 +48,7 @@ class User(TimestampMixin, Base):
         String(16), default=None, nullable=True
     )
     subtitle_mode: Mapped[str] = mapped_column(String(16), default="smart", nullable=False)
+    auto_play_next: Mapped[str] = mapped_column(String(16), default="prompt", nullable=False)
     # Incremented on password reset or forced logout so old access tokens die.
     token_version: Mapped[int] = mapped_column(Integer, default=0)
     last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), default=None)

@@ -5146,6 +5146,12 @@ export interface components {
              * @default true
              */
             allow_transcode: boolean;
+            /**
+             * Auto Play Next
+             * @default prompt
+             * @enum {string}
+             */
+            auto_play_next: "yes" | "no" | "prompt";
             /** Library Ids */
             library_ids?: string[];
             /** Max Bitrate */
@@ -5177,6 +5183,11 @@ export interface components {
         UserDetail: {
             /** Allow Transcode */
             allow_transcode: boolean;
+            /**
+             * Auto Play Next
+             * @default prompt
+             */
+            auto_play_next: string;
             /**
              * Created At
              * Format: date-time
@@ -5218,6 +5229,11 @@ export interface components {
         };
         /** UserPreferencesResponse */
         UserPreferencesResponse: {
+            /**
+             * Auto Play Next
+             * @default prompt
+             */
+            auto_play_next: string;
             /** Preferred Audio Language */
             preferred_audio_language?: string | null;
             /** Preferred Subtitle Language */
@@ -5230,6 +5246,8 @@ export interface components {
         };
         /** UserPreferencesUpdate */
         UserPreferencesUpdate: {
+            /** Auto Play Next */
+            auto_play_next?: ("yes" | "no" | "prompt") | null;
             /** Preferred Audio Language */
             preferred_audio_language?: string | null;
             /** Preferred Subtitle Language */
@@ -5241,6 +5259,11 @@ export interface components {
         UserResponse: {
             /** Allow Transcode */
             allow_transcode: boolean;
+            /**
+             * Auto Play Next
+             * @default prompt
+             */
+            auto_play_next: string;
             /**
              * Created At
              * Format: date-time
@@ -5272,6 +5295,8 @@ export interface components {
         UserUpdate: {
             /** Allow Transcode */
             allow_transcode?: boolean | null;
+            /** Auto Play Next */
+            auto_play_next?: ("yes" | "no" | "prompt") | null;
             /** Disabled */
             disabled?: boolean | null;
             /** Library Ids */

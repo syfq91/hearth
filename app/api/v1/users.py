@@ -22,6 +22,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 Role = Literal["admin", "user"]
 SubtitleMode = Literal["always", "never", "smart"]
+AutoPlayNext = Literal["yes", "no", "prompt"]
 
 
 class UserCreate(BaseModel):
@@ -34,6 +35,7 @@ class UserCreate(BaseModel):
     preferred_audio_language: str | None = Field(default=None, max_length=16)
     preferred_subtitle_language: str | None = Field(default=None, max_length=16)
     subtitle_mode: SubtitleMode = "smart"
+    auto_play_next: AutoPlayNext = "prompt"
     library_ids: list[str] = Field(default_factory=list)
 
 
@@ -47,6 +49,7 @@ class UserUpdate(BaseModel):
     preferred_audio_language: str | None = Field(default=None, max_length=16)
     preferred_subtitle_language: str | None = Field(default=None, max_length=16)
     subtitle_mode: SubtitleMode | None = None
+    auto_play_next: AutoPlayNext | None = None
     library_ids: list[str] | None = None
 
 
@@ -66,12 +69,14 @@ class UserPreferencesResponse(BaseModel):
     preferred_audio_language: str | None = None
     preferred_subtitle_language: str | None = None
     subtitle_mode: str = "smart"
+    auto_play_next: str = "prompt"
 
 
 class UserPreferencesUpdate(BaseModel):
     preferred_audio_language: str | None = Field(default=None, max_length=16)
     preferred_subtitle_language: str | None = Field(default=None, max_length=16)
     subtitle_mode: SubtitleMode | None = None
+    auto_play_next: AutoPlayNext | None = None
 
 
 class UserDetail(BaseModel):
@@ -85,6 +90,7 @@ class UserDetail(BaseModel):
     preferred_audio_language: str | None = None
     preferred_subtitle_language: str | None = None
     subtitle_mode: str = "smart"
+    auto_play_next: str = "prompt"
     created_at: datetime
     updated_at: datetime
     library_ids: list[str]
@@ -112,6 +118,7 @@ async def _detail(session: AsyncSession, user: User) -> UserDetail:
         preferred_audio_language=user.preferred_audio_language,
         preferred_subtitle_language=user.preferred_subtitle_language,
         subtitle_mode=user.subtitle_mode,
+        auto_play_next=user.auto_play_next,
         created_at=user.created_at,
         updated_at=user.updated_at,
         library_ids=await _grants_by_user(session, user.id),
@@ -197,6 +204,7 @@ async def create_user(
         preferred_audio_language=payload.preferred_audio_language,
         preferred_subtitle_language=payload.preferred_subtitle_language,
         subtitle_mode=payload.subtitle_mode,
+        auto_play_next=payload.auto_play_next,
     )
     session.add(user)
     try:
@@ -263,6 +271,7 @@ async def get_my_preferences(user: RequireUser) -> UserPreferencesResponse:
         preferred_audio_language=user.preferred_audio_language,
         preferred_subtitle_language=user.preferred_subtitle_language,
         subtitle_mode=user.subtitle_mode,
+        auto_play_next=user.auto_play_next,
     )
 
 
@@ -289,6 +298,8 @@ async def update_my_preferences(
         db_user.preferred_subtitle_language = sub_val or None
     if payload.subtitle_mode is not None:
         db_user.subtitle_mode = payload.subtitle_mode
+    if payload.auto_play_next is not None:
+        db_user.auto_play_next = payload.auto_play_next
     await session.commit()
     await session.refresh(db_user)
     return UserResponse.model_validate(db_user)
@@ -369,6 +380,8 @@ async def update_user(
         user.preferred_subtitle_language = payload.preferred_subtitle_language
     if payload.subtitle_mode is not None:
         user.subtitle_mode = payload.subtitle_mode
+    if payload.auto_play_next is not None:
+        user.auto_play_next = payload.auto_play_next
 
     if payload.library_ids is not None:
         library_ids = await _validate_library_ids(session, payload.library_ids)

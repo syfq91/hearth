@@ -9,6 +9,7 @@
 	let preferredAudio = $state('');
 	let preferredSubtitle = $state('');
 	let subtitleMode = $state<'always' | 'never' | 'smart'>('smart');
+	let autoPlayNext = $state<'yes' | 'no' | 'prompt'>('prompt');
 	let prefBusy = $state(false);
 	let prefMessage = $state<string | null>(null);
 	let prefError = $state<string | null>(null);
@@ -18,6 +19,7 @@
 			preferredAudio = user.preferred_audio_language ?? '';
 			preferredSubtitle = user.preferred_subtitle_language ?? '';
 			subtitleMode = (user.subtitle_mode as 'always' | 'never' | 'smart') ?? 'smart';
+			autoPlayNext = (user.auto_play_next as 'yes' | 'no' | 'prompt') ?? 'prompt';
 		}
 	});
 
@@ -31,7 +33,8 @@
 				body: {
 					preferred_audio_language: preferredAudio || null,
 					preferred_subtitle_language: preferredSubtitle || null,
-					subtitle_mode: subtitleMode
+					subtitle_mode: subtitleMode,
+					auto_play_next: autoPlayNext
 				}
 			});
 			await reloadUser();
@@ -158,6 +161,14 @@
 					<option value="smart">Smart (when audio is foreign)</option>
 					<option value="always">Always show</option>
 					<option value="never">Never show</option>
+				</select>
+			</label>
+			<label>
+				<span>Auto-play next episode</span>
+				<select bind:value={autoPlayNext}>
+					<option value="prompt">Prompt (ask when episode ends)</option>
+					<option value="yes">Yes (play next automatically)</option>
+					<option value="no">No (do not play next)</option>
 				</select>
 			</label>
 			<button type="submit" disabled={prefBusy}>
