@@ -1,0 +1,77 @@
+export interface LanguageOption {
+	code: string;
+	label: string;
+}
+
+export const COMMON_LANGUAGES: LanguageOption[] = [
+	{ code: 'en', label: 'English' },
+	{ code: 'ja', label: 'Japanese' },
+	{ code: 'es', label: 'Spanish' },
+	{ code: 'fr', label: 'French' },
+	{ code: 'de', label: 'German' },
+	{ code: 'it', label: 'Italian' },
+	{ code: 'pt', label: 'Portuguese' },
+	{ code: 'zh', label: 'Chinese' },
+	{ code: 'ko', label: 'Korean' },
+	{ code: 'ru', label: 'Russian' },
+	{ code: 'ar', label: 'Arabic' },
+	{ code: 'hi', label: 'Hindi' },
+	{ code: 'nl', label: 'Dutch' },
+	{ code: 'pl', label: 'Polish' },
+	{ code: 'sv', label: 'Swedish' },
+	{ code: 'tr', label: 'Turkish' },
+	{ code: 'id', label: 'Indonesian' },
+	{ code: 'vi', label: 'Vietnamese' },
+	{ code: 'th', label: 'Thai' }
+];
+
+const COMMON_LANGUAGE_ALIASES: Record<string, string[]> = {
+	en: ['eng', 'english'],
+	ja: ['jpn', 'japanese'],
+	es: ['spa', 'spanish', 'espanol', 'español'],
+	fr: ['fra', 'fre', 'french', 'francais', 'français'],
+	de: ['deu', 'ger', 'german', 'deutsch'],
+	it: ['ita', 'italian', 'italiano'],
+	pt: ['por', 'portuguese', 'português'],
+	zh: ['zho', 'chi', 'chinese'],
+	ko: ['kor', 'korean'],
+	ru: ['rus', 'russian'],
+	ar: ['ara', 'arabic'],
+	hi: ['hin', 'hindi'],
+	nl: ['nld', 'dut', 'dutch'],
+	pl: ['pol', 'polish'],
+	sv: ['swe', 'swedish'],
+	tr: ['tur', 'turkish'],
+	id: ['ind', 'indonesian'],
+	vi: ['vie', 'vietnamese'],
+	th: ['tha', 'thai']
+};
+
+function hasWord(text: string, word: string): boolean {
+	if (!text || !word) return false;
+	const regex = new RegExp(`(^|[^a-z0-9])${word}([^a-z0-9]|$)`, 'i');
+	return regex.test(text);
+}
+
+export function matchesLanguage(
+	trackLang: string | null | undefined,
+	trackTitle: string | null | undefined,
+	preferred: string | null | undefined
+): boolean {
+	if (!preferred) return false;
+	const pref = preferred.trim().toLowerCase();
+	if (!pref) return false;
+	const lang = (trackLang ?? '').trim().toLowerCase();
+	const title = (trackTitle ?? '').trim().toLowerCase();
+	if (lang === pref) return true;
+	if (pref.length === 2 && lang.startsWith(pref)) return true;
+	if (lang.length === 2 && pref.startsWith(lang)) return true;
+
+	for (const [code, aliases] of Object.entries(COMMON_LANGUAGE_ALIASES)) {
+		const group = [code, ...aliases];
+		if (group.some((a) => pref === a)) {
+			if (group.some((a) => lang === a || hasWord(title, a))) return true;
+		}
+	}
+	return hasWord(title, pref);
+}

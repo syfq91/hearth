@@ -7418,6 +7418,18 @@
             "title": "Password",
             "type": "string"
           },
+          "preferred_audio_language": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Audio Language"
+          },
           "role": {
             "default": "user",
             "enum": [
@@ -7494,6 +7506,17 @@
             ],
             "title": "Max Rating"
           },
+          "preferred_audio_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Audio Language"
+          },
           "role": {
             "title": "Role",
             "type": "string"
@@ -7521,6 +7544,41 @@
           "library_ids"
         ],
         "title": "UserDetail",
+        "type": "object"
+      },
+      "UserPreferencesResponse": {
+        "properties": {
+          "preferred_audio_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Audio Language"
+          }
+        },
+        "title": "UserPreferencesResponse",
+        "type": "object"
+      },
+      "UserPreferencesUpdate": {
+        "properties": {
+          "preferred_audio_language": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Audio Language"
+          }
+        },
+        "title": "UserPreferencesUpdate",
         "type": "object"
       },
       "UserResponse": {
@@ -7563,6 +7621,17 @@
               }
             ],
             "title": "Max Rating"
+          },
+          "preferred_audio_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Audio Language"
           },
           "role": {
             "title": "Role",
@@ -7647,6 +7716,18 @@
               }
             ],
             "title": "Max Rating"
+          },
+          "preferred_audio_language": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Audio Language"
           },
           "role": {
             "anyOf": [
@@ -15758,6 +15839,78 @@
           }
         ],
         "summary": "Set My Listenbrainz",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/me/preferences": {
+      "get": {
+        "description": "Return the current user's playback preferences.",
+        "operationId": "get_my_preferences_api_v1_users_me_preferences_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get My Preferences",
+        "tags": [
+          "users"
+        ]
+      },
+      "patch": {
+        "description": "Update current user's preferences.",
+        "operationId": "update_my_preferences_api_v1_users_me_preferences_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPreferencesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update My Preferences",
         "tags": [
           "users"
         ]

@@ -73,6 +73,7 @@ class UserResponse(BaseModel):
     max_bitrate: int | None
     allow_transcode: bool
     max_rating: str | None
+    preferred_audio_language: str | None = None
     created_at: datetime
 
 

@@ -1,8 +1,41 @@
 <script lang="ts">
 	import { api } from '../../lib/api/client';
-	import { session } from '../../lib/auth.svelte';
+	import { reloadUser, session } from '../../lib/auth.svelte';
+	import { COMMON_LANGUAGES } from '../../lib/languages';
 
 	let user = $derived(session.user);
+
+	/* ---- Playback preferences ---- */
+	let preferredAudio = $state('');
+	let prefBusy = $state(false);
+	let prefMessage = $state<string | null>(null);
+	let prefError = $state<string | null>(null);
+
+	$effect(() => {
+		if (user) {
+			preferredAudio = user.preferred_audio_language ?? '';
+		}
+	});
+
+	async function savePreferences(event: SubmitEvent): Promise<void> {
+		event.preventDefault();
+		prefBusy = true;
+		prefMessage = null;
+		prefError = null;
+		try {
+			await api.patch('/users/me/preferences', {
+				body: {
+					preferred_audio_language: preferredAudio || null
+				}
+			});
+			await reloadUser();
+			prefMessage = 'Preferences saved.';
+		} catch (e) {
+			prefError = e instanceof Error ? e.message : String(e);
+		} finally {
+			prefBusy = false;
+		}
+	}
 
 	/* ---- password ---- */
 	let newPassword = $state('');
@@ -90,6 +123,30 @@
 				<dd>{new Date(user.created_at).toLocaleDateString()}</dd>
 			</div>
 		</dl>
+	</section>
+
+	<section class="card" aria-labelledby="pref-heading">
+		<h2 id="pref-heading">Playback preferences</h2>
+		<form class="stack" onsubmit={savePreferences}>
+			<label>
+				<span>Preferred audio language</span>
+				<select bind:value={preferredAudio}>
+					<option value="">Default / Original</option>
+					{#each COMMON_LANGUAGES as lang}
+						<option value={lang.code}>{lang.label} ({lang.code})</option>
+					{/each}
+				</select>
+			</label>
+			<button type="submit" disabled={prefBusy}>
+				{prefBusy ? 'Saving…' : 'Save preferences'}
+			</button>
+			{#if prefMessage}
+				<p class="ok" role="status">{prefMessage}</p>
+			{/if}
+			{#if prefError}
+				<p class="err" role="alert">{prefError}</p>
+			{/if}
+		</form>
 	</section>
 
 	<section class="card" aria-labelledby="password-heading">
@@ -202,7 +259,8 @@
 		color: var(--muted);
 	}
 
-	input {
+	input,
+	select {
 		background: var(--surface-2);
 		border: 1px solid var(--border);
 		border-radius: 6px;

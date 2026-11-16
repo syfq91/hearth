@@ -50,6 +50,7 @@ from app.services.media.probe import ProbeResult, ProbeStream
 from app.services.playback_state import chapters_from_streams, resolve_watch_state
 from app.services.ratings import is_rating_permitted
 from app.services.scrobbling.listenbrainz import enqueue_scrobble
+from app.services.subtitles import matches_language
 from app.services.transcode.capabilities import probe_transcode_capabilities
 from app.services.transcode.decision import (
     BITMAP_SUBTITLE_CODECS,
@@ -379,6 +380,14 @@ async def playback_info(
         )
 
     # Evaluate decision engine
+    if request_obj.audio_track_index is None and user.preferred_audio_language:
+        for s in probe_res.streams:
+            if s.codec_type == "audio" and matches_language(
+                s.language, s.title, user.preferred_audio_language
+            ):
+                request_obj.audio_track_index = s.index
+                break
+
     server_caps = await probe_transcode_capabilities(settings)
     user_limits = UserLimits(
         max_bitrate=user.max_bitrate,

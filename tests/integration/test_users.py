@@ -223,3 +223,24 @@ async def test_user_management_requires_authentication(
     api_client: httpx.AsyncClient, path: str
 ) -> None:
     assert (await api_client.get(path)).status_code == 401
+
+
+async def test_user_playback_preferences_audio_language(
+    api_client: httpx.AsyncClient,
+) -> None:
+    admin = await _setup(api_client)
+    pref_res = await api_client.get("/api/v1/users/me/preferences", headers=_bearer(admin))
+    assert pref_res.status_code == 200
+    assert pref_res.json()["preferred_audio_language"] is None
+
+    patch_res = await api_client.patch(
+        "/api/v1/users/me/preferences",
+        json={"preferred_audio_language": "ja"},
+        headers=_bearer(admin),
+    )
+    assert patch_res.status_code == 200
+    assert patch_res.json()["preferred_audio_language"] == "ja"
+
+    me = await api_client.get("/api/v1/auth/me", headers=_bearer(admin))
+    assert me.status_code == 200
+    assert me.json()["preferred_audio_language"] == "ja"

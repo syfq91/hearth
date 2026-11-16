@@ -9,6 +9,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.auth import UserResponse
 from app.core.deps import RequireAdmin, RequireUser, SettingsDep
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
 from app.core.passwords import hash_password, validate_password, validate_username
@@ -29,6 +30,7 @@ class UserCreate(BaseModel):
     max_bitrate: int | None = Field(default=None, ge=1)
     allow_transcode: bool = True
     max_rating: str | None = Field(default=None, max_length=16)
+    preferred_audio_language: str | None = Field(default=None, max_length=16)
     library_ids: list[str] = Field(default_factory=list)
 
 
@@ -39,6 +41,7 @@ class UserUpdate(BaseModel):
     max_bitrate: int | None = Field(default=None, ge=1)
     allow_transcode: bool | None = None
     max_rating: str | None = Field(default=None, max_length=16)
+    preferred_audio_language: str | None = Field(default=None, max_length=16)
     library_ids: list[str] | None = None
 
 
@@ -54,6 +57,14 @@ class ListenBrainzTokenRequest(BaseModel):
     token: str = Field(min_length=1, max_length=255)
 
 
+class UserPreferencesResponse(BaseModel):
+    preferred_audio_language: str | None = None
+
+
+class UserPreferencesUpdate(BaseModel):
+    preferred_audio_language: str | None = Field(default=None, max_length=16)
+
+
 class UserDetail(BaseModel):
     id: str
     username: str
@@ -62,6 +73,7 @@ class UserDetail(BaseModel):
     max_bitrate: int | None
     allow_transcode: bool
     max_rating: str | None
+    preferred_audio_language: str | None = None
     created_at: datetime
     updated_at: datetime
     library_ids: list[str]
@@ -86,6 +98,7 @@ async def _detail(session: AsyncSession, user: User) -> UserDetail:
         max_bitrate=user.max_bitrate,
         allow_transcode=user.allow_transcode,
         max_rating=user.max_rating,
+        preferred_audio_language=user.preferred_audio_language,
         created_at=user.created_at,
         updated_at=user.updated_at,
         library_ids=await _grants_by_user(session, user.id),
@@ -168,6 +181,7 @@ async def create_user(
         max_bitrate=payload.max_bitrate,
         allow_transcode=payload.allow_transcode,
         max_rating=payload.max_rating,
+        preferred_audio_language=payload.preferred_audio_language,
     )
     session.add(user)
     try:
@@ -225,6 +239,33 @@ async def delete_my_listenbrainz(
     if db_user is not None:
         db_user.listenbrainz_token = None
         await session.commit()
+
+
+@router.get("/me/preferences")
+async def get_my_preferences(user: RequireUser) -> UserPreferencesResponse:
+    """Return the current user's playback preferences."""
+    return UserPreferencesResponse(
+        preferred_audio_language=user.preferred_audio_language,
+    )
+
+
+@router.patch("/me/preferences")
+async def update_my_preferences(
+    payload: UserPreferencesUpdate,
+    user: RequireUser,
+    session: SessionDep,
+) -> UserResponse:
+    """Update current user's preferences."""
+    db_user = await session.get(User, user.id)
+    if db_user is None:
+        raise NotFoundError("User not found", code="user_not_found")
+    changes = payload.model_fields_set
+    if "preferred_audio_language" in changes:
+        val = payload.preferred_audio_language.strip() if payload.preferred_audio_language else None
+        db_user.preferred_audio_language = val or None
+    await session.commit()
+    await session.refresh(db_user)
+    return UserResponse.model_validate(db_user)
 
 
 @router.get("/{user_id}")
@@ -296,6 +337,8 @@ async def update_user(
         user.allow_transcode = payload.allow_transcode
     if "max_rating" in changes:
         user.max_rating = payload.max_rating
+    if "preferred_audio_language" in changes:
+        user.preferred_audio_language = payload.preferred_audio_language
 
     if payload.library_ids is not None:
         library_ids = await _validate_library_ids(session, payload.library_ids)

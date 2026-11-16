@@ -533,6 +533,10 @@
 
 		if (destroyed) return;
 		info = response;
+		if (audioTrackIndex === null && response.plan?.audio_stream_index != null) {
+			audioTrackIndex = response.plan.audio_stream_index;
+			lastAudioTrack = audioTrackIndex;
+		}
 		sessionId = response.session_id ?? null;
 		if (response.hls_url) {
 			try {

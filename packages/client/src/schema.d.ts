@@ -2452,6 +2452,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Preferences
+         * @description Return the current user's playback preferences.
+         */
+        get: operations["get_my_preferences_api_v1_users_me_preferences_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update My Preferences
+         * @description Update current user's preferences.
+         */
+        patch: operations["update_my_preferences_api_v1_users_me_preferences_patch"];
+        trace?: never;
+    };
     "/api/v1/users/{user_id}": {
         parameters: {
             query?: never;
@@ -5130,6 +5154,8 @@ export interface components {
             max_rating?: string | null;
             /** Password */
             password: string;
+            /** Preferred Audio Language */
+            preferred_audio_language?: string | null;
             /**
              * Role
              * @default user
@@ -5163,6 +5189,8 @@ export interface components {
             max_bitrate: number | null;
             /** Max Rating */
             max_rating: string | null;
+            /** Preferred Audio Language */
+            preferred_audio_language?: string | null;
             /** Role */
             role: string;
             /**
@@ -5172,6 +5200,16 @@ export interface components {
             updated_at: string;
             /** Username */
             username: string;
+        };
+        /** UserPreferencesResponse */
+        UserPreferencesResponse: {
+            /** Preferred Audio Language */
+            preferred_audio_language?: string | null;
+        };
+        /** UserPreferencesUpdate */
+        UserPreferencesUpdate: {
+            /** Preferred Audio Language */
+            preferred_audio_language?: string | null;
         };
         /** UserResponse */
         UserResponse: {
@@ -5190,6 +5228,8 @@ export interface components {
             max_bitrate: number | null;
             /** Max Rating */
             max_rating: string | null;
+            /** Preferred Audio Language */
+            preferred_audio_language?: string | null;
             /** Role */
             role: string;
             /** Username */
@@ -5207,6 +5247,8 @@ export interface components {
             max_bitrate?: number | null;
             /** Max Rating */
             max_rating?: string | null;
+            /** Preferred Audio Language */
+            preferred_audio_language?: string | null;
             /** Role */
             role?: ("admin" | "user") | null;
             /** Username */
@@ -9539,6 +9581,59 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_my_preferences_api_v1_users_me_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferencesResponse"];
+                };
+            };
+        };
+    };
+    update_my_preferences_api_v1_users_me_preferences_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserPreferencesUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

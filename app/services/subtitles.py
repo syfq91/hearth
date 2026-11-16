@@ -281,6 +281,61 @@ async def extract_embedded_subtitle(
         return "WEBVTT\n\n" if fmt == "webvtt" else ""
 
 
+_COMMON_LANGUAGE_ALIASES: dict[str, list[str]] = {
+    "en": ["eng", "english"],
+    "ja": ["jpn", "japanese"],
+    "es": ["spa", "spanish", "espanol", "español"],
+    "fr": ["fra", "fre", "french", "francais", "français"],
+    "de": ["deu", "ger", "german", "deutsch"],
+    "it": ["ita", "italian", "italiano"],
+    "pt": ["por", "portuguese", "português"],
+    "zh": ["zho", "chi", "chinese"],
+    "ko": ["kor", "korean"],
+    "ru": ["rus", "russian"],
+    "ar": ["ara", "arabic"],
+    "hi": ["hin", "hindi"],
+    "nl": ["nld", "dut", "dutch"],
+    "pl": ["pol", "polish"],
+    "sv": ["swe", "swedish"],
+    "tr": ["tur", "turkish"],
+    "id": ["ind", "indonesian"],
+    "vi": ["vie", "vietnamese"],
+    "th": ["tha", "thai"],
+}
+
+
+def _has_word(text: str, word: str) -> bool:
+    if not text or not word:
+        return False
+    return bool(re.search(rf"(^|[^a-z0-9]){re.escape(word)}([^a-z0-9]|$)", text, re.IGNORECASE))
+
+
+def matches_language(
+    track_lang: str | None,
+    track_title: str | None = None,
+    preferred: str | None = None,
+) -> bool:
+    """Return whether a stream language/title matches the preferred language tag."""
+    if not preferred:
+        return False
+    pref = preferred.strip().casefold()
+    if not pref:
+        return False
+    lang = (track_lang or "").strip().casefold()
+    title = (track_title or "").strip().casefold()
+    if lang == pref:
+        return True
+    if len(pref) == 2 and lang.startswith(pref):
+        return True
+    if len(lang) == 2 and pref.startswith(lang):
+        return True
+    for code, aliases in _COMMON_LANGUAGE_ALIASES.items():
+        group = [code, *aliases]
+        if any(pref == a for a in group) and any(lang == a or _has_word(title, a) for a in group):
+            return True
+    return _has_word(title, pref) if title else False
+
+
 __all__ = [
     "SUPPORTED_SUFFIXES",
     "SubtitleRef",
@@ -290,6 +345,7 @@ __all__ = [
     "discover_subtitles",
     "encode_subtitle_id",
     "extract_embedded_subtitle",
+    "matches_language",
     "shift_webvtt",
     "subtitle_language",
 ]
