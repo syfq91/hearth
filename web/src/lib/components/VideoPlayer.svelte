@@ -83,6 +83,9 @@
 	let qualityLevel = $state(-1); // -1 = Auto ABR
 	let streamStats = $state<HlsStreamStats | null>(null);
 
+	// Wall clock, ticked so the projected end time stays truthful while paused.
+	let nowMs = $state(Date.now());
+
 	// OSD activity state
 	let isUserActive = $state(true);
 	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -204,6 +207,15 @@
 
 	/** Throughput actually achieved fetching HLS segments. */
 	const streamThroughput = $derived(streamStats?.measuredBitrate ?? 0);
+
+	/** Wall-clock time playback will finish at the current rate and position. */
+	const endsAt = $derived.by(() => {
+		if (duration <= 0) return '';
+		const rate = playbackRate > 0 ? playbackRate : 1;
+		const remainingSecs = Math.max(0, duration - currentTime) / rate;
+		const finish = new Date(nowMs + remainingSecs * 1000);
+		return finish.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+	});
 
 	async function report(state: 'playing' | 'paused' | 'stopped'): Promise<void> {
 		if (!videoEl || destroyed) return;
@@ -924,10 +936,12 @@
 			style="object-fit: {aspectRatio};"
 			onplay={() => {
 				isPaused = false;
+				nowMs = Date.now();
 				triggerActivity();
 			}}
 			onpause={() => {
 				isPaused = true;
+				nowMs = Date.now();
 				isUserActive = true;
 				if (hideTimeout) clearTimeout(hideTimeout);
 				subtitleManager?.renderManualFrame(true);
@@ -936,6 +950,7 @@
 			ontimeupdate={() => {
 				if (!videoEl) return;
 				currentTime = videoEl.currentTime;
+				nowMs = Date.now();
 				const positionMs = Math.floor(currentTime * 1000);
 				if (positionMs - lastReportedMs >= REPORT_INTERVAL_MS) {
 					lastReportedMs = positionMs;
@@ -971,6 +986,7 @@
 				isWaiting = false;
 			}}
 			onseeked={() => {
+				nowMs = Date.now();
 				subtitleManager?.renderManualFrame(true);
 			}}
 			onended={() => {
@@ -1237,6 +1253,10 @@
 				>
 					<RotateCw size={19} />
 				</button>
+
+				{#if endsAt}
+					<span class="end-time" title="Ends at {endsAt}">End at {endsAt}</span>
+				{/if}
 			</div>
 
 			<div class="controls-right">
@@ -1687,6 +1707,14 @@
 
 	.play-btn {
 		padding: 0.5rem;
+	}
+
+	.end-time {
+		font-size: 0.8rem;
+		font-family: ui-monospace, monospace;
+		color: var(--muted);
+		white-space: nowrap;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.volume-group {
