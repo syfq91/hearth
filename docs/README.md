@@ -30,20 +30,20 @@ Architecture, local workflows, and the HTTP contract.
 | [Frontend Decision](development/frontend-decision.md) | SvelteKit selection and frontend constraints |
 | [Reader Integration](development/reader-integration.md) | EPUB, PDF, and comic reader contract |
 | [Hardware Tests](development/hardware-tests.md) | VAAPI benchmark results |
-| [Release Checklist](development/release-checklist.md) | Release acceptance checklist |
 
-## Planning and history
+## Archive
 
-Phased plans and implementation records. These are historical context, not a
-current TODO list.
+Completed plans and release history. These documents are frozen for reference;
+they are not a current TODO list and should not be updated.
 
 | Document | Contents |
 | --- | --- |
-| [Implementation Plan](planning/plan.md) | Phased architecture and agent implementation plan |
-| [Progress](planning/progress.md) | Phase history and completed work |
-| [Plugin System Plan](planning/plan-plugin-system.md) | Plugin architecture and rollout plan |
-| [Video Playback and Transcoding Plan](planning/video-playback-transcoding.md) | HLS playback/transcoding work plan |
-| [Video Player Improvement Plan](planning/video-player-improvement-plan.md) | Web player and ASS subtitle improvements |
+| [Implementation Plan](archive/plan.md) | Phased architecture and agent implementation plan |
+| [Progress](archive/progress.md) | Phase history and completed work |
+| [Plugin System Plan](archive/plan-plugin-system.md) | Plugin architecture and rollout plan |
+| [Video Playback and Transcoding Plan](archive/video-playback-transcoding.md) | HLS playback/transcoding work plan |
+| [Video Player Improvement Plan](archive/video-player-improvement-plan.md) | Web player and ASS subtitle improvements |
+| [Release Checklist](archive/release-checklist.md) | 1.0.0 release acceptance checklist |
 
 ## Design
 

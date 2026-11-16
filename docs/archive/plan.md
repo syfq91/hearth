@@ -1,5 +1,8 @@
 # Hearth: AI Agent Implementation Plan for a Self-Hosted Media Server
 
+> **Archived:** this document records completed work and is kept for historical context.
+> See the [documentation index](../README.md) for current docs.
+
 > A phased build plan for an AI coding agent · Python/FastAPI · Docker · VAAPI · October 21, 2026
 
 ## 0. How the agent should use this document
@@ -9,7 +12,7 @@ This plan is written to be executed by an autonomous coding agent working in a g
 - Work one phase at a time. Do not start a phase until the previous phase's acceptance criteria all pass. Never skip ahead to "nice to have" features.
 - Work in small vertical slices. Each task should end with code, tests and a commit. Commit messages use Conventional Commits (`feat:`, `fix:`, `test:`, `chore:`).
 - Tests first for logic, tests alongside for I/O. Pure logic (playback decision engine, filename parsing, ffmpeg argument building) is written test-first. Everything else gets tests in the same commit.
-- Keep a living log. Maintain `docs/planning/progress.md` (phase, task, status, open questions) and `docs/decisions/decisions.md` (one short entry per non-obvious decision: context, choice, alternatives). Update both at the end of every task.
+- Keep a living log. Maintain `docs/archive/progress.md` (phase, task, status, open questions) and `docs/decisions/decisions.md` (one short entry per non-obvious decision: context, choice, alternatives). Update both at the end of every task.
 - Never invent hardware behavior. VAAPI results must come from running the real probe. If no GPU is available in the environment, build against the interface, use the software fallback, and mark the hardware acceptance items as "needs manual verification" in `progress.md`. Do not claim they pass.
 - Ask or record, do not guess, on ambiguity. If a requirement is unclear, choose the simplest option consistent with this plan, record it in `decisions.md`, and continue.
 - Security by default. No secrets in the repo, media mounted read-only, no shell string interpolation for subprocesses (always argument lists), all path inputs validated against library roots.
@@ -356,7 +359,7 @@ Write `docs/development/frontend-decision.md` comparing at least three options (
 - [ ] Observability: optional Prometheus `/metrics` endpoint (off by default), structured logs, an admin log viewer, and clear error messages when ffmpeg or VAAPI fails.
 - [ ] Documentation: README quick start, compose examples for Intel, a hardware transcoding guide (finding the render GID, verifying with `vainfo`, common errors), reverse proxy examples (Caddy and Traefik with TLS), backup and upgrade guide, and a troubleshooting FAQ.
 - [ ] Release engineering: semantic versioning, multi-arch image build (amd64 at minimum), published image with a tagged release, changelog, and a migration compatibility test from the previous release.
-- [ ] Final acceptance run: fresh install on the real server, a real library of each media type, and a full manual checklist stored in `docs/development/release-checklist.md`.
+- [ ] Final acceptance run: fresh install on the real server, a real library of each media type, and a full manual checklist stored in `docs/archive/release-checklist.md`.
 
 ### Acceptance criteria
 

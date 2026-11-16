@@ -1,5 +1,8 @@
 # Hearth Plugin System Architecture & Implementation Plan
 
+> **Archived:** this document records completed work and is kept for historical context.
+> See the [documentation index](../README.md) for current docs.
+
 This document details the architectural design and implementation plan for introducing a Jellyfin-inspired plugin system to Hearth, with the initial milestone focusing on decoupling all online metadata providers into standalone, configurable plugins.
 
 ---

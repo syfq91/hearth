@@ -1,5 +1,8 @@
 # Hearth Implementation Progress
 
+> **Archived:** this document records completed work and is kept for historical context.
+> See the [documentation index](../README.md) for current docs.
+
 ## Status Overview
 
 - **Current Phase**: Phase 10 (Hardening, performance and release) — in progress
@@ -929,7 +932,7 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 | 10.4 | Observability: optional Prometheus `/metrics` endpoint (off by default), structured logs, admin log viewer, clear error messages when ffmpeg/VAAPI fails. | Complete | `feat(observability): add prometheus metrics, admin log viewer, and structured errors` |
 | 10.5 | Documentation: README quick start, compose examples for Intel/AMD, hardware transcoding guide, reverse proxy examples, backup/upgrade guide, troubleshooting FAQ. | Complete | `docs: add deployment, hardware transcode, reverse proxy, and operations documentation` |
 | 10.6 | Release engineering: semantic versioning, multi-arch image build (amd64 min), published image with tagged release, changelog, migration compatibility test. | Complete | `chore(release): configure release engineering, multi-arch build, and migration compatibility` |
-| 10.7 | Final acceptance run: fresh install on real server, real library of each media type, full manual checklist in `docs/development/release-checklist.md`. | Complete | `docs: complete release acceptance checklist and finalize Phase 10` |
+| 10.7 | Final acceptance run: fresh install on real server, real library of each media type, full manual checklist in `docs/archive/release-checklist.md`. | Complete | `docs: complete release acceptance checklist and finalize Phase 10` |
 
 ### Task 10.1 Load Test Simulation Results
 
@@ -1028,12 +1031,12 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 
 ### Phase 10 Acceptance Checklist
 
-- [x] **Every item in `docs/development/release-checklist.md` is checked off**:
+- [x] **Every item in `docs/archive/release-checklist.md` is checked off**:
   - Automated tests verify load simulation (15 users, 0 dropped segments, p95 260.47 ms < 300 ms), resilience under fault injection (server restart, unmounted storage, full disk, corrupted media, SQLite contention), security audit (clean `pip-audit`, headers, traversal prevention, SSRF defense, secret masking), observability (Prometheus `/metrics`, admin logs), and schema migration compatibility.
   - Real library scanning and streaming verified for movies, TV series, music, and books/comics.
   - Responsive web UI and TV mode verified (Lighthouse 100 on desktop profile, Playwright e2e 9/9 green).
   - Hardware-dependent item (AMD Radeon VA-API) documented with configuration in `docker/compose.amd.yaml` and flagged for human manual verification on physical AMD hardware.
-- [x] **No open high-severity issues in `docs/planning/progress.md`**:
+- [x] **No open high-severity issues in `docs/archive/progress.md`**:
   - Zero open blockers, security vulnerabilities, or failing tests.
 
 ### Phase 10 Deliverables
@@ -1044,7 +1047,7 @@ passed / 5 failed (the pre-existing ffmpeg-not-on-host environmental set) /
 - **Observability System (`app/core/metrics.py`, `tests/integration/test_observability.py`)**: Prometheus exposition endpoint (`GET /metrics`), structured log viewer with level and keyword search (`GET /api/v1/admin/logs`), and detailed stderr diagnostics for ffmpeg/VAAPI failures.
 - **Deployment & Operator Guides**: Quick start in `README.md`, Hardware Transcoding Guide (`docs/guides/hardware-transcoding.md`), Reverse Proxy Guide (`docs/guides/reverse-proxy.md`), Backup & Upgrade Guide (`docs/guides/backup-and-upgrade.md`), and Troubleshooting FAQ (`docs/guides/troubleshooting.md`).
 - **Release Engineering (`v1.0.0`)**: Semantic versioning bump, multi-arch Docker image workflow (`.github/workflows/release.yml`), `CHANGELOG.md`, and migration compatibility test suite (`tests/integration/test_migrations.py`).
-- **Release Checklist (`docs/development/release-checklist.md`)**: Full release verification matrix.
+- **Release Checklist (`docs/archive/release-checklist.md`)**: Full release verification matrix.
 
 ---
 

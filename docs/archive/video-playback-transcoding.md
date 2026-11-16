@@ -1,5 +1,8 @@
 # Video Playback & Transcoding: Reference Spec and Agent Work Plan
 
+> **Archived:** this document records completed work and is kept for historical context.
+> See the [documentation index](../README.md) for current docs.
+
 > **Audience:** AI coding agents (and humans reviewing their work).
 > **Goal:** Upgrade Hearth's HLS playback/transcoding engine to production-grade reliability, one small verifiable task at a time.
 > **Source of truth:** This file. If code and this file disagree, stop and report the conflict (see §0.4) instead of guessing.

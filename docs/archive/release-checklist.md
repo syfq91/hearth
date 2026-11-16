@@ -1,5 +1,8 @@
 # Hearth 1.0.0 Release Acceptance Checklist
 
+> **Archived:** this document records completed work and is kept for historical context.
+> See the [documentation index](../README.md) for current docs.
+
 This checklist documents the full manual and automated verification required before tagging a release of Hearth.
 
 **Target Version:** `1.0.0`  

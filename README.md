@@ -122,7 +122,7 @@ reference document in the repository.
 | [Architecture](docs/development/architecture.md) | Runtime topology and module layout |
 | [Decisions](docs/decisions/decisions.md) | Architecture decision records |
 | [Performance Audit](docs/development/performance-audit.md) | Codebase performance review, benchmarks, and resolutions |
-| [Implementation Plan](docs/planning/plan.md) | Phased architecture and agent implementation plan |
+| [Implementation Plan (archive)](docs/archive/plan.md) | Historical phased architecture and agent implementation plan |
 | [Changelog](CHANGELOG.md) | Release history |
 | [Attribution](docs/attribution.md) | TMDB and third-party notices |
 

@@ -1,4 +1,7 @@
 # Hearth Video Player & ASS Subtitle Improvement Plan
+
+> **Archived:** this document records completed work and is kept for historical context.
+> See the [documentation index](../README.md) for current docs.
 *Architectural blueprint and implementation strategy adapted from the Jellyfin Web Video Player Guide.*
 
 ---

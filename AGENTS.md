@@ -13,9 +13,9 @@ Read these before making non-trivial changes:
 - `docs/development/development.md` — the canonical local setup and command list.
 - `docs/development/api.md` — HTTP conventions, auth, playback contract.
 - `docs/decisions/decisions.md` — ADRs; check before re-litigating a design choice.
-- `docs/planning/progress.md` — phase history, not a current TODO list.
+- `docs/archive/progress.md` — phase history, not a current TODO list.
 - `docs/development/performance-audit.md` — performance benchmarks and optimization log.
-- `docs/planning/plan.md` — phased implementation plan.
+- `docs/archive/plan.md` — phased implementation plan.
 
 ## Stack
 
@@ -160,10 +160,10 @@ docs/
   README.md           documentation index
   guides/             operator guides
   development/        architecture, API, development, audits
-  planning/           plans, progress history, improvement plans
   reference/          background playback/transcoding references
   design/             UI design system and mockups
   decisions/          architecture decision records
+  archive/            completed plans, progress history, release evidence
 tools/testplayer/     standalone developer player served at /testplayer/
 ```
 
