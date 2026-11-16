@@ -4,10 +4,12 @@ import uuid
 from pathlib import Path
 
 import httpx
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.db.models import Library, LibraryPath, MediaFile, MediaItem, Movie
+from app.services.media.probe import parse_probe_payload
 from app.services.media.titles import sort_title
 
 ADMIN = {"username": "admin", "password": "correct horse"}
@@ -611,6 +613,79 @@ async def test_playback_info_includes_font_attachments(
     assert att["filename"] == "anime.ttf"
     assert att["mime_type"] == "font/ttf"
     assert f"/api/v1/media/{file_ids[0]}/attachments/2?token=" in att["url"]
+
+
+async def test_playback_info_refreshes_attachment_metadata_from_old_scans(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    admin = await _setup(api_client)
+    _, item_id, file_ids, _ = await _seed(db_settings, db_sessionmaker, sidecar=False)
+
+    stale_streams = {
+        "container": "matroska",
+        "duration_seconds": 100.0,
+        "streams": [
+            {"index": 0, "codec_type": "video", "codec_name": "h264"},
+            {"index": 1, "codec_type": "audio", "codec_name": "aac"},
+            {"index": 2, "codec_type": "attachment"},
+            {"index": 3, "codec_type": "subtitle", "codec_name": "ass"},
+        ],
+        "chapters": [],
+    }
+    async with db_sessionmaker() as session:
+        f = await session.get(MediaFile, file_ids[0])
+        assert f is not None
+        f.streams_json = stale_streams
+        await session.commit()
+
+    fresh = parse_probe_payload(
+        {
+            "format": {"format_name": "matroska", "duration": "100.0"},
+            "streams": [
+                {"index": 0, "codec_type": "video", "codec_name": "h264"},
+                {"index": 1, "codec_type": "audio", "codec_name": "aac"},
+                {
+                    "index": 2,
+                    "codec_type": "attachment",
+                    "tags": {"filename": "anime.ttf", "mimetype": "font/ttf"},
+                },
+                {"index": 3, "codec_type": "subtitle", "codec_name": "ass"},
+            ],
+            "chapters": [],
+        }
+    )
+    calls = 0
+
+    async def fake_probe(path, **kwargs):  # noqa: ANN001, ANN003
+        nonlocal calls
+        calls += 1
+        return fresh
+
+    monkeypatch.setattr("app.api.v1.playback.probe_media", fake_probe)
+
+    res = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        headers=_bearer(admin),
+    )
+    assert res.status_code == 200, res.text
+    assert [att["filename"] for att in res.json()["attachments"]] == ["anime.ttf"]
+    assert calls == 1
+
+    async with db_sessionmaker() as session:
+        f = await session.get(MediaFile, file_ids[0])
+        assert f is not None
+        assert "attachments" in f.streams_json
+
+    # Once repaired, later requests use the stored probe without re-probing.
+    again = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        headers=_bearer(admin),
+    )
+    assert again.status_code == 200
+    assert calls == 1
 
 
 async def test_playback_info_force_burn_in_subtitles(

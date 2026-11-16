@@ -158,6 +158,37 @@ def test_builder_vaapi_burn_in_subtitles(tmp_path: Path) -> None:
     assert "scale_vaapi" in vf
 
 
+def test_builder_burn_in_subtitles_uses_container_fonts_dir(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="burn_in",
+        subtitle_stream_index=0,
+        hwaccel="none",
+    )
+    fonts_dir = tmp_path / "fonts"
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        fonts_dir=fonts_dir,
+    )
+    vf = cmd[cmd.index("-vf") + 1]
+    sub_symlink = tmp_path / "sub_source.mkv"
+    assert f"subtitles='{sub_symlink}':si=0:fontsdir='{fonts_dir}'" in vf
+
+    without_fonts = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+    )
+    assert "fontsdir=" not in without_fonts[without_fonts.index("-vf") + 1]
+
+
 def test_builder_burn_in_subtitles_complex_filename(tmp_path: Path) -> None:
     import os
 

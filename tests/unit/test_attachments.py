@@ -78,6 +78,32 @@ def test_font_extension_dictionary():
     """Verify font extension mapping covers common container font formats."""
     assert _FONT_MIME_BY_EXT[".ttf"] == "font/ttf"
     assert _FONT_MIME_BY_EXT[".otf"] == "font/otf"
+
+
+def test_font_filename_keeps_an_extension_and_strips_paths(tmp_path):
+    """Extracted fonts must have a safe name libass/fontconfig can scan."""
+    from app.services.media.attachments import font_filename
+
+    assert (
+        font_filename(AttachmentStream(index=3, filename="../My Font.ttf", mime_type="font/ttf"))
+        == "3-My_Font.ttf"
+    )
+    assert (
+        font_filename(
+            AttachmentStream(index=4, filename="cool", mime_type="application/vnd.ms-opentype")
+        )
+        == "4-cool.otf"
+    )
+    assert (
+        font_filename(AttachmentStream(index=5, filename=None, mime_type=None))
+        == "5-attachment-5.ttf"
+    )
+
+
+def test_attachment_cache_path_matches_the_serving_contract(tmp_path):
+    from app.services.media.attachments import attachment_cache_path
+
+    assert attachment_cache_path(tmp_path, "file-1", 2) == tmp_path / "file-1_2.bin"
     assert _FONT_MIME_BY_EXT[".woff"] == "font/woff"
     assert _FONT_MIME_BY_EXT[".woff2"] == "font/woff2"
     assert ".ttf" in FONT_EXTENSIONS

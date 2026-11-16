@@ -12,6 +12,22 @@
 import type JASSUB from 'jassub';
 import { toAss } from '../video-subtitles.ts';
 
+/**
+ * A valid, empty ASS document used to let libass finish initialising (including
+ * the container font catalog) while the real track is still downloading.
+ */
+const EMPTY_ASS = [
+	'[Script Info]',
+	'ScriptType: v4.00+',
+	'',
+	'[V4+ Styles]',
+	'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
+	'Style: Default,Liberation Sans,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1',
+	'',
+	'[Events]',
+	'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
+].join('\n');
+
 export interface SubtitleTrackItem {
 	id: string;
 	url: string;
@@ -119,19 +135,28 @@ export class SubtitleManager {
 			try {
 				const delimiter = track.url.includes('?') ? '&' : '?';
 				const fetchUrl = `${track.url}${delimiter}raw=true`;
-				const res = await fetch(fetchUrl);
-				if (!res.ok) throw new Error(`HTTP ${res.status} fetching subtitles`);
-				const text = await res.text();
-				const subContent = toAss(text);
-				if (generation !== this.loadGeneration) return;
+				// Fetch the document while JASSUB initializes its worker,
+				// WebAssembly and font catalog. Waiting for the document first
+				// serialized two network/CPU phases and delayed the first cue.
+				const trackPromise = fetch(fetchUrl).then(async (response) => {
+					if (!response.ok) throw new Error(`HTTP ${response.status} fetching subtitles`);
+					return response.text();
+				});
+				void trackPromise.catch(() => {
+					/* the awaited path reports a useful error */
+				});
+				const modulePromise = import('jassub');
+				void modulePromise.catch(() => {
+					/* the awaited path reports a useful error */
+				});
 
-				const { default: JASSUBConstructor } = await import('jassub');
+				const { default: JASSUBConstructor } = await modulePromise;
 				if (generation !== this.loadGeneration) return;
 
 				this.isAss = true;
 				const instance = new JASSUBConstructor({
 					video: this.video,
-					subContent,
+					subContent: EMPTY_ASS,
 					fonts: fontUrls,
 					timeOffset: this.userOffsetSeconds,
 					prescaleFactor: 0.8,
@@ -141,13 +166,20 @@ export class SubtitleManager {
 					libassGlyphLimit: 40
 				});
 
-				await instance.ready;
-				if (generation !== this.loadGeneration) {
+				try {
+					const [text] = await Promise.all([trackPromise, instance.ready]);
+					if (generation !== this.loadGeneration) {
+						void instance.destroy();
+						return;
+					}
+					await instance.renderer.setTrack(toAss(text));
+					instance.timeOffset = this.userOffsetSeconds;
+					this.jassubInstance = instance;
+					this.renderManualFrame(true);
+				} catch (error) {
 					void instance.destroy();
-					return;
+					throw error;
 				}
-				this.jassubInstance = instance;
-				this.renderManualFrame(true);
 			} catch (err) {
 				console.error('[SubtitleManager] Failed to initialize JASSUB:', err);
 				if (generation === this.loadGeneration) {

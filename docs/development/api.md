@@ -230,11 +230,13 @@ When playing media files containing embedded fonts (typically Matroska `.mkv` fi
   ]
 }
 ```
-Clients rendering ASS subtitles client-side (via WebAssembly/JASSUB) supply these attachment URLs to the font loader.
+Clients rendering ASS subtitles client-side (via WebAssembly/JASSUB) supply these attachment URLs to the font loader. When the server burns in text subtitles instead, it extracts the same attachments into the transcode session and passes the directory to FFmpeg's `subtitles` filter as `fontsdir`, so the burn-in uses the container's fonts rather than a host font.
 
 When an embedded subtitle is selected, `PlaybackInfoResponse` may also include `embedded_subtitle_url` and `embedded_subtitle_format` (`vtt` or `ass`). This is populated when the server is not delivering the subtitle inside an HLS manifest: direct-play `sidecar_vtt` tracks and client-rendered `external_ass` tracks. Clients load that URL directly (`text/vtt` into a native text track, `text/x-ssa` into JASSUB). For HLS `sidecar_vtt` delivery the master playlist advertises the rendition instead, and these fields are null.
 
 `PlaybackInfoResponse.embedded_subtitle_urls` lists a client-renderable `url` and `format` (`vtt` or `ass`) for every embedded text subtitle stream, keyed by the container stream `index` that the client uses in its `emb:<index>` selector. Bitmap streams (PGS, DVD) are omitted because they can only be burned in. Clients use this list to switch embedded text tracks mid-playback without renegotiating the stream; selecting a bitmap track still requires a new playback-info request.
+
+The embedded subtitle endpoints extract text tracks on demand into a revision-keyed cache (`HEARTH_TRANSCODE_DIR/subtitles/`). All text tracks for a file are produced in a single FFmpeg demux pass and cached by stream revision, so switching tracks or replaying a title does not re-read the whole source file.
 
 Both WebVTT subtitle endpoints — `/api/v1/subtitles/{id}.vtt` and `/api/v1/media/{file_id}/subtitles/{index}.vtt` — accept `shift_ms` (default `0`, range ±60 000). It rewrites every cue boundary by that many milliseconds, positive shifting cues later and clamping at zero; header metadata and cue text are preserved. Native `<track>` elements cannot be shifted at display time, so a client applies its user subtitle calibration by re-fetching the document with `shift_ms` instead of only adjusting `JASSUB.timeOffset`.
 

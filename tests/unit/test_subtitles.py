@@ -199,3 +199,74 @@ async def test_extract_embedded_subtitle_handles_missing_file(tmp_path: Path) ->
 
     result = await extract_embedded_subtitle(tmp_path / "nonexistent.mkv", 0, fmt="webvtt")
     assert result == "WEBVTT\n\n"
+    vtt_result = await extract_embedded_subtitle(tmp_path / "nonexistent.mkv", 0, fmt="vtt")
+    assert vtt_result == "WEBVTT\n\n"
+
+
+def test_embedded_subtitle_cache_is_keyed_by_file_revision(tmp_path: Path) -> None:
+    from app.services.subtitles import embedded_subtitle_cache_dir
+
+    first = embedded_subtitle_cache_dir(tmp_path, "file-1", 1000.0, 42)
+    assert embedded_subtitle_cache_dir(tmp_path, "file-1", 1000.0, 42) == first
+    assert embedded_subtitle_cache_dir(tmp_path, "file-1", 1001.0, 42) != first
+    assert embedded_subtitle_cache_dir(tmp_path, "file-1", 1000.0, 43) != first
+    assert embedded_subtitle_cache_dir(tmp_path, "file-2", 1000.0, 42) != first
+
+
+def test_embedded_subtitle_command_extracts_all_tracks_in_one_pass(tmp_path: Path) -> None:
+    from app.services.subtitles import build_embedded_subtitle_command
+
+    cmd = build_embedded_subtitle_command(
+        Path("/media/movie.mkv"),
+        [(0, "ass"), (0, "vtt"), (2, "vtt")],
+        tmp_path,
+    )
+    assert cmd.count("-map") == 3
+    assert cmd.count("-i") == 1
+    assert str(tmp_path / "0.ass") in cmd
+    assert str(tmp_path / "0.vtt") in cmd
+    assert str(tmp_path / "2.vtt") in cmd
+    ass_output = cmd.index(str(tmp_path / "0.ass"))
+    assert cmd[ass_output - 6 : ass_output] == [
+        "-map",
+        "0:s:0",
+        "-c:s",
+        "copy",
+        "-f",
+        "ass",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_ensure_embedded_subtitles_caches_every_output_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services import subtitles
+
+    calls: list[list[str]] = []
+
+    async def fake_run(cmd: list[str], *, timeout: float) -> None:
+        calls.append(cmd)
+        for index, value in enumerate(cmd[:-1]):
+            if value == "-f" and index + 2 < len(cmd):
+                Path(cmd[index + 2]).write_text("cached track", encoding="utf-8")
+
+    monkeypatch.setattr(subtitles, "_run_subtitle_ffmpeg", fake_run)
+    cache_dir = tmp_path / "cache"
+    tracks = [
+        subtitles.EmbeddedSubtitleTrack(ordinal=0, formats=("ass", "vtt")),
+        subtitles.EmbeddedSubtitleTrack(ordinal=2, formats=("vtt",)),
+    ]
+
+    await subtitles.ensure_embedded_subtitles(
+        tmp_path / "movie.mkv", tracks, cache_dir, timeout=1.0
+    )
+    assert len(calls) == 1
+    assert (cache_dir / "0.ass").read_text() == "cached track"
+    assert (cache_dir / "0.vtt").read_text() == "cached track"
+    assert (cache_dir / "2.vtt").read_text() == "cached track"
+
+    await subtitles.ensure_embedded_subtitles(
+        tmp_path / "movie.mkv", tracks, cache_dir, timeout=1.0
+    )
+    assert len(calls) == 1

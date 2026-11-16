@@ -1,13 +1,16 @@
 """Integration tests for sidecar subtitle listing and WebVTT serving."""
 
+import subprocess
 import uuid
 from pathlib import Path
 
 import httpx
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.db.models import Library, LibraryPath, MediaFile, MediaItem, Movie
+from app.services.media.probe import probe_media
 from app.services.media.titles import sort_title
 from app.services.subtitles import encode_subtitle_id
 
@@ -16,6 +19,23 @@ ADMIN = {"username": "admin", "password": "correct horse"}
 VIDEO_NAME = "The Matrix (1999).mkv"
 SRT = "1\n00:00:01,000 --> 00:00:02,000\nHello from SRT\n"
 ASS = "[Events]\nFormat: Start, End, Text\nDialogue: 0:00:03.00,0:00:04.00,Hello from ASS\n"
+EMBEDDED_ASS = (
+    "[Script Info]\n"
+    "ScriptType: v4.00+\n"
+    "PlayResX: 384\n"
+    "PlayResY: 288\n"
+    "\n"
+    "[V4+ Styles]\n"
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
+    "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
+    "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+    "Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,"
+    "100,100,0,0,1,2,2,2,10,10,10,1\n"
+    "\n"
+    "[Events]\n"
+    "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    "Dialogue: 0,0:00:00.50,0:00:01.50,Default,,0,0,0,,Hello from ASS\n"
+)
 
 
 async def _setup(client: httpx.AsyncClient) -> dict[str, str]:
@@ -250,3 +270,113 @@ async def test_oversized_subtitles_are_rejected(
     response = await api_client.get(url, headers=_bearer(admin))
     assert response.status_code == 413
     assert response.json()["error"]["code"] == "subtitle_too_large"
+
+
+def _create_embedded_ass_mkv(path: Path) -> None:
+    """Mux a tiny H.264 clip with a real embedded ASS track."""
+    subtitle = path.parent / "embedded-source.ass"
+    subtitle.write_text(EMBEDDED_ASS, encoding="utf-8")
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=s=64x64:d=2",
+            "-i",
+            str(subtitle),
+            "-map",
+            "0:v",
+            "-map",
+            "1:s",
+            "-c:v",
+            "libx264",
+            "-c:s",
+            "ass",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    subtitle.unlink()
+
+
+async def _seed_embedded_subtitle_file(
+    settings: Settings,
+    sessionmaker: async_sessionmaker[AsyncSession],
+    video: Path,
+) -> tuple[str, str]:
+    """Create a movie row whose stored probe describes a real embedded track."""
+    probe = await probe_media(video)
+    stat = video.stat()
+    async with sessionmaker() as session:
+        library = Library(name=f"Movies {uuid.uuid4().hex[:8]}", type="movie")
+        library.paths.append(LibraryPath(path=str(video.parent)))
+        session.add(library)
+        await session.flush()
+        item = MediaItem(
+            library_id=library.id,
+            type="movie",
+            title="Embedded Subtitles",
+            sort_title=sort_title("Embedded Subtitles"),
+            year=2020,
+            match_state="matched",
+        )
+        item.movie = Movie()
+        session.add(item)
+        await session.flush()
+        media_file = MediaFile(
+            item_id=item.id,
+            path=str(video),
+            size_bytes=stat.st_size,
+            mtime=stat.st_mtime,
+            partial_hash=uuid.uuid4().hex * 2,
+            container=probe.container,
+            duration_seconds=probe.duration_seconds,
+            streams_json=probe.model_dump(mode="json"),
+        )
+        session.add(media_file)
+        await session.commit()
+        return item.id, media_file.id
+
+
+async def test_embedded_subtitles_are_cached_for_every_format_in_one_pass(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    admin = await _setup(api_client)
+    root = db_settings.media_dir / f"Movies {uuid.uuid4().hex[:8]}"
+    root.mkdir()
+    video = root / "Embedded.2020.mkv"
+    _create_embedded_ass_mkv(video)
+    _, file_id = await _seed_embedded_subtitle_file(db_settings, db_sessionmaker, video)
+    headers = _bearer(admin)
+
+    ass = await api_client.get(f"/api/v1/media/{file_id}/subtitles/0.ass", headers=headers)
+    assert ass.status_code == 200, ass.text
+    assert ass.headers["content-type"].startswith("text/x-ssa")
+    assert "Hello from ASS" in ass.text
+
+    vtt = await api_client.get(f"/api/v1/media/{file_id}/subtitles/0.vtt", headers=headers)
+    assert vtt.status_code == 200, vtt.text
+    assert vtt.headers["content-type"].startswith("text/vtt")
+    assert "Hello from ASS" in vtt.text
+
+    cache_root = Path(db_settings.transcode_dir) / "subtitles"
+    cache_dirs = [path for path in cache_root.iterdir() if path.is_dir()]
+    assert len(cache_dirs) == 1
+    assert (cache_dirs[0] / "0.ass").is_file()
+    assert (cache_dirs[0] / "0.vtt").is_file()
+
+    # Both formats were produced by one FFmpeg pass. A repeat request must be
+    # answered from the revision-keyed cache, not by extracting again.
+    async def fail_extract(*args, **kwargs):  # noqa: ANN002, ANN003
+        raise AssertionError("subtitle extraction should have been cached")
+
+    monkeypatch.setattr("app.services.subtitles._run_subtitle_ffmpeg", fail_extract)
+    cached = await api_client.get(f"/api/v1/media/{file_id}/subtitles/0.ass", headers=headers)
+    assert cached.status_code == 200, cached.text
+    assert "Hello from ASS" in cached.text

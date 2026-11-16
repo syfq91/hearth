@@ -33,6 +33,17 @@ def _resolve_subtitle_source_path(input_path: Path, output_dir: Path) -> str:
         return str(input_path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
+def _subtitle_burn_in_filter(
+    input_path: Path, output_dir: Path, subtitle_index: int, fonts_dir: Path | None
+) -> str:
+    """Build the ``subtitles`` filter, with container fonts when available."""
+    sub_path = _resolve_subtitle_source_path(input_path, output_dir)
+    value = f"subtitles='{sub_path}':si={subtitle_index}"
+    if fonts_dir is not None:
+        value += f":fontsdir='{fonts_dir}'"
+    return value
+
+
 def _merge_hls_flags(existing_flags: str | None, *new_flags: str) -> str:
     """Merge HLS flag strings using '+' without duplicates."""
     flags: list[str] = []
@@ -62,6 +73,7 @@ def build_ffmpeg_hls_command(
     audio_bitrate_kbps: int = 192,
     hls_flags: str | None = None,
     fps: float = 24.0,
+    fonts_dir: Path | None = None,
 ) -> list[str]:
     """Produce argument list for ffmpeg executing HLS fMP4 delivery.
 
@@ -69,6 +81,9 @@ def build_ffmpeg_hls_command(
     can start before a full segment is encoded. It applies to video transcodes
     (which can force keyframes) and is ignored for stream copies, where segment
     boundaries follow the source keyframes.
+
+    ``fonts_dir`` makes libass use fonts extracted from the source container for
+    text burn-in instead of whatever fontconfig happens to provide.
     """
     short_first = plan.video_action == "transcode" and 0 < first_segment_duration < segment_duration
     keyframe_expr = (
@@ -118,10 +133,10 @@ def build_ffmpeg_hls_command(
     elif plan.hwaccel == "vaapi":
         filters: list[str] = []
         if plan.subtitle_action == "burn_in" and plan.subtitle_stream_index is not None:
-            sub_path = _resolve_subtitle_source_path(input_path, output_dir)
-            filters.append(
-                f"hwdownload,format=nv12,subtitles='{sub_path}':si={plan.subtitle_stream_index},hwupload"
+            subtitle_filter = _subtitle_burn_in_filter(
+                input_path, output_dir, plan.subtitle_stream_index, fonts_dir
             )
+            filters.append(f"hwdownload,format=nv12,{subtitle_filter},hwupload")
             if plan.target_width and plan.target_height:
                 filters.append(
                     f"scale_vaapi=w={plan.target_width}:h={plan.target_height}:format=nv12"
@@ -174,8 +189,11 @@ def build_ffmpeg_hls_command(
         # Software fallback
         sw_filters: list[str] = []
         if plan.subtitle_action == "burn_in" and plan.subtitle_stream_index is not None:
-            sub_path = _resolve_subtitle_source_path(input_path, output_dir)
-            sw_filters.append(f"subtitles='{sub_path}':si={plan.subtitle_stream_index}")
+            sw_filters.append(
+                _subtitle_burn_in_filter(
+                    input_path, output_dir, plan.subtitle_stream_index, fonts_dir
+                )
+            )
         if plan.target_width and plan.target_height:
             sw_filters.append(f"scale={plan.target_width}:{plan.target_height}")
         if plan.tonemap_hdr:

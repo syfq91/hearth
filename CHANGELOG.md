@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scoped book folder discovery queries to the active directory prefix.
 - Updated web client home page to fetch all shelves in a single request, eliminating client-side API waterfalls.
 - Dynamically split `JASSUB` in the video player route, loading WebAssembly assets only when ASS/SSA subtitles are rendered.
+- Embedded subtitle text tracks are now extracted once into a revision-keyed disk cache, with every text track produced in a single FFmpeg demux pass. Opening a second track or replaying a title no longer re-reads the whole video, which previously delayed the first cue by seconds on large files; the extraction deadline also rose from 30s to 5 minutes so slow storage no longer silently yields an empty track. The web player fetches the JASSUB module in parallel with the subtitle document.
 
 ### Fixed
 - Subtitles no longer freeze on the last cue when JASSUB's `requestVideoFrameCallback` loop stalls (background tab, PiP transition, hls.js media swap). The player now reconciles the rendered cue on every `timeupdate`, not only while paused.
@@ -60,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `HEARTH_TRANSCODE_VAINFO_TIMEOUT_SECONDS` (default 15s) replaces the hardcoded 5s VA-API probe deadline, and the encoder smoke-test deadline now defaults to 15s. Low-power iGPUs needed 2.5-4.5s for the first driver initialisation, so both deadlines previously expired on ordinary hardware.
 - A slow hardware capability probe no longer demotes the process to software encoding until restart. On low-power iGPUs (for example a Celeron J4005) `vainfo` can take close to the probe deadline; the timeout was cached as "no hardware encoder", after which every session used `libx264` and the first HLS segment took ~27s instead of ~4s. Timed-out probes are now flagged as inconclusive (`probe_incomplete` on the admin capability response) and re-run in the background up to `HEARTH_TRANSCODE_CAPABILITY_PROBE_RETRIES` times.
 - Client-side ASS/SSA rendering now loads container fonts during direct play. The player rebuilt attachment URLs from an HLS-only media token, so font requests were unauthenticated and JASSUB silently fell back to its bundled font; it now uses the token-scoped `attachments[].url` returned by playback-info.
+- Server-side text subtitle burn-in now renders with the container's embedded fonts. FFmpeg's `subtitles` filter only sees fontconfig by default, so a styled ASS track fell back to a system font; the transcode session now extracts the file's font attachments into a session `fontsdir` and passes it to the filter.
+- Libraries scanned before attachment metadata was persisted no longer lose embedded fonts. Playback-info detects the older probe shape, re-probes the file header once, and stores the repaired `attachments` list.
 - MKV files are no longer treated as WebM for direct-play negotiation. ffprobe reports both containers as `matroska,webm`, so clients that only claim WebM support were handed `video/x-matroska` bytes; the playback decision now disambiguates them using the real file extension and remuxes MKV instead.
 
 ### Removed

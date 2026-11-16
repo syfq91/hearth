@@ -2,12 +2,14 @@
 
 import asyncio
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Query, status
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
 from app.core.deps import SettingsDep, Viewer, ViewerDep, user_can_access_library
 from app.core.errors import AppError, NotFoundError
 from app.db.models import Episode, LibraryPath, MediaFile, MediaItem
@@ -15,13 +17,18 @@ from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
 from app.services.media.probe import ProbeResult
 from app.services.subtitles import (
+    EmbeddedSubtitleTrack,
     convert_to_webvtt,
     decode_subtitle_bytes,
     decode_subtitle_id,
     discover_subtitles,
+    embedded_subtitle_cache_dir,
+    ensure_embedded_subtitles,
     extract_embedded_subtitle,
+    read_embedded_subtitle,
     shift_webvtt,
 )
+from app.services.transcode.decision import BITMAP_SUBTITLE_CODECS
 
 _SUBTITLE_HEADERS = {
     "Cache-Control": "private, max-age=0, must-revalidate",
@@ -85,20 +92,61 @@ def _probe_result(media_file: MediaFile) -> ProbeResult:
     )
 
 
+def _text_subtitle_tracks(probe: ProbeResult) -> list[EmbeddedSubtitleTrack]:
+    """Describe the non-bitmap subtitle streams the server can cache as text."""
+    tracks: list[EmbeddedSubtitleTrack] = []
+    ordinal = 0
+    for stream in probe.streams:
+        if stream.codec_type != "subtitle":
+            continue
+        codec = (stream.codec_name or "").lower()
+        if codec not in BITMAP_SUBTITLE_CODECS:
+            # ASS/SSA can also be delivered as WebVTT to clients without a
+            # client-side renderer, so cache both representations in one pass.
+            formats = ("ass", "vtt") if codec in {"ass", "ssa"} else ("vtt",)
+            tracks.append(EmbeddedSubtitleTrack(ordinal=ordinal, formats=formats))
+        ordinal += 1
+    return tracks
+
+
 async def _embedded_subtitle_response(
-    media_file: MediaFile, stream_index: int, fmt: str, shift_ms: int = 0
+    media_file: MediaFile,
+    stream_index: int,
+    fmt: Literal["ass", "vtt"],
+    settings: Settings,
+    shift_ms: int = 0,
 ) -> Response:
     """Extract one embedded subtitle stream as WebVTT or ASS.
 
     ``stream_index`` is the ordinal among subtitle streams, matching the
-    decision plan's ``subtitle_stream_index``.
+    decision plan's ``subtitle_stream_index``. Every text track is extracted
+    into a revision-keyed cache in a single demux pass, so switching tracks and
+    replaying a title does not read the whole video again.
     """
     probe = _probe_result(media_file)
     subtitle_count = sum(1 for stream in probe.streams if stream.codec_type == "subtitle")
     if stream_index < 0 or stream_index >= subtitle_count:
         raise NotFoundError(_NOT_FOUND, code="subtitle_not_found")
 
-    content = await extract_embedded_subtitle(Path(media_file.path), stream_index, fmt=fmt)
+    video_path = Path(media_file.path)
+    cache_dir = embedded_subtitle_cache_dir(
+        Path(settings.transcode_dir) / "subtitles",
+        media_file.id,
+        media_file.mtime,
+        media_file.size_bytes,
+    )
+    await ensure_embedded_subtitles(
+        video_path,
+        _text_subtitle_tracks(probe),
+        cache_dir,
+        ffmpeg_binary=settings.ffmpeg_binary,
+    )
+    content = await read_embedded_subtitle(cache_dir, stream_index, fmt)
+    if content is None:
+        # Cached extraction failed (unsupported stream, missing file, ...).
+        # Preserve the previous per-request behaviour and return an empty track.
+        content = await extract_embedded_subtitle(video_path, stream_index, fmt=fmt)
+
     if fmt == "ass":
         return Response(content=content, media_type="text/x-ssa", headers=_SUBTITLE_HEADERS)
     return Response(
@@ -122,6 +170,7 @@ async def get_embedded_subtitle_vtt(
     file_id: str,
     stream_index: int,
     viewer: ViewerDep,
+    settings: SettingsDep,
     session: SessionDep,
     shift_ms: int = Query(
         default=0,
@@ -135,7 +184,7 @@ async def get_embedded_subtitle_vtt(
     Lets direct-play clients render text subtitles without a transcode session.
     """
     media_file, _roots = await _authorized_media_file(session, viewer, file_id)
-    return await _embedded_subtitle_response(media_file, stream_index, "vtt", shift_ms)
+    return await _embedded_subtitle_response(media_file, stream_index, "vtt", settings, shift_ms)
 
 
 @router.get(
@@ -152,11 +201,12 @@ async def get_embedded_subtitle_ass(
     file_id: str,
     stream_index: int,
     viewer: ViewerDep,
+    settings: SettingsDep,
     session: SessionDep,
 ) -> Response:
     """Serve an embedded subtitle stream as ASS for client-side rendering."""
     media_file, _roots = await _authorized_media_file(session, viewer, file_id)
-    return await _embedded_subtitle_response(media_file, stream_index, "ass")
+    return await _embedded_subtitle_response(media_file, stream_index, "ass", settings)
 
 
 @router.get(

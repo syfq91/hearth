@@ -1,6 +1,5 @@
 """Serve extracted media attachments (e.g. fonts) on demand with disk caching."""
 
-import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -9,10 +8,14 @@ from sqlalchemy import func, select
 
 from app.core.deps import SettingsDep, ViewerDep, user_can_access_library
 from app.core.errors import NotFoundError
-from app.core.ids import new_id
 from app.db.models import Episode, LibraryPath, MediaFile, MediaItem, Track
 from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
+from app.services.media.attachments import (
+    AttachmentExtractionError,
+    attachment_cache_path,
+    extract_attachment,
+)
 from app.services.media.probe import ProbeResult
 
 router = APIRouter(prefix="/media", tags=["media"])
@@ -121,44 +124,20 @@ async def get_attachment(
         media_type = _FONT_MIME_BY_EXT.get(suffix, "application/octet-stream")
 
     fonts_dir = Path(settings.transcode_dir) / "fonts"
-    fonts_dir.mkdir(parents=True, exist_ok=True)
-    cache_path = fonts_dir / f"{media_file.id}_{attachment_index}.bin"
+    cache_path = attachment_cache_path(fonts_dir, media_file.id, attachment_index)
 
-    if not cache_path.is_file() or cache_path.stat().st_size == 0:
-        temp_path = fonts_dir / f"{media_file.id}_{attachment_index}.tmp.{new_id()}"
-        cmd = [
-            settings.ffmpeg_binary,
-            "-y",
-            f"-dump_attachment:{attachment_index}",
-            str(temp_path),
-            "-i",
-            str(video_path),
-            "-t",
-            "0",
-            "-f",
-            "null",
-            "-",
-        ]
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            _, stderr = await proc.communicate()
-            if proc.returncode != 0 or not temp_path.is_file() or temp_path.stat().st_size == 0:
-                temp_path.unlink(missing_ok=True)
-                raise NotFoundError(
-                    "Attachment could not be extracted",
-                    code="attachment_not_found",
-                )
-            temp_path.replace(cache_path)
-        except (FileNotFoundError, OSError) as e:
-            temp_path.unlink(missing_ok=True)
-            raise NotFoundError(
-                "Attachment extraction failed",
-                code="attachment_not_found",
-            ) from e
+    try:
+        await extract_attachment(
+            video_path,
+            attachment,
+            cache_path,
+            ffmpeg_binary=settings.ffmpeg_binary,
+        )
+    except AttachmentExtractionError as exc:
+        raise NotFoundError(
+            "Attachment could not be extracted",
+            code="attachment_not_found",
+        ) from exc
 
     return FileResponse(
         cache_path,

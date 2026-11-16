@@ -21,7 +21,8 @@ from pathlib import Path
 from app.core.config import Settings, get_settings
 from app.core.errors import TranscodeCapacityExceededError
 from app.db.base import utcnow
-from app.services.media.probe import ProbeStream
+from app.services.media.attachments import prepare_font_directory
+from app.services.media.probe import AttachmentStream, ProbeStream
 from app.services.transcode.builder import build_ffmpeg_hls_command
 from app.services.transcode.decision import TranscodePlan
 
@@ -50,6 +51,7 @@ class TranscodeSession:
         source_video: ProbeStream | None = None,
         source_audio: ProbeStream | None = None,
         source_fps: float | None = None,
+        font_attachments: list[AttachmentStream] | None = None,
     ) -> None:
         self.id = session_id
         self.user_id = user_id
@@ -64,6 +66,7 @@ class TranscodeSession:
         self.source_video = source_video
         self.source_audio = source_audio
         self.source_fps = source_fps
+        self.font_attachments = font_attachments or []
         self.segment_duration = settings.transcode_segment_duration_seconds
         # A short opening segment gets the client playing sooner. Stream copies
         # cannot force keyframes, so they keep a uniform grid.
@@ -327,6 +330,29 @@ class TranscodeSession:
         if self.is_paused and self.compute_lead() <= 20.0:
             self.resume()
 
+    async def _prepare_burn_in_fonts(self) -> Path | None:
+        """Extract container fonts for libass when burning in text subtitles."""
+        if self.plan.subtitle_action != "burn_in" or self.plan.subtitle_stream_index is None:
+            return None
+        if not self.font_attachments:
+            return None
+        fonts_dir = self.output_dir / "fonts"
+        prepared = await prepare_font_directory(
+            self.input_path,
+            self.font_attachments,
+            fonts_dir,
+            cache_dir=self.settings.transcode_dir / "fonts",
+            file_id=self.file_id,
+            ffmpeg_binary=self.settings.ffmpeg_binary,
+        )
+        if prepared is not None:
+            logger.info(
+                "using container fonts for subtitle burn-in from %s",
+                prepared,
+                extra={"session_id": self.id},
+            )
+        return prepared
+
     async def start_process(self) -> None:
         """Build command and launch ffmpeg subprocess."""
         if self.is_circuit_open():
@@ -338,6 +364,7 @@ class TranscodeSession:
             return
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        fonts_dir = await self._prepare_burn_in_fonts()
         start_seg = self.segment_index_at(self.start_offset)
         self.current_start_segment = start_seg
         cmd_offset = self.segment_start(start_seg)
@@ -359,6 +386,7 @@ class TranscodeSession:
             segment_duration=self.segment_duration,
             first_segment_duration=first_segment_duration,
             audio_bitrate_kbps=self.settings.transcode_audio_bitrate_kbps,
+            fonts_dir=fonts_dir,
         )
 
         logger.info(
@@ -645,6 +673,7 @@ class SessionManager:
         source_video: ProbeStream | None = None,
         source_audio: ProbeStream | None = None,
         source_fps: float | None = None,
+        font_attachments: list[AttachmentStream] | None = None,
     ) -> TranscodeSession:
         """Create and start a new transcoding session, respecting concurrency limits."""
         async with self._lock:
@@ -697,6 +726,7 @@ class SessionManager:
                 source_video=source_video,
                 source_audio=source_audio,
                 source_fps=source_fps,
+                font_attachments=font_attachments,
             )
             self.sessions[session_id] = session
             await session.start_process()

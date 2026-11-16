@@ -46,7 +46,7 @@ from app.db.models import (
 from app.db.session import SessionDep
 from app.services.events import get_broadcaster
 from app.services.libraries import path_is_within_roots
-from app.services.media.probe import ProbeResult, ProbeStream
+from app.services.media.probe import ProbeError, ProbeResult, ProbeStream, probe_media
 from app.services.playback_state import chapters_from_streams, resolve_watch_state
 from app.services.ratings import is_rating_permitted
 from app.services.scrobbling.listenbrainz import enqueue_scrobble
@@ -300,6 +300,65 @@ def _extract_query_playback_info(request: Request) -> dict[str, Any]:
     return params
 
 
+def _parse_stored_probe(media_file: MediaFile) -> ProbeResult:
+    """Parse the probe JSON stored on a media file, with metadata fallbacks."""
+    try:
+        if isinstance(media_file.streams_json, dict) and "container" in media_file.streams_json:
+            return ProbeResult.model_validate(media_file.streams_json)
+        if isinstance(media_file.streams_json, str):
+            return ProbeResult.model_validate_json(media_file.streams_json)
+    except Exception:
+        pass
+    return ProbeResult(
+        container=media_file.container or "mp4",
+        duration_seconds=media_file.duration_seconds,
+        size_bytes=media_file.size_bytes,
+    )
+
+
+def _needs_attachment_refresh(media_file: MediaFile) -> bool:
+    """Whether this row predates attachment metadata being persisted.
+
+    Older scans stored the attachment streams but dropped their filename and
+    MIME tags, so playback could not advertise container fonts at all. A
+    header-only re-probe repairs the row once; rows written by the current
+    scanner always carry an ``attachments`` key, even when it is empty.
+    """
+    stored = media_file.streams_json
+    return isinstance(stored, dict) and bool(stored.get("streams")) and "attachments" not in stored
+
+
+async def _load_playback_probe(
+    session: AsyncSession, media_file: MediaFile, settings: Settings
+) -> ProbeResult:
+    """Load stored probe data, refreshing stale attachment metadata once."""
+    needs_refresh = _needs_attachment_refresh(media_file)
+    probe_res = _parse_stored_probe(media_file)
+    if not needs_refresh:
+        return probe_res
+    try:
+        refreshed = await probe_media(
+            media_file.path,
+            ffprobe_binary=settings.ffprobe_binary,
+        )
+    except ProbeError:
+        return probe_res
+
+    media_file.container = refreshed.container or media_file.container
+    media_file.duration_seconds = refreshed.duration_seconds
+    media_file.bit_rate = refreshed.bit_rate
+    media_file.streams_json = refreshed.model_dump(mode="json")
+    try:
+        await session.commit()
+    except Exception:
+        # Another request may be refreshing the same row. The fresh result is
+        # still valid for this response; drop the failed transaction so the
+        # rest of playback-info can read normally.
+        await session.rollback()
+        await session.refresh(media_file)
+    return refreshed
+
+
 @router.post("/items/{item_id}/playback-info")
 async def playback_info(
     item_id: str,
@@ -360,24 +419,7 @@ async def playback_info(
     encoded_token = quote(token, safe="")
 
     # Parse stored streams
-    probe_res: ProbeResult
-    try:
-        if isinstance(media_file.streams_json, dict) and "container" in media_file.streams_json:
-            probe_res = ProbeResult.model_validate(media_file.streams_json)
-        elif isinstance(media_file.streams_json, str):
-            probe_res = ProbeResult.model_validate_json(media_file.streams_json)
-        else:
-            probe_res = ProbeResult(
-                container=media_file.container or "mp4",
-                duration_seconds=media_file.duration_seconds,
-                size_bytes=media_file.size_bytes,
-            )
-    except Exception:
-        probe_res = ProbeResult(
-            container=media_file.container or "mp4",
-            duration_seconds=media_file.duration_seconds,
-            size_bytes=media_file.size_bytes,
-        )
+    probe_res = await _load_playback_probe(session, media_file, settings)
 
     # Evaluate decision engine
     if request_obj.audio_track_index is None and user.preferred_audio_language:
@@ -466,6 +508,7 @@ async def playback_info(
         duration_seconds=media_file.duration_seconds or probe_res.duration_seconds or 0.0,
         source_video=probe_res.primary_video,
         source_audio=source_audio,
+        font_attachments=probe_res.font_attachments,
     )
 
     return PlaybackInfoResponse(

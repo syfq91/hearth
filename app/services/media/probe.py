@@ -165,7 +165,9 @@ class ProbeResult(BaseModel):
                             }
                         )
                 if attachments:
-                    data["attachments"] = attachments
+                    # Never mutate the caller's dict: callers compare stored JSON
+                    # to the probe schema to detect rows that need a re-probe.
+                    data = {**data, "attachments": attachments}
         return data
 
     @property
