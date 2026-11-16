@@ -7,6 +7,7 @@
 
 	/* ---- Playback preferences ---- */
 	let preferredAudio = $state('');
+	let preferredSubtitle = $state('');
 	let prefBusy = $state(false);
 	let prefMessage = $state<string | null>(null);
 	let prefError = $state<string | null>(null);
@@ -14,6 +15,7 @@
 	$effect(() => {
 		if (user) {
 			preferredAudio = user.preferred_audio_language ?? '';
+			preferredSubtitle = user.preferred_subtitle_language ?? '';
 		}
 	});
 
@@ -25,7 +27,8 @@
 		try {
 			await api.patch('/users/me/preferences', {
 				body: {
-					preferred_audio_language: preferredAudio || null
+					preferred_audio_language: preferredAudio || null,
+					preferred_subtitle_language: preferredSubtitle || null
 				}
 			});
 			await reloadUser();
@@ -132,6 +135,15 @@
 				<span>Preferred audio language</span>
 				<select bind:value={preferredAudio}>
 					<option value="">Default / Original</option>
+					{#each COMMON_LANGUAGES as lang}
+						<option value={lang.code}>{lang.label} ({lang.code})</option>
+					{/each}
+				</select>
+			</label>
+			<label>
+				<span>Preferred subtitle language</span>
+				<select bind:value={preferredSubtitle}>
+					<option value="">None / Off</option>
 					{#each COMMON_LANGUAGES as lang}
 						<option value={lang.code}>{lang.label} ({lang.code})</option>
 					{/each}

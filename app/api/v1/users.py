@@ -31,6 +31,7 @@ class UserCreate(BaseModel):
     allow_transcode: bool = True
     max_rating: str | None = Field(default=None, max_length=16)
     preferred_audio_language: str | None = Field(default=None, max_length=16)
+    preferred_subtitle_language: str | None = Field(default=None, max_length=16)
     library_ids: list[str] = Field(default_factory=list)
 
 
@@ -42,6 +43,7 @@ class UserUpdate(BaseModel):
     allow_transcode: bool | None = None
     max_rating: str | None = Field(default=None, max_length=16)
     preferred_audio_language: str | None = Field(default=None, max_length=16)
+    preferred_subtitle_language: str | None = Field(default=None, max_length=16)
     library_ids: list[str] | None = None
 
 
@@ -59,10 +61,12 @@ class ListenBrainzTokenRequest(BaseModel):
 
 class UserPreferencesResponse(BaseModel):
     preferred_audio_language: str | None = None
+    preferred_subtitle_language: str | None = None
 
 
 class UserPreferencesUpdate(BaseModel):
     preferred_audio_language: str | None = Field(default=None, max_length=16)
+    preferred_subtitle_language: str | None = Field(default=None, max_length=16)
 
 
 class UserDetail(BaseModel):
@@ -74,6 +78,7 @@ class UserDetail(BaseModel):
     allow_transcode: bool
     max_rating: str | None
     preferred_audio_language: str | None = None
+    preferred_subtitle_language: str | None = None
     created_at: datetime
     updated_at: datetime
     library_ids: list[str]
@@ -99,6 +104,7 @@ async def _detail(session: AsyncSession, user: User) -> UserDetail:
         allow_transcode=user.allow_transcode,
         max_rating=user.max_rating,
         preferred_audio_language=user.preferred_audio_language,
+        preferred_subtitle_language=user.preferred_subtitle_language,
         created_at=user.created_at,
         updated_at=user.updated_at,
         library_ids=await _grants_by_user(session, user.id),
@@ -182,6 +188,7 @@ async def create_user(
         allow_transcode=payload.allow_transcode,
         max_rating=payload.max_rating,
         preferred_audio_language=payload.preferred_audio_language,
+        preferred_subtitle_language=payload.preferred_subtitle_language,
     )
     session.add(user)
     try:
@@ -246,6 +253,7 @@ async def get_my_preferences(user: RequireUser) -> UserPreferencesResponse:
     """Return the current user's playback preferences."""
     return UserPreferencesResponse(
         preferred_audio_language=user.preferred_audio_language,
+        preferred_subtitle_language=user.preferred_subtitle_language,
     )
 
 
@@ -263,6 +271,13 @@ async def update_my_preferences(
     if "preferred_audio_language" in changes:
         val = payload.preferred_audio_language.strip() if payload.preferred_audio_language else None
         db_user.preferred_audio_language = val or None
+    if "preferred_subtitle_language" in changes:
+        sub_val = (
+            payload.preferred_subtitle_language.strip()
+            if payload.preferred_subtitle_language
+            else None
+        )
+        db_user.preferred_subtitle_language = sub_val or None
     await session.commit()
     await session.refresh(db_user)
     return UserResponse.model_validate(db_user)
@@ -339,6 +354,8 @@ async def update_user(
         user.max_rating = payload.max_rating
     if "preferred_audio_language" in changes:
         user.preferred_audio_language = payload.preferred_audio_language
+    if "preferred_subtitle_language" in changes:
+        user.preferred_subtitle_language = payload.preferred_subtitle_language
 
     if payload.library_ids is not None:
         library_ids = await _validate_library_ids(session, payload.library_ids)

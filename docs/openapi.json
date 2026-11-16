@@ -7430,6 +7430,18 @@
             ],
             "title": "Preferred Audio Language"
           },
+          "preferred_subtitle_language": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Subtitle Language"
+          },
           "role": {
             "default": "user",
             "enum": [
@@ -7517,6 +7529,17 @@
             ],
             "title": "Preferred Audio Language"
           },
+          "preferred_subtitle_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Subtitle Language"
+          },
           "role": {
             "title": "Role",
             "type": "string"
@@ -7558,6 +7581,17 @@
               }
             ],
             "title": "Preferred Audio Language"
+          },
+          "preferred_subtitle_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Subtitle Language"
           }
         },
         "title": "UserPreferencesResponse",
@@ -7576,6 +7610,18 @@
               }
             ],
             "title": "Preferred Audio Language"
+          },
+          "preferred_subtitle_language": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Subtitle Language"
           }
         },
         "title": "UserPreferencesUpdate",
@@ -7632,6 +7678,17 @@
               }
             ],
             "title": "Preferred Audio Language"
+          },
+          "preferred_subtitle_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Subtitle Language"
           },
           "role": {
             "title": "Role",
@@ -7728,6 +7785,18 @@
               }
             ],
             "title": "Preferred Audio Language"
+          },
+          "preferred_subtitle_language": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Subtitle Language"
           },
           "role": {
             "anyOf": [

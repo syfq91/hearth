@@ -232,10 +232,11 @@ async def test_user_playback_preferences_audio_language(
     pref_res = await api_client.get("/api/v1/users/me/preferences", headers=_bearer(admin))
     assert pref_res.status_code == 200
     assert pref_res.json()["preferred_audio_language"] is None
+    assert pref_res.json()["preferred_subtitle_language"] is None
 
     patch_res = await api_client.patch(
         "/api/v1/users/me/preferences",
-        json={"preferred_audio_language": "ja"},
+        json={"preferred_audio_language": "ja", "preferred_subtitle_language": "en"},
         headers=_bearer(admin),
     )
     assert patch_res.status_code == 200
@@ -244,3 +245,4 @@ async def test_user_playback_preferences_audio_language(
     me = await api_client.get("/api/v1/auth/me", headers=_bearer(admin))
     assert me.status_code == 200
     assert me.json()["preferred_audio_language"] == "ja"
+    assert me.json()["preferred_subtitle_language"] == "en"

@@ -75,3 +75,20 @@ export function matchesLanguage(
 	}
 	return hasWord(title, pref);
 }
+
+export function findMatchingSubtitleTrack(
+	subtitles: Array<{ id: string; name?: string | null; language?: string | null }> | null | undefined,
+	embeddedSubtitles: Array<{ index: number; title?: string | null; language?: string | null }> | null | undefined,
+	preferredLang: string | null | undefined
+): string | null {
+	if (!preferredLang) return null;
+	if (subtitles) {
+		const match = subtitles.find((t) => matchesLanguage(t.language, t.name, preferredLang));
+		if (match) return `ext:${match.id}`;
+	}
+	if (embeddedSubtitles) {
+		const match = embeddedSubtitles.find((s) => matchesLanguage(s.language, s.title, preferredLang));
+		if (match) return `emb:${match.index}`;
+	}
+	return null;
+}

@@ -5156,6 +5156,8 @@ export interface components {
             password: string;
             /** Preferred Audio Language */
             preferred_audio_language?: string | null;
+            /** Preferred Subtitle Language */
+            preferred_subtitle_language?: string | null;
             /**
              * Role
              * @default user
@@ -5191,6 +5193,8 @@ export interface components {
             max_rating: string | null;
             /** Preferred Audio Language */
             preferred_audio_language?: string | null;
+            /** Preferred Subtitle Language */
+            preferred_subtitle_language?: string | null;
             /** Role */
             role: string;
             /**
@@ -5205,11 +5209,15 @@ export interface components {
         UserPreferencesResponse: {
             /** Preferred Audio Language */
             preferred_audio_language?: string | null;
+            /** Preferred Subtitle Language */
+            preferred_subtitle_language?: string | null;
         };
         /** UserPreferencesUpdate */
         UserPreferencesUpdate: {
             /** Preferred Audio Language */
             preferred_audio_language?: string | null;
+            /** Preferred Subtitle Language */
+            preferred_subtitle_language?: string | null;
         };
         /** UserResponse */
         UserResponse: {
@@ -5230,6 +5238,8 @@ export interface components {
             max_rating: string | null;
             /** Preferred Audio Language */
             preferred_audio_language?: string | null;
+            /** Preferred Subtitle Language */
+            preferred_subtitle_language?: string | null;
             /** Role */
             role: string;
             /** Username */
@@ -5249,6 +5259,8 @@ export interface components {
             max_rating?: string | null;
             /** Preferred Audio Language */
             preferred_audio_language?: string | null;
+            /** Preferred Subtitle Language */
+            preferred_subtitle_language?: string | null;
             /** Role */
             role?: ("admin" | "user") | null;
             /** Username */
