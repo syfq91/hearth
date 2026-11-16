@@ -1196,7 +1196,9 @@
 					</div>
 				{/if}
 			</div>
-			<span class="time-duration">{formatTime(duration)}</span>
+			<span class="time-remaining" title="Remaining time">
+				-{formatTime(Math.max(0, duration - currentTime))}
+			</span>
 		</div>
 
 		<!-- Control Buttons Row -->
@@ -1701,7 +1703,7 @@
 	}
 
 	.time-current,
-	.time-duration {
+	.time-remaining {
 		font-size: 0.825rem;
 		font-family: ui-monospace, monospace;
 		white-space: nowrap;
@@ -1712,7 +1714,7 @@
 		color: #fff;
 	}
 
-	.time-duration {
+	.time-remaining {
 		color: var(--muted);
 	}
 
