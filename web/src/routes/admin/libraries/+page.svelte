@@ -161,6 +161,21 @@
 		}
 	}
 
+	let scanningAll = $state(false);
+
+	async function scanAllLibraries(): Promise<void> {
+		scanningAll = true;
+		error = null;
+		try {
+			await api.post('/admin/libraries/scan');
+			message = 'Scans queued for all libraries. Check the admin overview for job progress.';
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			scanningAll = false;
+		}
+	}
+
 	async function removeLibrary(libraryId: string, libraryName: string): Promise<void> {
 		if (!confirm(`Delete the library “${libraryName}”? Its files are not touched.`)) return;
 		error = null;
@@ -351,7 +366,20 @@
 />
 
 <section class="card" aria-labelledby="existing-heading">
-	<h2 id="existing-heading">Libraries</h2>
+	<div class="card-header-row">
+		<h2 id="existing-heading">Libraries</h2>
+		{#if libraries.length > 0}
+			<button
+				type="button"
+				class="ghost inline-action"
+				onclick={scanAllLibraries}
+				disabled={scanningAll}
+			>
+				<RefreshCw size={14} class={scanningAll ? 'spin' : ''} />
+				{scanningAll ? 'Queuing scans…' : 'Scan all libraries'}
+			</button>
+		{/if}
+	</div>
 	{#if libraries.length === 0}
 		<p class="muted">No libraries yet.</p>
 	{:else}
@@ -572,6 +600,18 @@
 		border-radius: var(--radius);
 		padding: 1.25rem;
 		margin-bottom: 1.25rem;
+	}
+
+	.card-header-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.card-header-row h2 {
+		margin-bottom: 0;
 	}
 
 	.card h2 {

@@ -1,7 +1,29 @@
 <script lang="ts">
+	import { api } from '../../lib/api/client';
+	import { invalidateAll } from '$app/navigation';
+	import { RefreshCw } from '@lucide/svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+
+	let scanningAll = $state(false);
+	let actionMessage = $state<string | null>(null);
+	let actionError = $state<string | null>(null);
+
+	async function scanAllLibraries(): Promise<void> {
+		scanningAll = true;
+		actionMessage = null;
+		actionError = null;
+		try {
+			await api.post('/admin/libraries/scan');
+			actionMessage = 'Scans queued for all libraries.';
+			await invalidateAll();
+		} catch (e) {
+			actionError = e instanceof Error ? e.message : String(e);
+		} finally {
+			scanningAll = false;
+		}
+	}
 
 	function formatBytes(bytes: number | null | undefined): string {
 		if (!bytes) return '—';
@@ -26,6 +48,13 @@
 
 {#if data.error}
 	<p class="banner" role="alert">Some admin data failed to load: {data.error}</p>
+{/if}
+
+{#if actionMessage}
+	<p class="banner ok-banner" role="status">{actionMessage}</p>
+{/if}
+{#if actionError}
+	<p class="banner" role="alert">{actionError}</p>
 {/if}
 
 {#if data.system}
@@ -87,7 +116,18 @@
 </section>
 
 <section class="card" aria-labelledby="jobs-heading">
-	<h2 id="jobs-heading">Recent jobs</h2>
+	<div class="card-header-row">
+		<h2 id="jobs-heading">Recent jobs</h2>
+		<button
+			type="button"
+			class="ghost inline-action"
+			onclick={scanAllLibraries}
+			disabled={scanningAll}
+		>
+			<RefreshCw size={14} class={scanningAll ? 'spin' : ''} />
+			{scanningAll ? 'Queuing scans…' : 'Scan all libraries'}
+		</button>
+	</div>
 	{#if data.jobs.length === 0}
 		<p class="muted">No jobs recorded.</p>
 	{:else}
@@ -184,5 +224,43 @@
 		padding: 0.6rem 1rem;
 		color: var(--muted);
 		margin-bottom: 1rem;
+	}
+
+	.ok-banner {
+		border-left-color: var(--accent, #4caf50);
+		color: var(--text);
+	}
+
+	.card-header-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.card-header-row h2 {
+		margin-bottom: 0;
+	}
+
+	.inline-action {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: 0.85rem;
+		padding: 0.35rem 0.65rem;
+	}
+
+	:global(.spin) {
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
 	}
 </style>
