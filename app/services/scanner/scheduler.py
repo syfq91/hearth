@@ -20,6 +20,7 @@ from app.core.config import Settings
 from app.db.base import utcnow
 from app.db.models import Library
 from app.services.scanner.jobs import enqueue_scan
+from app.services.scanner.settings import apply_scanner_settings
 
 logger = logging.getLogger("hearth.scanner.scheduler")
 
@@ -40,11 +41,12 @@ class ScanScheduler:
 
     async def tick(self) -> list[str]:
         """Enqueue scans for libraries whose last scan is older than the interval."""
-        now = self.clock()
-        interval = timedelta(hours=self.settings.scan_interval_hours)
         created: list[str] = []
 
         async with self.sessionmaker() as session:
+            await apply_scanner_settings(self.settings, session)
+            now = self.clock()
+            interval = timedelta(hours=self.settings.scan_interval_hours)
             libraries = list(
                 await session.scalars(
                     select(Library)

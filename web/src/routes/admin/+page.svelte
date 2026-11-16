@@ -56,6 +56,12 @@
 						: 'unavailable'}
 				</dd>
 			</div>
+			{#if data.scannerSettings}
+				<div>
+					<dt>Scan interval</dt>
+					<dd>Every {data.scannerSettings.scan_interval_hours}h (<a href="/admin/libraries#scan-settings-heading">change</a>)</dd>
+				</div>
+			{/if}
 		</dl>
 	</section>
 {/if}

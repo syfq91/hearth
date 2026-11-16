@@ -80,6 +80,8 @@ ENDPOINT_POLICIES: dict[tuple[str, str], EndpointPolicy] = {
     ("GET", "/api/v1/admin/jobs"): EndpointPolicy("admin"),
     ("POST", "/api/v1/admin/jobs/{job_id}/cancel"): EndpointPolicy("admin"),
     ("GET", "/api/v1/admin/transcoding/capabilities"): EndpointPolicy("admin"),
+    ("GET", "/api/v1/admin/scanner/settings"): EndpointPolicy("admin"),
+    ("PUT", "/api/v1/admin/scanner/settings"): EndpointPolicy("admin"),
     ("GET", "/api/v1/admin/transcoding/settings"): EndpointPolicy("admin"),
     ("PUT", "/api/v1/admin/transcoding/settings"): EndpointPolicy("admin"),
     ("GET", "/api/v1/admin/transcoding/sessions"): EndpointPolicy("admin"),
@@ -95,6 +97,8 @@ ENDPOINT_POLICIES: dict[tuple[str, str], EndpointPolicy] = {
     ("GET", "/api/v1/users/me/listenbrainz"): EndpointPolicy("user"),
     ("PUT", "/api/v1/users/me/listenbrainz"): EndpointPolicy("user"),
     ("DELETE", "/api/v1/users/me/listenbrainz"): EndpointPolicy("user"),
+    ("GET", "/api/v1/users/me/preferences"): EndpointPolicy("user"),
+    ("PATCH", "/api/v1/users/me/preferences"): EndpointPolicy("user"),
     # Jobs (Admin)
     ("GET", "/api/v1/jobs"): EndpointPolicy("admin"),
     ("POST", "/api/v1/jobs"): EndpointPolicy("admin"),

@@ -55,7 +55,7 @@ async def test_migrations_apply_and_are_idempotent(settings: Settings) -> None:
     finally:
         await engine.dispose()
 
-    assert version == "0009_state_and_progress_indexes"
+    assert version == "0013_user_auto_play_next"
     assert settings.db_path.exists()
 
 

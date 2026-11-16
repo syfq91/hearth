@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { api } from '../../../lib/api/client';
 	import { invalidateAll } from '$app/navigation';
-	import type { LibraryDetail } from '../../../lib/api/types';
+	import type { LibraryDetail, ScannerSettingsResponse } from '../../../lib/api/types';
 	import type { PageProps } from './$types';
 	import FolderBrowserModal from '../../../lib/components/FolderBrowserModal.svelte';
 	import { Folder, FolderPlus, FolderOpen, Pencil, Trash2, RefreshCw, X, Plus } from '@lucide/svelte';
@@ -170,6 +170,36 @@
 			message = `Library “${libraryName}” deleted.`;
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	/* ---- scan settings state ---- */
+	let scanIntervalHours = $state<number>(6);
+	let savingScanSettings = $state(false);
+	let scanSettingsMessage = $state<string | null>(null);
+	let scanSettingsError = $state<string | null>(null);
+
+	$effect(() => {
+		if (data.scannerSettings?.scan_interval_hours != null) {
+			scanIntervalHours = data.scannerSettings.scan_interval_hours;
+		}
+	});
+
+	async function saveScanSettings(event: SubmitEvent): Promise<void> {
+		event.preventDefault();
+		savingScanSettings = true;
+		scanSettingsMessage = null;
+		scanSettingsError = null;
+		try {
+			const res = await api.put<ScannerSettingsResponse>('/admin/scanner/settings', {
+				body: { scan_interval_hours: Number(scanIntervalHours) }
+			});
+			scanIntervalHours = res.scan_interval_hours;
+			scanSettingsMessage = 'Scan interval updated.';
+		} catch (e) {
+			scanSettingsError = e instanceof Error ? e.message : String(e);
+		} finally {
+			savingScanSettings = false;
 		}
 	}
 </script>
@@ -503,6 +533,35 @@
 				</li>
 			{/each}
 		</ul>
+	{/if}
+</section>
+
+<section class="card" aria-labelledby="scan-settings-heading">
+	<h2 id="scan-settings-heading">Scan settings</h2>
+	<form class="stack" onsubmit={saveScanSettings}>
+		<label>
+			<span>Automatic scan interval (hours)</span>
+			<input
+				type="number"
+				step="any"
+				min="0.1"
+				max="720"
+				bind:value={scanIntervalHours}
+				required
+			/>
+		</label>
+		<p class="muted">How often Hearth automatically rescans library folders for new or modified media files.</p>
+
+		<button type="submit" disabled={savingScanSettings}>
+			{savingScanSettings ? 'Saving…' : 'Save scan interval'}
+		</button>
+	</form>
+
+	{#if scanSettingsMessage}
+		<p class="ok" role="status">{scanSettingsMessage}</p>
+	{/if}
+	{#if scanSettingsError}
+		<p class="err" role="alert">{scanSettingsError}</p>
 	{/if}
 </section>
 

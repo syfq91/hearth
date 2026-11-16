@@ -19,7 +19,9 @@ from app.db.migrate import run_migrations, run_migrations_async
 from app.db.session import build_engine, build_sessionmaker
 from app.services.backup import create_backup, restore_backup
 from app.services.jobs.worker import JobWorker
+from app.services.metadata.credentials import apply_credential_overrides
 from app.services.scanner.scheduler import ScanScheduler
+from app.services.scanner.settings import apply_scanner_settings
 from app.services.scanner.watcher import LibraryWatcher
 
 logger = logging.getLogger("hearth.cli")
@@ -89,6 +91,9 @@ async def _run_worker(settings: Settings) -> None:
     engine = build_engine(settings)
     try:
         sessionmaker = build_sessionmaker(engine)
+        async with sessionmaker() as session:
+            await apply_credential_overrides(settings, session)
+            await apply_scanner_settings(settings, session)
         worker = JobWorker(settings, sessionmaker)
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()

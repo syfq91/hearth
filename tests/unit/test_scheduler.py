@@ -92,3 +92,28 @@ async def test_tick_skips_libraries_with_fresh_scans(
     assert await scheduler.tick() == []
     async with db_sessionmaker() as session:
         assert list(await session.scalars(select(Job))) == []
+
+
+async def test_tick_respects_database_interval_override(
+    db_settings: Settings, db_sessionmaker: async_sessionmaker[AsyncSession]
+) -> None:
+    from app.services.scanner.settings import save_scan_interval_override
+
+    await _make_library(
+        db_sessionmaker,
+        db_settings.media_dir / "movies",
+        last_scan_at=NOW - timedelta(hours=3),
+    )
+    scheduler = ScanScheduler(db_settings, db_sessionmaker, clock=lambda: NOW)
+
+    # Not due under default 6 hours
+    assert await scheduler.tick() == []
+
+    # Update override to 2 hours
+    async with db_sessionmaker() as session:
+        await save_scan_interval_override(session, 2.0)
+        await session.commit()
+
+    job_ids = await scheduler.tick()
+    assert len(job_ids) == 1
+    assert db_settings.scan_interval_hours == 2.0

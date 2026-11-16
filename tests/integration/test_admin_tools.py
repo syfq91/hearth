@@ -271,3 +271,58 @@ async def test_admin_browse_filesystem(
         headers=admin_hdr,
     )
     assert missing_path.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_admin_scanner_settings(
+    api_client: httpx.AsyncClient,
+) -> None:
+    admin_tokens = await _setup(api_client)
+    admin_hdr = _bearer(admin_tokens)
+
+    # 1. Non-admin forbidden
+    u_res = await api_client.post(
+        "/api/v1/users",
+        headers=admin_hdr,
+        json={"username": "scanner_user", "password": "correct horse", "role": "user"},
+    )
+    assert u_res.status_code == 201
+    user_tokens = await _login(api_client, "scanner_user")
+    user_hdr = _bearer(user_tokens)
+
+    bad_get = await api_client.get("/api/v1/admin/scanner/settings", headers=user_hdr)
+    assert bad_get.status_code == 403
+
+    bad_put = await api_client.put(
+        "/api/v1/admin/scanner/settings",
+        headers=user_hdr,
+        json={"scan_interval_hours": 12.0},
+    )
+    assert bad_put.status_code == 403
+
+    # 2. Admin get default
+    get_res = await api_client.get("/api/v1/admin/scanner/settings", headers=admin_hdr)
+    assert get_res.status_code == 200
+    assert get_res.json()["scan_interval_hours"] == 6.0
+
+    # 3. Admin update
+    put_res = await api_client.put(
+        "/api/v1/admin/scanner/settings",
+        headers=admin_hdr,
+        json={"scan_interval_hours": 12.5},
+    )
+    assert put_res.status_code == 200
+    assert put_res.json()["scan_interval_hours"] == 12.5
+
+    # 4. Verify persist
+    get_res2 = await api_client.get("/api/v1/admin/scanner/settings", headers=admin_hdr)
+    assert get_res2.status_code == 200
+    assert get_res2.json()["scan_interval_hours"] == 12.5
+
+    # 5. Invalid values rejected
+    bad_val = await api_client.put(
+        "/api/v1/admin/scanner/settings",
+        headers=admin_hdr,
+        json={"scan_interval_hours": -1.0},
+    )
+    assert bad_val.status_code == 422

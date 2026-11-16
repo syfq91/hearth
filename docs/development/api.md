@@ -351,6 +351,7 @@ If a client encounters an unrecoverable client-side subtitle crash, it can re-re
 | | `/api/v1/admin/restore` | POST | Admin | Restore database from backup archive |
 | | `/api/v1/admin/logs` | GET | Admin | Tail structured server logs with level, category, and search filters |
 | | `/api/v1/admin/metadata/settings` | GET, PUT | Admin | Read or update online metadata provider API keys |
+| | `/api/v1/admin/scanner/settings` | GET, PUT | Admin | Read or update automatic library file scanning interval |
 | | `/api/v1/admin/transcoding/capabilities` | GET | Admin | Inspect hardware VAAPI capabilities |
 | | `/api/v1/admin/transcoding/sessions` | GET | Admin | Inspect active transcoding sessions |
 | **Plugins** | `/api/v1/plugins` | GET | Admin | List discovered plugins and their status |

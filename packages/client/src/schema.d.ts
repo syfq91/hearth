@@ -251,6 +251,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/scanner/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Scanner Settings
+         * @description Return runtime scanner settings.
+         */
+        get: operations["get_scanner_settings_api_v1_admin_scanner_settings_get"];
+        /**
+         * Update Scanner Settings
+         * @description Update runtime scanner settings and persist to database.
+         */
+        put: operations["update_scanner_settings_api_v1_admin_scanner_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/system/info": {
         parameters: {
             query?: never;
@@ -4481,6 +4505,11 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** ScannerSettingsResponse */
+        ScannerSettingsResponse: {
+            /** Scan Interval Hours */
+            scan_interval_hours: number;
+        };
         /**
          * SearchPersonResult
          * @description A person credit match (cast, crew, artist).
@@ -5120,6 +5149,14 @@ export interface components {
             config: {
                 [key: string]: unknown;
             };
+        };
+        /** UpdateScannerSettingsRequest */
+        UpdateScannerSettingsRequest: {
+            /**
+             * Scan Interval Hours
+             * @description Scan interval in hours
+             */
+            scan_interval_hours: number;
         };
         /**
          * UpdateTranscodeSettingsRequest
@@ -5773,6 +5810,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminRestoreResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_scanner_settings_api_v1_admin_scanner_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScannerSettingsResponse"];
+                };
+            };
+        };
+    };
+    update_scanner_settings_api_v1_admin_scanner_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateScannerSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScannerSettingsResponse"];
                 };
             };
             /** @description Validation Error */

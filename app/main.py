@@ -36,6 +36,7 @@ from app.core.spa import SpaStaticFiles, find_web_dist
 from app.db.migrate import run_migrations_async
 from app.db.session import build_engine, build_sessionmaker
 from app.services.metadata.credentials import apply_credential_overrides
+from app.services.scanner.settings import apply_scanner_settings
 from app.services.transcode.capabilities import probe_transcode_capabilities
 from app.services.transcode.session import get_session_manager
 
@@ -61,6 +62,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await run_migrations_async(resolved)
         async with sessionmaker() as session:
             await apply_credential_overrides(resolved, session)
+            await apply_scanner_settings(resolved, session)
         get_session_manager(resolved).startup_sweep()
         with contextlib.suppress(Exception):
             await probe_transcode_capabilities(resolved)

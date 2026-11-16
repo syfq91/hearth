@@ -3,6 +3,7 @@ import type {
 	AdminSystemInfoResponse,
 	AuditEntry,
 	JobResponse,
+	ScannerSettingsResponse,
 	TranscodeSessionResponse
 } from '../../lib/api/types';
 import type { PageLoad } from './$types';
@@ -12,9 +13,10 @@ export const load: PageLoad = async () => {
 		api.get<AdminSystemInfoResponse>('/admin/system/info'),
 		api.get<TranscodeSessionResponse[]>('/admin/transcoding/sessions'),
 		api.get<JobResponse[]>('/admin/jobs', { query: { limit: 10 } }),
-		api.get<AuditEntry[]>('/admin/audit', { query: { limit: 10 } })
+		api.get<AuditEntry[]>('/admin/audit', { query: { limit: 10 } }),
+		api.get<ScannerSettingsResponse>('/admin/scanner/settings')
 	]);
-	const [system, sessions, jobs, audit] = results;
+	const [system, sessions, jobs, audit, scannerSettings] = results;
 	const firstFailure = results.find((r) => r.status === 'rejected') as
 		| PromiseRejectedResult
 		| undefined;
@@ -23,6 +25,7 @@ export const load: PageLoad = async () => {
 		sessions: sessions.status === 'fulfilled' ? sessions.value : [],
 		jobs: jobs.status === 'fulfilled' ? jobs.value : [],
 		audit: audit.status === 'fulfilled' ? audit.value : [],
+		scannerSettings: scannerSettings.status === 'fulfilled' ? scannerSettings.value : null,
 		error: firstFailure
 			? firstFailure.reason instanceof Error
 				? firstFailure.reason.message

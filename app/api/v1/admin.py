@@ -35,6 +35,10 @@ from app.services.metadata.credentials import (
     save_credential_overrides,
 )
 from app.services.scanner.jobs import enqueue_scan
+from app.services.scanner.settings import (
+    apply_scanner_settings,
+    save_scan_interval_override,
+)
 from app.services.transcode.capabilities import (
     ServerTranscodeCapabilities,
     probe_transcode_capabilities,
@@ -243,6 +247,22 @@ class UpdateMetadataSettingsRequest(BaseModel):
     google_books_api_key: str | None = Field(default=None, max_length=512)
 
 
+class ScannerSettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scan_interval_hours: float
+
+
+class UpdateScannerSettingsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scan_interval_hours: float = Field(
+        gt=0,
+        le=720,
+        description="Scan interval in hours",
+    )
+
+
 @router.get("/audit", response_model=list[AuditEntry])
 async def list_audit(
     _actor: RequireAdmin,
@@ -318,6 +338,39 @@ async def scan_all_libraries(
 
     await session.commit()
     return job_responses
+
+
+@router.get("/scanner/settings", response_model=ScannerSettingsResponse)
+async def get_scanner_settings(
+    _actor: RequireAdmin,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> ScannerSettingsResponse:
+    """Return runtime scanner settings."""
+    await apply_scanner_settings(settings, session)
+    return ScannerSettingsResponse(scan_interval_hours=settings.scan_interval_hours)
+
+
+@router.put("/scanner/settings", response_model=ScannerSettingsResponse)
+async def update_scanner_settings(
+    body: UpdateScannerSettingsRequest,
+    actor: RequireAdmin,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> ScannerSettingsResponse:
+    """Update runtime scanner settings and persist to database."""
+    await save_scan_interval_override(session, body.scan_interval_hours)
+    settings.scan_interval_hours = body.scan_interval_hours
+    record_audit(
+        session,
+        actor_id=actor.id,
+        action="scanner.settings_updated",
+        target_type="system",
+        target_id="scanner",
+        details={"scan_interval_hours": body.scan_interval_hours},
+    )
+    await session.commit()
+    return ScannerSettingsResponse(scan_interval_hours=settings.scan_interval_hours)
 
 
 # ------------------------------------------------------------- unmatched queue & rematch

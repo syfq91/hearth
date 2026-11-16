@@ -5549,6 +5549,20 @@
         "title": "ScanJobResponse",
         "type": "object"
       },
+      "ScannerSettingsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "scan_interval_hours": {
+            "title": "Scan Interval Hours",
+            "type": "number"
+          }
+        },
+        "required": [
+          "scan_interval_hours"
+        ],
+        "title": "ScannerSettingsResponse",
+        "type": "object"
+      },
       "SearchPersonResult": {
         "additionalProperties": false,
         "description": "A person credit match (cast, crew, artist).",
@@ -7291,6 +7305,23 @@
         "title": "UpdatePluginConfigRequest",
         "type": "object"
       },
+      "UpdateScannerSettingsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "scan_interval_hours": {
+            "description": "Scan interval in hours",
+            "exclusiveMinimum": 0.0,
+            "maximum": 720.0,
+            "title": "Scan Interval Hours",
+            "type": "number"
+          }
+        },
+        "required": [
+          "scan_interval_hours"
+        ],
+        "title": "UpdateScannerSettingsRequest",
+        "type": "object"
+      },
       "UpdateTranscodeSettingsRequest": {
         "additionalProperties": false,
         "description": "Update runtime transcode settings.",
@@ -8811,6 +8842,78 @@
           }
         ],
         "summary": "Restore Database Backup",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/scanner/settings": {
+      "get": {
+        "description": "Return runtime scanner settings.",
+        "operationId": "get_scanner_settings_api_v1_admin_scanner_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScannerSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Scanner Settings",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "description": "Update runtime scanner settings and persist to database.",
+        "operationId": "update_scanner_settings_api_v1_admin_scanner_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScannerSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScannerSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Scanner Settings",
         "tags": [
           "admin"
         ]
