@@ -1784,7 +1784,7 @@
 		gap: 0.1rem;
 		min-width: 11rem;
 		max-width: min(20rem, 80vw);
-		max-height: min(50vh, 22rem);
+		max-height: min(70vh, 30rem);
 		overflow-y: auto;
 		margin-bottom: 0.4rem;
 		padding: 0.4rem;
