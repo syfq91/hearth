@@ -1157,42 +1157,46 @@
 			</div>
 		{/if}
 
-		<!-- Seekbar -->
-		<div
-			class="seekbar-container"
-			bind:this={seekbarEl}
-			onclick={handleSeekbarClick}
-			onmouseenter={() => (isHoveringSeekbar = true)}
-			onmouseleave={() => (isHoveringSeekbar = false)}
-			onmousemove={handleSeekbarMouseMove}
-			role="slider"
-			tabindex="0"
-			aria-label="Seek timeline"
-			aria-valuemin="0"
-			aria-valuemax={duration}
-			aria-valuenow={currentTime}
-			aria-valuetext={formatTime(currentTime)}
-			onkeydown={(e) => {
-				if (e.key === 'ArrowRight') seekBy(5);
-				if (e.key === 'ArrowLeft') seekBy(-5);
-			}}
-		>
-			<div class="seekbar-track">
-				{#each bufferedRanges as range}
-					<div
-						class="buffered-bar"
-						style="left: {range.startPct}%; width: {range.widthPct}%;"
-					></div>
-				{/each}
-				<div class="played-bar" style="width: {progressPct}%;"></div>
-				<div class="scrub-thumb" style="left: {progressPct}%;"></div>
-			</div>
-
-			{#if isHoveringSeekbar && duration > 0}
-				<div class="hover-tooltip" style="left: {hoverPct}%;">
-					{formatTime(hoverTime)}
+		<!-- Seekbar with elapsed time on the left and total duration on the right -->
+		<div class="seek-row">
+			<span class="time-current" aria-live="off">{formatTime(currentTime)}</span>
+			<div
+				class="seekbar-container"
+				bind:this={seekbarEl}
+				onclick={handleSeekbarClick}
+				onmouseenter={() => (isHoveringSeekbar = true)}
+				onmouseleave={() => (isHoveringSeekbar = false)}
+				onmousemove={handleSeekbarMouseMove}
+				role="slider"
+				tabindex="0"
+				aria-label="Seek timeline"
+				aria-valuemin="0"
+				aria-valuemax={duration}
+				aria-valuenow={currentTime}
+				aria-valuetext={formatTime(currentTime)}
+				onkeydown={(e) => {
+					if (e.key === 'ArrowRight') seekBy(5);
+					if (e.key === 'ArrowLeft') seekBy(-5);
+				}}
+			>
+				<div class="seekbar-track">
+					{#each bufferedRanges as range}
+						<div
+							class="buffered-bar"
+							style="left: {range.startPct}%; width: {range.widthPct}%;"
+						></div>
+					{/each}
+					<div class="played-bar" style="width: {progressPct}%;"></div>
+					<div class="scrub-thumb" style="left: {progressPct}%;"></div>
 				</div>
-			{/if}
+
+				{#if isHoveringSeekbar && duration > 0}
+					<div class="hover-tooltip" style="left: {hoverPct}%;">
+						{formatTime(hoverTime)}
+					</div>
+				{/if}
+			</div>
+			<span class="time-duration">{formatTime(duration)}</span>
 		</div>
 
 		<!-- Control Buttons Row -->
@@ -1258,12 +1262,6 @@
 						class="volume-slider"
 						aria-label="Volume slider"
 					/>
-				</div>
-
-				<div class="time-display">
-					<span class="time-current">{formatTime(currentTime)}</span>
-					<span class="time-sep">/</span>
-					<span class="time-duration">{formatTime(duration)}</span>
 				</div>
 			</div>
 
@@ -1556,9 +1554,17 @@
 		transform: none !important;
 	}
 
+	.seek-row {
+		display: flex;
+		align-items: center;
+		gap: 0.65rem;
+		width: 100%;
+	}
+
 	.seekbar-container {
 		position: relative;
-		width: 100%;
+		flex: 1;
+		min-width: 0;
 		height: 1.25rem;
 		display: flex;
 		align-items: center;
@@ -1694,20 +1700,20 @@
 		cursor: pointer;
 	}
 
-	.time-display {
+	.time-current,
+	.time-duration {
 		font-size: 0.825rem;
 		font-family: ui-monospace, monospace;
-		color: var(--muted);
-		margin-left: 0.25rem;
 		white-space: nowrap;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.time-current {
 		color: #fff;
 	}
 
-	.time-sep {
-		margin: 0 0.15rem;
+	.time-duration {
+		color: var(--muted);
 	}
 
 	.select-label {
