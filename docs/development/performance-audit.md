@@ -632,6 +632,8 @@ the connection pragmas for future-proofing.
 **Scope:** Backend (Python/FastAPI), frontend (SvelteKit/Svelte 5), database (SQLite), infrastructure (Docker)
 **Method:** Source audit of hot paths plus verification of §§1–5 claims against the current tree. All `file:line` below were verified in the current tree.
 
+**Status refresh — 2026-11-16:** Every §7 finding was re-checked against the current tree. Only **7.17.1** is fully resolved. **7.4** and **7.16** are partially resolved; the remaining findings still reproduce. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
+
 **Verdict on prior audit:** §§1–5 were largely accurate. Verified as-designed / resolved: middleware is pure ASGI (§2.2 held), pool is 5+10 (§1.3 held), user-item-state/book-progress indexes exist (§1.4 held), probe/hash phases run in parallel (`scanner.py:592-644`, §3.1 held), TMDB throttle is bypassed on cache hits (`tmdb.py:602-604` — prior §3.3 overstated the cached-read cost). The remaining gaps are new issues in high-traffic routes and long-running services the prior pass did not measure.
 
 **Top 5 to address first:**
@@ -821,14 +823,14 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 - `deps.py:88-111` — per-request auth tax (JWT + user reload + library check) is intentional for immediate revocation; optional per-request grant caching only.
 - Home single `/home` call + `{#await}` skeleton, single-flight media-token/refresh, Poster blurhash LRU, `pdfjs`/`jassub` dynamic imports where effective — keep.
 
-### 7.19 Summary table (2026 re-audit)
+### 7.19 Summary table (2026 re-audit; statuses refreshed 2026-11-16)
 
 | # | Severity | Area | Finding | Status |
 |---|---|---|---|---|
 | 7.1 | 🟠 High | API | N+1 + unbounded loop in `next-up` | Open |
 | 7.2 | 🟠 High | API | Sequential shelves in composite `/home` | Open |
 | 7.3 | 🟠 High | API | Unbounded full-table load in collection auto-collect | Open |
-| 7.4 | 🟡 Medium | API | Uncached subprocess probes on `/health` | Open |
+| 7.4 | 🟡 Medium | API | Uncached subprocess probes on `/health` | 🟡 Partial |
 | 7.5 | 🟡 Medium | API | Argon2id blocks event loop | Open |
 | 7.6 | 🟡 Medium | API | Global playback lock serializes all writes | Open |
 | 7.7 | 🟡 Medium | API | Per-request matcher/httpx construction, sequential providers | Open |
@@ -840,9 +842,11 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 | 7.13 | 🟡 Medium | Service | Polling churn: worker/SSE/transcode; missing `jobs.updated_at` index | Open |
 | 7.14 | 🟡 Medium | Service | NFO O(n²) scans, per-file stat loops | Open |
 | 7.15 | 🟡 Medium | API | Unbounded details, double-count, `ORDER BY random()` | Open |
-| 7.16 | 🟡 Medium | DB | Missing indexes; incomplete SQLite pragmas | Open |
-| 7.17 | 🔴–🟡 | FE | Large bundles, full-book PDF render, home card overload, no cache/dedup, waterfalls | Open |
+| 7.16 | 🟡 Medium | DB | Missing indexes; incomplete SQLite pragmas | 🟡 Partial |
+| 7.17 | 🔴–🟡 | FE | Large bundles, full-book PDF render, home card overload, no cache/dedup, waterfalls | 🟡 Partial (7.17.1 resolved) |
 | 7.18 | ⚪ Info | — | Verified as-designed | No action |
+
+> **7.17 sub-items:** 7.17.1 is ✅ resolved (Video.js replaced by native `<video>` + `hls.js`); 7.17.2–7.17.7 remain open. See §7.22 for evidence.
 
 ### 7.20 Recommended priority order (2026)
 
@@ -856,7 +860,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 5. `home_overview` parallel sessions; `list_next_up` batching (§7.1–7.2)
 6. Scanner: phase-split writes, cancel-flag cache, batch commits (§7.8–7.9)
 7. Metadata: bounded `gather`, singleton clients, book-provider cache (§7.7, §7.10–7.11)
-8. FE: dynamic `video.js`/readers, PdfReader windowing, API cache + abort (§7.17)
+8. FE: dynamic readers, PdfReader windowing, API cache + abort (§7.17.2–7.17.6)
 
 **Phase 3 — Verification**
 9. `EXPLAIN QUERY PLAN` on shelf/search/next-up paths; `cProfile`/wall-time on first scan; bundle analyzer before/after; load-test via `scripts/` before claiming gains.
@@ -882,3 +886,35 @@ Root causes found:
 3. `nice(10)` on the ffmpeg process starved the first segment whenever the API or worker shared the CPU. Hardware sessions now keep default priority; software encodes still yield.
 
 The probe still runs serially inside `_cache_lock` and `create_session` still spawns under the session lock (§7.13 remains open for those).
+
+### 7.22 Re-verification — 2026-11-16
+
+**Method:** each finding's cited path and behavior was checked against the current tree. A finding is marked resolved only when the described behavior is gone, not merely when a file moved or a partial optimization landed.
+
+| # | Status | Evidence in current tree |
+|---|---|---|
+| 7.1 | Open | `app/api/v1/shows.py:421-466`: the active-series query still has no `LIMIT`, and the loop still performs per-series `session.get()`, episode, watch-state, and season-title queries. |
+| 7.2 | Open | `app/api/v1/home.py:78-89`: shelves are still awaited sequentially, followed by a per-library `recently_added` loop. |
+| 7.3 | Open | `app/api/v1/collections.py:147-152`: auto-collect still loads full `MediaItem` ORM rows and filters `provider_ids` in Python. |
+| 7.4 | 🟡 Partial | `app/api/v1/system.py:76-81` now runs ffmpeg, VAAPI, and database probes concurrently with `asyncio.gather`, but there is still no TTL cache. |
+| 7.5 | Open | `app/api/v1/auth.py:230,234` and `app/api/v1/users.py:199,414` still call synchronous `hash_password`/`verify_password` directly from async routes. |
+| 7.6 | Open | `app/api/v1/playback.py:191,504,577,595,649`: a single module-level `_STATE_LOCK` still serializes playback writes across all users and items. |
+| 7.7 | Open | `app/api/v1/metadata.py:22-26` still builds a matcher per request, and `app/services/metadata/factory.py:16-23` constructs a new `ImagePipeline` with that matcher. |
+| 7.8 | Open | `app/services/scanner/scanner.py:720,962,1176` still calls `read_audio_tags`/`read_book_metadata` synchronously inside `_write_changes`, which commits once at line 1465. |
+| 7.9 | Open | `app/services/scanner/scanner.py:604,629` still awaits `is_cancelled` per hashed/probed file, and the worker callback at `app/services/jobs/worker.py:137-139` still opens a session for each check. |
+| 7.10 | Open | `app/services/metadata/matching.py:284` still loops items serially; the provider throttles still hold `_rate_lock` across `sleep` (`plugins/musicbrainz/client.py:335-342`, `plugins/tmdb/client.py:685-691`). |
+| 7.11 | Open | `plugins/openlibrary/plugin.py:75,88` and `plugins/googlebooks/plugin.py:80,93` still make direct `httpx` calls with a fixed 10 s timeout and no cache or throttle. |
+| 7.12 | Open | `app/services/images/pipeline.py:218` downloads artwork serially; `:408-416` still joins response chunks in memory; `_get_pool` at `:71-80` still ignores later `max_workers` values; the `is_file()` render check at `:323` is still a TOCTOU. |
+| 7.13 | Open | `app/services/jobs/worker.py:257` still polls idle work at the configured 1 s interval; `app/api/v1/events.py:80,129,149` still polls every 1 s and sleeps 0.1 s per loop; `app/db/models.py:164-169` still has no `jobs.updated_at` index. |
+| 7.14 | Open | `app/services/metadata/local.py:335` still globs `**/*.nfo` per season, and `_first_existing` at `:85-93` still performs repeated `is_file()` stats. |
+| 7.15 | Open | Author/series detail (`app/api/v1/books.py:809-822,918-931`) and artist detail (`app/api/v1/music.py:346-352`) remain unbounded; `ORDER BY random()` remains at `music.py:758,785`; playlist/collection details still load every ID (`playlists.py:398-438`, `collections.py:334-375`). |
+| 7.16 | 🟡 Partial | `app/db/models.py:234` gives `media_items.year` a single-column index, but `audit_log.created_at`, `jobs.updated_at`, `media_items.rating`, and composite `(library_id, year/rating)` indexes are still missing; `app/db/session.py:22-31` still omits `cache_size`, `temp_store`, and per-connection `journal_mode`. |
+| 7.17.1 | ✅ Resolved | Video.js is gone; `web/src/lib/player/hls-engine.ts:12` uses `hls.js` with the native `<video>` element. |
+| 7.17.2 | Open | `web/src/routes/books/[bookId]/read/+page.svelte:2-4` still statically imports all three readers. |
+| 7.17.3 | Open | `web/src/lib/components/PdfReader.svelte` still fetches the whole file into an `ArrayBuffer` and renders every page in `renderAll()`. |
+| 7.17.4 | Open | `web/src/routes/+page.ts:41` still requests `limit: 20`; `Shelf.svelte` has no intersection-based mounting or `content-visibility`. |
+| 7.17.5 | Open | `web/src/lib/api/client.ts` still has no GET cache, in-flight deduplication, or `AbortSignal` callers; the signal parameter is only plumbed through. |
+| 7.17.6 | Open | `books/[bookId]/read/+page.ts` awaits the book and progress sequentially; `watch/[itemId]/+page.ts` awaits item, next-up, then item again. |
+| 7.17.7 | Open | `Poster.svelte:78` and `BookCover.svelte:32` still use `loading="lazy"` only, with no `srcset`/`fetchpriority`; library filters still refetch without debounce. |
+
+**Conclusion:** 7.17.1 and the concurrent-probe portion of 7.4 are the only completed improvements since the 2026-11-09 audit. The remaining findings are still valid and keep their original priority.
