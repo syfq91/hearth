@@ -1179,12 +1179,7 @@
 					<RotateCw size={19} />
 				</button>
 
-				{#if endsAt}
-					<span class="end-time" title="Ends at {endsAt}">End at {endsAt}</span>
-				{/if}
-			</div>
-
-			<div class="controls-right">
+				<!-- Volume; the slider reveals on hover or focus -->
 				<div class="volume-group">
 					<button
 						type="button"
@@ -1201,18 +1196,26 @@
 							<Volume2 size={20} />
 						{/if}
 					</button>
-					<input
-						type="range"
-						min="0"
-						max="1"
-						step="0.05"
-						value={isMuted ? 0 : volume}
-						oninput={(e) => handleVolumeInput(Number.parseFloat(e.currentTarget.value))}
-						class="volume-slider"
-						aria-label="Volume slider"
-					/>
+					<div class="volume-slider-wrap">
+						<input
+							type="range"
+							min="0"
+							max="1"
+							step="0.05"
+							value={isMuted ? 0 : volume}
+							oninput={(e) => handleVolumeInput(Number.parseFloat(e.currentTarget.value))}
+							class="volume-slider"
+							aria-label="Volume slider"
+						/>
+					</div>
 				</div>
+			</div>
 
+			{#if endsAt}
+				<span class="end-time" title="Ends at {endsAt}">End at {endsAt}</span>
+			{/if}
+
+			<div class="controls-right">
 				<!-- Audio selector -->
 				{#if availableAudio.length > 1}
 					<button
@@ -1627,7 +1630,12 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+		flex: 1 1 0;
 		flex-wrap: wrap;
+	}
+
+	.controls-right {
+		justify-content: flex-end;
 	}
 
 	.icon-btn {
@@ -1664,17 +1672,36 @@
 	}
 
 	.end-time {
+		flex: 0 0 auto;
 		font-size: 0.8rem;
 		font-family: ui-monospace, monospace;
 		color: var(--muted);
 		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
+		text-align: center;
 	}
 
 	.volume-group {
 		display: flex;
 		align-items: center;
 		gap: 0.25rem;
+	}
+
+	.volume-slider-wrap {
+		display: flex;
+		align-items: center;
+		max-width: 0;
+		opacity: 0;
+		overflow: hidden;
+		transition:
+			max-width 0.18s ease,
+			opacity 0.18s ease;
+	}
+
+	.volume-group:hover .volume-slider-wrap,
+	.volume-group:focus-within .volume-slider-wrap {
+		max-width: 5rem;
+		opacity: 1;
 	}
 
 	.volume-slider {
