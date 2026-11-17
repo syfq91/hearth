@@ -94,7 +94,6 @@ IMAGES_PAYLOAD: dict[str, Any] = {
 
 
 def _settings(settings: Settings) -> Settings:
-    settings.tmdb_api_key = "test-key"
     settings.tmdb_min_interval_seconds = 0
     settings.tmdb_cache_ttl_hours = 24
     return settings
@@ -104,6 +103,8 @@ def _provider(
     settings: Settings,
     sessionmaker: async_sessionmaker[AsyncSession],
     handler: Callable[[httpx.Request], httpx.Response],
+    *,
+    api_key: str = "test-key",
 ) -> tuple[TMDBPlugin, httpx.AsyncClient]:
     client = httpx.AsyncClient(
         transport=httpx.MockTransport(handler),
@@ -111,7 +112,11 @@ def _provider(
     )
     return (
         make_metadata_plugin(
-            TMDBPlugin, settings=settings, sessionmaker=sessionmaker, client=client
+            TMDBPlugin,
+            settings=settings,
+            sessionmaker=sessionmaker,
+            client=client,
+            config={"api_key": api_key},
         ),
         client,
     )
@@ -284,8 +289,9 @@ async def test_bearer_token_is_sent_as_a_header(
         return httpx.Response(200, json=SEARCH_PAYLOAD)
 
     settings = _settings(db_settings)
-    settings.tmdb_api_key = "header.payload.signature"
-    provider, client = _provider(settings, db_sessionmaker, handler)
+    provider, client = _provider(
+        settings, db_sessionmaker, handler, api_key="header.payload.signature"
+    )
     try:
         await provider.search("The Matrix")
     finally:
@@ -299,12 +305,11 @@ async def test_missing_key_is_unavailable(
     db_settings: Settings, db_sessionmaker: async_sessionmaker[AsyncSession]
 ) -> None:
     settings = _settings(db_settings)
-    settings.tmdb_api_key = None
 
     def handler(request: httpx.Request) -> httpx.Response:
         raise AssertionError("no request should be made without a key")
 
-    provider, client = _provider(settings, db_sessionmaker, handler)
+    provider, client = _provider(settings, db_sessionmaker, handler, api_key="")
     try:
         with pytest.raises(ProviderUnavailable, match="not configured"):
             await provider.search("The Matrix")

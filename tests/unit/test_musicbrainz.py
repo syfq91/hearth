@@ -75,14 +75,19 @@ def _make_provider(
     settings: Settings,
     sessionmaker: async_sessionmaker[AsyncSession],
     handler: Callable[[httpx.Request], httpx.Response],
+    *,
+    enabled: bool = True,
 ) -> tuple[MusicBrainzPlugin, httpx.AsyncClient]:
-    settings.musicbrainz_rate_limit_seconds = 0.0
     client = httpx.AsyncClient(
         transport=httpx.MockTransport(handler),
         base_url="https://musicbrainz.org/ws/2",
     )
     provider = make_metadata_plugin(
-        MusicBrainzPlugin, settings=settings, sessionmaker=sessionmaker, client=client
+        MusicBrainzPlugin,
+        settings=settings,
+        sessionmaker=sessionmaker,
+        client=client,
+        config={"enabled": enabled, "rate_limit_seconds": 0.0},
     )
     return provider, client
 
@@ -259,11 +264,11 @@ async def test_musicbrainz_error_handling(
         await c2.aclose()
 
     # 3. Disabled provider raises ProviderUnavailable
-    db_settings.musicbrainz_enabled = False
-    p3, c3 = _make_provider(db_settings, db_sessionmaker, lambda r: httpx.Response(200))
+    p3, c3 = _make_provider(
+        db_settings, db_sessionmaker, lambda r: httpx.Response(200), enabled=False
+    )
     try:
         with pytest.raises(ProviderUnavailable):
             await p3.fetch_artist_details("any-mbid")
     finally:
         await c3.aclose()
-        db_settings.musicbrainz_enabled = True

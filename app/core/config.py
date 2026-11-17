@@ -124,8 +124,7 @@ class Settings(BaseSettings):
     scan_watch_refresh_seconds: float = 60.0
     scan_scheduler_wake_seconds: float = 30.0
 
-    # Metadata providers
-    tmdb_api_key: str | None = None
+    # Metadata providers (online API keys live in plugin configuration)
     tmdb_base_url: str = "https://api.themoviedb.org/3"
     tmdb_image_base_url: str = "https://image.tmdb.org/t/p"
     tmdb_timeout_seconds: float = 10.0
@@ -137,7 +136,6 @@ class Settings(BaseSettings):
     metadata_unmatched_retry_hours: float = 24.0
 
     # Music metadata
-    musicbrainz_enabled: bool = True
     musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
     musicbrainz_timeout_seconds: float = 10.0
     musicbrainz_rate_limit_seconds: float = 1.0
@@ -150,11 +148,8 @@ class Settings(BaseSettings):
     listenbrainz_base_url: str = "https://api.listenbrainz.org"
 
     # Book metadata
-    openlibrary_enabled: bool = True
     openlibrary_base_url: str = "https://openlibrary.org"
     openlibrary_covers_base_url: str = "https://covers.openlibrary.org"
-    google_books_enabled: bool = True
-    google_books_api_key: str | None = None
     google_books_base_url: str = "https://www.googleapis.com/books/v1"
 
     # Images

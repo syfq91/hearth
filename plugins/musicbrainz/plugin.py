@@ -55,14 +55,10 @@ class MusicBrainzPlugin(MetadataPlugin[MusicBrainzConfig]):
     def enabled(self) -> bool:
         if self.status != PluginStatus.ACTIVE:
             return False
-        if self.config is not None:
-            return self.config.enabled
-        return self.context.settings.musicbrainz_enabled
+        return bool(self.config is not None and self.config.enabled)
 
     def apply_configuration(self, config_data: dict[str, Any]) -> None:
         data = dict(config_data)
-        if "enabled" not in data:
-            data["enabled"] = self.context.settings.musicbrainz_enabled
         if "rate_limit_seconds" not in data:
             data["rate_limit_seconds"] = self.context.settings.musicbrainz_rate_limit_seconds
 
@@ -80,9 +76,7 @@ class MusicBrainzPlugin(MetadataPlugin[MusicBrainzConfig]):
             if self.config
             else self.context.settings.musicbrainz_rate_limit_seconds
         )
-        is_enabled = (
-            self.config.enabled if self.config else self.context.settings.musicbrainz_enabled
-        )
+        is_enabled = self.config.enabled if self.config else True
 
         self._mb_client = MusicBrainzClient(
             sessionmaker=self.context.sessionmaker,
@@ -109,9 +103,7 @@ class MusicBrainzPlugin(MetadataPlugin[MusicBrainzConfig]):
                 if self.config
                 else self.context.settings.musicbrainz_rate_limit_seconds
             )
-            is_enabled = (
-                self.config.enabled if self.config else self.context.settings.musicbrainz_enabled
-            )
+            is_enabled = self.config.enabled if self.config else True
             self._mb_client = MusicBrainzClient(
                 sessionmaker=self.context.sessionmaker,
                 enabled=is_enabled,

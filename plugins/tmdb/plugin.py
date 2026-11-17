@@ -61,17 +61,10 @@ class TMDBPlugin(MetadataPlugin[TMDBConfig]):
     def enabled(self) -> bool:
         if self.status != PluginStatus.ACTIVE:
             return False
-        if self.config is not None and self.config.api_key:
-            return True
-        return bool(self.context.settings.tmdb_api_key)
+        return bool(self.config is not None and self.config.api_key)
 
     def apply_configuration(self, config_data: dict[str, Any]) -> None:
-        data = dict(config_data)
-        # Fall back to legacy environment setting if api_key is not set in DB
-        if not data.get("api_key") and self.context.settings.tmdb_api_key:
-            data["api_key"] = self.context.settings.tmdb_api_key
-
-        self.config = TMDBConfig(**data)
+        self.config = TMDBConfig(**config_data)
         if self._tmdb_client is not None:
             self._tmdb_client.api_key = self.config.api_key
             self._tmdb_client.include_adult = self.config.include_adult
@@ -104,9 +97,7 @@ class TMDBPlugin(MetadataPlugin[TMDBConfig]):
     def _ensure_client(self) -> TMDBClient:
         if self._tmdb_client is None:
             # Lazy initialize if accessed before explicit lifecycle initialize
-            api_key = (
-                self.config.api_key if self.config else (self.context.settings.tmdb_api_key or "")
-            )
+            api_key = self.config.api_key if self.config else ""
             self._tmdb_client = TMDBClient(
                 api_key=api_key,
                 sessionmaker=self.context.sessionmaker,

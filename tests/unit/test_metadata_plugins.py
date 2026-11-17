@@ -18,13 +18,6 @@ async def test_discover_and_load_builtin_metadata_plugins(
     db_settings: Settings,
 ) -> None:
     """Verify PluginManager discovers all 4 built-in plugins from repo plugins/."""
-    # Configure db_settings with test API keys and flags
-    db_settings.tmdb_api_key = "test-env-tmdb-key"
-    db_settings.google_books_api_key = "test-env-gb-key"
-    db_settings.musicbrainz_enabled = True
-    db_settings.openlibrary_enabled = True
-    db_settings.google_books_enabled = True
-
     # Builtin plugins directory is the repository's plugins/ directory
     repo_plugins_dir = Path(__file__).resolve().parent.parent.parent / "plugins"
     db_settings.builtin_plugins_dir = repo_plugins_dir
@@ -32,6 +25,12 @@ async def test_discover_and_load_builtin_metadata_plugins(
 
     manager = PluginManager(db_settings, db_sessionmaker)
     plugins = await manager.discover_and_load()
+
+    # API keys come exclusively from persisted plugin configuration.
+    await manager.configure_plugin("org.hearth.plugins.tmdb", {"api_key": "test-config-tmdb-key"})
+    await manager.configure_plugin(
+        "org.hearth.plugins.googlebooks", {"api_key": "test-config-gb-key"}
+    )
 
     assert len(plugins) >= 4
     plugin_ids = {p.manifest.id for p in plugins}
@@ -47,9 +46,8 @@ async def test_discover_and_load_builtin_metadata_plugins(
     assert tmdb.status == PluginStatus.ACTIVE
     assert "movie" in tmdb.supported_media_types
     assert "series" in tmdb.supported_media_types
-    # Fallback to env setting
     assert tmdb.config is not None
-    assert tmdb.config.api_key == "test-env-tmdb-key"
+    assert tmdb.config.api_key == "test-config-tmdb-key"
 
     # MusicBrainz plugin checks
     mb = manager.get_plugin("org.hearth.plugins.musicbrainz")
@@ -73,7 +71,7 @@ async def test_discover_and_load_builtin_metadata_plugins(
     assert gb.status == PluginStatus.ACTIVE
     assert "book" in gb.supported_media_types
     assert gb.config is not None
-    assert gb.config.api_key == "test-env-gb-key"
+    assert gb.config.api_key == "test-config-gb-key"
 
 
 async def test_metadata_plugins_integration_with_registry(
@@ -82,13 +80,13 @@ async def test_metadata_plugins_integration_with_registry(
     db_settings: Settings,
 ) -> None:
     """Verify registering discovered metadata plugins into MetadataRegistry."""
-    db_settings.tmdb_api_key = "test-tmdb-key"
     repo_plugins_dir = Path(__file__).resolve().parent.parent.parent / "plugins"
     db_settings.builtin_plugins_dir = repo_plugins_dir
     db_settings.plugins_dir = tmp_path / "user_plugins"
 
     manager = PluginManager(db_settings, db_sessionmaker)
     await manager.discover_and_load()
+    await manager.configure_plugin("org.hearth.plugins.tmdb", {"api_key": "test-config-tmdb-key"})
 
     registry = MetadataRegistry(sessionmaker=db_sessionmaker)
 
@@ -154,3 +152,16 @@ async def test_disable_and_enable_metadata_plugin(
     assert gb.status == PluginStatus.ACTIVE
     assert gb.enabled
     assert any(p.name == "googlebooks" for p in registry.get_providers_for("book"))
+
+
+def test_legacy_credential_settings_are_removed() -> None:
+    """Online provider credentials are plugin config, not Settings fields."""
+    fields = set(Settings.model_fields)
+    for name in (
+        "tmdb_api_key",
+        "google_books_api_key",
+        "musicbrainz_enabled",
+        "openlibrary_enabled",
+        "google_books_enabled",
+    ):
+        assert name not in fields

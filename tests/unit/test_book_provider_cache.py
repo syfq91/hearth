@@ -42,7 +42,7 @@ async def test_openlibrary_reuses_cached_search(sessionmaker: async_sessionmaker
         calls += 1
         return httpx.Response(200, json=payload)
 
-    settings = Settings(env="testing", data_dir=Path("."), openlibrary_enabled=True)
+    settings = Settings(env="testing", data_dir=Path("."))
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     provider = make_metadata_plugin(
         OpenLibraryPlugin, settings=settings, sessionmaker=sessionmaker, client=client
@@ -66,7 +66,7 @@ async def test_googlebooks_reuses_cached_details(sessionmaker: async_sessionmake
         calls += 1
         return httpx.Response(200, json=payload)
 
-    settings = Settings(env="testing", data_dir=Path("."), google_books_enabled=True)
+    settings = Settings(env="testing", data_dir=Path("."))
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     provider = make_metadata_plugin(
         GoogleBooksPlugin, settings=settings, sessionmaker=sessionmaker, client=client

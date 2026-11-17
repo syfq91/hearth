@@ -61,17 +61,10 @@ class GoogleBooksPlugin(MetadataPlugin[GoogleBooksConfig]):
     def enabled(self) -> bool:
         if self.status != PluginStatus.ACTIVE:
             return False
-        if self.config is not None:
-            return self.config.enabled
-        return self.context.settings.google_books_enabled
+        return bool(self.config is not None and self.config.enabled)
 
     def apply_configuration(self, config_data: dict[str, Any]) -> None:
-        data = dict(config_data)
-        if not data.get("api_key") and self.context.settings.google_books_api_key:
-            data["api_key"] = self.context.settings.google_books_api_key
-        if "enabled" not in data:
-            data["enabled"] = self.context.settings.google_books_enabled
-        self.config = GoogleBooksConfig(**data)
+        self.config = GoogleBooksConfig(**config_data)
 
     async def initialize(self) -> None:
         if self.config is None:
@@ -156,7 +149,7 @@ class GoogleBooksPlugin(MetadataPlugin[GoogleBooksConfig]):
                 q += f"+inauthor:{author}"
 
         params: dict[str, str] = {"q": q, "maxResults": "10"}
-        api_key = self.config.api_key if self.config else self.context.settings.google_books_api_key
+        api_key = self.config.api_key if self.config else ""
         if api_key:
             params["key"] = api_key
 
@@ -201,7 +194,7 @@ class GoogleBooksPlugin(MetadataPlugin[GoogleBooksConfig]):
             return None
 
         params: dict[str, str] = {}
-        api_key = self.config.api_key if self.config else self.context.settings.google_books_api_key
+        api_key = self.config.api_key if self.config else ""
         if api_key:
             params["key"] = api_key
 

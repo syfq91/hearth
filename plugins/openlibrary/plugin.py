@@ -58,15 +58,10 @@ class OpenLibraryPlugin(MetadataPlugin[OpenLibraryConfig]):
     def enabled(self) -> bool:
         if self.status != PluginStatus.ACTIVE:
             return False
-        if self.config is not None:
-            return self.config.enabled
-        return self.context.settings.openlibrary_enabled
+        return bool(self.config is not None and self.config.enabled)
 
     def apply_configuration(self, config_data: dict[str, Any]) -> None:
-        data = dict(config_data)
-        if "enabled" not in data:
-            data["enabled"] = self.context.settings.openlibrary_enabled
-        self.config = OpenLibraryConfig(**data)
+        self.config = OpenLibraryConfig(**config_data)
 
     async def initialize(self) -> None:
         if self.config is None:

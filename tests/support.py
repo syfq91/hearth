@@ -25,12 +25,12 @@ def make_metadata_plugin(
     settings: Settings,
     sessionmaker: async_sessionmaker[AsyncSession] | None = None,
     client: httpx.AsyncClient | None = None,
+    config: dict[str, Any] | None = None,
 ) -> Any:
     """Build a metadata plugin with an injected HTTP client for tests.
 
-    Settings must be mutated by the caller before this helper is called: plugin
-    configuration snapshots values such as API keys and rate limits at
-    construction time.
+    API keys and enabled flags are supplied through ``config``; they are no
+    longer read from environment-backed ``Settings`` fields.
     """
     name = plugin_cls.name
     manifest = PluginManifest(
@@ -48,7 +48,7 @@ def make_metadata_plugin(
         plugin_dir=Path("plugins") / name,
     )
     plugin = plugin_cls(context, manifest, client=client)
-    plugin.apply_configuration({})
+    plugin.apply_configuration(config or {})
     return plugin
 
 
