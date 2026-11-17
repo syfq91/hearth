@@ -734,4 +734,24 @@
   - Ephemeral (in-memory) subtitle sync: Rejected because users lose their calibration if they pause, refresh, or resume later.
 
 
+## ADR 068: Remove Legacy Compatibility Shims Before Public Release
+
+- **Date:** 2026-11-17
+- **Status:** Accepted
+- **Context:**
+  Several earlier refactors deliberately preserved backward compatibility: the metadata providers moved from core into plugins while thin adapter classes, `HEARTH_*` credential variables, and `/api/v1/admin/metadata/settings` remained; the playback API accepted case-insensitive query aliases; capability profiles accepted Jellyfin-style PascalCase keys; the metadata registry treated `tv` as an alias for `series`; playback-info silently re-probed rows written before attachment metadata was persisted; and `video-resilience.ts` retained a Video.js VHS interceptor after Video.js itself was removed (ADR 067). Hearth is still in private development with no external consumers, so these surfaces only added complexity and a second source of truth for provider configuration.
+- **Decision:**
+  - **Single plugin-config source:** Online provider API keys and enabled state come only from persisted plugin configuration under `plugin.<id>` in the `settings` table. Remove `tmdb_api_key`, `google_books_api_key`, `musicbrainz_enabled`, `openlibrary_enabled`, and `google_books_enabled` from `Settings`, the `metadata.*` credential override layer, and the backward-compatible adapter modules. The matcher registers active `MetadataPlugin` instances directly.
+  - **Plugin-aware worker:** Both the API and `hearth worker` load their own `PluginManager` at startup and pass it through `JobContext`, so scans and manual matches resolve the same providers.
+  - **One management API:** Remove `GET`/`PUT /api/v1/admin/metadata/settings`; **Admin → Plugins** is the only configuration path.
+  - **Canonical playback contract:** `POST /api/v1/items/{id}/playback-info` accepts only its validated body. Remove legacy query aliases, replace tolerant stored-probe parsing with validation plus column fallbacks (no re-probe), accept only snake_case capability keys, and drop the `tv` media-type alias.
+  - **Dead code:** Remove the vestigial Video.js VHS retry interceptor; keep the hls.js retry loader and stop beacon.
+  - **Retained workarounds:** SQLite `batch_alter_table` migrations, the fixed-UID e2e configuration accommodation, JWT clock leeway, `token_version`, versioned key purposes, and subtitle live re-discovery remain — they solve platform or correctness constraints, not legacy compatibility.
+- **Alternatives Considered:**
+  - Keep the shims until public release: Rejected because there are no in-repo or external consumers and two configuration sources invited drift.
+  - Keep environment variables as an operator convenience: Rejected because plugin DB config is authoritative and the fallback made it unclear which value was active.
+  - Migrate old `metadata.*` setting rows and repair stored probes: Rejected because private development allows a hard cutover; orphan key/value rows are inert and a rescan repopulates attachment metadata.
+  - Remove the retained platform/correctness workarounds as well: Rejected because SQLite, UID, and clock constraints still apply.
+
+
 
