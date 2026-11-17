@@ -15,6 +15,7 @@ import uvicorn
 
 from app.core.config import Settings, get_settings
 from app.core.logging import setup_logging
+from app.core.plugins.manager import PluginManager
 from app.db.migrate import run_migrations, run_migrations_async
 from app.db.session import build_engine, build_sessionmaker
 from app.services.backup import create_backup, restore_backup
@@ -89,12 +90,15 @@ async def _run_worker(settings: Settings) -> None:
     """Run the durable job worker, scan scheduler and filesystem watcher."""
     await run_migrations_async(settings)
     engine = build_engine(settings)
+    plugin_manager: PluginManager | None = None
     try:
         sessionmaker = build_sessionmaker(engine)
         async with sessionmaker() as session:
             await apply_credential_overrides(settings, session)
             await apply_scanner_settings(settings, session)
-        worker = JobWorker(settings, sessionmaker)
+        plugin_manager = PluginManager(settings, sessionmaker)
+        await plugin_manager.discover_and_load()
+        worker = JobWorker(settings, sessionmaker, plugin_manager=plugin_manager)
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -130,6 +134,8 @@ async def _run_worker(settings: Settings) -> None:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
     finally:
+        if plugin_manager is not None:
+            await plugin_manager.dispose_all()
         await engine.dispose()
     logger.info("worker stopped")
 

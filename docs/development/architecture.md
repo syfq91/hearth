@@ -27,13 +27,15 @@ Phase 9.
 
                      ┌─────────────────────────┐
                      │ hearth worker           │  same image, asyncio
-                     │ jobs table + handlers   │  polls SQLite
+                     │ jobs + plugin manager   │  polls SQLite
                      └─────────────────────────┘
 ```
 
 The API and worker run from the same image with different commands
-(`hearth api`, `hearth worker`). A single node with a handful of concurrent
-streams is the design target; there is no horizontal scaling or Redis.
+(`hearth api`, `hearth worker`). Each process loads its own `PluginManager` at
+startup and passes it to job handlers, so scans and manual matches resolve
+metadata providers from plugin configuration. A single node with a handful of
+concurrent streams is the design target; there is no horizontal scaling or Redis.
 
 ## Module layout
 
