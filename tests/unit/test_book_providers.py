@@ -7,13 +7,14 @@ import pytest
 
 from app.core.config import Settings
 from app.services.metadata.base import BookMetadata
-from app.services.metadata.googlebooks import GoogleBooksProvider
 from app.services.metadata.local import (
     find_local_book_cover,
     find_local_book_opf,
     parse_local_opf,
 )
-from app.services.metadata.openlibrary import OpenLibraryProvider
+from plugins.googlebooks.plugin import GoogleBooksPlugin
+from plugins.openlibrary.plugin import OpenLibraryPlugin
+from tests.support import make_metadata_plugin
 
 
 @pytest.fixture
@@ -58,7 +59,7 @@ async def test_openlibrary_search_and_details(settings: Settings) -> None:
         return httpx.Response(404)
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    provider = OpenLibraryProvider(settings, client=client)
+    provider = make_metadata_plugin(OpenLibraryPlugin, settings=settings, client=client)
 
     results = await provider.search_book("Dune", author="Frank Herbert")
     assert len(results) == 1
@@ -105,7 +106,7 @@ async def test_googlebooks_search_and_details(settings: Settings) -> None:
         return httpx.Response(404)
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    provider = GoogleBooksProvider(settings, client=client)
+    provider = make_metadata_plugin(GoogleBooksPlugin, settings=settings, client=client)
 
     results = await provider.search_book("Dune")
     assert len(results) == 1

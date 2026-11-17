@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings
 from app.db.models import ProviderCache
 from app.services.metadata.base import ProviderError, ProviderUnavailable
-from app.services.metadata.tmdb import TMDBProvider
+from plugins.tmdb.plugin import TMDBPlugin
+from tests.support import make_metadata_plugin
 
 SEARCH_PAYLOAD: dict[str, Any] = {
     "page": 1,
@@ -103,12 +104,17 @@ def _provider(
     settings: Settings,
     sessionmaker: async_sessionmaker[AsyncSession],
     handler: Callable[[httpx.Request], httpx.Response],
-) -> tuple[TMDBProvider, httpx.AsyncClient]:
+) -> tuple[TMDBPlugin, httpx.AsyncClient]:
     client = httpx.AsyncClient(
         transport=httpx.MockTransport(handler),
         base_url="https://api.themoviedb.org/3",
     )
-    return TMDBProvider(settings, sessionmaker, client=client), client
+    return (
+        make_metadata_plugin(
+            TMDBPlugin, settings=settings, sessionmaker=sessionmaker, client=client
+        ),
+        client,
+    )
 
 
 async def test_search_maps_results_and_sends_api_key(

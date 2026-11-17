@@ -9,8 +9,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.core.config import Settings
 from app.db.migrate import run_migrations_async
 from app.db.session import build_engine, build_sessionmaker
-from app.services.metadata.googlebooks import GoogleBooksProvider
-from app.services.metadata.openlibrary import OpenLibraryProvider
+from plugins.googlebooks.plugin import GoogleBooksPlugin
+from plugins.openlibrary.plugin import OpenLibraryPlugin
+from tests.support import make_metadata_plugin
 
 
 @pytest.fixture
@@ -43,7 +44,9 @@ async def test_openlibrary_reuses_cached_search(sessionmaker: async_sessionmaker
 
     settings = Settings(env="testing", data_dir=Path("."), openlibrary_enabled=True)
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    provider = OpenLibraryProvider(settings, sessionmaker=sessionmaker, client=client)
+    provider = make_metadata_plugin(
+        OpenLibraryPlugin, settings=settings, sessionmaker=sessionmaker, client=client
+    )
 
     first = await provider.search_book("Dune")
     second = await provider.search_book("Dune")
@@ -65,7 +68,9 @@ async def test_googlebooks_reuses_cached_details(sessionmaker: async_sessionmake
 
     settings = Settings(env="testing", data_dir=Path("."), google_books_enabled=True)
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    provider = GoogleBooksProvider(settings, sessionmaker=sessionmaker, client=client)
+    provider = make_metadata_plugin(
+        GoogleBooksPlugin, settings=settings, sessionmaker=sessionmaker, client=client
+    )
 
     first = await provider.fetch_book_details("vol-1")
     second = await provider.fetch_book_details("vol-1")

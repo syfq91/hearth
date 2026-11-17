@@ -1,13 +1,55 @@
 """Reusable fakes for metadata tests."""
 
+import logging
 from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
 
+import httpx
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.core.config import Settings
+from app.core.plugins.base import MetadataPlugin, PluginContext
+from app.core.plugins.manifest import PluginManifest
 from app.services.metadata.base import (
     MetadataProvider,
     MovieMetadata,
     ProviderImage,
     SearchResult,
 )
+
+
+def make_metadata_plugin(
+    plugin_cls: type[MetadataPlugin],
+    *,
+    settings: Settings,
+    sessionmaker: async_sessionmaker[AsyncSession] | None = None,
+    client: httpx.AsyncClient | None = None,
+) -> Any:
+    """Build a metadata plugin with an injected HTTP client for tests.
+
+    Settings must be mutated by the caller before this helper is called: plugin
+    configuration snapshots values such as API keys and rate limits at
+    construction time.
+    """
+    name = plugin_cls.name
+    manifest = PluginManifest(
+        id=f"org.hearth.plugins.{name}",
+        name=name,
+        version="1.0.0",
+        entrypoint=f"plugin:{plugin_cls.__name__}",
+        capabilities=[],
+    )
+    context = PluginContext(
+        settings=settings,
+        sessionmaker=sessionmaker,  # type: ignore[arg-type]
+        logger=logging.getLogger(f"hearth.test.{name}"),
+        data_dir=Path(settings.data_dir),
+        plugin_dir=Path("plugins") / name,
+    )
+    plugin = plugin_cls(context, manifest, client=client)
+    plugin.apply_configuration({})
+    return plugin
 
 
 class FakeProvider(MetadataProvider):

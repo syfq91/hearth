@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings
 from app.db.models import ProviderCache
 from app.services.metadata.base import ProviderError, ProviderUnavailable
-from app.services.metadata.musicbrainz import MusicBrainzProvider
+from plugins.musicbrainz.plugin import MusicBrainzPlugin
+from tests.support import make_metadata_plugin
 
 MB_ARTIST_SEARCH: dict[str, Any] = {
     "artists": [
@@ -74,13 +75,15 @@ def _make_provider(
     settings: Settings,
     sessionmaker: async_sessionmaker[AsyncSession],
     handler: Callable[[httpx.Request], httpx.Response],
-) -> tuple[MusicBrainzProvider, httpx.AsyncClient]:
+) -> tuple[MusicBrainzPlugin, httpx.AsyncClient]:
     settings.musicbrainz_rate_limit_seconds = 0.0
     client = httpx.AsyncClient(
         transport=httpx.MockTransport(handler),
         base_url="https://musicbrainz.org/ws/2",
     )
-    provider = MusicBrainzProvider(settings, sessionmaker, client=client)
+    provider = make_metadata_plugin(
+        MusicBrainzPlugin, settings=settings, sessionmaker=sessionmaker, client=client
+    )
     return provider, client
 
 

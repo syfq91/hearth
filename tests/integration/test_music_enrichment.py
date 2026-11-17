@@ -24,7 +24,8 @@ from app.db.models import (
 )
 from app.services.images.pipeline import ImagePipeline
 from app.services.metadata.matching import MetadataMatcher
-from app.services.metadata.musicbrainz import MusicBrainzProvider
+from plugins.musicbrainz.plugin import MusicBrainzPlugin
+from tests.support import make_metadata_plugin
 
 MB_ARTIST_DETAILS = {
     "id": "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
@@ -167,7 +168,9 @@ async def test_artist_enrichment_and_local_image_discovery(
         transport=httpx.MockTransport(mb_handler),
         base_url="https://musicbrainz.org/ws/2",
     )
-    provider = MusicBrainzProvider(db_settings, db_sessionmaker, client=client)
+    provider = make_metadata_plugin(
+        MusicBrainzPlugin, settings=db_settings, sessionmaker=db_sessionmaker, client=client
+    )
 
     pipeline = ImagePipeline(settings=db_settings, sessionmaker=db_sessionmaker)
     matcher = MetadataMatcher(
@@ -264,7 +267,9 @@ async def test_album_enrichment_and_cover_art_archive(
         transport=httpx.MockTransport(mb_handler),
         base_url="https://musicbrainz.org/ws/2",
     )
-    provider = MusicBrainzProvider(db_settings, db_sessionmaker, client=client)
+    provider = make_metadata_plugin(
+        MusicBrainzPlugin, settings=db_settings, sessionmaker=db_sessionmaker, client=client
+    )
 
     # Mock ImagePipeline download to serve fake_jpeg for coverartarchive
     def caa_handler(request: httpx.Request) -> httpx.Response:
@@ -347,7 +352,9 @@ async def test_graceful_degradation_on_musicbrainz_failure(
         transport=httpx.MockTransport(fail_handler),
         base_url="https://musicbrainz.org/ws/2",
     )
-    provider = MusicBrainzProvider(db_settings, db_sessionmaker, client=client)
+    provider = make_metadata_plugin(
+        MusicBrainzPlugin, settings=db_settings, sessionmaker=db_sessionmaker, client=client
+    )
 
     matcher = MetadataMatcher(
         db_settings,
