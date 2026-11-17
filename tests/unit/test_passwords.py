@@ -1,7 +1,10 @@
 """Password hashing and username validation tests."""
 
+import threading
+
 import pytest
 
+from app.core import passwords
 from app.core.config import Settings
 from app.core.errors import ValidationError
 from app.core.passwords import (
@@ -62,3 +65,27 @@ def test_username_normalization_and_validation() -> None:
 def test_invalid_usernames_are_rejected(username: str) -> None:
     with pytest.raises(ValidationError):
         validate_username(username)
+
+
+async def test_async_password_helpers_run_in_worker_threads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Argon2 helpers must never execute on the event loop thread."""
+    loop_thread = threading.get_ident()
+    worker_threads: list[int] = []
+
+    def fake_hash(password: str) -> str:
+        worker_threads.append(threading.get_ident())
+        return f"hash:{password}"
+
+    def fake_verify(password_hash: str, password: str) -> bool:
+        worker_threads.append(threading.get_ident())
+        return password_hash == f"hash:{password}"
+
+    monkeypatch.setattr(passwords, "hash_password", fake_hash)
+    monkeypatch.setattr(passwords, "verify_password", fake_verify)
+
+    assert await passwords.hash_password_async("secret") == "hash:secret"
+    assert await passwords.verify_password_async("hash:secret", "secret") is True
+    assert worker_threads
+    assert all(thread_id != loop_thread for thread_id in worker_threads)

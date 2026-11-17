@@ -1,5 +1,6 @@
 """Authentication endpoints: first-run setup, login, refresh, logout and me."""
 
+import asyncio
 from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any, cast
@@ -27,9 +28,10 @@ from app.core.errors import (
 from app.core.ids import uuid7
 from app.core.passwords import (
     hash_password,
+    hash_password_async,
     validate_password,
     validate_username,
-    verify_password,
+    verify_password_async,
 )
 from app.core.secrets import Keys
 from app.core.tokens import (
@@ -183,7 +185,7 @@ async def setup(
 
     user = User(
         username=username,
-        password_hash=hash_password(payload.password),
+        password_hash=await hash_password_async(payload.password),
         role="admin",
     )
     session.add(user)
@@ -226,12 +228,14 @@ async def login(
 
     user = await session.scalar(select(User).where(User.username == username))
     if user is None:
-        # Verify against a real hash so unknown usernames are not cheaper.
-        verify_password(_dummy_hash(), payload.password)
+        # Verify against a real hash so unknown usernames are not cheaper. The
+        # cached placeholder itself is created in a worker on first use too.
+        dummy_hash = await asyncio.to_thread(_dummy_hash)
+        await verify_password_async(dummy_hash, payload.password)
         limiter.hit(ip_key)
         limiter.hit(user_key)
         raise UnauthorizedError("Invalid username or password", code="invalid_credentials")
-    if not verify_password(user.password_hash, payload.password):
+    if not await verify_password_async(user.password_hash, payload.password):
         limiter.hit(ip_key)
         limiter.hit(user_key)
         raise UnauthorizedError("Invalid username or password", code="invalid_credentials")

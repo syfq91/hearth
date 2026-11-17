@@ -1,5 +1,6 @@
 """Integration tests for setup, login, refresh rotation, logout and me."""
 
+import threading
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -274,3 +275,32 @@ async def test_media_token_stops_working_when_user_is_disabled(
             await get_media_user(claims, session)
 
     assert excinfo.value.code == "account_disabled"
+
+
+async def test_password_hashing_and_verification_run_off_the_event_loop(
+    api_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Setup and login must invoke Argon2 in worker threads, not the ASGI loop."""
+    from app.core import passwords
+
+    loop_thread = threading.get_ident()
+    worker_threads: list[int] = []
+    real_hash = passwords.hash_password
+    real_verify = passwords.verify_password
+
+    def recording_hash(password: str) -> str:
+        worker_threads.append(threading.get_ident())
+        return real_hash(password)
+
+    def recording_verify(password_hash: str, password: str) -> bool:
+        worker_threads.append(threading.get_ident())
+        return real_verify(password_hash, password)
+
+    monkeypatch.setattr(passwords, "hash_password", recording_hash)
+    monkeypatch.setattr(passwords, "verify_password", recording_verify)
+
+    await _setup(api_client)
+    await _login(api_client)
+
+    assert worker_threads
+    assert all(thread_id != loop_thread for thread_id in worker_threads)

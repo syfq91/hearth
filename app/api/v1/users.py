@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.auth import UserResponse
 from app.core.deps import RequireAdmin, RequireUser, SettingsDep
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
-from app.core.passwords import hash_password, validate_password, validate_username
+from app.core.passwords import hash_password_async, validate_password, validate_username
 from app.db.models import Library, LibraryAccess, RefreshToken, User
 from app.db.session import SessionDep
 from app.services.audit import record_audit
@@ -196,7 +196,7 @@ async def create_user(
 
     user = User(
         username=username,
-        password_hash=hash_password(payload.password),
+        password_hash=await hash_password_async(payload.password),
         role=payload.role,
         max_bitrate=payload.max_bitrate,
         allow_transcode=payload.allow_transcode,
@@ -411,7 +411,7 @@ async def reset_password(
     user = await _load_user(session, user_id)
     validate_password(payload.password, settings)
 
-    user.password_hash = hash_password(payload.password)
+    user.password_hash = await hash_password_async(payload.password)
     user.token_version += 1
     await session.execute(
         update(RefreshToken)

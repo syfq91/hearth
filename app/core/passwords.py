@@ -1,5 +1,6 @@
 """Password hashing (Argon2id) and account input validation."""
 
+import asyncio
 import re
 
 from argon2 import PasswordHasher
@@ -30,6 +31,16 @@ def verify_password(password_hash: str, password: str) -> bool:
         return _hasher.verify(password_hash, password)
     except (VerifyMismatchError, VerificationError, InvalidHashError):
         return False
+
+
+async def hash_password_async(password: str) -> str:
+    """Hash a password in a worker thread so the event loop stays responsive."""
+    return await asyncio.to_thread(hash_password, password)
+
+
+async def verify_password_async(password_hash: str, password: str) -> bool:
+    """Verify a password in a worker thread so the event loop stays responsive."""
+    return await asyncio.to_thread(verify_password, password_hash, password)
 
 
 def needs_rehash(password_hash: str) -> bool:
