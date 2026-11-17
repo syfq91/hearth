@@ -28,6 +28,7 @@ from app.core.errors import NotFoundError
 from app.db.base import utcnow
 from app.db.models import (
     Episode,
+    LibraryAccess,
     MediaItem,
     Season,
     Series,
@@ -407,61 +408,106 @@ async def list_next_up(
     if library_id is not None:
         await require_library_access(library_id, user, session)
 
-    # Find series where user has watched or in-progress activity on episodes
+    # Find series where the user has watched or in-progress episodes. Access
+    # filtering and the limit live in SQL so a library-restricted user does not
+    # pay for inaccessible series before they are discarded.
     query = (
         select(Episode.series_id, func.max(UserItemState.last_played_at).label("last_active"))
         .join(UserItemState, UserItemState.item_id == Episode.item_id)
+        .join(MediaItem, MediaItem.id == Episode.series_id)
         .where(
             UserItemState.user_id == user.id,
             (UserItemState.played.is_(True) | (UserItemState.position_ms > 0)),
         )
-        .group_by(Episode.series_id)
+    )
+    if library_id is not None:
+        query = query.where(MediaItem.library_id == library_id)
+    if user.role != "admin":
+        query = query.join(LibraryAccess, LibraryAccess.library_id == MediaItem.library_id).where(
+            LibraryAccess.user_id == user.id
+        )
+    query = (
+        query.group_by(Episode.series_id)
         .order_by(func.max(UserItemState.last_played_at).desc())
+        .limit(limit)
     )
 
     active_series_rows = (await session.execute(query)).all()
-    next_up_items: list[NextUpEpisode] = []
+    series_ids = [row.series_id for row in active_series_rows]
+    if not series_ids:
+        return NextUpShelf(items=[])
 
+    # Batch the four follow-up lookups instead of issuing them per series.
+    series_items = {
+        item.id: item
+        for item in (
+            await session.scalars(
+                select(MediaItem).where(
+                    MediaItem.id.in_(series_ids),
+                    MediaItem.type == "series",
+                )
+            )
+        ).all()
+    }
+
+    episodes_by_series: dict[str, list[Episode]] = {series_id: [] for series_id in series_ids}
+    for episode in (
+        await session.scalars(
+            select(Episode)
+            .where(Episode.series_id.in_(series_ids))
+            .order_by(
+                Episode.series_id,
+                Episode.season_number.asc(),
+                Episode.episode_number.asc(),
+            )
+        )
+    ).all():
+        episodes_by_series[episode.series_id].append(episode)
+
+    episode_ids = [ep.item_id for episodes in episodes_by_series.values() for ep in episodes]
+    states = await watch_states(session, user.id, episode_ids)
+
+    season_ids = {
+        ep.season_id
+        for episodes in episodes_by_series.values()
+        for ep in episodes
+        if ep.season_id is not None
+    }
+    season_titles: dict[str, str] = {}
+    if season_ids:
+        season_titles = {
+            season_id: title
+            for season_id, title in (
+                await session.execute(
+                    select(MediaItem.id, MediaItem.title).where(MediaItem.id.in_(season_ids))
+                )
+            ).all()
+        }
+
+    next_up_items: list[NextUpEpisode] = []
     for series_id, _ in active_series_rows:
         if len(next_up_items) >= limit:
             break
 
-        series_item = await session.get(MediaItem, series_id)
-        if series_item is None or series_item.type != "series":
+        series_item = series_items.get(series_id)
+        if series_item is None:
             continue
-        if library_id is not None and series_item.library_id != library_id:
-            continue
-        if not await user_can_access_library(session, user, series_item.library_id):
-            continue
-
-        episodes = list(
-            await session.scalars(
-                select(Episode)
-                .where(Episode.series_id == series_id)
-                .order_by(Episode.season_number.asc(), Episode.episode_number.asc())
-            )
-        )
-        if not episodes:
-            continue
-
-        states = await watch_states(session, user.id, [ep.item_id for ep in episodes])
+        episodes = episodes_by_series.get(series_id, [])
         next_ep = select_next_up_episode(episodes, states)
         if next_ep is None:
             continue
 
         summary = _build_episode_summary(next_ep, states.get(next_ep.item_id))
-        series_title = series_item.title
-        series_poster = _primary_image(series_item, "poster")
         season_title = (
-            await session.scalar(select(MediaItem.title).where(MediaItem.id == next_ep.season_id))
+            season_titles.get(next_ep.season_id)
             if next_ep.season_id
             else (f"Season {next_ep.season_number}" if next_ep.season_number is not None else None)
         )
         next_up_items.append(
             NextUpEpisode(
                 **summary.model_dump(),
-                series_title=series_title,
-                series_poster=series_poster,
+                series_title=series_item.title,
+                series_poster=_primary_image(series_item, "poster"),
                 season_title=season_title,
             )
         )

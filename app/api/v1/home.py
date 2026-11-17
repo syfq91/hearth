@@ -1,10 +1,13 @@
 """Home shelves: continue watching, continue reading, recently added and favorites."""
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.books import BookListItem, _to_book_list_item
@@ -18,7 +21,7 @@ from app.api.v1.items import (
 from app.api.v1.libraries import LibrarySummary, list_libraries
 from app.api.v1.music import AlbumSummary, recently_added_albums
 from app.api.v1.shows import NextUpShelf, list_next_up
-from app.core.deps import RequireUser, require_library_access
+from app.core.deps import RequireUser, SessionmakerDep, require_library_access
 from app.db.models import (
     Book,
     BookProgress,
@@ -35,6 +38,15 @@ router = APIRouter(tags=["home"])
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
+
+
+async def _run_with_session[T](
+    sessionmaker: async_sessionmaker[AsyncSession],
+    operation: Callable[[AsyncSession], Awaitable[T]],
+) -> T:
+    """Run one shelf query on its own short-lived session."""
+    async with sessionmaker() as shelf_session:
+        return await operation(shelf_session)
 
 
 class HomeShelf(BaseModel):
@@ -72,21 +84,37 @@ class HomeOverview(BaseModel):
 async def home_overview(
     user: RequireUser,
     session: SessionDep,
+    sessionmaker: SessionmakerDep,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
 ) -> HomeOverview:
     """Return all home shelves in a single composite response."""
-    cw = await continue_watching(user=user, session=session, limit=limit)
-    cr = await continue_reading(user=user, session=session, limit=limit)
-    nu = await list_next_up(user=user, session=session, limit=limit)
-    ra = await recently_added_albums(user=user, session=session, limit=limit)
-    libs = await list_libraries(user=user, session=session)
+    # Each shelf gets its own session: a single AsyncSession is not safe for
+    # concurrent use, and shelves were previously awaited one after another.
+    cw, cr, nu, ra, libs = await asyncio.gather(
+        _run_with_session(
+            sessionmaker, lambda s: continue_watching(user=user, session=s, limit=limit)
+        ),
+        _run_with_session(
+            sessionmaker, lambda s: continue_reading(user=user, session=s, limit=limit)
+        ),
+        _run_with_session(sessionmaker, lambda s: list_next_up(user=user, session=s, limit=limit)),
+        _run_with_session(
+            sessionmaker, lambda s: recently_added_albums(user=user, session=s, limit=limit)
+        ),
+        list_libraries(user=user, session=session),
+    )
 
-    recent_libs: list[LibraryShelf] = []
-    for lib in libs:
-        if lib.type != "music":
-            shelf = await recently_added(user=user, session=session, library_id=lib.id, limit=limit)
-            if shelf.items:
-                recent_libs.append(LibraryShelf(library=lib, shelf=shelf))
+    async def library_shelf(lib: LibrarySummary) -> LibraryShelf | None:
+        if lib.type == "music":
+            return None
+        shelf = await _run_with_session(
+            sessionmaker,
+            lambda s: recently_added(user=user, session=s, library_id=lib.id, limit=limit),
+        )
+        return LibraryShelf(library=lib, shelf=shelf) if shelf.items else None
+
+    built_shelves = await asyncio.gather(*(library_shelf(lib) for lib in libs))
+    recent_libs = [shelf for shelf in built_shelves if shelf is not None]
 
     return HomeOverview(
         continue_watching=cw,
