@@ -42,7 +42,15 @@ test('first-time user sets up Hearth and watches a video', async ({ page, reques
 	for (const library of LIBRARIES) {
 		await page.locator('input[placeholder="Movies"]').fill(library.name);
 		await page.locator('select').selectOption(library.type);
-		await page.locator('textarea').fill(library.path);
+		// Paths are added through the manual-entry field (the folder browser
+		// walks the server filesystem). It stays open after each library, so
+		// only open it on the first pass.
+		const pathInput = page.locator('input[placeholder="/media/movies"]');
+		if (!(await pathInput.isVisible())) {
+			await page.getByRole('button', { name: 'Or enter path manually' }).click();
+		}
+		await pathInput.fill(library.path);
+		await page.getByRole('button', { name: 'Add', exact: true }).click();
 		await page.getByRole('button', { name: 'Create library' }).click();
 		await expect(page.getByRole('status')).toContainText(`Library “${library.name}” created.`);
 	}
