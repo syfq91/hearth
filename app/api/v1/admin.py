@@ -662,6 +662,7 @@ async def get_metadata_settings(
 async def update_metadata_settings(
     body: UpdateMetadataSettingsRequest,
     actor: RequireAdmin,
+    request: Request,
     settings: SettingsDep,
     session: SessionDep,
     plugin_manager: PluginManagerDep,
@@ -698,6 +699,13 @@ async def update_metadata_settings(
             "org.hearth.plugins.googlebooks",
             {"api_key": changes["google_books_api_key"] or ""},
         )
+
+    # The metadata API reuses one matcher; rebuild it so the new credentials
+    # and plugin configuration are picked up on the next request.
+    shared_matcher = getattr(request.app.state, "metadata_matcher", None)
+    if shared_matcher is not None:
+        await shared_matcher.close()
+        request.app.state.metadata_matcher = None
 
     record_audit(
         session,

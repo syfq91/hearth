@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -24,6 +24,20 @@ def build_matcher(
 ) -> MetadataMatcher:
     """Construct the matcher for a request; overridable in tests."""
     return build_metadata_matcher(settings, sessionmaker)
+
+
+def get_metadata_matcher(
+    request: Request, settings: SettingsDep, sessionmaker: SessionmakerDep
+) -> MetadataMatcher:
+    """Reuse one matcher (and its provider HTTP clients) for the whole app."""
+    matcher = getattr(request.app.state, "metadata_matcher", None)
+    if matcher is None:
+        matcher = build_matcher(settings, sessionmaker)
+        request.app.state.metadata_matcher = matcher
+    return matcher
+
+
+MetadataMatcherDep = Annotated[MetadataMatcher, Depends(get_metadata_matcher)]
 
 
 class SearchResultResponse(BaseModel):
@@ -62,26 +76,19 @@ class MatchResponse(BaseModel):
 @router.get("/metadata/search")
 async def search_metadata(
     actor: RequireAdmin,
-    settings: SettingsDep,
-    sessionmaker: SessionmakerDep,
+    matcher: MetadataMatcherDep,
     query: Annotated[str, Query(min_length=1, max_length=200)],
     year: Annotated[int | None, Query(ge=1800, le=2100)] = None,
     provider: Annotated[str | None, Query(max_length=32)] = None,
 ) -> list[SearchResultResponse]:
     """Search configured metadata providers for a manual match."""
 
-    matcher = build_matcher(settings, sessionmaker)
+    if provider is not None and matcher.get_provider(provider) is None:
+        raise ValidationError(f"Unknown metadata provider {provider!r}", code="unknown_provider")
     try:
-        if provider is not None and matcher.get_provider(provider) is None:
-            raise ValidationError(
-                f"Unknown metadata provider {provider!r}", code="unknown_provider"
-            )
-        try:
-            results = await matcher.search(query, year)
-        except ProviderError as exc:
-            raise BadGatewayError(str(exc), code="metadata_provider_error") from None
-    finally:
-        await matcher.close()
+        results = await matcher.search(query, year)
+    except ProviderError as exc:
+        raise BadGatewayError(str(exc), code="metadata_provider_error") from None
 
     if provider is not None:
         results = [result for result in results if result.provider == provider]
@@ -93,8 +100,7 @@ async def manual_match(
     item_id: str,
     payload: MatchRequest,
     actor: RequireAdmin,
-    settings: SettingsDep,
-    sessionmaker: SessionmakerDep,
+    matcher: MetadataMatcherDep,
     session: SessionDep,
 ) -> MatchResponse:
     """Attach a specific provider candidate to an item, bypassing scoring."""
@@ -103,14 +109,10 @@ async def manual_match(
     if item is None:
         raise NotFoundError("Item not found", code="item_not_found")
 
-    matcher = build_matcher(settings, sessionmaker)
     try:
-        try:
-            result = await matcher.manual_match(item_id, payload.provider, payload.provider_id)
-        except ProviderError as exc:
-            raise BadGatewayError(str(exc), code="metadata_provider_error") from None
-    finally:
-        await matcher.close()
+        result = await matcher.manual_match(item_id, payload.provider, payload.provider_id)
+    except ProviderError as exc:
+        raise BadGatewayError(str(exc), code="metadata_provider_error") from None
 
     if result.error == "Item not found":
         raise NotFoundError("Item not found", code="item_not_found")

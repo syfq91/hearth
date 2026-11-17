@@ -126,6 +126,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         pipeline = getattr(app.state, "image_pipeline", None)
         if pipeline is not None:
             await pipeline.close()
+        matcher = getattr(app.state, "metadata_matcher", None)
+        if matcher is not None:
+            await matcher.close()
         await plugin_manager.dispose_all()
         await get_session_manager(resolved).stop_all()
         await engine.dispose()

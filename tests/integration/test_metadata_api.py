@@ -181,3 +181,29 @@ async def test_search_requires_admin(api_client: httpx.AsyncClient, monkeypatch)
     response = await api_client.get("/api/v1/metadata/search", params={"query": "The Matrix"})
 
     assert response.status_code == 401
+
+
+async def test_search_reuses_one_matcher_for_the_app(
+    api_client: httpx.AsyncClient, monkeypatch
+) -> None:
+    import app.api.v1.metadata as metadata_module
+
+    admin = await _setup(api_client)
+    provider = FakeProvider(results=[SearchResult("tmdb", "603", "The Matrix", 1999)])
+    builds: list[int] = []
+
+    def build(settings, app_sessionmaker):  # type: ignore[no-untyped-def]
+        builds.append(1)
+        return MetadataMatcher(settings, app_sessionmaker, providers=[provider])
+
+    monkeypatch.setattr(metadata_module, "build_matcher", build)
+
+    for _ in range(2):
+        response = await api_client.get(
+            "/api/v1/metadata/search",
+            params={"query": "The Matrix"},
+            headers=_bearer(admin),
+        )
+        assert response.status_code == 200, response.text
+
+    assert len(builds) == 1

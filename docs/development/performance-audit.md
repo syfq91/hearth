@@ -632,7 +632,7 @@ the connection pragmas for future-proofing.
 **Scope:** Backend (Python/FastAPI), frontend (SvelteKit/Svelte 5), database (SQLite), infrastructure (Docker)
 **Method:** Source audit of hot paths plus verification of §§1–5 claims against the current tree. All `file:line` below were verified in the current tree.
 
-**Status refresh — 2026-11-16; updated 2026-11-17:** Every §7 finding was re-checked against the current tree. **7.1**, **7.2**, **7.3**, **7.4**, **7.5**, **7.8**, **7.9**, **7.10**, **7.16**, and **7.17.1** are fully resolved. The 7.17 bundle remains partial because 7.17.2–7.17.7 are still open. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
+**Status refresh — 2026-11-16; updated 2026-11-17:** Every §7 finding was re-checked against the current tree. **7.1**, **7.2**, **7.3**, **7.4**, **7.5**, **7.7**, **7.8**, **7.9**, **7.10**, **7.16**, and **7.17.1** are fully resolved. The 7.17 bundle remains partial because 7.17.2–7.17.7 are still open. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
 
 **Verdict on prior audit:** §§1–5 were largely accurate. Verified as-designed / resolved: middleware is pure ASGI (§2.2 held), pool is 5+10 (§1.3 held), user-item-state/book-progress indexes exist (§1.4 held), probe/hash phases run in parallel (`scanner.py:592-644`, §3.1 held), TMDB throttle is bypassed on cache hits (`tmdb.py:602-604` — prior §3.3 overstated the cached-read cost). The remaining gaps are new issues in high-traffic routes and long-running services the prior pass did not measure.
 
@@ -833,7 +833,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 | 7.4 | 🟡 Medium | API | Uncached subprocess probes on `/health` | ✅ Resolved |
 | 7.5 | 🟡 Medium | API | Argon2id blocks event loop | ✅ Resolved |
 | 7.6 | 🟡 Medium | API | Global playback lock serializes all writes | Open |
-| 7.7 | 🟡 Medium | API | Per-request matcher/httpx construction, sequential providers | Open |
+| 7.7 | 🟡 Medium | API | Per-request matcher/httpx construction, sequential providers | ✅ Resolved |
 | 7.8 | 🔴 Critical | Service | Scanner blocking parse inside one long DB transaction | ✅ Resolved |
 | 7.9 | 🔵 Low | Service | `_is_cancelled` DB session per file | ✅ Resolved |
 | 7.10 | 🟠 High | Service | Serial metadata matching; lock held across `sleep` | ✅ Resolved |
@@ -859,7 +859,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 **Phase 2 — Medium effort (1–3 days)**
 5. ✅ Done: `home_overview` parallel sessions and `list_next_up` batching (§7.1–7.2)
 6. ✅ Done: scanner phase-split parsing and cancel-flag cache (§7.8–7.9)
-7. Metadata: singleton clients and book-provider cache (§7.7, §7.11); bounded matching (§7.10) is done
+7. Metadata: book-provider cache (§7.11); shared matcher (§7.7) and bounded matching (§7.10) are done
 8. FE: dynamic readers, PdfReader windowing, API cache + abort (§7.17.2–7.17.6)
 
 **Phase 3 — Verification**
@@ -899,7 +899,7 @@ The probe still runs serially inside `_cache_lock` and `create_session` still sp
 | 7.4 | ✅ Resolved | `app/api/v1/system.py` now caches ffmpeg/VAAPI probe results with a 30 s TTL (5 s for failures) and single-flight locking; the read-only database check still runs per request. |
 | 7.5 | ✅ Resolved | `app/core/passwords.py` now exposes `hash_password_async`/`verify_password_async` backed by `asyncio.to_thread`; setup/login (`auth.py:188,234,238`) and user create/reset (`users.py:199,414`) await them, and the first dummy-hash computation is also threaded. |
 | 7.6 | Open | `app/api/v1/playback.py:191,504,577,595,649`: a single module-level `_STATE_LOCK` still serializes playback writes across all users and items. |
-| 7.7 | Open | `app/api/v1/metadata.py:22-26` still builds a matcher per request, and `app/services/metadata/factory.py:16-23` constructs a new `ImagePipeline` with that matcher. |
+| 7.7 | ✅ Resolved | `app/api/v1/metadata.py` now exposes `MetadataMatcherDep`, which caches one matcher on `app.state` for the process; `update_metadata_settings` closes and clears it after credential changes, and app shutdown closes it. |
 | 7.8 | ✅ Resolved | `app/services/scanner/scanner.py` now has a bounded `_parse_files()` phase using `asyncio.to_thread` for `read_audio_tags`, `read_book_metadata`/local OPF, `parse_episode_path`, and the movie parser. `_write_changes` consumes the precomputed results; the writer transaction now covers DB work only. The single final commit is retained for atomicity. |
 | 7.9 | ✅ Resolved | `scan_library()` wraps the cancellation callback in `_cache_cancellation()`, which polls at most once per second and remembers a `True` result; per-file `_check_cancel()` calls no longer open a DB session each time. |
 | 7.10 | ✅ Resolved | `app/services/metadata/matching.py` now bounds item, candidate-detail, and season fetches with `asyncio.Semaphore`/`gather`; `plugins/tmdb/client.py` and `plugins/musicbrainz/client.py` reserve rate-limit slots under `_rate_lock` and sleep outside it. |
@@ -917,4 +917,4 @@ The probe still runs serially inside `_cache_lock` and `create_session` still sp
 | 7.17.6 | Open | `books/[bookId]/read/+page.ts` awaits the book and progress sequentially; `watch/[itemId]/+page.ts` awaits item, next-up, then item again. |
 | 7.17.7 | Open | `Poster.svelte:78` and `BookCover.svelte:32` still use `loading="lazy"` only, with no `srcset`/`fetchpriority`; library filters still refetch without debounce. |
 
-**Conclusion:** 7.1, 7.2, 7.3, 7.4, 7.5, 7.8, 7.9, 7.10, 7.16, and 7.17.1 are the findings completed since the 2026-11-09 audit. The remaining findings are still valid and keep their original priority.
+**Conclusion:** 7.1, 7.2, 7.3, 7.4, 7.5, 7.7, 7.8, 7.9, 7.10, 7.16, and 7.17.1 are the findings completed since the 2026-11-09 audit. The remaining findings are still valid and keep their original priority.
