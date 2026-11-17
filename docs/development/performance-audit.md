@@ -632,7 +632,7 @@ the connection pragmas for future-proofing.
 **Scope:** Backend (Python/FastAPI), frontend (SvelteKit/Svelte 5), database (SQLite), infrastructure (Docker)
 **Method:** Source audit of hot paths plus verification of §§1–5 claims against the current tree. All `file:line` below were verified in the current tree.
 
-**Status refresh — 2026-11-16; updated 2026-11-17:** Every §7 finding was re-checked against the current tree. **7.17.1**, **7.4**, and **7.5** are fully resolved. **7.16** is partially resolved; the remaining findings still reproduce. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
+**Status refresh — 2026-11-16; updated 2026-11-17:** Every §7 finding was re-checked against the current tree. **7.3**, **7.4**, **7.5**, and **7.17.1** are fully resolved. **7.16** is partially resolved; the remaining findings still reproduce. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
 
 **Verdict on prior audit:** §§1–5 were largely accurate. Verified as-designed / resolved: middleware is pure ASGI (§2.2 held), pool is 5+10 (§1.3 held), user-item-state/book-progress indexes exist (§1.4 held), probe/hash phases run in parallel (`scanner.py:592-644`, §3.1 held), TMDB throttle is bypassed on cache hits (`tmdb.py:602-604` — prior §3.3 overstated the cached-read cost). The remaining gaps are new issues in high-traffic routes and long-running services the prior pass did not measure.
 
@@ -829,7 +829,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 |---|---|---|---|---|
 | 7.1 | 🟠 High | API | N+1 + unbounded loop in `next-up` | Open |
 | 7.2 | 🟠 High | API | Sequential shelves in composite `/home` | Open |
-| 7.3 | 🟠 High | API | Unbounded full-table load in collection auto-collect | Open |
+| 7.3 | 🟠 High | API | Unbounded full-table load in collection auto-collect | ✅ Resolved |
 | 7.4 | 🟡 Medium | API | Uncached subprocess probes on `/health` | ✅ Resolved |
 | 7.5 | 🟡 Medium | API | Argon2id blocks event loop | ✅ Resolved |
 | 7.6 | 🟡 Medium | API | Global playback lock serializes all writes | Open |
@@ -851,7 +851,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 ### 7.20 Recommended priority order (2026)
 
 **Phase 1 — Quick wins (< 1 day)**
-1. Collection scalar query (§7.3) — the `/health` TTL cache (§7.4) and Argon2 offloading (§7.5) are already done
+1. ✅ Done: `/health` TTL cache (§7.4), Argon2 offloading (§7.5), collection scalar query (§7.3)
 2. `jobs.updated_at` / `audit_log.created_at` indexes + `cache_size`/`temp_store` pragmas (§7.16)
 3. `ORDER BY random()` → offset; `count() OVER ()`; limits on author/artist detail (§7.15)
 4. FE: `Promise.all` independent loaders, debounce library filters, `content-visibility`, image `fetchpriority`/`srcset` (§7.17)
@@ -895,7 +895,7 @@ The probe still runs serially inside `_cache_lock` and `create_session` still sp
 |---|---|---|
 | 7.1 | Open | `app/api/v1/shows.py:421-466`: the active-series query still has no `LIMIT`, and the loop still performs per-series `session.get()`, episode, watch-state, and season-title queries. |
 | 7.2 | Open | `app/api/v1/home.py:78-89`: shelves are still awaited sequentially, followed by a per-library `recently_added` loop. |
-| 7.3 | Open | `app/api/v1/collections.py:147-152`: auto-collect still loads full `MediaItem` ORM rows and filters `provider_ids` in Python. |
+| 7.3 | ✅ Resolved | `app/api/v1/collections.py` now uses `_auto_collect_item_ids()`, which selects only `MediaItem.id` and `MediaItem.provider_ids` via a scalar projection; both `tmdb_collection_id` and `collection_id` matching are preserved. |
 | 7.4 | ✅ Resolved | `app/api/v1/system.py` now caches ffmpeg/VAAPI probe results with a 30 s TTL (5 s for failures) and single-flight locking; the read-only database check still runs per request. |
 | 7.5 | ✅ Resolved | `app/core/passwords.py` now exposes `hash_password_async`/`verify_password_async` backed by `asyncio.to_thread`; setup/login (`auth.py:188,234,238`) and user create/reset (`users.py:199,414`) await them, and the first dummy-hash computation is also threaded. |
 | 7.6 | Open | `app/api/v1/playback.py:191,504,577,595,649`: a single module-level `_STATE_LOCK` still serializes playback writes across all users and items. |
@@ -917,4 +917,4 @@ The probe still runs serially inside `_cache_lock` and `create_session` still sp
 | 7.17.6 | Open | `books/[bookId]/read/+page.ts` awaits the book and progress sequentially; `watch/[itemId]/+page.ts` awaits item, next-up, then item again. |
 | 7.17.7 | Open | `Poster.svelte:78` and `BookCover.svelte:32` still use `loading="lazy"` only, with no `srcset`/`fetchpriority`; library filters still refetch without debounce. |
 
-**Conclusion:** 7.17.1, 7.4, and 7.5 are the findings completed since the 2026-11-09 audit. The remaining findings are still valid and keep their original priority.
+**Conclusion:** 7.3, 7.4, 7.5, and 7.17.1 are the findings completed since the 2026-11-09 audit. The remaining findings are still valid and keep their original priority.

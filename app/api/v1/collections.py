@@ -5,6 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.items import ItemSummary, item_summary, watch_states
 from app.core.deps import RequireAdmin, RequireUser
@@ -85,6 +86,27 @@ class ReorderCollectionItemsRequest(BaseModel):
     item_ids: list[str] = Field(min_length=1)
 
 
+async def _auto_collect_item_ids(session: AsyncSession, tmdb_id: int) -> list[str]:
+    """Return movie IDs whose provider_ids reference the given TMDB collection.
+
+    A scalar projection avoids loading full ``MediaItem`` objects (and their
+    relationships) for every movie just to read one JSON column.
+    """
+    rows = (
+        await session.execute(
+            select(MediaItem.id, MediaItem.provider_ids).where(MediaItem.type == "movie")
+        )
+    ).all()
+    wanted = str(tmdb_id)
+    matched: list[str] = []
+    for item_id, provider_ids in rows:
+        ids = provider_ids or {}
+        collection_id = ids.get("tmdb_collection_id") or ids.get("collection_id")
+        if collection_id is not None and str(collection_id) == wanted:
+            matched.append(item_id)
+    return matched
+
+
 @router.get("", response_model=list[CollectionSummary])
 async def list_collections(
     user: RequireUser,
@@ -144,12 +166,7 @@ async def create_collection(
 
     # Auto-collect by TMDB collection ID if provided and item_ids empty
     if not item_ids_to_add and body.tmdb_id is not None:
-        all_movies = await session.scalars(select(MediaItem).where(MediaItem.type == "movie"))
-        for m in all_movies.all():
-            p_ids = m.provider_ids or {}
-            c_id = p_ids.get("tmdb_collection_id") or p_ids.get("collection_id")
-            if c_id is not None and str(c_id) == str(body.tmdb_id):
-                item_ids_to_add.append(m.id)
+        item_ids_to_add = await _auto_collect_item_ids(session, body.tmdb_id)
 
     # Add items
     for pos, iid in enumerate(item_ids_to_add):
