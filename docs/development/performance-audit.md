@@ -632,7 +632,7 @@ the connection pragmas for future-proofing.
 **Scope:** Backend (Python/FastAPI), frontend (SvelteKit/Svelte 5), database (SQLite), infrastructure (Docker)
 **Method:** Source audit of hot paths plus verification of §§1–5 claims against the current tree. All `file:line` below were verified in the current tree.
 
-**Status refresh — 2026-11-16; updated 2026-11-17:** Every §7 finding was re-checked against the current tree. **7.1**, **7.2**, **7.3**, **7.4**, **7.5**, **7.7**, **7.8**, **7.9**, **7.10**, **7.11**, **7.16**, and **7.17.1** are fully resolved. The 7.17 bundle remains partial because 7.17.2–7.17.7 are still open. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
+**Status refresh — 2026-11-16; updated 2026-11-17:** Every §7 finding was re-checked against the current tree. **7.1**, **7.2**, **7.3**, **7.4**, **7.5**, **7.7**, **7.8**, **7.9**, **7.10**, **7.11**, **7.16**, **7.17.1**, and **7.17.2** are fully resolved. The 7.17 bundle remains partial because 7.17.3–7.17.7 are still open. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
 
 **Verdict on prior audit:** §§1–5 were largely accurate. Verified as-designed / resolved: middleware is pure ASGI (§2.2 held), pool is 5+10 (§1.3 held), user-item-state/book-progress indexes exist (§1.4 held), probe/hash phases run in parallel (`scanner.py:592-644`, §3.1 held), TMDB throttle is bypassed on cache hits (`tmdb.py:602-604` — prior §3.3 overstated the cached-read cost). The remaining gaps are new issues in high-traffic routes and long-running services the prior pass did not measure.
 
@@ -843,10 +843,10 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 | 7.14 | 🟡 Medium | Service | NFO O(n²) scans, per-file stat loops | Open |
 | 7.15 | 🟡 Medium | API | Unbounded details, double-count, `ORDER BY random()` | Open |
 | 7.16 | 🟡 Medium | DB | Missing indexes; incomplete SQLite pragmas | ✅ Resolved |
-| 7.17 | 🔴–🟡 | FE | Large bundles, full-book PDF render, home card overload, no cache/dedup, waterfalls | 🟡 Partial (7.17.1 resolved) |
+| 7.17 | 🔴–🟡 | FE | Large bundles, full-book PDF render, home card overload, no cache/dedup, waterfalls | 🟡 Partial (7.17.1–7.17.2 resolved) |
 | 7.18 | ⚪ Info | — | Verified as-designed | No action |
 
-> **7.17 sub-items:** 7.17.1 is ✅ resolved (Video.js replaced by native `<video>` + `hls.js`); 7.17.2–7.17.7 remain open. See §7.22 for evidence.
+> **7.17 sub-items:** 7.17.1 (native `<video>` + `hls.js`) and 7.17.2 (dynamic readers) are ✅ resolved; 7.17.3–7.17.7 remain open. See §7.22 for evidence.
 
 ### 7.20 Recommended priority order (2026)
 
@@ -860,7 +860,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 5. ✅ Done: `home_overview` parallel sessions and `list_next_up` batching (§7.1–7.2)
 6. ✅ Done: scanner phase-split parsing and cancel-flag cache (§7.8–7.9)
 7. ✅ Done: book-provider cache (§7.11), shared matcher (§7.7), and bounded matching (§7.10)
-8. FE: dynamic readers, PdfReader windowing, API cache + abort (§7.17.2–7.17.6)
+8. FE: PdfReader windowing, API cache + abort, shelf/loader tuning (§7.17.3–7.17.7); dynamic readers (§7.17.2) are done
 
 **Phase 3 — Verification**
 9. `EXPLAIN QUERY PLAN` on shelf/search/next-up paths; `cProfile`/wall-time on first scan; bundle analyzer before/after; load-test via `scripts/` before claiming gains.
@@ -910,7 +910,7 @@ The probe still runs serially inside `_cache_lock` and `create_session` still sp
 | 7.15 | Open | Author/series detail (`app/api/v1/books.py:809-822,918-931`) and artist detail (`app/api/v1/music.py:346-352`) remain unbounded; `ORDER BY random()` remains at `music.py:758,785`; playlist/collection details still load every ID (`playlists.py:398-438`, `collections.py:334-375`). |
 | 7.16 | ✅ Resolved | Alembic revision `0014_query_indexes` adds `ix_jobs_updated_at`, `ix_audit_log_created_at`, `ix_media_items_library_year`, and `ix_media_items_library_rating`; `app/db/session.py` now sets `cache_size=-64000`, `temp_store=MEMORY`, and `journal_mode=WAL` on every connection, with model metadata updated to match. |
 | 7.17.1 | ✅ Resolved | Video.js is gone; `web/src/lib/player/hls-engine.ts:12` uses `hls.js` with the native `<video>` element. |
-| 7.17.2 | Open | `web/src/routes/books/[bookId]/read/+page.svelte:2-4` still statically imports all three readers. |
+| 7.17.2 | ✅ Resolved | `web/src/routes/books/[bookId]/read/+page.svelte` now loads EpubReader, PdfReader, and ComicReader with format-gated `import()` calls. |
 | 7.17.3 | Open | `web/src/lib/components/PdfReader.svelte` still fetches the whole file into an `ArrayBuffer` and renders every page in `renderAll()`. |
 | 7.17.4 | Open | `web/src/routes/+page.ts:41` still requests `limit: 20`; `Shelf.svelte` has no intersection-based mounting or `content-visibility`. |
 | 7.17.5 | Open | `web/src/lib/api/client.ts` still has no GET cache, in-flight deduplication, or `AbortSignal` callers; the signal parameter is only plumbed through. |

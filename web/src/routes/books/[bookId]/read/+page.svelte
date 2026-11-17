@@ -1,7 +1,9 @@
 <script lang="ts">
-	import ComicReader from '../../../../lib/components/ComicReader.svelte';
-	import EpubReader from '../../../../lib/components/EpubReader.svelte';
-	import PdfReader from '../../../../lib/components/PdfReader.svelte';
+	// Readers are loaded on demand: opening an EPUB must not download pdf.js or
+	// the comic viewer (§7.17.2 of the performance audit).
+	import type ComicReaderType from '../../../../lib/components/ComicReader.svelte';
+	import type EpubReaderType from '../../../../lib/components/EpubReader.svelte';
+	import type PdfReaderType from '../../../../lib/components/PdfReader.svelte';
 	import { ProgressSync } from '../../../../lib/reader/progress';
 	import { withMediaToken } from '../../../../lib/media-token.svelte';
 	import { goto } from '$app/navigation';
@@ -35,6 +37,36 @@
 	const isComic = $derived(format === 'cbz' || format === 'cbr');
 	const isPdf = $derived(format === 'pdf');
 	const isEpub = $derived(format === 'epub');
+
+	let EpubReader: typeof EpubReaderType | null = $state(null);
+	let PdfReader: typeof PdfReaderType | null = $state(null);
+	let ComicReader: typeof ComicReaderType | null = $state(null);
+
+	$effect(() => {
+		const target = format;
+		let cancelled = false;
+		EpubReader = null;
+		PdfReader = null;
+		ComicReader = null;
+
+		if (target === 'epub') {
+			void import('../../../../lib/components/EpubReader.svelte').then((m) => {
+				if (!cancelled) EpubReader = m.default;
+			});
+		} else if (target === 'pdf') {
+			void import('../../../../lib/components/PdfReader.svelte').then((m) => {
+				if (!cancelled) PdfReader = m.default;
+			});
+		} else if (target === 'cbz' || target === 'cbr') {
+			void import('../../../../lib/components/ComicReader.svelte').then((m) => {
+				if (!cancelled) ComicReader = m.default;
+			});
+		}
+
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	// File URL only needed for epub and pdf (ComicReader resolves per-page).
 	let fileUrl = $state<string | null>(null);
@@ -141,20 +173,20 @@
 	<div class="reader-viewport">
 		{#if !format}
 			<p class="muted">This book has no readable format.</p>
-		{:else if isEpub && fileUrl}
+		{:else if isEpub && fileUrl && EpubReader}
 			<EpubReader
 				bookUrl={fileUrl}
 				initialCfi={progress && !progress.completed ? progress.locator : null}
 				onRelocate={handleEpubRelocate}
 			/>
-		{:else if isComic}
+		{:else if isComic && ComicReader}
 			<ComicReader
 				bookId={bookId}
 				pageCount={data.book.page_count ?? 0}
 				startPage={parsePage(progress?.locator)}
 				onPageChange={handleComicPage}
 			/>
-		{:else if isPdf && fileUrl}
+		{:else if isPdf && fileUrl && PdfReader}
 			<PdfReader
 				fileUrl={fileUrl}
 				initialLocator={progress?.locator ?? null}
