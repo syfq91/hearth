@@ -31,6 +31,19 @@
 	let genre = $state('');
 	let year = $state('');
 	let watched = $state<'' | 'true' | 'false'>('');
+	let debouncedGenre = $state('');
+	let debouncedYear = $state('');
+
+	// Text/number filters wait for a short pause before hitting the API.
+	$effect(() => {
+		const nextGenre = genre;
+		const nextYear = year;
+		const timer = setTimeout(() => {
+			debouncedGenre = nextGenre;
+			debouncedYear = nextYear;
+		}, 250);
+		return () => clearTimeout(timer);
+	});
 
 	let items = $state<ItemPage['items']>([]);
 	let nextCursor = $state<string | null>(null);
@@ -40,7 +53,9 @@
 
 	// Reset pagination when any filter or the current folder changes, then
 	// reload the first page.
-	let filterKey = $derived(`${sort}|${order}|${genre}|${year}|${watched}|${folder}`);
+	let filterKey = $derived(
+		`${sort}|${order}|${debouncedGenre}|${debouncedYear}|${watched}|${folder}`
+	);
 
 	$effect(() => {
 		void loadFirstPage(filterKey);
@@ -56,8 +71,8 @@
 					sort,
 					order,
 					limit: 48,
-					genre: genre || undefined,
-					year: year ? Number(year) : undefined,
+					genre: debouncedGenre || undefined,
+					year: debouncedYear ? Number(debouncedYear) : undefined,
 					watched: watched === '' ? undefined : watched === 'true',
 					folder: isBook && folder ? folder : undefined
 				}
@@ -83,8 +98,8 @@
 					order,
 					limit: 48,
 					cursor: nextCursor,
-					genre: genre || undefined,
-					year: year ? Number(year) : undefined,
+					genre: debouncedGenre || undefined,
+					year: debouncedYear ? Number(debouncedYear) : undefined,
 					watched: watched === '' ? undefined : watched === 'true',
 					folder: isBook && folder ? folder : undefined
 				}

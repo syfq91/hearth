@@ -96,8 +96,8 @@
 		<p class="empty">Nothing here yet.</p>
 	{:else}
 		<ul class="row" bind:this={rowEl}>
-			{#each items as entry (entry.id)}
-				<li><MediaCard item={entry} {directPlay} /></li>
+			{#each items as entry, index (entry.id)}
+				<li><MediaCard item={entry} {directPlay} priority={index === 0} /></li>
 			{/each}
 		</ul>
 	{/if}
@@ -184,6 +184,8 @@
 
 	.row li {
 		scroll-snap-align: start;
+		content-visibility: auto;
+		contain-intrinsic-size: 200px 300px;
 	}
 
 	.empty {

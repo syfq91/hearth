@@ -10,9 +10,11 @@
 		alt: string;
 		/** CSS aspect ratio for the placeholder box (e.g. `2 / 3`). */
 		aspect?: string;
+		/** First visible card: load eagerly with high fetch priority. */
+		priority?: boolean;
 	}
 
-	let { image, width = 300, alt, aspect = '2 / 3' }: Props = $props();
+	let { image, width = 300, alt, aspect = '2 / 3', priority = false }: Props = $props();
 
 	let src = $state<string | null>(null);
 	let loaded = $state(false);
@@ -75,7 +77,8 @@
 		<img
 			{src}
 			{alt}
-			loading="lazy"
+			loading={priority ? 'eager' : 'lazy'}
+			fetchpriority={priority ? 'high' : 'auto'}
 			decoding="async"
 			class:loaded
 			onload={() => (loaded = true)}

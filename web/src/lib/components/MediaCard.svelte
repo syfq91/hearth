@@ -11,9 +11,11 @@
 		directPlay?: boolean;
 		/** Optional override for aspect ratio. */
 		aspect?: string;
+		/** First visible card in a shelf. */
+		priority?: boolean;
 	}
 
-	let { item, level = 3, directPlay = false, aspect: propAspect }: Props = $props();
+	let { item, level = 3, directPlay = false, aspect: propAspect, priority = false }: Props = $props();
 
 	// An item is an episode if it's typed 'episode' or has NextUp's series_title
 	const isEpisode = $derived(
@@ -161,7 +163,7 @@
 		href={withLib(posterHref)}
 		aria-label={isEpisode ? (seriesTitle ? `Play ${seriesTitle}` : `Play ${item.title}`) : item.title}
 	>
-		<Poster image={poster} alt="" {aspect} />
+		<Poster image={poster} alt="" {aspect} {priority} />
 		{#if watched}
 			<div class="badge checkmark-badge" aria-label="Completed">
 				<Check size={13} strokeWidth={2.8} />

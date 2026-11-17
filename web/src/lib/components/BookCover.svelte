@@ -6,9 +6,11 @@
 		alt: string;
 		aspect?: string;
 		width?: number;
+		/** First visible card: load eagerly with high fetch priority. */
+		priority?: boolean;
 	}
 
-	let { coverImageId, alt, aspect = '2 / 3', width = 300 }: Props = $props();
+	let { coverImageId, alt, aspect = '2 / 3', width = 300, priority = false }: Props = $props();
 
 	let src = $state<string | null>(null);
 
@@ -29,7 +31,13 @@
 
 <div class="cover" style:aspect-ratio={aspect}>
 	{#if src}
-		<img {src} {alt} loading="lazy" decoding="async" />
+		<img
+			{src}
+			{alt}
+			loading={priority ? 'eager' : 'lazy'}
+			fetchpriority={priority ? 'high' : 'auto'}
+			decoding="async"
+		/>
 	{:else}
 		<div class="placeholder" aria-hidden="true"></div>
 	{/if}

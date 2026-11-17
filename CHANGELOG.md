@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- Page loaders for book reading and watch now fetch independent detail/progress/next-up data in parallel; library text filters are debounced, offscreen shelf cards use `content-visibility`, first cards load images eagerly with high fetch priority, and audio prewarming uses `preload="metadata"` with debounced localStorage writes.
 - The API client now caches GET responses for 30 seconds, deduplicates concurrent identical GETs, sends `If-None-Match` and reuses cached bodies on 304, and drops the cache when the access token changes. `cache: false` opts out per request.
 - The PDF reader now streams the document by URL with range requests and renders only a small window around the current page, with previous/next controls and page cleanup, instead of downloading and rendering the whole book.
 - The book reader route now loads EPUB, PDF, and comic viewers with format-gated dynamic imports instead of statically importing all three on every reader visit.

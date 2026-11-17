@@ -59,7 +59,7 @@
 			const src = await nextTrackSrc();
 			if (!src || player.index !== index) return;
 			const next = new Audio();
-			next.preload = 'auto';
+			next.preload = 'metadata';
 			next.src = src;
 			preloader?.pause();
 			preloader?.removeAttribute('src');
@@ -178,14 +178,19 @@
 		}
 	});
 
-	// Keep HTMLAudioElement volume in sync and save to localStorage
+	// Keep the audio element in sync immediately; persist after the slider
+	// settles instead of writing localStorage on every tick.
 	$effect(() => {
+		const nextVolume = volume;
 		if (audio) {
-			audio.volume = volume;
+			audio.volume = nextVolume;
 		}
-		if (typeof localStorage !== 'undefined') {
-			localStorage.setItem('hearth.audio_volume', String(volume));
-		}
+		const timer = setTimeout(() => {
+			if (typeof localStorage !== 'undefined') {
+				localStorage.setItem('hearth.audio_volume', String(nextVolume));
+			}
+		}, 300);
+		return () => clearTimeout(timer);
 	});
 
 	function toggleMute(): void {

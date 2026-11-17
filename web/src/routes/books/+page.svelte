@@ -70,11 +70,11 @@
 	<p class="muted">No books yet.</p>
 {:else}
 	<ul class="grid">
-		{#each items as book (book.id)}
+		{#each items as book, index (book.id)}
 			<li>
 				<article class="book">
 					<a href={`/books/${book.id}`} aria-label={book.title}>
-						<BookCover coverImageId={book.cover_image_id} alt="" />
+						<BookCover coverImageId={book.cover_image_id} alt="" priority={index === 0} />
 					</a>
 					<h2 class="title">
 						<a href={`/books/${book.id}`}>{book.title}</a>
