@@ -42,7 +42,15 @@ _cleanup() {
 		docker logs "$WORKER_CONTAINER" >&2 || true
 	fi
 	docker rm -f "$API_CONTAINER" "$WORKER_CONTAINER" >/dev/null 2>&1 || true
-	rm -rf "$CONFIG_DIR"
+	# Plugin data dirs under /config are created by the container (uid 1000).
+	# On CI runners the host user has a different uid and cannot unlink them,
+	# so a host-side `rm -rf` fails with EACCES and (under `set -e`) masks the
+	# real test result. Remove the tree as root inside a throwaway container,
+	# then best-effort remove the (now empty) dir from the host. Cleanup must
+	# never fail the job: keep the original exit status.
+	docker run --rm --user root -v "$CONFIG_DIR:/config" "$IMAGE" \
+		find /config -mindepth 1 -delete >/dev/null 2>&1 || true
+	rm -rf "$CONFIG_DIR" 2>/dev/null || true
 	exit "$status"
 }
 trap _cleanup EXIT
