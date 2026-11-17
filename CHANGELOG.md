@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- Scanner tag, OPF, and filename parsing now runs in bounded worker threads before the write transaction; cancellation is polled at most once per second instead of opening a DB session per file. The final DB write still commits atomically, but no longer holds the writer lock during file parsing.
 - `/api/v1/home` now runs its shelves concurrently on separate short-lived sessions instead of awaiting each one in turn; per-library shelves are batched the same way. `/api/v1/shows/next-up` now filters and limits series in SQL and batches series, episode, watch-state, and season-title lookups instead of issuing four queries per series.
 - Added SQLite indexes for job/audit ordering and library-scoped media sorting (`jobs.updated_at`, `audit_log.created_at`, `(library_id, year)`, `(library_id, rating)`) plus per-connection `cache_size`, `temp_store`, and WAL pragmas, via Alembic revision `0014_query_indexes`.
 - Collection auto-collect now selects only movie IDs and `provider_ids` instead of loading every `MediaItem` with its relationships, so creating a TMDB collection no longer scales with the full movie library.

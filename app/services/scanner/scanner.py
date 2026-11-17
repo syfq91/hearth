@@ -6,7 +6,7 @@ import os
 import time
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -34,18 +34,23 @@ from app.db.models import (
     Track,
 )
 from app.services.images.pipeline import ImagePipeline
-from app.services.media.books import read_book_metadata
+from app.services.media.books import BookTagData, read_book_metadata
 from app.services.media.probe import ProbeResult, probe_media
-from app.services.media.tags import read_audio_tags
+from app.services.media.tags import AudioTags, read_audio_tags
 from app.services.media.titles import normalize_title, sort_title
-from app.services.metadata.base import ProviderImage
+from app.services.metadata.base import BookMetadata, ProviderImage
 from app.services.metadata.local import (
     find_local_book_cover,
     find_local_book_opf,
     parse_local_opf,
 )
 from app.services.scanner.hashing import partial_hash
-from app.services.scanner.parsing import ParsedMovie, parse_episode_path, parse_movie_path
+from app.services.scanner.parsing import (
+    ParsedEpisode,
+    ParsedMovie,
+    parse_episode_path,
+    parse_movie_path,
+)
 from app.services.scanner.walker import (
     ScannedFile,
     find_album_artwork,
@@ -120,11 +125,49 @@ class _ProbeOutcome:
     error: str | None = None
 
 
+@dataclass
+class _ParsedFiles:
+    """File parsing results computed before the write transaction."""
+
+    audio_tags: dict[str, AudioTags] = field(default_factory=dict)
+    book_tags: dict[str, tuple[BookTagData, BookMetadata | None, Path | None, Path | None]] = field(
+        default_factory=dict
+    )
+    movies: dict[str, ParsedMovie] = field(default_factory=dict)
+    episodes: dict[str, ParsedEpisode] = field(default_factory=dict)
+
+
+def _cache_cancellation(
+    is_cancelled: Callable[[], Awaitable[bool]] | None,
+    interval: float = 1.0,
+) -> Callable[[], Awaitable[bool]] | None:
+    """Poll cancellation at most once per interval instead of once per file."""
+    if is_cancelled is None:
+        return None
+    last_checked: float | None = None
+    cached = False
+
+    async def check() -> bool:
+        nonlocal last_checked, cached
+        if cached:
+            return True
+        now = time.monotonic()
+        if last_checked is not None and now - last_checked < interval:
+            return False
+        cached = await is_cancelled()
+        last_checked = now
+        return cached
+
+    return check
+
+
 class LibraryScanner:
     """Reconcile one library's files with the catalog.
 
-    The walk, hash and probe phases never hold a database transaction. Only a
-    short final transaction writes results, because SQLite has one writer.
+    The walk, hash, probe and parse phases never hold a database transaction.
+    Only a short final transaction writes results, because SQLite has one
+    writer. Parsing (tags, OPF, guessit) happens in worker threads before that
+    transaction so a large scan cannot starve API writes.
     """
 
     def __init__(
@@ -169,6 +212,7 @@ class LibraryScanner:
         """
         started = time.monotonic()
         stats = ScanStats(library_id=library_id)
+        is_cancelled = _cache_cancellation(is_cancelled)
         await self._set_status(library_id, "running")
         try:
             (
@@ -314,9 +358,16 @@ class LibraryScanner:
             delete_now = expired + (missing_now if grace <= timedelta(0) else [])
             mark_missing = missing_now if grace > timedelta(0) else []
 
+            parse_queue = [c for c in new_files if c.path not in moved_paths]
+            if library_type == "music":
+                parse_queue.extend(changed_files)
+            parsed_data = await self._parse_files(library_type, parse_queue, roots, is_cancelled)
+            await self._check_cancel(is_cancelled)
+
             await self._write_changes(
                 library_id=library_id,
                 library_type=library_type,
+                parsed_data=parsed_data,
                 roots=roots,
                 existing=existing,
                 item_index=item_index,
@@ -643,11 +694,54 @@ class LibraryScanner:
         results = await asyncio.gather(*(one(candidate) for candidate in candidates))
         return dict(results)
 
+    async def _parse_files(
+        self,
+        library_type: str,
+        candidates: Sequence[ScannedFile],
+        roots: Sequence[str] | None,
+        is_cancelled: Callable[[], Awaitable[bool]] | None,
+    ) -> _ParsedFiles:
+        """Parse tags, OPF sidecars and filenames off-loop before writing."""
+        parsed = _ParsedFiles()
+        if not candidates:
+            return parsed
+
+        semaphore = asyncio.Semaphore(max(1, self.settings.ffprobe_concurrency))
+        root_path = roots[0] if roots else None
+
+        def parse_one(candidate: ScannedFile) -> None:
+            path = Path(candidate.path)
+            if library_type == "music":
+                parsed.audio_tags[candidate.path] = read_audio_tags(path, library_root=root_path)
+            elif library_type == "book":
+                tag_data = read_book_metadata(path)
+                local_opf = find_local_book_opf(path.parent)
+                local_cover = find_local_book_cover(path.parent) if local_opf is not None else None
+                local_meta = (
+                    parse_local_opf(local_opf, cover_path=local_cover)
+                    if local_opf is not None
+                    else None
+                )
+                parsed.book_tags[candidate.path] = (tag_data, local_meta, local_opf, local_cover)
+            elif library_type == "tv":
+                parsed.episodes[candidate.path] = parse_episode_path(path)
+            else:
+                parsed.movies[candidate.path] = self.parser(path)
+
+        async def one(candidate: ScannedFile) -> None:
+            async with semaphore:
+                await self._check_cancel(is_cancelled)
+                await asyncio.to_thread(parse_one, candidate)
+
+        await asyncio.gather(*(one(candidate) for candidate in candidates))
+        return parsed
+
     async def _write_changes(
         self,
         *,
         library_id: str,
         library_type: str,
+        parsed_data: _ParsedFiles,
         roots: Sequence[str] | None = None,
         existing: dict[str, _ExistingFile],
         item_index: dict[tuple[str, int], str],
@@ -716,8 +810,7 @@ class LibraryScanner:
                 if row is None:
                     continue
                 if library_type == "music":
-                    root_path = roots[0] if roots else None
-                    tags = read_audio_tags(candidate.path, library_root=root_path)
+                    tags = parsed_data.audio_tags[candidate.path]
                     row.size_bytes = candidate.size_bytes
                     row.mtime = candidate.mtime
                     row.partial_hash = hashes.get(candidate.path, current.partial_hash)
@@ -768,7 +861,7 @@ class LibraryScanner:
 
             if library_type == "movie":
                 for candidate in new_files:
-                    parsed = self.parser(Path(candidate.path))
+                    parsed = parsed_data.movies[candidate.path]
                     key = (normalize_title(parsed.title), parsed.year or 0)
                     item_id = item_index.get(key)
                     if item_id is None:
@@ -805,7 +898,7 @@ class LibraryScanner:
                 assert tv_indices is not None
                 series_index, season_index, episode_index = tv_indices
                 for candidate in new_files:
-                    parsed_ep = parse_episode_path(Path(candidate.path))
+                    parsed_ep = parsed_data.episodes[candidate.path]
                     s_key = parsed_ep.series_key
                     series_id = series_index.get(s_key)
                     if series_id is None:
@@ -956,10 +1049,9 @@ class LibraryScanner:
             elif library_type == "music":
                 assert music_indices is not None
                 artist_index, album_index, track_index = music_indices
-                root_path = roots[0] if roots else None
 
                 for candidate in new_files:
-                    tags = read_audio_tags(candidate.path, library_root=root_path)
+                    tags = parsed_data.audio_tags[candidate.path]
 
                     # 1. Album Artist
                     album_artist_name = tags.album_artist or "Unknown Artist"
@@ -1173,13 +1265,12 @@ class LibraryScanner:
                     digest = hashes.get(candidate.path, "")
 
                     # 1. Read tags from book file
-                    tag_data = read_book_metadata(p)
+                    tag_data, local_meta, local_opf, local_cover = parsed_data.book_tags[
+                        candidate.path
+                    ]
 
-                    # 2. Check for local OPF and sidecar cover (Local always wins)
-                    local_opf = find_local_book_opf(p.parent)
-                    local_cover = find_local_book_cover(p.parent)
-                    if local_opf:
-                        local_meta = parse_local_opf(local_opf, cover_path=local_cover)
+                    # 2. Apply local OPF and sidecar cover overrides (Local always wins)
+                    if local_meta:
                         if local_meta.title:
                             tag_data.title = local_meta.title
                         if local_meta.author_name:
