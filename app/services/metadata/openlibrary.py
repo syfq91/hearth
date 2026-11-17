@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.plugins.base import PluginContext
@@ -36,6 +37,7 @@ class OpenLibraryProvider(MetadataProvider):
         settings: Settings,
         *,
         client: httpx.AsyncClient | None = None,
+        sessionmaker: async_sessionmaker[AsyncSession] | None = None,
     ) -> None:
         self.settings = settings
         manifest = PluginManifest(
@@ -47,7 +49,7 @@ class OpenLibraryProvider(MetadataProvider):
         )
         context = PluginContext(
             settings=settings,
-            sessionmaker=None,  # type: ignore[arg-type]
+            sessionmaker=sessionmaker,  # type: ignore[arg-type]
             logger=logger,
             data_dir=Path(settings.data_dir),
             plugin_dir=Path("plugins/openlibrary"),

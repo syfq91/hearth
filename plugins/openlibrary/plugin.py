@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -13,10 +14,10 @@ from app.core.plugins.manifest import PluginManifest
 from app.services.metadata.base import (
     BookMetadata,
     MovieMetadata,
-    ProviderError,
     ProviderImage,
     SearchResult,
 )
+from app.services.metadata.provider_cache import RateLimiter, cache_get, cache_set
 
 logger = logging.getLogger("hearth.plugins.openlibrary")
 
@@ -47,6 +48,7 @@ class OpenLibraryPlugin(MetadataPlugin[OpenLibraryConfig]):
         self.covers_base_url = context.settings.openlibrary_covers_base_url.rstrip("/")
         self._owned_client = client is None
         self._client = client
+        self._limiter = RateLimiter(0.5)
 
     @property
     def supported_media_types(self) -> tuple[str, ...]:
@@ -90,6 +92,34 @@ class OpenLibraryPlugin(MetadataPlugin[OpenLibraryConfig]):
             )
         return self._client
 
+    async def _get_json(
+        self, cache_key: str, url: str, params: dict[str, str] | None = None
+    ) -> dict[str, Any] | None:
+        cached = await cache_get(self.context.sessionmaker, self.name, cache_key)
+        if cached is not None:
+            return cached
+
+        client = self._ensure_client()
+        await self._limiter.wait()
+        try:
+            response = await client.get(url, params=params)
+            if response.status_code == 429:
+                retry_after = float(response.headers.get("Retry-After", "1") or 1)
+                await asyncio.sleep(min(max(retry_after, 0.0), 5.0))
+                await self._limiter.wait()
+                response = await client.get(url, params=params)
+            if response.status_code != 200:
+                return None
+            payload = response.json()
+        except Exception as exc:
+            logger.warning("Open Library request failed: %s", exc)
+            return None
+
+        if not isinstance(payload, dict):
+            return None
+        await cache_set(self.context.sessionmaker, self.name, cache_key, payload)
+        return payload
+
     # ------------------------------------------------------------- base stubs
 
     async def search(self, query: str, year: int | None = None) -> list[SearchResult]:
@@ -122,15 +152,9 @@ class OpenLibraryPlugin(MetadataPlugin[OpenLibraryConfig]):
             if author:
                 params["author"] = author
 
-        client = self._ensure_client()
-        try:
-            res = await client.get(f"{self.base_url}/search.json", params=params)
-            if res.status_code != 200:
-                logger.warning("Open Library search returned status %s", res.status_code)
-                return []
-            data = res.json()
-        except Exception as exc:
-            logger.warning("Open Library search failed: %s", exc)
+        cache_key = "search:" + (f"isbn:{params['isbn']}" if isbn else f"{query}:{author or ''}")
+        data = await self._get_json(cache_key, f"{self.base_url}/search.json", params)
+        if data is None:
             return []
 
         docs = data.get("docs", [])
@@ -175,16 +199,8 @@ class OpenLibraryPlugin(MetadataPlugin[OpenLibraryConfig]):
         else:
             path = f"{clean_id}.json" if not clean_id.endswith(".json") else clean_id
 
-        client = self._ensure_client()
-        try:
-            res = await client.get(f"{self.base_url}{path}")
-            if res.status_code == 404:
-                return None
-            if res.status_code != 200:
-                raise ProviderError(f"Open Library details failed: HTTP {res.status_code}")
-            data = res.json()
-        except Exception as exc:
-            logger.warning("Open Library detail lookup failed for %s: %s", book_id, exc)
+        data = await self._get_json(f"details:{path}", f"{self.base_url}{path}")
+        if data is None:
             return None
 
         title = data.get("title", "")

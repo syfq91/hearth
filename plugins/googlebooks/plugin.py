@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -13,10 +14,10 @@ from app.core.plugins.manifest import PluginManifest
 from app.services.metadata.base import (
     BookMetadata,
     MovieMetadata,
-    ProviderError,
     ProviderImage,
     SearchResult,
 )
+from app.services.metadata.provider_cache import RateLimiter, cache_get, cache_set
 
 logger = logging.getLogger("hearth.plugins.googlebooks")
 
@@ -50,6 +51,7 @@ class GoogleBooksPlugin(MetadataPlugin[GoogleBooksConfig]):
         self.base_url = context.settings.google_books_base_url.rstrip("/")
         self._owned_client = client is None
         self._client = client
+        self._limiter = RateLimiter(0.5)
 
     @property
     def supported_media_types(self) -> tuple[str, ...]:
@@ -95,6 +97,34 @@ class GoogleBooksPlugin(MetadataPlugin[GoogleBooksConfig]):
             )
         return self._client
 
+    async def _get_json(
+        self, cache_key: str, url: str, params: dict[str, str] | None = None
+    ) -> dict[str, Any] | None:
+        cached = await cache_get(self.context.sessionmaker, self.name, cache_key)
+        if cached is not None:
+            return cached
+
+        client = self._ensure_client()
+        await self._limiter.wait()
+        try:
+            response = await client.get(url, params=params)
+            if response.status_code == 429:
+                retry_after = float(response.headers.get("Retry-After", "1") or 1)
+                await asyncio.sleep(min(max(retry_after, 0.0), 5.0))
+                await self._limiter.wait()
+                response = await client.get(url, params=params)
+            if response.status_code != 200:
+                return None
+            payload = response.json()
+        except Exception as exc:
+            logger.warning("Google Books request failed: %s", exc)
+            return None
+
+        if not isinstance(payload, dict):
+            return None
+        await cache_set(self.context.sessionmaker, self.name, cache_key, payload)
+        return payload
+
     # ------------------------------------------------------------- base stubs
 
     async def search(self, query: str, year: int | None = None) -> list[SearchResult]:
@@ -130,15 +160,9 @@ class GoogleBooksPlugin(MetadataPlugin[GoogleBooksConfig]):
         if api_key:
             params["key"] = api_key
 
-        client = self._ensure_client()
-        try:
-            res = await client.get(f"{self.base_url}/volumes", params=params)
-            if res.status_code != 200:
-                logger.warning("Google Books search status %s", res.status_code)
-                return []
-            data = res.json()
-        except Exception as exc:
-            logger.warning("Google Books search failed: %s", exc)
+        cache_key = "search:" + (f"isbn:{q}" if isbn else f"{query}:{author or ''}")
+        data = await self._get_json(cache_key, f"{self.base_url}/volumes", params)
+        if data is None:
             return []
 
         items = data.get("items", [])
@@ -181,16 +205,10 @@ class GoogleBooksPlugin(MetadataPlugin[GoogleBooksConfig]):
         if api_key:
             params["key"] = api_key
 
-        client = self._ensure_client()
-        try:
-            res = await client.get(f"{self.base_url}/volumes/{book_id}", params=params)
-            if res.status_code == 404:
-                return None
-            if res.status_code != 200:
-                raise ProviderError(f"Google Books failed: HTTP {res.status_code}")
-            data = res.json()
-        except Exception as exc:
-            logger.warning("Google Books lookup failed for %s: %s", book_id, exc)
+        data = await self._get_json(
+            f"details:{book_id}", f"{self.base_url}/volumes/{book_id}", params
+        )
+        if data is None:
             return None
 
         info = data.get("volumeInfo", {})

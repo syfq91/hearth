@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- Open Library and Google Books provider calls now use the shared `provider_cache` table and a bounded rate limiter, with one retry on HTTP 429; API keys are excluded from cache keys. The backward-compatible adapters now receive the app session factory so caching works for matcher-created providers too.
 - The admin metadata API now reuses one matcher and its provider HTTP clients for the whole app instead of constructing them per request; changing metadata credentials invalidates the shared matcher so new settings take effect immediately.
 - Metadata matching now uses bounded concurrency for items, top-3 candidate detail lookups, and TV season fetches. TMDB and MusicBrainz rate limiting reserves a slot under the lock but sleeps outside it, so concurrent callers no longer serialize the whole provider.
 - Scanner tag, OPF, and filename parsing now runs in bounded worker threads before the write transaction; cancellation is polled at most once per second instead of opening a DB session per file. The final DB write still commits atomically, but no longer holds the writer lock during file parsing.

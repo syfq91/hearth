@@ -204,9 +204,9 @@ class MetadataMatcher:
                 if settings.musicbrainz_enabled:
                     self.registry.register(MusicBrainzProvider(settings, sessionmaker))
                 if settings.openlibrary_enabled:
-                    self.registry.register(OpenLibraryProvider(settings))
+                    self.registry.register(OpenLibraryProvider(settings, sessionmaker=sessionmaker))
                 if settings.google_books_enabled:
-                    self.registry.register(GoogleBooksProvider(settings))
+                    self.registry.register(GoogleBooksProvider(settings, sessionmaker=sessionmaker))
             else:
                 for p in providers:
                     self.registry.register(p)
