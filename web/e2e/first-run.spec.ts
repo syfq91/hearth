@@ -64,14 +64,15 @@ test('first-time user sets up Hearth and watches a video', async ({ page, reques
 	}
 
 	// 6. Wait for the scan to surface the movie on Home (scan is a job).
-	const movieCard = page.getByRole('link', { name: MOVIE_TITLE });
+	// The title appears on both the poster and the text link in the shelf card.
+	const movieCard = page.getByRole('link', { name: MOVIE_TITLE }).first();
 	await expect(async () => {
 		await page.goto('/');
 		await expect(movieCard).toBeVisible({ timeout: 5_000 });
 	}).toPass({ timeout: 90_000 });
 
 	// 7. Open the movie and play it.
-	await movieCard.first().click();
+	await movieCard.click();
 	await expect(page).toHaveURL(/\/movies\//);
 	await expect(page.getByRole('heading', { level: 1, name: MOVIE_TITLE })).toBeVisible();
 	await page.getByRole('link', { name: 'Play', exact: true }).click();
