@@ -217,7 +217,9 @@ export function request<T>(method: string, path: string, opts: RequestOptions = 
 	const promise = (async (): Promise<T> => {
 		const headers: Record<string, string> = { ...(opts.headers ?? {}) };
 		const cached = cacheable ? getCache.get(url) : undefined;
-		if (cached?.etag && cached.expiresAt > Date.now()) {
+		// The unexpired case returned above, so an entry here is expired: send
+		// its ETag so the server can answer 304 and we can reuse the body.
+		if (cached?.etag) {
 			headers['If-None-Match'] = cached.etag;
 		}
 		const fetchOpts: RequestOptions = { ...opts, headers };
@@ -252,9 +254,14 @@ export function request<T>(method: string, path: string, opts: RequestOptions = 
 
 	if (cacheable) {
 		inFlight.set(url, promise);
-		void promise.finally(() => {
-			if (inFlight.get(url) === promise) inFlight.delete(url);
-		});
+		// Callers handle the rejection (e.g. the watch loader's next-up call).
+		// finally() creates a second promise, so swallow it to avoid an
+		// unhandled rejection for every failed cacheable GET.
+		void promise
+			.finally(() => {
+				if (inFlight.get(url) === promise) inFlight.delete(url);
+			})
+			.catch(() => {});
 	}
 	return promise;
 }

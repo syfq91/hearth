@@ -72,6 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PascalCase client-capability keys (`Format`, `Method`, `SubtitleProfiles`), the `tv` media-type alias, and the unused Video.js VHS retry interceptor.
 
 ### Fixed
+- Video playback no longer blocks on an unnecessary `next-up` request for movies. The watch route only fetches a series' next-up hint after the item is known to be a series, so a slow or stalled request can no longer prevent the player from mounting.
+- Finished items no longer open the player and jump straight to the end. The near-end resume guard now checks the server resume point (it previously checked a value that was always positive by that point, making the guard unreachable).
+- The API client no longer emits an unhandled rejection for failed cacheable GETs, and expired cache entries now send `If-None-Match` so a 304 can reuse the cached body as intended.
 - Subtitles no longer freeze on the last cue when JASSUB's `requestVideoFrameCallback` loop stalls (background tab, PiP transition, hls.js media swap). The player now reconciles the rendered cue on every `timeupdate`, not only while paused.
 - Switching subtitle tracks no longer races. Two overlapping loads could both pass the active-track check (it was assigned after `await clearTrack()`) and append two `<track>` elements; the superseded element was never removed because only the newest one was tracked, producing doubled or garbled cues. Mounts are now serialized and tagged with a generation that is re-checked after every await.
 - Enabling a subtitle track mid-playback no longer shifts it by the resume position. The client treated the playback resume point as a subtitle time offset on top of JASSUB, but the HLS pipeline already rebases segment timestamps with `-output_ts_offset`, so `video.currentTime` is on the media timeline; ASS tracks toggled at 20:00 were rendered 20 minutes late.

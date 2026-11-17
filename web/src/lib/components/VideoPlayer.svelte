@@ -255,7 +255,10 @@
 		const dur = duration;
 		const durationMs = dur * 1000;
 		// Near the end the user wants a rewatch prompt, not a jump to credits.
-		if (resumePositionMs <= 0 && Number.isFinite(durationMs) && durationMs > 30_000 && durationMs - targetMs < 30_000) {
+		// Only skip when the position came from the server resume point. By this
+		// point resumePositionMs is always positive (startPlayback copies
+		// startAtMs into it), so checking it here made this guard unreachable.
+		if (startAtMs > 0 && Number.isFinite(durationMs) && durationMs > 30_000 && durationMs - targetMs < 30_000) {
 			return;
 		}
 		videoEl.currentTime = targetMs / 1000;
