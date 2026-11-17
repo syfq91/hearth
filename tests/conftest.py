@@ -8,6 +8,7 @@ import pytest
 from asgi_lifespan import LifespanManager
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+import app.api.v1.system as health_api
 import app.services.transcode.session as session_mod
 from app.core.config import Settings
 from app.db.migrate import run_migrations_async
@@ -65,5 +66,7 @@ async def api_client(db_settings: Settings) -> AsyncIterator[httpx.AsyncClient]:
 
 @pytest.fixture(autouse=True)
 def _reset_singletons() -> Iterator[None]:
+    health_api.reset_health_probe_cache()
     yield
     session_mod._session_manager = None
+    health_api.reset_health_probe_cache()

@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- `/api/v1/health` now caches ffmpeg and VAAPI probe results for 30 seconds (5 seconds for failures) with single-flight deduplication, so container healthchecks no longer spawn a subprocess per request. The read-only database check still runs on every call.
 - Video player control bar layout: playback speed, subtitle timing and stream info each have their own control-bar button again; elapsed time sits left of the seek bar with a remaining-time countdown on the right instead of the total duration; volume sits in the left cluster with its slider hidden until the speaker icon is hovered or focused; and the projected finish time ("End at 10:32 PM") is centered in the controls row.
 - The stream-info popup gained a fourth line with the delivered bitrate and the measured network throughput.
 - Reorganized documentation into `docs/guides/`, `docs/development/`, `docs/reference/`, `docs/decisions/`, and `docs/design/`, moved completed plans and release history into `docs/archive/`, added a `docs/README.md` index, and fixed cross-links and local file references that pointed at the old flat layout.

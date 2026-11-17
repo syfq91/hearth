@@ -632,7 +632,7 @@ the connection pragmas for future-proofing.
 **Scope:** Backend (Python/FastAPI), frontend (SvelteKit/Svelte 5), database (SQLite), infrastructure (Docker)
 **Method:** Source audit of hot paths plus verification of §§1–5 claims against the current tree. All `file:line` below were verified in the current tree.
 
-**Status refresh — 2026-11-16:** Every §7 finding was re-checked against the current tree. Only **7.17.1** is fully resolved. **7.4** and **7.16** are partially resolved; the remaining findings still reproduce. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
+**Status refresh — 2026-11-16; updated 2026-11-17:** Every §7 finding was re-checked against the current tree. **7.17.1** and **7.4** are fully resolved. **7.16** is partially resolved; the remaining findings still reproduce. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
 
 **Verdict on prior audit:** §§1–5 were largely accurate. Verified as-designed / resolved: middleware is pure ASGI (§2.2 held), pool is 5+10 (§1.3 held), user-item-state/book-progress indexes exist (§1.4 held), probe/hash phases run in parallel (`scanner.py:592-644`, §3.1 held), TMDB throttle is bypassed on cache hits (`tmdb.py:602-604` — prior §3.3 overstated the cached-read cost). The remaining gaps are new issues in high-traffic routes and long-running services the prior pass did not measure.
 
@@ -823,14 +823,14 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 - `deps.py:88-111` — per-request auth tax (JWT + user reload + library check) is intentional for immediate revocation; optional per-request grant caching only.
 - Home single `/home` call + `{#await}` skeleton, single-flight media-token/refresh, Poster blurhash LRU, `pdfjs`/`jassub` dynamic imports where effective — keep.
 
-### 7.19 Summary table (2026 re-audit; statuses refreshed 2026-11-16)
+### 7.19 Summary table (2026 re-audit; statuses refreshed 2026-11-16, updated 2026-11-17)
 
 | # | Severity | Area | Finding | Status |
 |---|---|---|---|---|
 | 7.1 | 🟠 High | API | N+1 + unbounded loop in `next-up` | Open |
 | 7.2 | 🟠 High | API | Sequential shelves in composite `/home` | Open |
 | 7.3 | 🟠 High | API | Unbounded full-table load in collection auto-collect | Open |
-| 7.4 | 🟡 Medium | API | Uncached subprocess probes on `/health` | 🟡 Partial |
+| 7.4 | 🟡 Medium | API | Uncached subprocess probes on `/health` | ✅ Resolved |
 | 7.5 | 🟡 Medium | API | Argon2id blocks event loop | Open |
 | 7.6 | 🟡 Medium | API | Global playback lock serializes all writes | Open |
 | 7.7 | 🟡 Medium | API | Per-request matcher/httpx construction, sequential providers | Open |
@@ -851,7 +851,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 ### 7.20 Recommended priority order (2026)
 
 **Phase 1 — Quick wins (< 1 day)**
-1. `/health` TTL cache (§7.4); Argon2 → `to_thread` (§7.5); collection scalar query (§7.3)
+1. Argon2 → `to_thread` (§7.5); collection scalar query (§7.3) — the `/health` TTL cache from §7.4 is already done
 2. `jobs.updated_at` / `audit_log.created_at` indexes + `cache_size`/`temp_store` pragmas (§7.16)
 3. `ORDER BY random()` → offset; `count() OVER ()`; limits on author/artist detail (§7.15)
 4. FE: `Promise.all` independent loaders, debounce library filters, `content-visibility`, image `fetchpriority`/`srcset` (§7.17)
@@ -887,7 +887,7 @@ Root causes found:
 
 The probe still runs serially inside `_cache_lock` and `create_session` still spawns under the session lock (§7.13 remains open for those).
 
-### 7.22 Re-verification — 2026-11-16
+### 7.22 Re-verification — 2026-11-16, updated 2026-11-17
 
 **Method:** each finding's cited path and behavior was checked against the current tree. A finding is marked resolved only when the described behavior is gone, not merely when a file moved or a partial optimization landed.
 
@@ -896,7 +896,7 @@ The probe still runs serially inside `_cache_lock` and `create_session` still sp
 | 7.1 | Open | `app/api/v1/shows.py:421-466`: the active-series query still has no `LIMIT`, and the loop still performs per-series `session.get()`, episode, watch-state, and season-title queries. |
 | 7.2 | Open | `app/api/v1/home.py:78-89`: shelves are still awaited sequentially, followed by a per-library `recently_added` loop. |
 | 7.3 | Open | `app/api/v1/collections.py:147-152`: auto-collect still loads full `MediaItem` ORM rows and filters `provider_ids` in Python. |
-| 7.4 | 🟡 Partial | `app/api/v1/system.py:76-81` now runs ffmpeg, VAAPI, and database probes concurrently with `asyncio.gather`, but there is still no TTL cache. |
+| 7.4 | ✅ Resolved | `app/api/v1/system.py` now caches ffmpeg/VAAPI probe results with a 30 s TTL (5 s for failures) and single-flight locking; the read-only database check still runs per request. |
 | 7.5 | Open | `app/api/v1/auth.py:230,234` and `app/api/v1/users.py:199,414` still call synchronous `hash_password`/`verify_password` directly from async routes. |
 | 7.6 | Open | `app/api/v1/playback.py:191,504,577,595,649`: a single module-level `_STATE_LOCK` still serializes playback writes across all users and items. |
 | 7.7 | Open | `app/api/v1/metadata.py:22-26` still builds a matcher per request, and `app/services/metadata/factory.py:16-23` constructs a new `ImagePipeline` with that matcher. |
@@ -917,4 +917,4 @@ The probe still runs serially inside `_cache_lock` and `create_session` still sp
 | 7.17.6 | Open | `books/[bookId]/read/+page.ts` awaits the book and progress sequentially; `watch/[itemId]/+page.ts` awaits item, next-up, then item again. |
 | 7.17.7 | Open | `Poster.svelte:78` and `BookCover.svelte:32` still use `loading="lazy"` only, with no `srcset`/`fetchpriority`; library filters still refetch without debounce. |
 
-**Conclusion:** 7.17.1 and the concurrent-probe portion of 7.4 are the only completed improvements since the 2026-11-09 audit. The remaining findings are still valid and keep their original priority.
+**Conclusion:** 7.17.1 and 7.4 are the findings completed since the 2026-11-09 audit. The remaining findings are still valid and keep their original priority.

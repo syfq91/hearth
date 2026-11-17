@@ -1,5 +1,6 @@
 """Tests for the FastAPI application factory and system endpoints."""
 
+import asyncio
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from fastapi.testclient import TestClient
 from app import __version__
 from app.core.config import Settings
 from app.core.errors import NotFoundError
-from app.core.system import FFmpegHealth, VaapiHealth
+from app.core.system import ComponentHealth, FFmpegHealth, VaapiHealth
 from app.main import create_app
 
 
@@ -96,6 +97,122 @@ def test_health_reports_database_error(client: TestClient, settings: Settings) -
     assert response.status_code == 200
     assert response.json()["status"] == "degraded"
     assert response.json()["database"]["status"] == "error"
+
+
+def test_health_caches_probes_but_rechecks_database(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, settings: Settings
+) -> None:
+    """Repeated health calls reuse ffmpeg/vainfo results, not the database check."""
+    import app.api.v1.system as system_module
+
+    calls = {"ffmpeg": 0, "vaapi": 0, "database": 0}
+
+    async def counted_ffmpeg(*_args: object, **_kwargs: object) -> FFmpegHealth:
+        calls["ffmpeg"] += 1
+        return FFmpegHealth(status="ok", version="6.1.1-test")
+
+    async def counted_vaapi(*_args: object, **_kwargs: object) -> VaapiHealth:
+        calls["vaapi"] += 1
+        return VaapiHealth(status="unavailable", device=str(settings.render_device))
+
+    def counted_database(*_args: object, **_kwargs: object) -> ComponentHealth:
+        calls["database"] += 1
+        return ComponentHealth(status="ok")
+
+    monkeypatch.setattr(system_module, "probe_ffmpeg", counted_ffmpeg)
+    monkeypatch.setattr(system_module, "probe_vaapi", counted_vaapi)
+    monkeypatch.setattr(system_module, "check_database", counted_database)
+    system_module.reset_health_probe_cache()
+
+    for _ in range(2):
+        response = client.get("/api/v1/health")
+        assert response.status_code == 200
+
+    assert calls == {"ffmpeg": 1, "vaapi": 1, "database": 2}
+
+
+async def test_health_probe_cache_expires(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A zero TTL makes every call re-run the probe."""
+    import app.api.v1.system as system_module
+
+    calls = 0
+
+    async def counted_ffmpeg(*_args: object, **_kwargs: object) -> FFmpegHealth:
+        nonlocal calls
+        calls += 1
+        return FFmpegHealth(status="ok", version="6.1.1-test")
+
+    async def counted_vaapi(*_args: object, **_kwargs: object) -> VaapiHealth:
+        return VaapiHealth(status="unavailable", device=str(settings.render_device))
+
+    monkeypatch.setattr(system_module, "probe_ffmpeg", counted_ffmpeg)
+    monkeypatch.setattr(system_module, "probe_vaapi", counted_vaapi)
+    monkeypatch.setattr(system_module, "_HEALTH_CACHE_TTL_SECONDS", 0.0)
+    system_module.reset_health_probe_cache()
+
+    for _ in range(2):
+        result = await system_module.health(settings)
+        assert result.ffmpeg.version == "6.1.1-test"
+
+    assert calls == 2
+
+
+async def test_health_probe_cache_is_single_flight(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Concurrent health calls share one in-flight probe per key."""
+    import app.api.v1.system as system_module
+
+    calls = 0
+
+    async def slow_ffmpeg(*_args: object, **_kwargs: object) -> FFmpegHealth:
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.01)
+        return FFmpegHealth(status="ok", version="6.1.1-test")
+
+    async def counted_vaapi(*_args: object, **_kwargs: object) -> VaapiHealth:
+        return VaapiHealth(status="unavailable", device=str(settings.render_device))
+
+    monkeypatch.setattr(system_module, "probe_ffmpeg", slow_ffmpeg)
+    monkeypatch.setattr(system_module, "probe_vaapi", counted_vaapi)
+    system_module.reset_health_probe_cache()
+
+    results = await asyncio.gather(*(system_module.health(settings) for _ in range(5)))
+
+    assert calls == 1
+    assert all(result.ffmpeg.version == "6.1.1-test" for result in results)
+
+
+async def test_health_probes_still_run_concurrently(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Caching must not serialize ffmpeg and VAAPI probes behind one lock."""
+    import app.api.v1.system as system_module
+
+    ffmpeg_started = asyncio.Event()
+    vaapi_started = asyncio.Event()
+
+    async def slow_ffmpeg(*_args: object, **_kwargs: object) -> FFmpegHealth:
+        ffmpeg_started.set()
+        await asyncio.wait_for(vaapi_started.wait(), timeout=1.0)
+        return FFmpegHealth(status="ok", version="6.1.1-test")
+
+    async def slow_vaapi(*_args: object, **_kwargs: object) -> VaapiHealth:
+        vaapi_started.set()
+        await asyncio.wait_for(ffmpeg_started.wait(), timeout=1.0)
+        return VaapiHealth(status="unavailable", device=str(settings.render_device))
+
+    monkeypatch.setattr(system_module, "probe_ffmpeg", slow_ffmpeg)
+    monkeypatch.setattr(system_module, "probe_vaapi", slow_vaapi)
+    system_module.reset_health_probe_cache()
+
+    result = await system_module.health(settings)
+
+    assert result.ffmpeg.status == "ok"
+    assert result.vaapi.status == "unavailable"
 
 
 def test_version_endpoint(client: TestClient) -> None:
