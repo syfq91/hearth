@@ -15,6 +15,22 @@ const BASE = '/api/v1';
 const ACCESS_KEY = 'hearth.access';
 const REFRESH_KEY = 'hearth.refresh';
 
+// Short-lived GET cache with single-flight deduplication (§7.17.5).
+const GET_CACHE_TTL_MS = 30_000;
+interface CacheEntry {
+	value: unknown;
+	etag?: string;
+	expiresAt: number;
+}
+const getCache = new Map<string, CacheEntry>();
+const inFlight = new Map<string, Promise<unknown>>();
+
+/** Drop cached API responses (called when the authenticated user changes). */
+export function clearApiCache(): void {
+	getCache.clear();
+	inFlight.clear();
+}
+
 /** Error raised for any non-2xx API response. */
 export class ApiError extends Error {
 	readonly status: number;
@@ -44,6 +60,8 @@ export interface RequestOptions {
 	auth?: boolean;
 	signal?: AbortSignal;
 	headers?: Record<string, string>;
+	/** Skip the short-lived GET cache (default false). */
+	cache?: boolean;
 }
 
 let accessToken: string | null = null;
@@ -83,6 +101,7 @@ export function getRefreshToken(): string | null {
 }
 
 export function setAccessToken(token: string | null): void {
+	if (accessToken !== token) clearApiCache();
 	accessToken = token;
 	writeStored(ACCESS_KEY, token);
 }
@@ -182,25 +201,62 @@ async function doFetch(method: string, url: string, opts: RequestOptions): Promi
 }
 
 /** Perform a typed API request against `/api/v1`. */
-export async function request<T>(
-	method: string,
-	path: string,
-	opts: RequestOptions = {}
-): Promise<T> {
+export function request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
 	const url = buildUrl(path, opts.query);
-	let response = await doFetch(method, url, opts);
-	if (response.status === 401 && opts.auth !== false) {
-		const error = await toApiError(response);
-		if (error.code === 'invalid_token' || error.code === 'token_revoked') {
-			if (!(await ensureFreshTokens())) throw error;
-			response = await doFetch(method, url, opts);
-		} else {
-			throw error;
-		}
+	// Aborted requests are never shared: one caller's signal must not cancel
+	// another caller's request.
+	const cacheable = method === 'GET' && opts.cache !== false && !opts.signal;
+
+	if (cacheable) {
+		const cached = getCache.get(url);
+		if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value as T);
+		const pending = inFlight.get(url);
+		if (pending) return pending as Promise<T>;
 	}
-	if (!response.ok) throw await toApiError(response);
-	if (response.status === 204) return undefined as T;
-	return (await response.json()) as T;
+
+	const promise = (async (): Promise<T> => {
+		const headers: Record<string, string> = { ...(opts.headers ?? {}) };
+		const cached = cacheable ? getCache.get(url) : undefined;
+		if (cached?.etag && cached.expiresAt > Date.now()) {
+			headers['If-None-Match'] = cached.etag;
+		}
+		const fetchOpts: RequestOptions = { ...opts, headers };
+		let response = await doFetch(method, url, fetchOpts);
+
+		if (response.status === 304 && cached) {
+			cached.expiresAt = Date.now() + GET_CACHE_TTL_MS;
+			return cached.value as T;
+		}
+		if (response.status === 401 && opts.auth !== false) {
+			const error = await toApiError(response);
+			if (error.code === 'invalid_token' || error.code === 'token_revoked') {
+				if (!(await ensureFreshTokens())) throw error;
+				response = await doFetch(method, url, fetchOpts);
+			} else {
+				throw error;
+			}
+		}
+		if (!response.ok) throw await toApiError(response);
+		if (response.status === 204) return undefined as T;
+
+		const value = (await response.json()) as T;
+		if (cacheable) {
+			getCache.set(url, {
+				value,
+				etag: response.headers.get('etag') ?? undefined,
+				expiresAt: Date.now() + GET_CACHE_TTL_MS
+			});
+		}
+		return value;
+	})();
+
+	if (cacheable) {
+		inFlight.set(url, promise);
+		void promise.finally(() => {
+			if (inFlight.get(url) === promise) inFlight.delete(url);
+		});
+	}
+	return promise;
 }
 
 /** Verb helpers with the response type supplied by the caller. */

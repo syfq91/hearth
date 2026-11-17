@@ -632,7 +632,7 @@ the connection pragmas for future-proofing.
 **Scope:** Backend (Python/FastAPI), frontend (SvelteKit/Svelte 5), database (SQLite), infrastructure (Docker)
 **Method:** Source audit of hot paths plus verification of §§1–5 claims against the current tree. All `file:line` below were verified in the current tree.
 
-**Status refresh — 2026-11-16; updated 2026-11-17:** Every §7 finding was re-checked against the current tree. **7.1**, **7.2**, **7.3**, **7.4**, **7.5**, **7.7**, **7.8**, **7.9**, **7.10**, **7.11**, **7.16**, **7.17.1**, **7.17.2**, and **7.17.3** are fully resolved. The 7.17 bundle remains partial because 7.17.4–7.17.7 are still open. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
+**Status refresh — 2026-11-16; updated 2026-11-17:** Every §7 finding was re-checked against the current tree. **7.1**, **7.2**, **7.3**, **7.4**, **7.5**, **7.7**, **7.8**, **7.9**, **7.10**, **7.11**, **7.16**, **7.17.1**, **7.17.2**, **7.17.3**, and **7.17.5** are fully resolved. The 7.17 bundle remains partial because 7.17.4, 7.17.6, and 7.17.7 are still open. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
 
 **Verdict on prior audit:** §§1–5 were largely accurate. Verified as-designed / resolved: middleware is pure ASGI (§2.2 held), pool is 5+10 (§1.3 held), user-item-state/book-progress indexes exist (§1.4 held), probe/hash phases run in parallel (`scanner.py:592-644`, §3.1 held), TMDB throttle is bypassed on cache hits (`tmdb.py:602-604` — prior §3.3 overstated the cached-read cost). The remaining gaps are new issues in high-traffic routes and long-running services the prior pass did not measure.
 
@@ -843,10 +843,10 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 | 7.14 | 🟡 Medium | Service | NFO O(n²) scans, per-file stat loops | Open |
 | 7.15 | 🟡 Medium | API | Unbounded details, double-count, `ORDER BY random()` | Open |
 | 7.16 | 🟡 Medium | DB | Missing indexes; incomplete SQLite pragmas | ✅ Resolved |
-| 7.17 | 🔴–🟡 | FE | Large bundles, full-book PDF render, home card overload, no cache/dedup, waterfalls | 🟡 Partial (7.17.1–7.17.3 resolved) |
+| 7.17 | 🔴–🟡 | FE | Large bundles, full-book PDF render, home card overload, no cache/dedup, waterfalls | 🟡 Partial (7.17.1–7.17.3, 7.17.5 resolved) |
 | 7.18 | ⚪ Info | — | Verified as-designed | No action |
 
-> **7.17 sub-items:** 7.17.1 (native `<video>` + `hls.js`), 7.17.2 (dynamic readers), and 7.17.3 (PDF windowing) are ✅ resolved; 7.17.4–7.17.7 remain open. See §7.22 for evidence.
+> **7.17 sub-items:** 7.17.1 (native `<video>` + `hls.js`), 7.17.2 (dynamic readers), 7.17.3 (PDF windowing), and 7.17.5 (GET cache/dedup) are ✅ resolved; 7.17.4, 7.17.6, and 7.17.7 remain open. See §7.22 for evidence.
 
 ### 7.20 Recommended priority order (2026)
 
@@ -860,7 +860,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 5. ✅ Done: `home_overview` parallel sessions and `list_next_up` batching (§7.1–7.2)
 6. ✅ Done: scanner phase-split parsing and cancel-flag cache (§7.8–7.9)
 7. ✅ Done: book-provider cache (§7.11), shared matcher (§7.7), and bounded matching (§7.10)
-8. FE: API cache + abort, shelf/loader tuning (§7.17.4–7.17.7); dynamic readers and PdfReader windowing (§7.17.2–7.17.3) are done
+8. FE: shelf/loader tuning and image hints (§7.17.4, §7.17.6–7.17.7); dynamic readers, PdfReader windowing, and API cache (§7.17.2–7.17.3, §7.17.5) are done
 
 **Phase 3 — Verification**
 9. `EXPLAIN QUERY PLAN` on shelf/search/next-up paths; `cProfile`/wall-time on first scan; bundle analyzer before/after; load-test via `scripts/` before claiming gains.
@@ -913,7 +913,7 @@ The probe still runs serially inside `_cache_lock` and `create_session` still sp
 | 7.17.2 | ✅ Resolved | `web/src/routes/books/[bookId]/read/+page.svelte` now loads EpubReader, PdfReader, and ComicReader with format-gated `import()` calls. |
 | 7.17.3 | ✅ Resolved | `web/src/lib/components/PdfReader.svelte` now uses `getDocument({ url, httpHeaders })`, renders only `pageWindow()` pages, calls `page.cleanup()` when pages leave the window, and adds previous/next navigation. |
 | 7.17.4 | Open | `web/src/routes/+page.ts:41` still requests `limit: 20`; `Shelf.svelte` has no intersection-based mounting or `content-visibility`. |
-| 7.17.5 | Open | `web/src/lib/api/client.ts` still has no GET cache, in-flight deduplication, or `AbortSignal` callers; the signal parameter is only plumbed through. |
+| 7.17.5 | ✅ Resolved | `web/src/lib/api/client.ts` now has a 30 s GET cache, single-flight deduplication, `If-None-Match`/304 reuse, and cache invalidation on token change. Aborted requests opt out of sharing. |
 | 7.17.6 | Open | `books/[bookId]/read/+page.ts` awaits the book and progress sequentially; `watch/[itemId]/+page.ts` awaits item, next-up, then item again. |
 | 7.17.7 | Open | `Poster.svelte:78` and `BookCover.svelte:32` still use `loading="lazy"` only, with no `srcset`/`fetchpriority`; library filters still refetch without debounce. |
 
