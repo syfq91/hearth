@@ -86,7 +86,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             from app.services.scanner.watcher import LibraryWatcher
 
             worker_stop = asyncio.Event()
-            worker = JobWorker(resolved, sessionmaker)
+            worker = JobWorker(resolved, sessionmaker, plugin_manager=plugin_manager)
             worker_tasks.append(asyncio.create_task(worker.run(worker_stop), name="job-worker"))
             if resolved.scan_scheduler_enabled:
                 worker_tasks.append(

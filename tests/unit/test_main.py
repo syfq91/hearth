@@ -364,10 +364,12 @@ async def test_embedded_worker_lifespan(
     worker_stopped = False
     scheduler_started = False
     watcher_started = False
+    seen_plugin_manager: object = None
 
     class FakeJobWorker:
-        def __init__(self, s: object, sm: object) -> None:
-            pass
+        def __init__(self, s: object, sm: object, *, plugin_manager: object = None) -> None:
+            nonlocal seen_plugin_manager
+            seen_plugin_manager = plugin_manager
 
         async def run(self, stop: object) -> None:
             nonlocal worker_started, worker_stopped
@@ -426,3 +428,4 @@ async def test_embedded_worker_lifespan(
         assert watcher_started is True
 
     assert worker_stopped is True
+    assert seen_plugin_manager is not None
