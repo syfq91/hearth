@@ -1,13 +1,13 @@
 """Administrator metadata search and manual matching endpoints."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
-from app.core.deps import RequireAdmin, SessionmakerDep, SettingsDep
+from app.core.deps import PluginManagerDep, RequireAdmin, SessionmakerDep, SettingsDep
 from app.core.errors import BadGatewayError, NotFoundError, ValidationError
 from app.db.models import MediaItem
 from app.db.session import SessionDep
@@ -20,19 +20,24 @@ router = APIRouter(tags=["metadata"])
 
 
 def build_matcher(
-    settings: Settings, sessionmaker: async_sessionmaker[AsyncSession]
+    settings: Settings,
+    sessionmaker: async_sessionmaker[AsyncSession],
+    plugin_manager: Any,
 ) -> MetadataMatcher:
     """Construct the matcher for a request; overridable in tests."""
-    return build_metadata_matcher(settings, sessionmaker)
+    return build_metadata_matcher(settings, sessionmaker, plugin_manager)
 
 
 def get_metadata_matcher(
-    request: Request, settings: SettingsDep, sessionmaker: SessionmakerDep
+    request: Request,
+    settings: SettingsDep,
+    sessionmaker: SessionmakerDep,
+    plugin_manager: PluginManagerDep,
 ) -> MetadataMatcher:
     """Reuse one matcher (and its provider HTTP clients) for the whole app."""
     matcher = getattr(request.app.state, "metadata_matcher", None)
     if matcher is None:
-        matcher = build_matcher(settings, sessionmaker)
+        matcher = build_matcher(settings, sessionmaker, plugin_manager)
         request.app.state.metadata_matcher = matcher
     return matcher
 

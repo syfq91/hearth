@@ -75,7 +75,7 @@ async def scan_library_job(context: JobContext) -> dict[str, Any]:
     # administrator saved after startup before building providers.
     async with context.sessionmaker() as session:
         await apply_credential_overrides(context.settings, session)
-    matcher = build_metadata_matcher(context.settings, context.sessionmaker)
+    matcher = build_metadata_matcher(context.settings, context.sessionmaker, context.plugin_manager)
     scanner = build_scanner(context, matcher)
     try:
         stats = await scanner.scan_library(

@@ -62,7 +62,7 @@ async def _seed_item(sessionmaker: async_sessionmaker[AsyncSession]) -> str:
 def _patch_matcher(monkeypatch, provider: FakeProvider) -> None:
     import app.api.v1.metadata as metadata_module
 
-    def build(settings, app_sessionmaker):  # type: ignore[no-untyped-def]
+    def build(settings, app_sessionmaker, plugin_manager):  # type: ignore[no-untyped-def]
         return MetadataMatcher(settings, app_sessionmaker, providers=[provider])
 
     monkeypatch.setattr(metadata_module, "build_matcher", build)
@@ -192,7 +192,7 @@ async def test_search_reuses_one_matcher_for_the_app(
     provider = FakeProvider(results=[SearchResult("tmdb", "603", "The Matrix", 1999)])
     builds: list[int] = []
 
-    def build(settings, app_sessionmaker):  # type: ignore[no-untyped-def]
+    def build(settings, app_sessionmaker, plugin_manager):  # type: ignore[no-untyped-def]
         builds.append(1)
         return MetadataMatcher(settings, app_sessionmaker, providers=[provider])
 
