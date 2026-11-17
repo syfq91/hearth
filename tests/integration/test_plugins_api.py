@@ -159,22 +159,12 @@ async def test_enable_disable_and_reload_plugins(api_client: httpx.AsyncClient) 
 
 
 @pytest.mark.asyncio
-async def test_admin_metadata_settings_synced_to_plugin(api_client: httpx.AsyncClient) -> None:
+async def test_legacy_metadata_settings_endpoints_removed(api_client: httpx.AsyncClient) -> None:
     admin_tokens = await _setup_admin(api_client)
     admin_hdr = _bearer(admin_tokens)
 
-    # Update via legacy /api/v1/admin/metadata/settings
-    update_res = await api_client.put(
-        "/api/v1/admin/metadata/settings",
-        headers=admin_hdr,
-        json={"tmdb_api_key": "legacy-sync-key-9999"},
-    )
-    assert update_res.status_code == 200
-
-    # Verify TMDB plugin config updated with the key
-    plugin_res = await api_client.get(
-        "/api/v1/plugins/org.hearth.plugins.tmdb/config",
-        headers=admin_hdr,
-    )
-    assert plugin_res.status_code == 200
-    assert plugin_res.json()["config"]["api_key"] == "…9999"
+    for method in ("get", "put"):
+        response = await getattr(api_client, method)(
+            "/api/v1/admin/metadata/settings", headers=admin_hdr
+        )
+        assert response.status_code == 404
