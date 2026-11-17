@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
+from app.core.plugins.manager import PluginManager
 
 
 class JobCancelled(Exception):
@@ -23,6 +24,7 @@ class JobContext:
     is_cancelled: Callable[[], Awaitable[bool]]
     settings: Settings
     sessionmaker: async_sessionmaker[AsyncSession]
+    plugin_manager: PluginManager | None = None
 
 
 JobHandler = Callable[[JobContext], Awaitable[dict[str, Any] | None]]

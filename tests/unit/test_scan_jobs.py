@@ -2,14 +2,17 @@
 
 import uuid
 from pathlib import Path
+from typing import Any
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
+from app.core.plugins.manager import PluginManager
 from app.db.models import Job, Library, LibraryPath, MediaItem
-from app.services.jobs.types import JobCancelled, JobContext
+from app.services.jobs.handlers import REGISTRY
+from app.services.jobs.types import JobCancelled, JobContext, JobSpec
 from app.services.jobs.worker import JobWorker
 from app.services.media.probe import ProbeResult
 from app.services.metadata.matching import MetadataMatcher
@@ -66,6 +69,7 @@ def _context(
         is_cancelled=is_cancelled,
         settings=settings,
         sessionmaker=sessionmaker,
+        plugin_manager=PluginManager(settings, sessionmaker),
     )
 
 
@@ -205,6 +209,41 @@ async def test_worker_executes_scan_job(
         assert stored.result is not None
         assert stored.result["added"] == 1
         assert stored.progress == 1.0
+
+
+async def test_worker_exposes_plugin_manager_to_handler(
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = db_settings.media_dir / "movies"
+    root.mkdir()
+    (root / "Matrix.mkv").write_bytes(b"video")
+    library_id = await _make_library(db_sessionmaker, root)
+    _patch_scanner(monkeypatch, FakeProbe())
+
+    async with db_sessionmaker() as session:
+        job, _ = await enqueue_scan(session, library_id)
+        await session.commit()
+
+    manager = PluginManager(db_settings, db_sessionmaker)
+    seen: list[PluginManager | None] = []
+    original = REGISTRY["scan.library"]
+
+    async def capture(context: JobContext) -> dict[str, Any] | None:
+        seen.append(context.plugin_manager)
+        return await original.handler(context)
+
+    worker = JobWorker(
+        db_settings,
+        db_sessionmaker,
+        plugin_manager=manager,
+        registry={"scan.library": JobSpec(handler=capture, concurrency=1)},
+        worker_id="manager-test",
+    )
+    await worker.drain()
+
+    assert seen == [manager]
 
 
 def test_scan_job_is_registered() -> None:

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.ids import uuid7
+from app.core.plugins.manager import PluginManager
 from app.db.base import utcnow
 from app.db.models import Job
 from app.services.jobs.handlers import (
@@ -41,11 +42,13 @@ class JobWorker:
         *,
         registry: dict[str, JobSpec] | None = None,
         worker_id: str | None = None,
+        plugin_manager: PluginManager | None = None,
     ) -> None:
         self.settings = settings
         self.sessionmaker = sessionmaker
         self.registry = registry if registry is not None else REGISTRY
         self.worker_id = worker_id or (f"{socket.gethostname()}:{os.getpid()}:{uuid7()[:8]}")
+        self.plugin_manager = plugin_manager
 
     async def requeue_running(self) -> int:
         """Return jobs left running by a previous process to the queue."""
@@ -207,6 +210,7 @@ class JobWorker:
             is_cancelled=lambda: self._is_cancelled(job.id),
             settings=self.settings,
             sessionmaker=self.sessionmaker,
+            plugin_manager=self.plugin_manager,
         )
         try:
             result = await spec.handler(context)
