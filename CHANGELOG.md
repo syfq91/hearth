@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- The PDF reader now streams the document by URL with range requests and renders only a small window around the current page, with previous/next controls and page cleanup, instead of downloading and rendering the whole book.
 - The book reader route now loads EPUB, PDF, and comic viewers with format-gated dynamic imports instead of statically importing all three on every reader visit.
 - Open Library and Google Books provider calls now use the shared `provider_cache` table and a bounded rate limiter, with one retry on HTTP 429; API keys are excluded from cache keys. The backward-compatible adapters now receive the app session factory so caching works for matcher-created providers too.
 - The admin metadata API now reuses one matcher and its provider HTTP clients for the whole app instead of constructing them per request; changing metadata credentials invalidates the shared matcher so new settings take effect immediately.

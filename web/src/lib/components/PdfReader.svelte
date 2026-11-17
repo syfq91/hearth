@@ -2,19 +2,37 @@
 	/**
 	 * PDF reader on pdf.js canvas rendering.
 	 *
-	 * Each page is rendered to a canvas at device-pixel-ratio resolution, and
-	 * the locator is `page:<n>` with percentage = page / total
-	 * (docs/development/reader-integration.md §3). The document is fetched once with the
-	 * bearer token, then parsed in memory.
+	 * The document is streamed by URL (with range requests) instead of being
+	 * downloaded in full, and only a small window around the current page is
+	 * rendered at a time (§7.17.3 of the performance audit). The locator is
+	 * `page:<n>` with percentage = page / total
+	 * (docs/development/reader-integration.md §3).
 	 */
 	import { onMount } from 'svelte';
 	import { getAccessToken } from '../api/client';
+	import { pageWindow } from '../reader/page-window';
 
 	interface Props {
 		fileUrl: string;
 		/** `page:<n>` locator to resume from. */
 		initialLocator?: string | null;
 		onPageChange?: (page: number, total: number) => void;
+	}
+
+	interface PdfPage {
+		getViewport(opts: { scale: number }): { width: number; height: number };
+		render(opts: {
+			canvasContext: CanvasRenderingContext2D;
+			canvas: HTMLCanvasElement;
+			transform: number[];
+		}): { promise: Promise<void> };
+		cleanup(): void;
+	}
+
+	interface PdfDocument {
+		numPages: number;
+		getPage(n: number): Promise<PdfPage>;
+		destroy(): Promise<void>;
 	}
 
 	let { fileUrl, initialLocator = null, onPageChange }: Props = $props();
@@ -24,89 +42,109 @@
 	let loading = $state(true);
 	let total = $state(0);
 	let current = $state(1);
+	let ready = $state(false);
+
+	const WINDOW_BEFORE = 1;
+	const WINDOW_AFTER = 2;
 
 	const startPage = $derived.by(() => {
 		const match = /^page:(\d+)$/.exec(initialLocator ?? '');
 		return match ? Number.parseInt(match[1], 10) : 1;
 	});
 
-	onMount(() => {
-		let disposed = false;
-		let observer: IntersectionObserver | null = null;
+	let pdfDocument: PdfDocument | null = null;
+	let rendered = new Map<number, { canvas: HTMLCanvasElement; page: PdfPage }>();
+	let disposed = false;
 
-		// Track which page is most visible so progress follows the reader.
-		function observePage(canvas: HTMLCanvasElement, pageNumber: number): void {
-			observer ??= new IntersectionObserver(
-				(entries) => {
-					for (const entry of entries) {
-						if (entry.isIntersecting) {
-							current = pageNumber;
-							onPageChange?.(pageNumber, total);
-						}
-					}
-				},
-				{ threshold: 0.5 }
-			);
-			observer.observe(canvas);
-		}
+	function reportPage(page: number): void {
+		if (total > 0) onPageChange?.(page, total);
+	}
 
-		async function renderAll(doc: {
-			numPages: number;
-			getPage: (n: number) => Promise<unknown>;
-		}): Promise<void> {
-			if (!container) return;
-			container.replaceChildren();
-			for (let n = 1; n <= doc.numPages; n += 1) {
-				if (disposed) return;
-				const page = (await doc.getPage(n)) as {
-					getViewport: (opts: { scale: number }) => { width: number; height: number };
-					render: (opts: {
-						canvasContext: CanvasRenderingContext2D;
-						canvas: HTMLCanvasElement;
-						transform: number[];
-					}) => { promise: Promise<void> };
-				};
-				const viewport = page.getViewport({ scale: 1 });
-				const canvas = document.createElement('canvas');
-				const dpr = Math.min(window.devicePixelRatio || 1, 2);
-				canvas.width = Math.floor(viewport.width * dpr);
-				canvas.height = Math.floor(viewport.height * dpr);
-				canvas.style.width = '100%';
-				canvas.style.height = 'auto';
-				canvas.setAttribute('aria-label', `Page ${n}`);
-				const context = canvas.getContext('2d');
-				if (!context) break;
-				await page.render({
-					canvasContext: context,
-					canvas,
-					transform: dpr === 1 ? [] : [dpr, 0, 0, dpr, 0, 0]
-				}).promise;
-				container.append(canvas);
-				observePage(canvas, n);
+	function goTo(page: number): void {
+		const next = Math.min(Math.max(page, 1), Math.max(total, 1));
+		if (next === current) return;
+		current = next;
+		reportPage(next);
+	}
+
+	async function renderWindow(center: number): Promise<void> {
+		if (!container || !pdfDocument || disposed) return;
+		const { first, last } = pageWindow(center, total, WINDOW_BEFORE, WINDOW_AFTER);
+
+		for (const [pageNumber, entry] of rendered) {
+			if (pageNumber < first || pageNumber > last) {
+				entry.canvas.remove();
+				entry.page.cleanup();
+				rendered.delete(pageNumber);
 			}
 		}
 
+		for (let n = first; n <= last; n += 1) {
+			if (disposed || rendered.has(n)) continue;
+			const page = await pdfDocument.getPage(n);
+			if (disposed) {
+				page.cleanup();
+				return;
+			}
+			const viewport = page.getViewport({ scale: 1 });
+			const canvas = document.createElement('canvas');
+			const dpr = Math.min(window.devicePixelRatio || 1, 2);
+			canvas.width = Math.floor(viewport.width * dpr);
+			canvas.height = Math.floor(viewport.height * dpr);
+			canvas.style.width = '100%';
+			canvas.style.height = 'auto';
+			canvas.setAttribute('aria-label', `Page ${n}`);
+			const context = canvas.getContext('2d');
+			if (!context) {
+				page.cleanup();
+				break;
+			}
+			await page.render({
+				canvasContext: context,
+				canvas,
+				transform: dpr === 1 ? [] : [dpr, 0, 0, dpr, 0, 0]
+			}).promise;
+			if (disposed) {
+				page.cleanup();
+				return;
+			}
+			container.append(canvas);
+			rendered.set(n, { canvas, page });
+		}
+
+		if (container) container.scrollTop = 0;
+	}
+
+	$effect(() => {
+		if (ready && pdfDocument) void renderWindow(current);
+	});
+
+	onMount(() => {
+		disposed = false;
 		(async () => {
 			try {
 				const pdfjs = await import('pdfjs-dist');
-				// Route the worker through Vite's asset pipeline.
 				pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 					'pdfjs-dist/build/pdf.worker.min.mjs',
 					import.meta.url
 				).toString();
 
 				const accessToken = getAccessToken();
-				const response = await fetch(fileUrl, {
-					headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+				const task = pdfjs.getDocument({
+					url: fileUrl,
+					httpHeaders: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
 				});
-				if (!response.ok) throw new Error(`Could not fetch the PDF (${response.status})`);
-				const bytes = await response.arrayBuffer();
-				if (disposed) return;
-				const pdf = await pdfjs.getDocument({ data: bytes }).promise;
-				total = pdf.numPages;
+				const doc = (await task.promise) as unknown as PdfDocument;
+				if (disposed) {
+					await doc.destroy();
+					return;
+				}
+				pdfDocument = doc;
+				total = doc.numPages;
+				current = Math.min(Math.max(startPage, 1), Math.max(total, 1));
 				loading = false;
-				current = Math.min(Math.max(startPage, 1), total);
-				await renderAll(pdf);
+				ready = true;
+				reportPage(current);
 			} catch (e) {
 				if (!disposed) error = e instanceof Error ? e.message : String(e);
 			}
@@ -114,7 +152,11 @@
 
 		return () => {
 			disposed = true;
-			observer?.disconnect();
+			ready = false;
+			rendered.clear();
+			const doc = pdfDocument;
+			pdfDocument = null;
+			if (doc) void doc.destroy();
 		};
 	});
 </script>
@@ -129,7 +171,25 @@
 	<div class="pages" bind:this={container}></div>
 
 	{#if total > 0}
-		<p class="counter" aria-live="polite">{current} / {total}</p>
+		<div class="toolbar">
+			<button
+				type="button"
+				onclick={() => goTo(current - 1)}
+				disabled={current <= 1}
+				aria-label="Previous page"
+			>
+				Previous
+			</button>
+			<p class="counter" aria-live="polite">{current} / {total}</p>
+			<button
+				type="button"
+				onclick={() => goTo(current + 1)}
+				disabled={current >= total}
+				aria-label="Next page"
+			>
+				Next
+			</button>
+		</div>
 	{/if}
 </div>
 
@@ -157,6 +217,31 @@
 		background: #fff;
 		border-radius: var(--radius);
 		box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+	}
+
+	.toolbar {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		position: sticky;
+		bottom: 0;
+		background: var(--surface, #161b22);
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius);
+	}
+
+	.toolbar button {
+		background: var(--surface-dim, #0e1116);
+		color: inherit;
+		border: 1px solid var(--outline, #2b3441);
+		border-radius: var(--radius);
+		padding: 0.4rem 0.75rem;
+		cursor: pointer;
+	}
+
+	.toolbar button:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 
 	.counter {
