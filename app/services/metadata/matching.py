@@ -53,17 +53,13 @@ from app.services.metadata.base import (
     SearchResult,
     SeasonMetadata,
 )
-from app.services.metadata.googlebooks import GoogleBooksProvider
 from app.services.metadata.local import (
     LocalProvider,
     find_local_book_cover,
     find_local_book_opf,
     parse_local_opf,
 )
-from app.services.metadata.musicbrainz import MusicBrainzProvider
-from app.services.metadata.openlibrary import OpenLibraryProvider
 from app.services.metadata.registry import MetadataRegistry
-from app.services.metadata.tmdb import TMDBProvider
 from app.services.scanner.walker import find_artist_artwork, find_series_artwork
 
 logger = logging.getLogger("hearth.metadata.matching")
@@ -192,24 +188,12 @@ class MetadataMatcher:
 
         if registry is not None:
             self.registry = registry
-            if providers:
-                for p in providers:
-                    self.registry.register(p)
         else:
             self.registry = MetadataRegistry(sessionmaker=sessionmaker)
             if providers is None:
                 self.registry.register(LocalProvider())
-                if settings.tmdb_api_key:
-                    self.registry.register(TMDBProvider(settings, sessionmaker))
-                if settings.musicbrainz_enabled:
-                    self.registry.register(MusicBrainzProvider(settings, sessionmaker))
-                if settings.openlibrary_enabled:
-                    self.registry.register(OpenLibraryProvider(settings, sessionmaker=sessionmaker))
-                if settings.google_books_enabled:
-                    self.registry.register(GoogleBooksProvider(settings, sessionmaker=sessionmaker))
-            else:
-                for p in providers:
-                    self.registry.register(p)
+        for provider in providers or ():
+            self.registry.register(provider)
 
     @property
     def providers(self) -> list[MetadataProvider]:

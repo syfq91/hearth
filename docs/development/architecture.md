@@ -69,7 +69,7 @@ app/
     audit.py           append-only admin audit entries
     libraries.py       media-root path validation
     scanner/           walkers, watchers, matchers
-    metadata/          decoupled registry, local baseline provider, matcher
+    metadata/          registry, local baseline provider, matcher (online providers are plugins)
     media/             ffprobe wrapper, tags, book readers
     transcode/         capabilities, decision engine, builder, sessions
     images/            fetch, resize, cache, BlurHash
