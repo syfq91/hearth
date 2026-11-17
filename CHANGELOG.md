@@ -64,6 +64,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated web client home page to fetch all shelves in a single request, eliminating client-side API waterfalls.
 - Dynamically split `JASSUB` in the video player route, loading WebAssembly assets only when ASS/SSA subtitles are rendered.
 - Embedded subtitle text tracks are now extracted once into a revision-keyed disk cache, with every text track produced in a single FFmpeg demux pass. Opening a second track or replaying a title no longer re-reads the whole video, which previously delayed the first cue by seconds on large files; the extraction deadline also rose from 30s to 5 minutes so slow storage no longer silently yields an empty track. The web player fetches the JASSUB module in parallel with the subtitle document.
+- Online metadata providers are now configured exclusively through **Admin → Plugins**. Both the API and the worker resolve providers from persisted plugin configuration, so changes apply without a restart and there is no secondary environment-variable source of truth.
+
+### Removed
+- `GET`/`PUT /api/v1/admin/metadata/settings`, the `metadata.*` credential override layer, and the backward-compatible metadata provider adapter modules in `app/services/metadata/`. `HEARTH_TMDB_API_KEY`, `HEARTH_GOOGLE_BOOKS_API_KEY`, `HEARTH_MUSICBRAINZ_ENABLED`, `HEARTH_OPENLIBRARY_ENABLED`, and `HEARTH_GOOGLE_BOOKS_ENABLED` no longer affect provider configuration; re-enter keys under **Admin → Plugins**.
+- Legacy playback-info query aliases (for example `?VideoBitrate=`, `?maxbitrate=`, `?forceBurnInSubtitles=`) and the one-time attachment re-probe: playback-info now uses only its validated request body and the probe data stored by the scanner.
+- PascalCase client-capability keys (`Format`, `Method`, `SubtitleProfiles`), the `tv` media-type alias, and the unused Video.js VHS retry interceptor.
 
 ### Fixed
 - Subtitles no longer freeze on the last cue when JASSUB's `requestVideoFrameCallback` loop stalls (background tab, PiP transition, hls.js media swap). The player now reconciles the rendered cue on every `timeupdate`, not only while paused.
