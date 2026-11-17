@@ -167,6 +167,7 @@ class Job(TimestampMixin, Base):
             name="status",
         ),
         Index("ix_jobs_claim", "status", "run_after"),
+        Index("ix_jobs_updated_at", "updated_at"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -189,6 +190,7 @@ class AuditLog(Base):
     """Append-only record of administrative actions."""
 
     __tablename__ = "audit_log"
+    __table_args__ = (Index("ix_audit_log_created_at", "created_at"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     actor_id: Mapped[str | None] = mapped_column(
@@ -221,6 +223,8 @@ class MediaItem(TimestampMixin, Base):
         ),
         Index("ix_media_items_library_title", "library_id", "sort_title"),
         Index("ix_media_items_library_added", "library_id", "added_at"),
+        Index("ix_media_items_library_year", "library_id", "year"),
+        Index("ix_media_items_library_rating", "library_id", "rating"),
         Index("ix_media_items_match_due", "match_state", "next_match_at"),
     )
 

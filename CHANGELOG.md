@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- Added SQLite indexes for job/audit ordering and library-scoped media sorting (`jobs.updated_at`, `audit_log.created_at`, `(library_id, year)`, `(library_id, rating)`) plus per-connection `cache_size`, `temp_store`, and WAL pragmas, via Alembic revision `0014_query_indexes`.
 - Collection auto-collect now selects only movie IDs and `provider_ids` instead of loading every `MediaItem` with its relationships, so creating a TMDB collection no longer scales with the full movie library.
 - Argon2id password hashing and verification now run in worker threads during setup, login, user creation, and password reset, so a 30–80 ms hash no longer blocks the event loop and every concurrent stream. The cached timing-equalization placeholder is also created off-loop on first unknown-user login.
 - `/api/v1/health` now caches ffmpeg and VAAPI probe results for 30 seconds (5 seconds for failures) with single-flight deduplication, so container healthchecks no longer spawn a subprocess per request. The read-only database check still runs on every call.

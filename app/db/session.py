@@ -23,10 +23,13 @@ def _apply_sqlite_pragmas(dbapi_connection: Any, _connection_record: Any) -> Non
     """Configure durability and concurrency on every new SQLite connection."""
     cursor = dbapi_connection.cursor()
     try:
+        cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
         cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.execute("PRAGMA mmap_size=268435456")
+        cursor.execute("PRAGMA cache_size=-64000")
+        cursor.execute("PRAGMA temp_store=MEMORY")
     finally:
         cursor.close()
 

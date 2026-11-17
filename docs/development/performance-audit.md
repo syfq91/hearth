@@ -632,7 +632,7 @@ the connection pragmas for future-proofing.
 **Scope:** Backend (Python/FastAPI), frontend (SvelteKit/Svelte 5), database (SQLite), infrastructure (Docker)
 **Method:** Source audit of hot paths plus verification of §§1–5 claims against the current tree. All `file:line` below were verified in the current tree.
 
-**Status refresh — 2026-11-16; updated 2026-11-17:** Every §7 finding was re-checked against the current tree. **7.3**, **7.4**, **7.5**, and **7.17.1** are fully resolved. **7.16** is partially resolved; the remaining findings still reproduce. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
+**Status refresh — 2026-11-16; updated 2026-11-17:** Every §7 finding was re-checked against the current tree. **7.3**, **7.4**, **7.5**, **7.16**, and **7.17.1** are fully resolved. The 7.17 bundle remains partial because 7.17.2–7.17.7 are still open. Evidence and current line references are in §7.22, and the §7.19 status column reflects that refresh.
 
 **Verdict on prior audit:** §§1–5 were largely accurate. Verified as-designed / resolved: middleware is pure ASGI (§2.2 held), pool is 5+10 (§1.3 held), user-item-state/book-progress indexes exist (§1.4 held), probe/hash phases run in parallel (`scanner.py:592-644`, §3.1 held), TMDB throttle is bypassed on cache hits (`tmdb.py:602-604` — prior §3.3 overstated the cached-read cost). The remaining gaps are new issues in high-traffic routes and long-running services the prior pass did not measure.
 
@@ -842,7 +842,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 | 7.13 | 🟡 Medium | Service | Polling churn: worker/SSE/transcode; missing `jobs.updated_at` index | Open |
 | 7.14 | 🟡 Medium | Service | NFO O(n²) scans, per-file stat loops | Open |
 | 7.15 | 🟡 Medium | API | Unbounded details, double-count, `ORDER BY random()` | Open |
-| 7.16 | 🟡 Medium | DB | Missing indexes; incomplete SQLite pragmas | 🟡 Partial |
+| 7.16 | 🟡 Medium | DB | Missing indexes; incomplete SQLite pragmas | ✅ Resolved |
 | 7.17 | 🔴–🟡 | FE | Large bundles, full-book PDF render, home card overload, no cache/dedup, waterfalls | 🟡 Partial (7.17.1 resolved) |
 | 7.18 | ⚪ Info | — | Verified as-designed | No action |
 
@@ -852,7 +852,7 @@ Every `search_book` / `fetch_book_details` hits the network with no `ProviderCac
 
 **Phase 1 — Quick wins (< 1 day)**
 1. ✅ Done: `/health` TTL cache (§7.4), Argon2 offloading (§7.5), collection scalar query (§7.3)
-2. `jobs.updated_at` / `audit_log.created_at` indexes + `cache_size`/`temp_store` pragmas (§7.16)
+2. ✅ Done: `jobs.updated_at` / `audit_log.created_at` indexes + `cache_size`/`temp_store` pragmas (§7.16)
 3. `ORDER BY random()` → offset; `count() OVER ()`; limits on author/artist detail (§7.15)
 4. FE: `Promise.all` independent loaders, debounce library filters, `content-visibility`, image `fetchpriority`/`srcset` (§7.17)
 
@@ -908,7 +908,7 @@ The probe still runs serially inside `_cache_lock` and `create_session` still sp
 | 7.13 | Open | `app/services/jobs/worker.py:257` still polls idle work at the configured 1 s interval; `app/api/v1/events.py:80,129,149` still polls every 1 s and sleeps 0.1 s per loop; `app/db/models.py:164-169` still has no `jobs.updated_at` index. |
 | 7.14 | Open | `app/services/metadata/local.py:335` still globs `**/*.nfo` per season, and `_first_existing` at `:85-93` still performs repeated `is_file()` stats. |
 | 7.15 | Open | Author/series detail (`app/api/v1/books.py:809-822,918-931`) and artist detail (`app/api/v1/music.py:346-352`) remain unbounded; `ORDER BY random()` remains at `music.py:758,785`; playlist/collection details still load every ID (`playlists.py:398-438`, `collections.py:334-375`). |
-| 7.16 | 🟡 Partial | `app/db/models.py:234` gives `media_items.year` a single-column index, but `audit_log.created_at`, `jobs.updated_at`, `media_items.rating`, and composite `(library_id, year/rating)` indexes are still missing; `app/db/session.py:22-31` still omits `cache_size`, `temp_store`, and per-connection `journal_mode`. |
+| 7.16 | ✅ Resolved | Alembic revision `0014_query_indexes` adds `ix_jobs_updated_at`, `ix_audit_log_created_at`, `ix_media_items_library_year`, and `ix_media_items_library_rating`; `app/db/session.py` now sets `cache_size=-64000`, `temp_store=MEMORY`, and `journal_mode=WAL` on every connection, with model metadata updated to match. |
 | 7.17.1 | ✅ Resolved | Video.js is gone; `web/src/lib/player/hls-engine.ts:12` uses `hls.js` with the native `<video>` element. |
 | 7.17.2 | Open | `web/src/routes/books/[bookId]/read/+page.svelte:2-4` still statically imports all three readers. |
 | 7.17.3 | Open | `web/src/lib/components/PdfReader.svelte` still fetches the whole file into an `ArrayBuffer` and renders every page in `renderAll()`. |
@@ -917,4 +917,4 @@ The probe still runs serially inside `_cache_lock` and `create_session` still sp
 | 7.17.6 | Open | `books/[bookId]/read/+page.ts` awaits the book and progress sequentially; `watch/[itemId]/+page.ts` awaits item, next-up, then item again. |
 | 7.17.7 | Open | `Poster.svelte:78` and `BookCover.svelte:32` still use `loading="lazy"` only, with no `srcset`/`fetchpriority`; library filters still refetch without debounce. |
 
-**Conclusion:** 7.3, 7.4, 7.5, and 7.17.1 are the findings completed since the 2026-11-09 audit. The remaining findings are still valid and keep their original priority.
+**Conclusion:** 7.3, 7.4, 7.5, 7.16, and 7.17.1 are the findings completed since the 2026-11-09 audit. The remaining findings are still valid and keep their original priority.

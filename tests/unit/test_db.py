@@ -55,7 +55,7 @@ async def test_migrations_apply_and_are_idempotent(settings: Settings) -> None:
     finally:
         await engine.dispose()
 
-    assert version == "0013_user_auto_play_next"
+    assert version == "0014_query_indexes"
     assert settings.db_path.exists()
 
 
@@ -69,6 +69,8 @@ async def test_sqlite_pragmas_are_applied(settings: Settings) -> None:
             busy_timeout = await connection.scalar(text("PRAGMA busy_timeout"))
             synchronous = await connection.scalar(text("PRAGMA synchronous"))
             mmap_size = await connection.scalar(text("PRAGMA mmap_size"))
+            cache_size = await connection.scalar(text("PRAGMA cache_size"))
+            temp_store = await connection.scalar(text("PRAGMA temp_store"))
     finally:
         await engine.dispose()
 
@@ -77,6 +79,8 @@ async def test_sqlite_pragmas_are_applied(settings: Settings) -> None:
     assert busy_timeout == 5000
     assert synchronous == 1
     assert mmap_size == 268435456
+    assert cache_size == -64000
+    assert temp_store == 2
 
 
 async def test_sessionmaker_returns_working_sessions(settings: Settings) -> None:
@@ -88,3 +92,23 @@ async def test_sessionmaker_returns_working_sessions(settings: Settings) -> None
             assert await session.scalar(text("SELECT 1")) == 1
     finally:
         await engine.dispose()
+
+
+async def test_query_indexes_exist_after_migrations(settings: Settings) -> None:
+    await run_migrations_async(settings)
+    engine = build_engine(settings)
+    try:
+        async with engine.connect() as connection:
+            result = await connection.execute(
+                text("SELECT name FROM sqlite_master WHERE type='index'")
+            )
+            index_names = set(result.scalars().all())
+    finally:
+        await engine.dispose()
+
+    assert {
+        "ix_jobs_updated_at",
+        "ix_audit_log_created_at",
+        "ix_media_items_library_year",
+        "ix_media_items_library_rating",
+    } <= index_names
