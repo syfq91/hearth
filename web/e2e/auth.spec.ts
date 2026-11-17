@@ -41,10 +41,12 @@ test('sign in and out through the UI', async ({ page, request }) => {
 
 	await expect(page).toHaveURL(/\/$/);
 	await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeAttached();
-	// The topbar shows the signed-in user with their role badge.
-	await expect(page.getByRole('link', { name: new RegExp(ADMIN_USERNAME) })).toBeVisible();
+	// The topbar's user menu is labelled with the signed-in username.
+	const userMenu = page.getByRole('button', { name: new RegExp(ADMIN_USERNAME) });
+	await expect(userMenu).toBeVisible();
 
-	await page.getByRole('button', { name: 'Sign out' }).click();
+	await userMenu.click();
+	await page.getByRole('menuitem', { name: 'Sign out' }).click();
 	await expect(page).toHaveURL(/\/login$/);
 
 	// The guard is back in force.
