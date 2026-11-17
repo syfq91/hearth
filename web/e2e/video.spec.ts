@@ -5,17 +5,27 @@
  * Progress checkpoints (docs/development/api.md §4) are written every 15s of playback and
  * immediately on pause/unload, so each step pauses before navigating away.
  */
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { MOVIE_TITLE, seedServer, signIn } from './helpers';
+
+/**
+ * Open the movie's detail page. Once the movie has progress, Home's "Continue
+ * watching" shelf links straight to /watch, so match the detail href directly
+ * instead of relying on a title locator's first match.
+ */
+async function openMovieDetail(page: Page): Promise<void> {
+	await page.goto('/');
+	const detail = page.locator('a[href^="/movies/"]').filter({ hasText: MOVIE_TITLE }).first();
+	await expect(detail).toBeVisible();
+	await detail.click();
+	await expect(page).toHaveURL(/\/movies\//);
+}
 
 test('play, seek and pause a movie', async ({ page, request }) => {
 	const pair = await seedServer(request);
 	await signIn(page, pair);
 
-	await page.goto('/');
-	const movieCard = page.getByRole('link', { name: MOVIE_TITLE }).first();
-	await expect(movieCard).toBeVisible();
-	await movieCard.click();
+	await openMovieDetail(page);
 	// The movie already has progress if an earlier spec (or first-run) played
 	// it, so the action reads Resume rather than Play.
 	await page.getByRole('link', { name: /^(Play|Resume)$/ }).click();
@@ -42,8 +52,8 @@ test('resume picks up where playback stopped', async ({ page, request }) => {
 	const pair = await seedServer(request);
 	await signIn(page, pair);
 
-	await page.goto('/');
-	await page.getByRole('link', { name: MOVIE_TITLE }).first().click();
+	await openMovieDetail(page);
+	const detailUrl = page.url();
 	await page.getByRole('link', { name: /^(Play|Resume)$/ }).click();
 
 	const video = page.locator('video');
@@ -57,13 +67,15 @@ test('resume picks up where playback stopped', async ({ page, request }) => {
 	await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
 	const stoppedAt = await video.evaluate((el: HTMLVideoElement) => el.currentTime);
 
+	// The player's "Home" control goes back to the detail page it was opened
+	// from, which unmounts the player and writes the stop checkpoint.
 	await page.getByRole('link', { name: 'Home' }).click();
-	await expect(page).toHaveURL(/\/$/);
+	await expect(page).toHaveURL(/\/movies\//);
 
-	// The detail page now offers Resume, and playback restarts near the
-	// saved position (the player skips the jump only within 30s of the end,
-	// and the fixture is 75s long).
-	await page.getByRole('link', { name: MOVIE_TITLE }).first().click();
+	// Reload so the detail page re-reads the saved checkpoint. Resume restarts
+	// near it (the player skips the jump only within 30s of the end, and the
+	// fixture is 75s long).
+	await page.goto(detailUrl);
 	await page.getByRole('link', { name: 'Resume', exact: true }).click();
 	const resumed = page.locator('video');
 	await expect(resumed).toBeVisible();
@@ -102,8 +114,7 @@ test('playback recovers after 503 burst without request storms (T11)', async ({ 
 		await route.continue();
 	});
 
-	await page.goto('/');
-	await page.getByRole('link', { name: MOVIE_TITLE }).first().click();
+	await openMovieDetail(page);
 	await page.getByRole('link', { name: /^(Play|Resume)$/ }).click();
 
 	const video = page.locator('video');
@@ -120,7 +131,8 @@ test('playback recovers after 503 burst without request storms (T11)', async ({ 
 		}
 	}
 
-	// Navigate away to trigger stop beacon on unmount/pagehide
+	// Navigate away to trigger stop beacon on unmount/pagehide. The player's
+	// "Home" control returns to the detail page it was opened from.
 	await page.getByRole('link', { name: 'Home' }).click();
-	await expect(page).toHaveURL(/\/$/);
+	await expect(page).toHaveURL(/\/movies\//);
 });
