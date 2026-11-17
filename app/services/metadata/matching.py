@@ -51,6 +51,7 @@ from app.services.metadata.base import (
     ProviderImage,
     ProviderUnavailable,
     SearchResult,
+    SeasonMetadata,
 )
 from app.services.metadata.googlebooks import GoogleBooksProvider
 from app.services.metadata.local import (
@@ -66,6 +67,10 @@ from app.services.metadata.tmdb import TMDBProvider
 from app.services.scanner.walker import find_artist_artwork, find_series_artwork
 
 logger = logging.getLogger("hearth.metadata.matching")
+
+# Bounded fan-out for matching: providers are I/O-bound, but SQLite has one
+# writer, so keep the number of concurrent item writes modest.
+_MATCH_CONCURRENCY = 4
 
 MatchState = Literal["matched", "unmatched", "pending"]
 ArtworkHandler = Callable[[str, str, Sequence[ProviderImage]], Awaitable[int]]
@@ -281,10 +286,22 @@ class MetadataMatcher:
         stats = MatchStats()
         before_calls = self._provider_calls
         await self.registry.prime_library_orders()
-        for index, item_id in enumerate(item_ids):
-            if is_cancelled is not None and await is_cancelled():
-                break
-            result = await self.match_item(item_id)
+
+        semaphore = asyncio.Semaphore(_MATCH_CONCURRENCY)
+        aborted = False
+
+        async def match_one(item_id: str) -> MatchResult | None:
+            nonlocal aborted
+            async with semaphore:
+                if aborted or (is_cancelled is not None and await is_cancelled()):
+                    aborted = True
+                    return None
+                return await self.match_item(item_id)
+
+        results = await asyncio.gather(*(match_one(item_id) for item_id in item_ids))
+        for index, result in enumerate(results):
+            if result is None:
+                continue
             stats.results.append(result)
             stats.attempted += 1
             if result.state == "matched":
@@ -541,11 +558,19 @@ class MetadataMatcher:
             reverse=True,
         )
 
+        async def fetch_details(
+            candidate: SearchResult,
+        ) -> tuple[SearchResult, MovieMetadata | None]:
+            self._provider_calls += 1
+            return candidate, await provider.fetch_details(candidate.provider_id)
+
+        details_by_candidate = await asyncio.gather(
+            *(fetch_details(candidate) for candidate in ranked[:3])
+        )
+
         best_score = 0.0
         best: tuple[SearchResult, MovieMetadata] | None = None
-        for candidate in ranked[:3]:
-            self._provider_calls += 1
-            details = await provider.fetch_details(candidate.provider_id)
+        for candidate, details in details_by_candidate:
             if details is None:
                 continue
             candidate_score = score_candidate(
@@ -813,17 +838,21 @@ class MetadataMatcher:
             await self._apply_genres(session, item.id, series_meta.genres)
             await self._apply_credits(session, item.id, series_meta.credits)
 
-            # Match seasons and episodes
+            # Match seasons and episodes: fetch all season payloads concurrently,
+            # then apply them in a deterministic order.
             seasons = list(
                 await session.scalars(select(Season).where(Season.series_id == snapshot.id))
             )
-            for season in seasons:
+
+            async def fetch_season(season: Season) -> SeasonMetadata | None:
                 self._provider_calls += 1
                 try:
-                    season_meta = await provider.fetch_tv_season(provider_id, season.season_number)
+                    return await provider.fetch_tv_season(provider_id, season.season_number)
                 except ProviderError:
-                    season_meta = None
+                    return None
 
+            season_metas = await asyncio.gather(*(fetch_season(season) for season in seasons))
+            for season, season_meta in zip(seasons, season_metas, strict=True):
                 sea_item = await session.get(MediaItem, season.item_id)
                 if season_meta is not None:
                     if sea_item:

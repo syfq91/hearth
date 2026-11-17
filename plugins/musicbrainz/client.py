@@ -334,13 +334,17 @@ class MusicBrainzClient:
 
     async def _throttle(self) -> None:
         interval = self.rate_limit_seconds
+        if interval <= 0:
+            return
+        loop = asyncio.get_running_loop()
         async with self._rate_lock:
-            loop = asyncio.get_running_loop()
-            now = loop.time()
-            elapsed = now - self._last_request
-            if elapsed < interval:
-                await asyncio.sleep(interval - elapsed)
-            self._last_request = loop.time()
+            # Reserve the next slot under the lock, but never sleep while
+            # holding it: concurrent callers can wait in parallel.
+            next_allowed = self._last_request + interval
+            wait = max(0.0, next_allowed - loop.time())
+            self._last_request = next_allowed
+        if wait:
+            await asyncio.sleep(wait)
 
     async def _cache_get(self, key: str) -> dict[str, Any] | None:
         async with self.sessionmaker() as session:
