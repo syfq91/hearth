@@ -76,11 +76,10 @@ always preferred over online providers. Artwork downloads are restricted to an
 allowlist (`HEARTH_IMAGE_ALLOWED_HOSTS`) and capped by size; see
 `app/core/config.py` for the image and provider timeouts.
 
-The **Admin → Metadata** tab can store TMDB and Google Books API keys in the
-database. A value saved there overrides the corresponding `HEARTH_*` variable
-and is picked up by the worker on its next scan, so a restart is not required.
-Clearing a key in the UI removes it entirely rather than falling back to the
-environment. MusicBrainz and Open Library do not require API keys.
+The **Admin → Plugins** tab stores each provider's API key and enabled state in
+the database. Both the API and the worker read plugin configuration, so changes
+are picked up without a restart. MusicBrainz and Open Library do not require API
+keys.
 
 ## Plugins
 
