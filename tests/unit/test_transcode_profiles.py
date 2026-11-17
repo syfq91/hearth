@@ -3,6 +3,7 @@
 from app.services.transcode.profile import (
     BUILTIN_PRESETS,
     ClientCapabilities,
+    SubtitleProfile,
     detect_preset_from_user_agent,
     resolve_client_capabilities,
 )
@@ -214,3 +215,15 @@ def test_explicit_capabilities_win_over_ua_preset() -> None:
     # Explicit codecs and containers override Chrome's default [h264, vp9, av1]
     assert res.video_codecs == ["hevc"]
     assert res.containers == ["mkv"]
+
+
+def test_pascal_case_capability_keys_are_not_aliased() -> None:
+    """Only snake_case keys are part of the capability contract."""
+    profile = SubtitleProfile.model_validate({"Format": "ass", "Method": "External"})
+    assert profile.format == ""
+    assert profile.method == ""
+
+    caps = ClientCapabilities.model_validate(
+        {"SubtitleProfiles": [{"format": "ass", "method": "external"}]}
+    )
+    assert caps.subtitle_profiles == []

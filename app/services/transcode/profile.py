@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 PresetName = Literal["chrome", "firefox", "safari", "android_tv", "unknown"]
 
@@ -19,8 +19,8 @@ class SubtitleProfile(BaseModel):
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    format: str = Field(validation_alias=AliasChoices("format", "Format"), default="")
-    method: str = Field(validation_alias=AliasChoices("method", "Method"), default="")
+    format: str = ""
+    method: str = ""
 
 
 class ClientCapabilities(BaseModel):
@@ -40,10 +40,7 @@ class ClientCapabilities(BaseModel):
     max_audio_channels: int | None = Field(default=None, gt=0)
     max_audio_sample_rate: int | None = Field(default=None, gt=0)
     subtitle_formats: list[str] = Field(default_factory=list)
-    subtitle_profiles: list[SubtitleProfile] = Field(
-        validation_alias=AliasChoices("subtitle_profiles", "SubtitleProfiles"),
-        default_factory=list,
-    )
+    subtitle_profiles: list[SubtitleProfile] = Field(default_factory=list)
     hdr: bool = False
     hls_fmp4: bool = False
 
