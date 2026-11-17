@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
+from app.core.plugins.manager import PluginManager
 from app.db.models import (
     Album,
     Artist,
@@ -238,6 +239,7 @@ async def test_track_progress_and_listenbrainz_scrobble_queue(
                 payload=scrobble_job.payload,
                 settings=db_settings,
                 sessionmaker=db_sessionmaker,
+                plugin_manager=PluginManager(db_settings, db_sessionmaker),
                 report_progress=lambda p: None,
                 is_cancelled=lambda: False,
             )

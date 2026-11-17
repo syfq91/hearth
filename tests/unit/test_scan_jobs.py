@@ -199,7 +199,12 @@ async def test_worker_executes_scan_job(
         await session.commit()
         job_id = job.id
 
-    worker = JobWorker(db_settings, db_sessionmaker, worker_id="scan-test")
+    worker = JobWorker(
+        db_settings,
+        db_sessionmaker,
+        plugin_manager=PluginManager(db_settings, db_sessionmaker),
+        worker_id="scan-test",
+    )
     await worker.drain()
 
     async with db_sessionmaker() as session:

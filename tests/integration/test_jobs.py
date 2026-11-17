@@ -10,12 +10,26 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.v1.events import job_event_stream
 from app.core.config import Settings
+from app.core.plugins.manager import PluginManager
 from app.db.base import utcnow
 from app.db.models import Job
 from app.services.jobs.handlers import JobContext, JobSpec
 from app.services.jobs.worker import JobWorker
 
 ADMIN = {"username": "admin", "password": "correct horse"}
+
+
+def _worker(
+    settings: Settings,
+    sessionmaker: async_sessionmaker[AsyncSession],
+    **kwargs: Any,
+) -> JobWorker:
+    return JobWorker(
+        settings,
+        sessionmaker,
+        plugin_manager=PluginManager(settings, sessionmaker),
+        **kwargs,
+    )
 
 
 async def _setup(client: httpx.AsyncClient) -> dict[str, str]:
@@ -100,7 +114,7 @@ async def test_worker_runs_noop_job_to_completion(
         db_sessionmaker,
         payload={"steps": 3, "delay": 0},
     )
-    worker = JobWorker(db_settings, db_sessionmaker, worker_id="test-worker")
+    worker = _worker(db_settings, db_sessionmaker, worker_id="test-worker")
 
     await worker.drain()
 
@@ -123,7 +137,7 @@ async def test_running_job_is_requeued_after_restart(
         claimed_by="dead-worker",
         started_at=utcnow(),
     )
-    worker = JobWorker(db_settings, db_sessionmaker, worker_id="new-worker")
+    worker = _worker(db_settings, db_sessionmaker, worker_id="new-worker")
 
     requeued = await worker.requeue_running()
     assert requeued == 1
@@ -144,7 +158,7 @@ async def test_failed_job_exhausts_attempts_and_records_error(
     registry = {"boom": JobSpec(handler=boom, concurrency=1)}
     db_settings.job_retry_base_seconds = 0
     job_id = await _add_job(db_sessionmaker, job_type="boom", max_attempts=2)
-    worker = JobWorker(db_settings, db_sessionmaker, registry=registry, worker_id="t")
+    worker = _worker(db_settings, db_sessionmaker, registry=registry, worker_id="t")
 
     await worker.drain()
     first = await _get_job(db_sessionmaker, job_id)
@@ -166,7 +180,7 @@ async def test_failed_job_waits_for_backoff_before_retry(
 
     registry = {"flaky": JobSpec(handler=flaky, concurrency=1)}
     job_id = await _add_job(db_sessionmaker, job_type="flaky", max_attempts=2)
-    worker = JobWorker(db_settings, db_sessionmaker, registry=registry, worker_id="t")
+    worker = _worker(db_settings, db_sessionmaker, registry=registry, worker_id="t")
 
     await worker.drain()
     job = await _get_job(db_sessionmaker, job_id)
@@ -180,7 +194,7 @@ async def test_cancellation_stops_a_running_handler(
     db_settings: Settings, db_sessionmaker: async_sessionmaker[AsyncSession]
 ) -> None:
     job_id = await _add_job(db_sessionmaker, payload={"steps": 50, "delay": 0.02})
-    worker = JobWorker(db_settings, db_sessionmaker, worker_id="cancel-worker")
+    worker = _worker(db_settings, db_sessionmaker, worker_id="cancel-worker")
     task = asyncio.create_task(worker.process_one())
 
     for _ in range(100):

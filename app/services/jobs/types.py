@@ -24,7 +24,7 @@ class JobContext:
     is_cancelled: Callable[[], Awaitable[bool]]
     settings: Settings
     sessionmaker: async_sessionmaker[AsyncSession]
-    plugin_manager: PluginManager | None = None
+    plugin_manager: PluginManager
 
 
 JobHandler = Callable[[JobContext], Awaitable[dict[str, Any] | None]]

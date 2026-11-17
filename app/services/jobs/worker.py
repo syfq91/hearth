@@ -42,7 +42,7 @@ class JobWorker:
         *,
         registry: dict[str, JobSpec] | None = None,
         worker_id: str | None = None,
-        plugin_manager: PluginManager | None = None,
+        plugin_manager: PluginManager,
     ) -> None:
         self.settings = settings
         self.sessionmaker = sessionmaker

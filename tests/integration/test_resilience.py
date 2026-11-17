@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.errors import TranscodeCapacityExceededError
+from app.core.plugins.manager import PluginManager
 from app.db.models import Job, Library, LibraryPath, MediaFile, MediaItem, UserItemState
 from app.services.jobs.worker import JobWorker
 from app.services.scanner.scanner import LibraryScanner
@@ -123,7 +124,11 @@ async def test_resilience_server_restart_during_playback_and_scan(
     assert not stale_dir.exists()
 
     # b. Job worker startup requeues jobs left 'running' by dead processes
-    worker = JobWorker(db_settings, db_sessionmaker)
+    worker = JobWorker(
+        db_settings,
+        db_sessionmaker,
+        plugin_manager=PluginManager(db_settings, db_sessionmaker),
+    )
     requeued = await worker.requeue_running()
     assert requeued >= 1
 
