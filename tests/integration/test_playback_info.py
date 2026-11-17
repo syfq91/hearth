@@ -4,12 +4,10 @@ import uuid
 from pathlib import Path
 
 import httpx
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.db.models import Library, LibraryPath, MediaFile, MediaItem, Movie
-from app.services.media.probe import parse_probe_payload
 from app.services.media.titles import sort_title
 
 ADMIN = {"username": "admin", "password": "correct horse"}
@@ -508,7 +506,7 @@ async def test_playback_info_malformed_capabilities_returns_422(
     assert unknown_field_res.status_code == 200
 
 
-async def test_playback_info_case_insensitive_query_params(
+async def test_playback_info_ignores_legacy_query_params(
     api_client: httpx.AsyncClient,
     db_settings: Settings,
     db_sessionmaker: async_sessionmaker[AsyncSession],
@@ -547,30 +545,27 @@ async def test_playback_info_case_insensitive_query_params(
         f.streams_json = streams_json
         await session.commit()
 
-    # Client queries with VideoBitrate=1000000 (1 Mbps cap, lower than 4 Mbps media)
-    # This should trigger transcode_hls with ContainerBitrateExceedsLimit
-    res1 = await api_client.post(
-        f"/api/v1/items/{item_id}/playback-info?VideoBitrate=1000000",
+    # Legacy query aliases are no longer bound; the decision stays direct play.
+    legacy = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info"
+        "?VideoBitrate=1000000&maxbitrate=1000000&forceBurnInSubtitles=true",
         json={"capabilities": {"preset": "chrome"}},
         headers=_bearer(admin),
     )
-    assert res1.status_code == 200
-    data1 = res1.json()
-    assert data1["mode"] == "transcode_hls"
-    assert "ContainerBitrateExceedsLimit" in data1["reasons"]
-    await api_client.post(f"/api/v1/hls/{data1['session_id']}/stop", headers=_bearer(admin))
+    assert legacy.status_code == 200
+    assert legacy.json()["mode"] == "direct_play"
 
-    # Client queries with videoBitRate=1000000 (camelCase)
-    res2 = await api_client.post(
-        f"/api/v1/items/{item_id}/playback-info?videoBitRate=1000000",
-        json={"capabilities": {"preset": "chrome"}},
+    # The canonical body still caps the bitrate and forces a transcode.
+    canonical = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={"capabilities": {"preset": "chrome"}, "target_max_bitrate": 1_000_000},
         headers=_bearer(admin),
     )
-    assert res2.status_code == 200
-    data2 = res2.json()
-    assert data2["mode"] == "transcode_hls"
-    assert "ContainerBitrateExceedsLimit" in data2["reasons"]
-    await api_client.post(f"/api/v1/hls/{data2['session_id']}/stop", headers=_bearer(admin))
+    assert canonical.status_code == 200
+    data = canonical.json()
+    assert data["mode"] == "transcode_hls"
+    assert "ContainerBitrateExceedsLimit" in data["reasons"]
+    await api_client.post(f"/api/v1/hls/{data['session_id']}/stop", headers=_bearer(admin))
 
 
 async def test_playback_info_includes_font_attachments(
@@ -613,79 +608,6 @@ async def test_playback_info_includes_font_attachments(
     assert att["filename"] == "anime.ttf"
     assert att["mime_type"] == "font/ttf"
     assert f"/api/v1/media/{file_ids[0]}/attachments/2?token=" in att["url"]
-
-
-async def test_playback_info_refreshes_attachment_metadata_from_old_scans(
-    api_client: httpx.AsyncClient,
-    db_settings: Settings,
-    db_sessionmaker: async_sessionmaker[AsyncSession],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    admin = await _setup(api_client)
-    _, item_id, file_ids, _ = await _seed(db_settings, db_sessionmaker, sidecar=False)
-
-    stale_streams = {
-        "container": "matroska",
-        "duration_seconds": 100.0,
-        "streams": [
-            {"index": 0, "codec_type": "video", "codec_name": "h264"},
-            {"index": 1, "codec_type": "audio", "codec_name": "aac"},
-            {"index": 2, "codec_type": "attachment"},
-            {"index": 3, "codec_type": "subtitle", "codec_name": "ass"},
-        ],
-        "chapters": [],
-    }
-    async with db_sessionmaker() as session:
-        f = await session.get(MediaFile, file_ids[0])
-        assert f is not None
-        f.streams_json = stale_streams
-        await session.commit()
-
-    fresh = parse_probe_payload(
-        {
-            "format": {"format_name": "matroska", "duration": "100.0"},
-            "streams": [
-                {"index": 0, "codec_type": "video", "codec_name": "h264"},
-                {"index": 1, "codec_type": "audio", "codec_name": "aac"},
-                {
-                    "index": 2,
-                    "codec_type": "attachment",
-                    "tags": {"filename": "anime.ttf", "mimetype": "font/ttf"},
-                },
-                {"index": 3, "codec_type": "subtitle", "codec_name": "ass"},
-            ],
-            "chapters": [],
-        }
-    )
-    calls = 0
-
-    async def fake_probe(path, **kwargs):  # noqa: ANN001, ANN003
-        nonlocal calls
-        calls += 1
-        return fresh
-
-    monkeypatch.setattr("app.api.v1.playback.probe_media", fake_probe)
-
-    res = await api_client.post(
-        f"/api/v1/items/{item_id}/playback-info",
-        headers=_bearer(admin),
-    )
-    assert res.status_code == 200, res.text
-    assert [att["filename"] for att in res.json()["attachments"]] == ["anime.ttf"]
-    assert calls == 1
-
-    async with db_sessionmaker() as session:
-        f = await session.get(MediaFile, file_ids[0])
-        assert f is not None
-        assert "attachments" in f.streams_json
-
-    # Once repaired, later requests use the stored probe without re-probing.
-    again = await api_client.post(
-        f"/api/v1/items/{item_id}/playback-info",
-        headers=_bearer(admin),
-    )
-    assert again.status_code == 200
-    assert calls == 1
 
 
 async def test_playback_info_force_burn_in_subtitles(

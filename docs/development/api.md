@@ -240,7 +240,7 @@ The embedded subtitle endpoints extract text tracks on demand into a revision-ke
 
 Both WebVTT subtitle endpoints — `/api/v1/subtitles/{id}.vtt` and `/api/v1/media/{file_id}/subtitles/{index}.vtt` — accept `shift_ms` (default `0`, range ±60 000). It rewrites every cue boundary by that many milliseconds, positive shifting cues later and clamping at zero; header metadata and cue text are preserved. Native `<track>` elements cannot be shifted at display time, so a client applies its user subtitle calibration by re-fetching the document with `shift_ms` instead of only adjusting `JASSUB.timeOffset`.
 
-If a client encounters an unrecoverable client-side subtitle crash, it can re-request playback negotiation with `force_burn_in_subtitles: true` in the `PlaybackInfoRequest` body (or `?forceBurnInSubtitles=true`), which bypasses external subtitle profiles and forces FFmpeg server-side subtitle burn-in.
+If a client encounters an unrecoverable client-side subtitle crash, it can re-request playback negotiation with `force_burn_in_subtitles: true` in the `PlaybackInfoRequest` body, which bypasses external subtitle profiles and forces FFmpeg server-side subtitle burn-in.
 
 ---
 

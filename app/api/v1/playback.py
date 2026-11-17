@@ -4,7 +4,6 @@ The auto-watched decision lives in :mod:`app.services.playback_state`; these
 routes only load the item, enforce library access and persist the result.
 """
 
-import contextlib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -46,7 +45,7 @@ from app.db.models import (
 from app.db.session import SessionDep
 from app.services.events import get_broadcaster
 from app.services.libraries import path_is_within_roots
-from app.services.media.probe import ProbeError, ProbeResult, ProbeStream, probe_media
+from app.services.media.probe import ProbeResult, ProbeStream
 from app.services.playback_state import chapters_from_streams, resolve_watch_state
 from app.services.ratings import is_rating_permitted
 from app.services.scrobbling.listenbrainz import enqueue_scrobble
@@ -274,89 +273,20 @@ async def report_progress(
     )
 
 
-def _extract_query_playback_info(request: Request) -> dict[str, Any]:
-    """Parse query parameters case-insensitively for legacy player compatibility."""
-    params: dict[str, Any] = {}
-    for k, v in request.query_params.items():
-        norm = k.lower().replace("-", "").replace("_", "")
-        if norm in ("videobitrate", "maxbitrate", "targetmaxbitrate"):
-            with contextlib.suppress(ValueError):
-                params["target_max_bitrate"] = int(v)
-        elif norm in ("audiotrackindex", "audiotrack"):
-            with contextlib.suppress(ValueError):
-                params["audio_track_index"] = int(v)
-        elif norm in ("subtitletrackindex", "subtitletrack"):
-            with contextlib.suppress(ValueError):
-                params["subtitle_track_index"] = int(v)
-        elif norm in ("starttimeoffset", "starttimeoffsetseconds", "startoffset", "offsetseconds"):
-            with contextlib.suppress(ValueError):
-                params["start_time_offset_seconds"] = float(v)
-        elif norm in ("forceburninsubtitles", "forceburnin", "burnin"):
-            params["force_burn_in_subtitles"] = v.lower() in ("true", "1", "yes")
-        elif norm in ("fileid",):
-            params["file_id"] = v
-        elif norm in ("preset",):
-            params["preset"] = v
-    return params
+def _load_stored_probe(media_file: MediaFile) -> ProbeResult:
+    """Parse the probe JSON stored by the current scanner.
 
-
-def _parse_stored_probe(media_file: MediaFile) -> ProbeResult:
-    """Parse the probe JSON stored on a media file, with metadata fallbacks."""
-    try:
-        if isinstance(media_file.streams_json, dict) and "container" in media_file.streams_json:
-            return ProbeResult.model_validate(media_file.streams_json)
-        if isinstance(media_file.streams_json, str):
-            return ProbeResult.model_validate_json(media_file.streams_json)
-    except Exception:
-        pass
+    Rows written before font attachments were persisted are not repaired here;
+    playback uses the columns stored on the media file for those rows.
+    """
+    stored = media_file.streams_json
+    if isinstance(stored, dict) and "container" in stored:
+        return ProbeResult.model_validate(stored)
     return ProbeResult(
         container=media_file.container or "mp4",
         duration_seconds=media_file.duration_seconds,
         size_bytes=media_file.size_bytes,
     )
-
-
-def _needs_attachment_refresh(media_file: MediaFile) -> bool:
-    """Whether this row predates attachment metadata being persisted.
-
-    Older scans stored the attachment streams but dropped their filename and
-    MIME tags, so playback could not advertise container fonts at all. A
-    header-only re-probe repairs the row once; rows written by the current
-    scanner always carry an ``attachments`` key, even when it is empty.
-    """
-    stored = media_file.streams_json
-    return isinstance(stored, dict) and bool(stored.get("streams")) and "attachments" not in stored
-
-
-async def _load_playback_probe(
-    session: AsyncSession, media_file: MediaFile, settings: Settings
-) -> ProbeResult:
-    """Load stored probe data, refreshing stale attachment metadata once."""
-    needs_refresh = _needs_attachment_refresh(media_file)
-    probe_res = _parse_stored_probe(media_file)
-    if not needs_refresh:
-        return probe_res
-    try:
-        refreshed = await probe_media(
-            media_file.path,
-            ffprobe_binary=settings.ffprobe_binary,
-        )
-    except ProbeError:
-        return probe_res
-
-    media_file.container = refreshed.container or media_file.container
-    media_file.duration_seconds = refreshed.duration_seconds
-    media_file.bit_rate = refreshed.bit_rate
-    media_file.streams_json = refreshed.model_dump(mode="json")
-    try:
-        await session.commit()
-    except Exception:
-        # Another request may be refreshing the same row. The fresh result is
-        # still valid for this response; drop the failed transaction so the
-        # rest of playback-info can read normally.
-        await session.rollback()
-        await session.refresh(media_file)
-    return refreshed
 
 
 @router.post("/items/{item_id}/playback-info")
@@ -375,35 +305,7 @@ async def playback_info(
     limits, and server hardware capabilities. Returns either direct play or an
     HLS stream session.
     """
-    query_params = _extract_query_playback_info(request)
-    if body is not None:
-        request_obj = body.model_copy()
-        if "target_max_bitrate" in query_params and request_obj.target_max_bitrate is None:
-            request_obj.target_max_bitrate = query_params["target_max_bitrate"]
-        if "audio_track_index" in query_params and request_obj.audio_track_index is None:
-            request_obj.audio_track_index = query_params["audio_track_index"]
-        if "subtitle_track_index" in query_params and request_obj.subtitle_track_index is None:
-            request_obj.subtitle_track_index = query_params["subtitle_track_index"]
-        if (
-            "start_time_offset_seconds" in query_params
-            and request_obj.start_time_offset_seconds == 0.0
-        ):
-            request_obj.start_time_offset_seconds = query_params["start_time_offset_seconds"]
-        if "force_burn_in_subtitles" in query_params and not request_obj.force_burn_in_subtitles:
-            request_obj.force_burn_in_subtitles = bool(query_params["force_burn_in_subtitles"])
-        if "file_id" in query_params and request_obj.file_id is None:
-            request_obj.file_id = query_params["file_id"]
-        if "preset" in query_params:
-            if request_obj.capabilities is None:
-                request_obj.capabilities = ClientCapabilities(preset=query_params["preset"])
-            elif not request_obj.capabilities.preset:
-                request_obj.capabilities.preset = query_params["preset"]
-    else:
-        caps = (
-            ClientCapabilities(preset=query_params["preset"]) if "preset" in query_params else None
-        )
-        req_kwargs: dict[str, Any] = {k: v for k, v in query_params.items() if k != "preset"}
-        request_obj = PlaybackInfoRequest(capabilities=caps, **req_kwargs)
+    request_obj = body.model_copy() if body is not None else PlaybackInfoRequest()
 
     item = await _load_item(session, user, item_id)
     media_file = _select_file(item, request_obj.file_id)
@@ -419,7 +321,7 @@ async def playback_info(
     encoded_token = quote(token, safe="")
 
     # Parse stored streams
-    probe_res = await _load_playback_probe(session, media_file, settings)
+    probe_res = _load_stored_probe(media_file)
 
     # Evaluate decision engine
     if request_obj.audio_track_index is None and user.preferred_audio_language:
