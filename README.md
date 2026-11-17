@@ -69,7 +69,7 @@ Hearth understands common file and folder naming, embedded tags, and local
 `.nfo` / `metadata.opf` files plus sidecar artwork. Online metadata is provided
 by modular plugins: music comes from MusicBrainz, books from Open Library and Google
 Books, and movies and TV from TMDB. Plugins can be configured and toggled from
-**Admin → Plugins** or via environment variables (e.g. `HEARTH_TMDB_API_KEY`).
+**Admin → Plugins**; their settings are stored in the database.
 See [Plugins](docs/guides/plugins.md) and [Configuration](docs/guides/configuration.md).
 
 ## Everyday use

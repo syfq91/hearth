@@ -62,13 +62,14 @@ without it, existing sessions and media URLs become invalid after a restore.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `HEARTH_TMDB_API_KEY` | unset | TMDB v3 API key or v4 read token; movie/TV items stay `pending` without it |
 | `HEARTH_METADATA_MATCH_THRESHOLD` | `0.80` | Minimum confidence for an automatic match |
-| `HEARTH_MUSICBRAINZ_ENABLED` | `true` | Artist and album metadata from MusicBrainz |
-| `HEARTH_OPENLIBRARY_ENABLED` | `true` | Primary book metadata provider |
-| `HEARTH_GOOGLE_BOOKS_ENABLED` | `true` | Book metadata fallback |
-| `HEARTH_GOOGLE_BOOKS_API_KEY` | unset | Optional Google Books API key; raises the anonymous request quota |
 | `HEARTH_LISTENBRAINZ_ENABLED` | `true` | ListenBrainz scrobbling support |
+
+Online metadata providers (TMDB, MusicBrainz, Open Library, Google Books) are
+plugins. Configure their API keys, enabled state, and other settings under
+**Admin → Plugins**; their configuration is persisted in the database and no
+longer read from environment variables. TMDB items stay `pending` until its
+API key is set in the plugin configuration.
 
 Local `.nfo` files, `metadata.opf` files, embedded tags, and sidecar artwork are
 always preferred over online providers. Artwork downloads are restricted to an

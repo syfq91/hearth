@@ -419,8 +419,9 @@ curl "$BASE/api/v1/items/$ITEM_ID" \
 served by `GET /api/v1/images/{image_id}`, which accepts a media token in
 `?token=` so it can be used directly in `<img>` tags.
 
-Without `HEARTH_TMDB_API_KEY`, movie and TV items stay `pending` and are retried
-with backoff. Local `.nfo` files and sidecar artwork are always used first.
+Without a TMDB API key configured under **Admin → Plugins**, movie and TV items
+stay `pending` and are retried with backoff. Local `.nfo` files and sidecar
+artwork are always used first.
 
 ### 8.4 Negotiate playback and report progress
 

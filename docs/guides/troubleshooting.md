@@ -47,7 +47,7 @@ Frequently encountered questions and step-by-step diagnostic solutions for Heart
 
 ### Metadata and posters are missing
 - Local `.nfo` and sidecar images (`poster.jpg`, `cover.jpg`) take priority.
-- If using TMDB for online metadata, verify `HEARTH_TMDB_API_KEY` is set in your `.env` file. Without an API key, library items remain in pending state.
+- If using TMDB for online metadata, open **Admin → Plugins** and verify its API key is configured. Without a key, library items remain in pending state.
 
 ---
 

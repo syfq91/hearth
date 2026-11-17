@@ -12,8 +12,9 @@ Metadata and artwork retrieved from [The Movie Database (TMDB)](https://www.them
 TMDB and the TMDB logo are trademarks of TiVo Platform Technologies LLC. The logo is
 used solely to identify the source of the metadata.
 
-The TMDB API is only contacted when `HEARTH_TMDB_API_KEY` is configured. Responses
-are cached locally and the key is never written to the database or logs.
+The TMDB API is only contacted when an API key is configured for the TMDB plugin
+under **Admin → Plugins**. Responses are cached locally and the key is never
+written to logs.
 
 ## Other media
 

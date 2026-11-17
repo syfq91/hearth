@@ -684,7 +684,10 @@ async def update_metadata_settings(
 
     await save_credential_overrides(session, changes)
     for attr, value in changes.items():
-        setattr(settings, attr, value)
+        # Credentials are now stored in plugin config; legacy Settings fields
+        # no longer exist, so only mirror values when a field is still present.
+        if hasattr(settings, attr):
+            setattr(settings, attr, value)
 
     # Sync with standalone plugins if active
     if "tmdb_api_key" in changes and plugin_manager.get_plugin("org.hearth.plugins.tmdb"):
