@@ -36,14 +36,6 @@ DEFAULT_PROVIDER_TYPES: dict[str, tuple[str, ...]] = {
 }
 
 
-def _normalize_type(media_type: str) -> str:
-    """Normalize aliases like tv -> series, music -> album/artist."""
-    t = media_type.lower()
-    if t == "tv":
-        return TYPE_SERIES
-    return t
-
-
 def get_library_setting_key(library_id: str) -> str:
     """Return the database setting key for a library's provider priority."""
     return f"{LIBRARY_PROVIDERS_KEY_PREFIX}{library_id}{LIBRARY_PROVIDERS_KEY_SUFFIX}"
@@ -117,12 +109,12 @@ class MetadataRegistry:
         self._providers[provider.name] = provider
 
         if supported_types is not None:
-            types = set(_normalize_type(t) for t in supported_types)
+            types = {t.lower() for t in supported_types}
         elif hasattr(provider, "supported_media_types"):
-            types = set(
-                _normalize_type(t)
+            types = {
+                t.lower()
                 for t in getattr(provider, "supported_media_types")  # noqa: B009
-            )
+            }
         else:
             types = set(
                 DEFAULT_PROVIDER_TYPES.get(
@@ -164,7 +156,7 @@ class MetadataRegistry:
         2. Cached or configured library-level priority order if library_id is given.
         3. Default registration order (with local provider preserving its position).
         """
-        norm_type = _normalize_type(media_type)
+        norm_type = media_type.lower()
         matching = [
             p
             for p in self._providers.values()

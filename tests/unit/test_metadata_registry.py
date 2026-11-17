@@ -89,9 +89,10 @@ def test_registry_registration_and_types() -> None:
     movie_providers = registry.get_providers_for("movie")
     assert movie_providers == [p1]
 
-    # "tv" should map to "series"
-    tv_providers = registry.get_providers_for("tv")
-    assert tv_providers == [p1]
+    # Canonical types resolve directly; legacy "tv" is no longer an alias.
+    series_providers = registry.get_providers_for("series")
+    assert series_providers == [p1]
+    assert registry.get_providers_for("tv") == []
 
     book_providers = registry.get_providers_for("book")
     assert book_providers == [p2]
