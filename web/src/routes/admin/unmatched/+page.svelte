@@ -16,15 +16,33 @@
 
 	/** itemId -> candidate list currently loaded for that item. */
 	let candidates = $state<Record<string, SearchResultResponse[]>>({});
+	/** itemId -> admin-edited search text (defaults to the item title). */
+	let queries = $state<Record<string, string>>({});
+	/** itemId -> chosen provider name (empty means all providers). */
+	let selectedProviders = $state<Record<string, string>>({});
 	let busyId = $state<string | null>(null);
 	let searchingId = $state<string | null>(null);
 
+	function searchText(item: UnmatchedItemResponse): string {
+		return queries[item.id] ?? item.title;
+	}
+
 	async function searchCandidates(item: UnmatchedItemResponse): Promise<void> {
+		const query = searchText(item).trim();
+		if (!query) {
+			error = 'Enter a search query.';
+			return;
+		}
 		searchingId = item.id;
 		error = null;
 		try {
+			const provider = selectedProviders[item.id];
 			const results = await api.get<SearchResultResponse[]>('/metadata/search', {
-				query: { query: item.title, year: item.year ?? undefined }
+				query: {
+					query,
+					year: item.year ?? undefined,
+					provider: provider || undefined
+				}
 			});
 			candidates = { ...candidates, [item.id]: results };
 		} catch (e) {
@@ -99,6 +117,36 @@
 					{#if item.match_error}
 						<span class="chip err-chip" title={item.match_error}>matcher error</span>
 					{/if}
+				</div>
+
+				{#if item.file_paths?.length}
+					<div class="files">
+						{#each item.file_paths ?? [] as path}
+							<code>{path}</code>
+						{/each}
+					</div>
+				{/if}
+
+				<div class="search-row">
+					<input
+						type="text"
+						aria-label={`Search text for ${item.title}`}
+						placeholder="Search text"
+						value={searchText(item)}
+						oninput={(event) => (queries[item.id] = event.currentTarget.value)}
+						disabled={searchingId === item.id}
+					/>
+					<select
+						aria-label={`Metadata provider for ${item.title}`}
+						value={selectedProviders[item.id] ?? ''}
+						onchange={(event) => (selectedProviders[item.id] = event.currentTarget.value)}
+						disabled={searchingId === item.id}
+					>
+						<option value="">All providers</option>
+						{#each data.providers as provider}
+							<option value={provider}>{provider}</option>
+						{/each}
+					</select>
 				</div>
 
 				<div class="actions">
@@ -190,6 +238,39 @@
 	.err-chip {
 		border-color: var(--danger);
 		color: var(--danger);
+	}
+
+	.files {
+		display: grid;
+		gap: 0.2rem;
+		margin-bottom: 0.6rem;
+	}
+
+	.files code {
+		font-size: 0.78rem;
+		color: var(--muted);
+		overflow-wrap: anywhere;
+	}
+
+	.search-row {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.search-row input,
+	.search-row select {
+		flex: 1;
+		min-width: 0;
+		background: var(--surface-2);
+		color: inherit;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		padding: 0.35rem 0.6rem;
+	}
+
+	.search-row select {
+		flex: 0 1 12rem;
 	}
 
 	.actions {
