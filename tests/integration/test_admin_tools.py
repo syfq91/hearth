@@ -6,7 +6,7 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import Library, MediaItem, Movie
+from app.db.models import Episode, Library, MediaFile, MediaItem, Movie, Series
 from app.services.media.titles import sort_title
 
 ADMIN = {"username": "admin", "password": "correct horse"}
@@ -93,6 +93,14 @@ async def test_admin_unmatched_and_rematch(
             match_attempts=2,
             match_error="No match found on TMDB",
         )
+        item.files.append(
+            MediaFile(
+                path="/media/unknown/Unknown Movie 123.mkv",
+                size_bytes=1024,
+                mtime=1.0,
+                partial_hash="a" * 64,
+            )
+        )
         session.add(item)
         await session.flush()
         session.add(Movie(item_id=item.id))
@@ -106,6 +114,7 @@ async def test_admin_unmatched_and_rematch(
     assert len(unmatched_list) == 1
     assert unmatched_list[0]["id"] == item_id
     assert unmatched_list[0]["match_state"] == "unmatched"
+    assert unmatched_list[0]["file_paths"] == ["/media/unknown/Unknown Movie 123.mkv"]
 
     # 2. Rematch with hints
     rematch_res = await api_client.post(
@@ -120,6 +129,54 @@ async def test_admin_unmatched_and_rematch(
     assert rematched["match_state"] == "pending"
     assert rematched["match_attempts"] == 0
     assert rematched["match_error"] is None
+    assert rematched["file_paths"] == ["/media/unknown/Unknown Movie 123.mkv"]
+
+
+@pytest.mark.asyncio
+async def test_admin_unmatched_series_lists_episode_files(
+    api_client: httpx.AsyncClient, db_sessionmaker: async_sessionmaker[AsyncSession]
+) -> None:
+    admin_hdr = _bearer(await _setup(api_client))
+
+    async with db_sessionmaker() as session:
+        lib = Library(name="Unmatched Series Lib", type="tv")
+        session.add(lib)
+        await session.flush()
+
+        series = MediaItem(
+            library_id=lib.id,
+            type="series",
+            title="Unknown Series",
+            sort_title=sort_title("Unknown Series"),
+            match_state="unmatched",
+        )
+        series.series = Series()
+        session.add(series)
+        await session.flush()
+
+        episode = MediaItem(
+            library_id=lib.id,
+            type="episode",
+            title="Unknown Series S01E01",
+            sort_title=sort_title("Unknown Series S01E01"),
+            match_state="unmatched",
+        )
+        episode.episode = Episode(series_id=series.id, season_number=1, episode_number=1)
+        episode.files.append(
+            MediaFile(
+                path="/media/unknown/Unknown Series S01E01.mkv",
+                size_bytes=1024,
+                mtime=1.0,
+                partial_hash="b" * 64,
+            )
+        )
+        session.add(episode)
+        await session.commit()
+
+    res = await api_client.get("/api/v1/admin/unmatched", headers=admin_hdr)
+    assert res.status_code == 200
+    series_entry = next(entry for entry in res.json() if entry["type"] == "series")
+    assert series_entry["file_paths"] == ["/media/unknown/Unknown Series S01E01.mkv"]
 
 
 @pytest.mark.asyncio

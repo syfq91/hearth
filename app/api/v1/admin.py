@@ -104,6 +104,45 @@ class UnmatchedItemResponse(BaseModel):
     match_attempts: int
     match_error: str | None = None
     added_at: datetime
+    file_paths: list[str] = Field(default_factory=list)
+
+
+def unmatched_file_paths(item: MediaItem) -> list[str]:
+    """Full paths of the files that make up an unmatched item.
+
+    Movies, artists, albums and episodes own their files directly. A series or
+    season does not, so fall back to the paths of its child episodes (including
+    multi-episode files referenced through ``Episode.file``).
+    """
+    paths = {media_file.path for media_file in item.files}
+    if not paths:
+        series = item.series
+        if series is not None:
+            episodes = series.episodes
+        else:
+            season = item.season
+            episodes = season.episodes if season is not None else []
+        for episode in episodes:
+            paths.update(media_file.path for media_file in episode.item.files)
+            if episode.file is not None:
+                paths.add(episode.file.path)
+    return sorted(paths)
+
+
+def unmatched_response(item: MediaItem) -> UnmatchedItemResponse:
+    """Build the admin response for one unmatched/pending item."""
+    return UnmatchedItemResponse(
+        id=item.id,
+        library_id=item.library_id,
+        type=item.type,
+        title=item.title,
+        year=item.year,
+        match_state=item.match_state,
+        match_attempts=item.match_attempts,
+        match_error=item.match_error,
+        added_at=item.added_at,
+        file_paths=unmatched_file_paths(item),
+    )
 
 
 class RematchRequest(BaseModel):
@@ -342,20 +381,7 @@ async def list_unmatched_items(
         .limit(limit)
     )
     items = list((await session.scalars(query)).all())
-    return [
-        UnmatchedItemResponse(
-            id=item.id,
-            library_id=item.library_id,
-            type=item.type,
-            title=item.title,
-            year=item.year,
-            match_state=item.match_state,
-            match_attempts=item.match_attempts,
-            match_error=item.match_error,
-            added_at=item.added_at,
-        )
-        for item in items
-    ]
+    return [unmatched_response(item) for item in items]
 
 
 @router.post("/items/{item_id}/rematch", response_model=UnmatchedItemResponse)
@@ -400,17 +426,7 @@ async def rematch_item(
     )
     await session.commit()
 
-    return UnmatchedItemResponse(
-        id=item.id,
-        library_id=item.library_id,
-        type=item.type,
-        title=item.title,
-        year=item.year,
-        match_state=item.match_state,
-        match_attempts=item.match_attempts,
-        match_error=item.match_error,
-        added_at=item.added_at,
-    )
+    return unmatched_response(item)
 
 
 # ------------------------------------------------------------- jobs & diagnostics
