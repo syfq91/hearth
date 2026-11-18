@@ -30,7 +30,6 @@ test('detectBrowserCapabilities emits H.264-only profile when MediaSource only s
 		assert.strictEqual(caps.video_codecs?.includes('vp9'), false, 'Should not include vp9');
 		assert.strictEqual(caps.video_codecs?.includes('av1'), false, 'Should not include av1');
 		assert.ok(caps.audio_codecs && caps.audio_codecs.includes('aac'), 'Should include aac');
-		assert.strictEqual(caps.hls_fmp4, true, 'Should support fMP4');
 	} finally {
 		(globalThis as any).window = origWindow;
 		clearCapabilitiesCache();
@@ -99,7 +98,6 @@ test('detectBrowserCapabilities guards against missing MediaSource (e.g. iOS Saf
 		const caps = detectBrowserCapabilities();
 		assert.ok(caps.video_codecs && caps.video_codecs.includes('h264'), 'Should include h264');
 		assert.strictEqual(caps.video_codecs?.includes('hevc'), false, 'Should not include hevc');
-		assert.strictEqual(caps.hls_fmp4, true, 'Native HLS support implies hls_fmp4');
 	} finally {
 		(globalThis as any).window = origWindow;
 		(globalThis as any).document = origDocument;

@@ -450,7 +450,7 @@ artwork are always used first.
 curl -X POST "$BASE/api/v1/items/$ITEM_ID/playback-info" \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"capabilities": {"preset": "chrome", "hls_fmp4": true}}'
+  -d '{"capabilities": {"preset": "chrome"}}'
 ```
 
 The response contains `mode: "direct_play"` (or an HLS session), a stream `url`

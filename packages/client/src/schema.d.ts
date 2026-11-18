@@ -3076,11 +3076,6 @@ export interface components {
              * @default false
              */
             hdr: boolean;
-            /**
-             * Hls Fmp4
-             * @default false
-             */
-            hls_fmp4: boolean;
             /** Max Audio Channels */
             max_audio_channels?: number | null;
             /** Max Audio Sample Rate */

@@ -42,7 +42,6 @@ class ClientCapabilities(BaseModel):
     subtitle_formats: list[str] = Field(default_factory=list)
     subtitle_profiles: list[SubtitleProfile] = Field(default_factory=list)
     hdr: bool = False
-    hls_fmp4: bool = False
 
     def supports_container(self, container: str, *, extension: str | None = None) -> bool:
         """Check if container extension/name is supported.
@@ -149,7 +148,6 @@ BUILTIN_PRESETS: dict[str, ClientCapabilities] = {
         max_bitrate=None,
         subtitle_formats=["vtt"],
         hdr=False,
-        hls_fmp4=True,
     ),
     "firefox": ClientCapabilities(
         preset="firefox",
@@ -162,7 +160,6 @@ BUILTIN_PRESETS: dict[str, ClientCapabilities] = {
         max_bitrate=None,
         subtitle_formats=["vtt"],
         hdr=False,
-        hls_fmp4=True,
     ),
     "safari": ClientCapabilities(
         preset="safari",
@@ -175,7 +172,6 @@ BUILTIN_PRESETS: dict[str, ClientCapabilities] = {
         max_bitrate=None,
         subtitle_formats=["vtt"],
         hdr=True,
-        hls_fmp4=True,
     ),
     "android_tv": ClientCapabilities(
         preset="android_tv",
@@ -188,7 +184,6 @@ BUILTIN_PRESETS: dict[str, ClientCapabilities] = {
         max_bitrate=None,
         subtitle_formats=["vtt", "srt"],
         hdr=True,
-        hls_fmp4=True,
     ),
     "unknown": ClientCapabilities(
         preset="unknown",
@@ -201,7 +196,6 @@ BUILTIN_PRESETS: dict[str, ClientCapabilities] = {
         max_bitrate=4_000_000,
         subtitle_formats=["vtt"],
         hdr=False,
-        hls_fmp4=False,
     ),
 }
 
@@ -292,8 +286,6 @@ def resolve_client_capabilities(
         base.max_audio_sample_rate = client.max_audio_sample_rate
     if client.hdr:
         base.hdr = True
-    if client.hls_fmp4:
-        base.hls_fmp4 = True
     if client.preset:
         base.preset = client.preset
 

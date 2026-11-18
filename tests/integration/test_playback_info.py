@@ -138,7 +138,6 @@ async def test_playback_info_accepts_the_full_capability_profile(
         "max_bitrate": 40_000_000,
         "subtitle_formats": ["vtt"],
         "hdr": True,
-        "hls_fmp4": True,
     }
     response = await api_client.post(
         f"/api/v1/items/{item_id}/playback-info",

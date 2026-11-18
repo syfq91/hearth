@@ -318,7 +318,6 @@ async def run_transcode_user(
                 "video_codecs": ["h264"],
                 "audio_codecs": ["aac"],
                 "max_bitrate": 50000,
-                "hls_fmp4": True,
             }
         }
         res = await _timed_request(

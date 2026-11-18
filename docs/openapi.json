@@ -1621,11 +1621,6 @@
             "title": "Hdr",
             "type": "boolean"
           },
-          "hls_fmp4": {
-            "default": false,
-            "title": "Hls Fmp4",
-            "type": "boolean"
-          },
           "max_audio_channels": {
             "anyOf": [
               {

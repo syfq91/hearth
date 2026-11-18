@@ -401,7 +401,6 @@ TEST_MATRIX = [
             audio_codecs=["aac"],
             max_width=1920,
             max_height=1080,
-            hls_fmp4=True,
         ),
         UserLimits(),
         _vaapi_caps(),
@@ -421,7 +420,6 @@ TEST_MATRIX = [
             audio_codecs=["aac"],
             max_width=1280,
             max_height=720,
-            hls_fmp4=True,
         ),
         UserLimits(),
         _vaapi_caps(),
@@ -441,7 +439,6 @@ TEST_MATRIX = [
             audio_codecs=["aac"],
             max_width=1920,
             max_height=1080,
-            hls_fmp4=True,
         ),
         UserLimits(),
         _vaapi_caps(),
@@ -461,7 +458,6 @@ TEST_MATRIX = [
             audio_codecs=["aac"],
             max_width=1280,
             max_height=720,
-            hls_fmp4=True,
         ),
         UserLimits(),
         _vaapi_caps(),
@@ -481,7 +477,6 @@ TEST_MATRIX = [
             audio_codecs=["aac"],
             max_width=1920,
             max_height=1080,
-            hls_fmp4=True,
         ),
         UserLimits(),
         _vaapi_caps(),
@@ -501,7 +496,6 @@ TEST_MATRIX = [
             video_codecs=["h264"],
             audio_codecs=["aac"],
             max_bitrate=4_000_000,
-            hls_fmp4=True,
         ),
         UserLimits(),
         _vaapi_caps(),
@@ -546,7 +540,6 @@ TEST_MATRIX = [
             video_codecs=["h264"],
             audio_codecs=["aac"],
             max_bitrate=5_000_000,
-            hls_fmp4=True,
         ),
         UserLimits(max_bitrate=6_000_000),
         _vaapi_caps(),
@@ -607,7 +600,6 @@ TEST_MATRIX = [
             max_width=1920,
             max_height=1080,
             hdr=False,
-            hls_fmp4=True,
         ),
         UserLimits(),
         _vaapi_caps(tonemap=True),
@@ -939,7 +931,6 @@ def test_target_resolution_calculation() -> None:
         audio_codecs=["aac"],
         max_width=1920,
         max_height=1080,
-        hls_fmp4=True,
     )
     plan = evaluate_playback_plan(probe, caps, UserLimits(), _vaapi_caps(), PlaybackOptions())
     assert plan.target_width == 1920
@@ -1011,7 +1002,6 @@ def test_decision_audit_acceptance_1_remux() -> None:
         audio_codecs=["aac"],
         max_width=1920,
         max_height=1080,
-        hls_fmp4=True,
     )
     plan = evaluate_playback_plan(probe, caps, UserLimits(), _vaapi_caps(), PlaybackOptions())
     assert plan.mode == "remux_hls"
@@ -1080,7 +1070,6 @@ def test_decision_audit_acceptance_2_transcode_hevc() -> None:
         audio_codecs=["aac"],
         max_width=1920,
         max_height=1080,
-        hls_fmp4=True,
     )
     plan = evaluate_playback_plan(probe, caps, UserLimits(), _vaapi_caps(), PlaybackOptions())
     assert plan.mode == "transcode_hls"

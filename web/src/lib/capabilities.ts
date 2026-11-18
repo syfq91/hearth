@@ -35,7 +35,6 @@ export function detectBrowserCapabilities(): ClientCapabilities {
 	const isTypeSupportedFn = typeof msObj?.isTypeSupported === 'function' ? msObj.isTypeSupported.bind(msObj) : null;
 
 	let canPlay: (type: string) => boolean;
-	let isHlsNative = false;
 
 	if (isTypeSupportedFn) {
 		canPlay = (type: string) => {
@@ -65,15 +64,6 @@ export function detectBrowserCapabilities(): ClientCapabilities {
 				return false;
 			}
 		};
-
-		if (videoEl && typeof videoEl.canPlayType === 'function') {
-			try {
-				const hlsRes = videoEl.canPlayType('application/vnd.apple.mpegurl');
-				isHlsNative = hlsRes === 'probably' || hlsRes === 'maybe';
-			} catch {
-				isHlsNative = false;
-			}
-		}
 	}
 
 	const videoCodecs: string[] = [];
@@ -156,9 +146,6 @@ export function detectBrowserCapabilities(): ClientCapabilities {
 		containers.push('flac');
 	}
 
-	// fMP4 HLS support: MediaSource capable of fMP4 or Safari native HLS
-	const hlsFmp4 = isTypeSupportedFn ? (supportsH264Baseline || supportsH264High || canPlay('video/mp4')) : isHlsNative;
-
 	// HDR check via media query
 	let hdr = false;
 	const matchMediaFn = win?.matchMedia as ((query: string) => { matches: boolean }) | undefined;
@@ -189,8 +176,7 @@ export function detectBrowserCapabilities(): ClientCapabilities {
 			{ format: 'ass', method: 'external' },
 			{ format: 'ssa', method: 'external' }
 		],
-		hdr,
-		hls_fmp4: hlsFmp4
+		hdr
 	};
 
 	cachedCapabilities = caps;

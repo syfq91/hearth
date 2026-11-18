@@ -327,9 +327,6 @@
             </select>
           </label>
 
-          <label class="checkbox-label">
-            <input type="checkbox" id="hls-fmp4-toggle" checked> Enable HLS fMP4
-          </label>
         </div>
 
         <!-- Transcoding & Playback Debug Panel -->
@@ -732,7 +729,6 @@
     if (!state.item) return;
 
     const preset = $("#preset-select").value || "chrome";
-    const hlsFmp4 = $("#hls-fmp4-toggle").checked;
     const maxBitrate = $("#max-bitrate-select").value ? Number($("#max-bitrate-select").value) : null;
     const maxResVal = $("#max-res-select").value;
     let maxRes = null;
@@ -756,7 +752,6 @@
 
     const capabilities = {
       preset: preset,
-      hls_fmp4: hlsFmp4,
     };
     if (maxRes) capabilities.max_resolution = maxRes;
     if (maxBitrate) capabilities.max_bitrate = maxBitrate;
@@ -952,9 +947,6 @@
 
   // Track and preset change handlers
   $("#preset-select").addEventListener("change", () => {
-    if (state.item) executePlaybackPlan();
-  });
-  $("#hls-fmp4-toggle").addEventListener("change", () => {
     if (state.item) executePlaybackPlan();
   });
   $("#max-res-select").addEventListener("change", () => {

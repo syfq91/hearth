@@ -35,7 +35,6 @@ def test_resolve_chrome_preset() -> None:
     assert "h264" in res.video_codecs
     assert "vp9" in res.video_codecs
     assert "av1" in res.video_codecs
-    assert res.hls_fmp4 is True
     assert res.hdr is False
 
 
@@ -45,7 +44,6 @@ def test_resolve_safari_preset() -> None:
     assert res.preset == "safari"
     assert "hevc" in res.video_codecs
     assert res.hdr is True
-    assert res.hls_fmp4 is True
 
 
 def test_resolve_android_tv_preset() -> None:
@@ -192,7 +190,6 @@ def test_ua_preset_wins_over_unknown_when_absent() -> None:
     res = resolve_client_capabilities(client=None, user_agent=chrome_ua)
     assert res.preset == "chrome"
     assert "vp9" in res.video_codecs
-    assert res.hls_fmp4 is True
 
 
 def test_unrecognized_ua_falls_back_to_unknown_preset() -> None:
