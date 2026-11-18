@@ -26,6 +26,9 @@ class SearchResult:
     backdrop_url: str | None = None
     popularity: float = 0.0
     source_url: str | None = None
+    # Set only when a URL was resolved directly to an episode or season.
+    season_number: int | None = None
+    episode_number: int | None = None
 
 
 @dataclass(frozen=True)

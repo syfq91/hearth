@@ -15,6 +15,7 @@ from app.services.audit import record_audit
 from app.services.metadata.base import ProviderError, SearchResult
 from app.services.metadata.factory import build_metadata_matcher
 from app.services.metadata.matching import MetadataMatcher
+from app.services.metadata.urls import UrlResolutionError
 
 router = APIRouter(tags=["metadata"])
 
@@ -59,6 +60,15 @@ class SearchResultResponse(BaseModel):
     backdrop_url: str | None = None
     popularity: float = 0.0
     source_url: str | None = None
+    season_number: int | None = None
+    episode_number: int | None = None
+
+
+class ResolveUrlRequest(BaseModel):
+    """A public provider URL pasted into the manual-match search box."""
+
+    item_id: str = Field(min_length=1, max_length=64)
+    url: str = Field(min_length=1, max_length=2000)
 
 
 class MatchRequest(BaseModel):
@@ -66,6 +76,8 @@ class MatchRequest(BaseModel):
 
     provider: str = Field(min_length=1, max_length=32)
     provider_id: str = Field(min_length=1, max_length=128)
+    season_number: int | None = Field(default=None, ge=0, le=1000)
+    episode_number: int | None = Field(default=None, ge=0, le=1000)
 
 
 class MatchResponse(BaseModel):
@@ -109,6 +121,27 @@ async def search_metadata(
     return [_search_response(result) for result in results]
 
 
+@router.post("/metadata/resolve", response_model=list[SearchResultResponse])
+async def resolve_metadata_url(
+    payload: ResolveUrlRequest,
+    actor: RequireAdmin,
+    matcher: MetadataMatcherDep,
+    session: SessionDep,
+) -> list[SearchResultResponse]:
+    """Fetch the exact item named by a pasted public provider URL."""
+
+    item = await session.get(MediaItem, payload.item_id)
+    if item is None:
+        raise NotFoundError("Item not found", code="item_not_found")
+    try:
+        results = await matcher.resolve_url(payload.item_id, payload.url)
+    except UrlResolutionError as exc:
+        raise ValidationError(str(exc), code="invalid_provider_url") from None
+    except ProviderError as exc:
+        raise BadGatewayError(str(exc), code="metadata_provider_error") from None
+    return [_search_response(result) for result in results]
+
+
 @router.get("/metadata/providers", response_model=list[str])
 async def list_metadata_providers(
     _actor: RequireAdmin,
@@ -141,7 +174,13 @@ async def manual_match(
         raise NotFoundError("Item not found", code="item_not_found")
 
     try:
-        result = await matcher.manual_match(item_id, payload.provider, payload.provider_id)
+        result = await matcher.manual_match(
+            item_id,
+            payload.provider,
+            payload.provider_id,
+            season_number=payload.season_number,
+            episode_number=payload.episode_number,
+        )
     except ProviderError as exc:
         raise BadGatewayError(str(exc), code="metadata_provider_error") from None
 
@@ -157,6 +196,8 @@ async def manual_match(
         details={
             "provider": payload.provider,
             "provider_id": payload.provider_id,
+            "season_number": payload.season_number,
+            "episode_number": payload.episode_number,
             "state": result.state,
         },
     )
@@ -182,4 +223,6 @@ def _search_response(result: SearchResult) -> SearchResultResponse:
         backdrop_url=result.backdrop_url,
         popularity=result.popularity,
         source_url=result.source_url,
+        season_number=result.season_number,
+        episode_number=result.episode_number,
     )

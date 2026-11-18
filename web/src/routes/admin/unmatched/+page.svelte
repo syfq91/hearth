@@ -27,25 +27,37 @@
 		return queries[item.id] ?? item.title;
 	}
 
+	function isProviderUrl(value: string): boolean {
+		return /^https?:\/\/\S+$/i.test(value);
+	}
+
 	async function searchCandidates(item: UnmatchedItemResponse): Promise<void> {
 		const query = searchText(item).trim();
 		if (!query) {
-			error = 'Enter a search query.';
+			error = 'Enter a search query or a provider URL.';
 			return;
 		}
 		searchingId = item.id;
 		error = null;
+		message = null;
 		try {
-			const provider = selectedProviders[item.id];
-			const results = await api.get<SearchResultResponse[]>('/metadata/search', {
-				query: {
-					query,
-					year: item.year ?? undefined,
-					provider: provider || undefined,
-					item_id: item.id
-				}
-			});
+			const results = isProviderUrl(query)
+				? await api.post<SearchResultResponse[]>('/metadata/resolve', {
+						body: { item_id: item.id, url: query },
+						cache: false
+					})
+				: await api.get<SearchResultResponse[]>('/metadata/search', {
+						query: {
+							query,
+							year: item.year ?? undefined,
+							provider: selectedProviders[item.id] || undefined,
+							item_id: item.id
+						}
+					});
 			candidates = { ...candidates, [item.id]: results };
+			if (isProviderUrl(query) && results.length) {
+				message = 'Fetched metadata from the pasted URL. Review it before applying.';
+			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -61,7 +73,16 @@
 		error = null;
 		try {
 			await api.post(`/items/${itemId}/match`, {
-				body: { provider: candidate.provider, provider_id: candidate.provider_id }
+				body: {
+					provider: candidate.provider,
+					provider_id: candidate.provider_id,
+					...(candidate.season_number != null
+						? { season_number: candidate.season_number }
+						: {}),
+					...(candidate.episode_number != null
+						? { episode_number: candidate.episode_number }
+						: {})
+				}
 			});
 			message = `Matched to “${candidate.title}”.`;
 			unmatched = unmatched.filter((item) => item.id !== itemId);
@@ -94,8 +115,10 @@
 </svelte:head>
 
 <p class="intro">
-	Items the matcher could not identify. Search metadata providers and pick the right match — open a
-	candidate's source page to verify it first — or trigger a rematch with the automatic matcher.
+	Items the matcher could not identify. Search metadata providers, or paste a link to the exact item
+	(a TMDB movie/series/season/episode, Google Books volume, or Open Library work) to fetch its
+	metadata directly. Review a candidate before applying it, or trigger a rematch with the automatic
+	matcher.
 </p>
 
 {#if message}
@@ -131,8 +154,8 @@
 				<div class="search-row">
 					<input
 						type="text"
-						aria-label={`Search text for ${item.title}`}
-						placeholder="Search text"
+						aria-label={`Search text or provider URL for ${item.title}`}
+						placeholder="Search text or paste provider URL"
 						value={searchText(item)}
 						oninput={(event) => (queries[item.id] = event.currentTarget.value)}
 						disabled={searchingId === item.id}
@@ -157,7 +180,11 @@
 						onclick={() => searchCandidates(item)}
 						disabled={searchingId === item.id}
 					>
-						{searchingId === item.id ? 'Searching…' : 'Search metadata'}
+						{searchingId === item.id
+							? 'Fetching…'
+							: isProviderUrl(searchText(item))
+								? 'Fetch from URL'
+								: 'Search metadata'}
 					</button>
 					<button
 						type="button"

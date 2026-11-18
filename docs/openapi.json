@@ -3797,6 +3797,19 @@
       "MatchRequest": {
         "description": "A specific candidate chosen by an administrator.",
         "properties": {
+          "episode_number": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Number"
+          },
           "provider": {
             "maxLength": 32,
             "minLength": 1,
@@ -3808,6 +3821,19 @@
             "minLength": 1,
             "title": "Provider Id",
             "type": "string"
+          },
+          "season_number": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Number"
           }
         },
         "required": [
@@ -5457,6 +5483,29 @@
         "title": "ReorderPlaylistItemsRequest",
         "type": "object"
       },
+      "ResolveUrlRequest": {
+        "description": "A public provider URL pasted into the manual-match search box.",
+        "properties": {
+          "item_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Item Id",
+            "type": "string"
+          },
+          "url": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "url"
+        ],
+        "title": "ResolveUrlRequest",
+        "type": "object"
+      },
       "ScanJobResponse": {
         "description": "The scan job queued for a library (or already active).",
         "properties": {
@@ -5598,6 +5647,17 @@
             ],
             "title": "Backdrop Url"
           },
+          "episode_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Number"
+          },
           "overview": {
             "anyOf": [
               {
@@ -5632,6 +5692,17 @@
           "provider_id": {
             "title": "Provider Id",
             "type": "string"
+          },
+          "season_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Number"
           },
           "source_url": {
             "anyOf": [
@@ -13574,6 +13645,57 @@
           }
         ],
         "summary": "List Metadata Providers",
+        "tags": [
+          "metadata"
+        ]
+      }
+    },
+    "/api/v1/metadata/resolve": {
+      "post": {
+        "description": "Fetch the exact item named by a pasted public provider URL.",
+        "operationId": "resolve_metadata_url_api_v1_metadata_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveUrlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SearchResultResponse"
+                  },
+                  "title": "Response Resolve Metadata Url Api V1 Metadata Resolve Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Resolve Metadata Url",
         "tags": [
           "metadata"
         ]

@@ -52,6 +52,7 @@ from app.services.metadata.base import (
     ProviderUnavailable,
     SearchResult,
     SeasonMetadata,
+    SeriesMetadata,
 )
 from app.services.metadata.local import (
     LocalProvider,
@@ -60,6 +61,7 @@ from app.services.metadata.local import (
     parse_local_opf,
 )
 from app.services.metadata.registry import MetadataRegistry
+from app.services.metadata.urls import UrlResolutionError, parse_provider_url
 from app.services.scanner.walker import find_artist_artwork, find_series_artwork
 
 logger = logging.getLogger("hearth.metadata.matching")
@@ -419,7 +421,122 @@ class MetadataMatcher:
         results.sort(key=lambda result: result.popularity, reverse=True)
         return results
 
-    async def manual_match(self, item_id: str, provider_name: str, provider_id: str) -> MatchResult:
+    async def resolve_url(self, item_id: str, url: str) -> list[SearchResult]:
+        """Fetch the exact item named by a public provider URL.
+
+        Returns a single candidate so the manual-match UI can show the fetched
+        metadata and let the administrator decide whether to apply it.
+        """
+        snapshot = await self._load_snapshot(item_id)
+        if snapshot is None:
+            raise UrlResolutionError("Item not found")
+        parsed = parse_provider_url(url)
+        if parsed is None:
+            raise UrlResolutionError(
+                "Unsupported URL. Paste a TMDB movie/series/season/episode page, "
+                "a Google Books volume, or an Open Library work."
+            )
+        if parsed.media_type != snapshot.type:
+            raise UrlResolutionError(
+                f"A {parsed.media_type} URL cannot match a {snapshot.type} item"
+            )
+
+        provider = self.get_provider(parsed.provider)
+        if provider is None or not provider.enabled:
+            raise ProviderUnavailable(f"Provider {parsed.provider!r} is not configured")
+
+        def first_image_url(images: Sequence[ProviderImage]) -> str | None:
+            return next((image.source_url for image in images if image.source_url), None)
+
+        def air_date_year(value: str | None) -> int | None:
+            return int(value[:4]) if value and len(value) >= 4 and value[:4].isdigit() else None
+
+        self._provider_calls += 1
+        source_url = url.strip()
+        candidate: SearchResult
+        if parsed.media_type == "movie":
+            movie = await provider.fetch_details(parsed.provider_id)
+            if movie is None:
+                raise ProviderError(f"No movie {parsed.provider_id!r} on {parsed.provider}")
+            candidate = SearchResult(
+                provider=parsed.provider,
+                provider_id=parsed.provider_id,
+                title=movie.title,
+                year=movie.year,
+                overview=movie.overview,
+                poster_url=first_image_url(movie.images),
+                source_url=source_url,
+            )
+        elif parsed.media_type == "series":
+            series: SeriesMetadata | None = await provider.fetch_tv_details(parsed.provider_id)
+            if series is None:
+                raise ProviderError(f"No series {parsed.provider_id!r} on {parsed.provider}")
+            candidate = SearchResult(
+                provider=parsed.provider,
+                provider_id=parsed.provider_id,
+                title=series.title,
+                year=series.year,
+                overview=series.overview,
+                poster_url=first_image_url(series.images),
+                source_url=source_url,
+            )
+        elif parsed.media_type == "season":
+            season: SeasonMetadata | None = await provider.fetch_tv_season(
+                parsed.provider_id, parsed.season_number or 1
+            )
+            if season is None:
+                raise ProviderError(f"No season {parsed.season_number!r} on {parsed.provider}")
+            candidate = SearchResult(
+                provider=parsed.provider,
+                provider_id=parsed.provider_id,
+                title=season.title or f"Season {parsed.season_number}",
+                year=air_date_year(season.air_date),
+                overview=season.overview,
+                poster_url=season.poster_url or first_image_url(season.images),
+                source_url=source_url,
+                season_number=parsed.season_number,
+            )
+        elif parsed.media_type == "episode":
+            episode: EpisodeMetadata | None = await provider.fetch_tv_episode(
+                parsed.provider_id, parsed.season_number or 1, parsed.episode_number or 1
+            )
+            if episode is None:
+                raise ProviderError(f"No episode {parsed.provider_id!r} on {parsed.provider}")
+            candidate = SearchResult(
+                provider=parsed.provider,
+                provider_id=parsed.provider_id,
+                title=episode.title,
+                year=air_date_year(episode.air_date),
+                overview=episode.overview,
+                poster_url=episode.still_url or first_image_url(episode.images),
+                source_url=source_url,
+                season_number=parsed.season_number,
+                episode_number=parsed.episode_number,
+            )
+        else:  # book
+            book: BookMetadata | None = await provider.fetch_book_details(parsed.provider_id)
+            if book is None:
+                raise ProviderError(f"No book {parsed.provider_id!r} on {parsed.provider}")
+            candidate = SearchResult(
+                provider=parsed.provider,
+                provider_id=parsed.provider_id,
+                title=book.title,
+                year=air_date_year(book.published_date),
+                overview=book.overview,
+                poster_url=first_image_url(book.images),
+                source_url=source_url,
+            )
+        return [candidate]
+
+    async def manual_match(
+        self,
+        item_id: str,
+        provider_name: str,
+        provider_id: str,
+        *,
+        season_number: int | None = None,
+        episode_number: int | None = None,
+    ) -> MatchResult:
         """Attach a specific provider candidate to an item, bypassing scoring."""
 
         snapshot = await self._load_snapshot(item_id)
@@ -430,6 +547,18 @@ class MetadataMatcher:
             return await self._apply_series_match(snapshot, provider_name, provider_id, score=1.0)
         if snapshot.type == "book":
             return await self._manual_match_book(snapshot, provider_name, provider_id)
+        if snapshot.type == "episode":
+            if season_number is None or episode_number is None:
+                raise ProviderError("An episode URL must include season and episode numbers")
+            return await self._manual_match_episode(
+                snapshot, provider_name, provider_id, season_number, episode_number
+            )
+        if snapshot.type == "season":
+            if season_number is None:
+                raise ProviderError("A season URL must include a season number")
+            return await self._manual_match_season(
+                snapshot, provider_name, provider_id, season_number
+            )
 
         provider = next(
             (candidate for candidate in self.providers if candidate.name == provider_name),
@@ -481,6 +610,120 @@ class MetadataMatcher:
                 )
 
         return await self._apply_book_match(snapshot, provider_name, provider_id, details, images)
+
+    async def _manual_match_season(
+        self,
+        snapshot: _ItemSnapshot,
+        provider_name: str,
+        series_id: str,
+        season_number: int,
+    ) -> MatchResult:
+        """Attach one season of a series to a season item."""
+        provider = self.get_provider(provider_name)
+        if provider is None:
+            raise ProviderUnavailable(f"Provider {provider_name!r} is not configured")
+
+        self._provider_calls += 1
+        details = await provider.fetch_tv_season(series_id, season_number)
+        if details is None:
+            raise ProviderError(f"Provider {provider_name!r} has no season {season_number}")
+
+        now = self.clock()
+        async with self.sessionmaker() as session:
+            item = await session.get(MediaItem, snapshot.id)
+            if item is None:
+                return MatchResult(item_id=snapshot.id, state="pending", error="Item not found")
+            item.title = details.title or item.title
+            item.sort_title = sort_title(item.title)
+            item.overview = details.overview or item.overview
+            item.match_state = "matched"
+            item.match_attempts += 1
+            item.match_error = None
+            item.matched_at = now
+            item.next_match_at = None
+            provider_ids = dict(item.provider_ids or {})
+            if details.provider_id:
+                provider_ids[provider_name] = details.provider_id
+            provider_ids[f"{provider_name}_series"] = details.series_provider_id or series_id
+            item.provider_ids = provider_ids
+            if item.season is not None:
+                item.season.season_number = (
+                    details.season_number if details.season_number else season_number
+                )
+                item.season.air_date = details.air_date or item.season.air_date
+            await session.commit()
+
+        stored = await self._store_images(snapshot.id, provider_name, details.images)
+        return MatchResult(
+            item_id=snapshot.id,
+            state="matched",
+            provider=provider_name,
+            provider_id=series_id,
+            score=1.0,
+            images=stored,
+        )
+
+    async def _manual_match_episode(
+        self,
+        snapshot: _ItemSnapshot,
+        provider_name: str,
+        series_id: str,
+        season_number: int,
+        episode_number: int,
+    ) -> MatchResult:
+        """Attach one episode of a series to an episode item."""
+        provider = self.get_provider(provider_name)
+        if provider is None:
+            raise ProviderUnavailable(f"Provider {provider_name!r} is not configured")
+
+        self._provider_calls += 1
+        details = await provider.fetch_tv_episode(series_id, season_number, episode_number)
+        if details is None:
+            raise ProviderError(f"Provider {provider_name!r} has no episode {episode_number}")
+
+        now = self.clock()
+        async with self.sessionmaker() as session:
+            item = await session.get(MediaItem, snapshot.id)
+            if item is None:
+                return MatchResult(item_id=snapshot.id, state="pending", error="Item not found")
+            item.title = details.title or item.title
+            item.sort_title = sort_title(item.title)
+            item.overview = details.overview or item.overview
+            item.rating = details.rating if details.rating is not None else item.rating
+            item.runtime_seconds = (
+                details.runtime_seconds
+                if details.runtime_seconds is not None
+                else item.runtime_seconds
+            )
+            item.match_state = "matched"
+            item.match_attempts += 1
+            item.match_error = None
+            item.matched_at = now
+            item.next_match_at = None
+            provider_ids = dict(item.provider_ids or {})
+            provider_ids.update(details.provider_ids)
+            provider_ids[f"{provider_name}_series"] = details.series_provider_id or series_id
+            item.provider_ids = provider_ids
+            if item.episode is not None:
+                item.episode.season_number = (
+                    details.season_number if details.season_number is not None else season_number
+                )
+                item.episode.episode_number = (
+                    details.episode_number if details.episode_number is not None else episode_number
+                )
+                item.episode.air_date = details.air_date or item.episode.air_date
+            await self._apply_credits(session, snapshot.id, details.credits)
+            await session.commit()
+
+        stored = await self._store_images(snapshot.id, provider_name, details.images)
+        return MatchResult(
+            item_id=snapshot.id,
+            state="matched",
+            provider=provider_name,
+            provider_id=details.provider_id or series_id,
+            score=1.0,
+            images=stored,
+        )
 
     async def close(self) -> None:
         """Release clients owned by the providers and the artwork handler."""

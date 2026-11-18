@@ -1716,6 +1716,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/metadata/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Metadata Url
+         * @description Fetch the exact item named by a pasted public provider URL.
+         */
+        post: operations["resolve_metadata_url_api_v1_metadata_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/metadata/search": {
         parameters: {
             query?: never;
@@ -3867,10 +3887,14 @@ export interface components {
          * @description A specific candidate chosen by an administrator.
          */
         MatchRequest: {
+            /** Episode Number */
+            episode_number?: number | null;
             /** Provider */
             provider: string;
             /** Provider Id */
             provider_id: string;
+            /** Season Number */
+            season_number?: number | null;
         };
         /**
          * MatchResponse
@@ -4466,6 +4490,16 @@ export interface components {
             item_ids: string[];
         };
         /**
+         * ResolveUrlRequest
+         * @description A public provider URL pasted into the manual-match search box.
+         */
+        ResolveUrlRequest: {
+            /** Item Id */
+            item_id: string;
+            /** Url */
+            url: string;
+        };
+        /**
          * ScanJobResponse
          * @description The scan job queued for a library (or already active).
          */
@@ -4545,6 +4579,8 @@ export interface components {
         SearchResultResponse: {
             /** Backdrop Url */
             backdrop_url?: string | null;
+            /** Episode Number */
+            episode_number?: number | null;
             /** Overview */
             overview?: string | null;
             /**
@@ -4558,6 +4594,8 @@ export interface components {
             provider: string;
             /** Provider Id */
             provider_id: string;
+            /** Season Number */
+            season_number?: number | null;
             /** Source Url */
             source_url?: string | null;
             /** Title */
@@ -8326,6 +8364,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+        };
+    };
+    resolve_metadata_url_api_v1_metadata_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveUrlRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResultResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
