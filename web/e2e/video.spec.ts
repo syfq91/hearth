@@ -136,3 +136,47 @@ test('playback recovers after 503 burst without request storms (T11)', async ({ 
 	await page.getByRole('link', { name: 'Home' }).click();
 	await expect(page).toHaveURL(/\/movies\//);
 });
+
+test('selecting a quality renegotiates playback and keeps playing', async ({ page, request }) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
+
+	const playbackInfoBodies: string[] = [];
+	page.on('request', (req) => {
+		if (req.url().includes('/playback-info') && req.method() === 'POST') {
+			playbackInfoBodies.push(req.postData() ?? '');
+		}
+	});
+
+	await openMovieDetail(page);
+	await page.getByRole('link', { name: /^(Play|Resume)$/ }).click();
+
+	const video = page.locator('video');
+	await expect(video).toBeVisible();
+	await expect
+		.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime), { timeout: 30_000 })
+		.toBeGreaterThan(1);
+
+	// Any pointer move restores the auto-hiding control bar.
+	await page.mouse.move(10, 10);
+	await page.getByRole('button', { name: 'Playback quality' }).click();
+	const sd = page.getByRole('menuitemradio', { name: /SD/ });
+	await expect(sd).toBeVisible();
+	await sd.click();
+
+	// The player re-POSTs playback-info with the new ceiling, then resumes from
+	// a fresh session instead of staying on the old stream.
+	await expect
+		.poll(() => playbackInfoBodies.some((body) => body.includes('"quality":"sd"')))
+		.toBe(true);
+	await expect
+		.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime), { timeout: 30_000 })
+		.toBeGreaterThan(1);
+
+	await page.mouse.move(10, 10);
+	await page.getByRole('button', { name: 'Playback quality' }).click();
+	await expect(page.getByRole('menuitemradio', { name: /SD/ })).toHaveAttribute(
+		'aria-checked',
+		'true'
+	);
+});

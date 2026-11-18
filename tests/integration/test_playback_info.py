@@ -929,3 +929,100 @@ async def test_embedded_subtitle_endpoint_rejects_out_of_range_streams(
 
     no_auth = await api_client.get(f"/api/v1/media/{file_ids[0]}/subtitles/0.vtt")
     assert no_auth.status_code == 401
+
+
+async def _seed_4k_h264(
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> tuple[str, str]:
+    _, item_id, file_ids, _ = await _seed(
+        db_settings, db_sessionmaker, sidecar=False, container="mp4"
+    )
+    streams_json = {
+        "container": "mp4",
+        "duration_seconds": 120.0,
+        "bit_rate": 20_000_000,
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "h264",
+                "profile": "High",
+                "width": 3840,
+                "height": 2160,
+            },
+            {
+                "index": 1,
+                "codec_type": "audio",
+                "codec_name": "aac",
+                "channels": 2,
+                "is_default": True,
+            },
+        ],
+    }
+    async with db_sessionmaker() as session:
+        media_file = await session.get(MediaFile, file_ids[0])
+        assert media_file is not None
+        media_file.streams_json = streams_json
+        await session.commit()
+    return item_id, file_ids[0]
+
+
+async def test_playback_info_quality_ceiling_downscales(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    item_id, _ = await _seed_4k_h264(db_settings, db_sessionmaker)
+
+    response = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={"capabilities": {"preset": "chrome"}, "quality": "sd"},
+        headers=_bearer(admin),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["mode"] == "transcode_hls"
+    assert body["plan"]["target_height"] == 480
+    assert body["plan"]["target_width"] == 852
+    assert body["plan"]["target_bitrate"] == 1_500_000
+    assert "VideoResolutionNotSupported" in body["reasons"]
+    await api_client.post(f"/api/v1/hls/{body['session_id']}/stop", headers=_bearer(admin))
+
+
+async def test_playback_info_quality_auto_and_4k_keep_direct_play(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    item_id, _ = await _seed_4k_h264(db_settings, db_sessionmaker)
+
+    for quality in ("auto", "4k"):
+        response = await api_client.post(
+            f"/api/v1/items/{item_id}/playback-info",
+            json={"capabilities": {"preset": "chrome"}, "quality": quality},
+            headers=_bearer(admin),
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["mode"] == "direct_play", quality
+        assert body["plan"]["target_height"] is None
+        assert body["reasons"] == []
+
+
+async def test_playback_info_rejects_unknown_quality(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    item_id, _ = await _seed_4k_h264(db_settings, db_sessionmaker)
+
+    response = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={"quality": "ultra"},
+        headers=_bearer(admin),
+    )
+    assert response.status_code == 422
