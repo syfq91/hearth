@@ -7,11 +7,13 @@ Clients may select a built-in preset ('chrome', 'firefox', 'safari',
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 PresetName = Literal["chrome", "firefox", "safari", "android_tv", "unknown"]
+QualityLevel = Literal["auto", "sd", "hd", "fhd", "4k"]
 
 
 class SubtitleProfile(BaseModel):
@@ -228,6 +230,47 @@ BUILTIN_PRESETS: dict[str, ClientCapabilities] = {
 }
 
 
+@dataclass(frozen=True)
+class QualityLimit:
+    """Ceilings imposed by a user-facing quality label.
+
+    A missing ceiling means the label does not constrain that dimension:
+    ``auto`` leaves device and user limits untouched.
+    """
+
+    max_height: int | None = None
+    max_bitrate: int | None = None
+
+
+QUALITY_LIMITS: dict[str, QualityLimit] = {
+    "auto": QualityLimit(),
+    "sd": QualityLimit(max_height=480, max_bitrate=1_500_000),
+    "hd": QualityLimit(max_height=720, max_bitrate=3_000_000),
+    "fhd": QualityLimit(max_height=1080, max_bitrate=6_000_000),
+    "4k": QualityLimit(max_height=2160, max_bitrate=20_000_000),
+}
+
+
+def apply_quality_ceiling(capabilities: ClientCapabilities, quality: QualityLevel) -> None:
+    """Narrow ``capabilities`` in place with a quality label's ceilings.
+
+    These are ceilings, not targets: a source already below them still direct
+    plays. Device and per-user limits continue to win because each value is
+    intersected with what the client already declared.
+    """
+    limit = QUALITY_LIMITS.get(quality, QUALITY_LIMITS["auto"])
+    if limit.max_height is not None:
+        current = capabilities.max_height
+        capabilities.max_height = (
+            min(current, limit.max_height) if current is not None else limit.max_height
+        )
+    if limit.max_bitrate is not None:
+        current = capabilities.max_bitrate
+        capabilities.max_bitrate = (
+            min(current, limit.max_bitrate) if current is not None else limit.max_bitrate
+        )
+
+
 def detect_preset_from_user_agent(user_agent: str | None) -> PresetName:
     """Infer the built-in preset from a User-Agent header string.
 
@@ -338,8 +381,12 @@ __all__ = [
     "BUILTIN_PRESETS",
     "ClientCapabilities",
     "PresetName",
+    "QUALITY_LIMITS",
+    "QualityLevel",
+    "QualityLimit",
     "SubtitleProfile",
     "TranscodeTarget",
+    "apply_quality_ceiling",
     "detect_preset_from_user_agent",
     "resolve_client_capabilities",
 ]

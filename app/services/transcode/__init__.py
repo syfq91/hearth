@@ -25,10 +25,14 @@ from app.services.transcode.decision import (
 )
 from app.services.transcode.profile import (
     BUILTIN_PRESETS,
+    QUALITY_LIMITS,
     ClientCapabilities,
     PresetName,
+    QualityLevel,
+    QualityLimit,
     SubtitleProfile,
     TranscodeTarget,
+    apply_quality_ceiling,
     detect_preset_from_user_agent,
     resolve_client_capabilities,
 )
@@ -55,6 +59,9 @@ __all__ = [
     "PlaybackMode",
     "PlaybackOptions",
     "PresetName",
+    "QUALITY_LIMITS",
+    "QualityLevel",
+    "QualityLimit",
     "REMUX_ELIGIBLE_REASONS",
     "ServerTranscodeCapabilities",
     "SubtitleAction",
@@ -65,6 +72,7 @@ __all__ = [
     "TranscodeReason",
     "TranscodeTarget",
     "UserLimits",
+    "apply_quality_ceiling",
     "budget_audio_bitrate",
     "build_ffmpeg_hls_command",
     "detect_preset_from_user_agent",

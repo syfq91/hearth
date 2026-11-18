@@ -4036,6 +4036,12 @@ export interface components {
              */
             force_burn_in_subtitles: boolean;
             /**
+             * Quality
+             * @default auto
+             * @enum {string}
+             */
+            quality: "auto" | "sd" | "hd" | "fhd" | "4k";
+            /**
              * Start Time Offset Seconds
              * @default 0
              */

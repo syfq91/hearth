@@ -65,6 +65,7 @@ from app.services.transcode.decision import (
 )
 from app.services.transcode.profile import (
     ClientCapabilities,
+    QualityLevel,
     detect_preset_from_user_agent,
 )
 from app.services.transcode.session import get_session_manager
@@ -123,6 +124,7 @@ class PlaybackInfoRequest(BaseModel):
     start_time_offset_seconds: float = 0.0
     target_max_bitrate: int | None = Field(default=None, gt=0)
     force_burn_in_subtitles: bool = False
+    quality: QualityLevel = "auto"
 
 
 def _log_playback_decision(
@@ -165,6 +167,7 @@ def _log_playback_decision(
             "user_id": user_id,
             "capability_source": source,
             "preset": preset,
+            "quality": request_obj.quality,
             "mode": plan.mode,
             "reasons": plan.reasons,
             "video_action": plan.video_action,
@@ -412,6 +415,7 @@ async def playback_info(
         subtitle_track_index=request_obj.subtitle_track_index,
         target_max_bitrate=request_obj.target_max_bitrate,
         force_burn_in_subtitles=request_obj.force_burn_in_subtitles,
+        quality=request_obj.quality,
     )
     user_agent = request.headers.get("user-agent")
     plan = evaluate_playback_plan(

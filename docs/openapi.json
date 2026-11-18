@@ -4410,6 +4410,18 @@
             "title": "Force Burn In Subtitles",
             "type": "boolean"
           },
+          "quality": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "sd",
+              "hd",
+              "fhd",
+              "4k"
+            ],
+            "title": "Quality",
+            "type": "string"
+          },
           "start_time_offset_seconds": {
             "default": 0.0,
             "title": "Start Time Offset Seconds",

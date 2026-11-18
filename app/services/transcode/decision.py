@@ -13,7 +13,12 @@ from pydantic import BaseModel, Field
 
 from app.services.media.probe import ProbeResult, ProbeStream
 from app.services.transcode.capabilities import ServerTranscodeCapabilities
-from app.services.transcode.profile import ClientCapabilities, resolve_client_capabilities
+from app.services.transcode.profile import (
+    ClientCapabilities,
+    QualityLevel,
+    apply_quality_ceiling,
+    resolve_client_capabilities,
+)
 from app.services.transcode.targets import select_transcode_targets
 
 PlaybackMode = Literal["direct_play", "remux_hls", "transcode_hls"]
@@ -84,6 +89,7 @@ class PlaybackOptions(BaseModel):
     subtitle_track_index: int | None = None
     target_max_bitrate: int | None = None
     force_burn_in_subtitles: bool = False
+    quality: QualityLevel = "auto"
 
 
 class TranscodePlan(BaseModel):
@@ -132,6 +138,10 @@ def evaluate_playback_plan(
     """
     opts = options or PlaybackOptions()
     resolved_client = resolve_client_capabilities(capabilities, user_agent=user_agent)
+    # The user's quality choice narrows the effective device ceilings before any
+    # compatibility check. Everything downstream (resolution downscale, bitrate
+    # union, conditional targets) then works against the intersected limits.
+    apply_quality_ceiling(resolved_client, opts.quality)
     reasons: list[str] = []
 
     primary_video = file_streams.primary_video
