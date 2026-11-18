@@ -5,7 +5,6 @@
 	let { data }: PageProps = $props();
 
 	let audioBitrate = $state<number | null>(null);
-	let defaultMaxBitrate = $state<number | null>(null);
 	let idleTimeout = $state<number | null>(null);
 	let maxHw = $state<number | null>(null);
 	let maxSw = $state<number | null>(null);
@@ -15,7 +14,6 @@
 		const settings = data.settings;
 		if (!settings) return;
 		audioBitrate = settings.audio_bitrate_kbps ?? null;
-		defaultMaxBitrate = settings.default_max_bitrate ?? null;
 		idleTimeout = settings.idle_timeout_seconds ?? null;
 		maxHw = settings.max_hw_sessions ?? null;
 		maxSw = settings.max_sw_sessions ?? null;
@@ -35,7 +33,6 @@
 			await api.put('/admin/transcoding/settings', {
 				body: {
 					audio_bitrate_kbps: audioBitrate,
-					default_max_bitrate: defaultMaxBitrate,
 					idle_timeout_seconds: idleTimeout,
 					max_hw_sessions: maxHw,
 					max_sw_sessions: maxSw,
@@ -106,10 +103,6 @@
 			<label>
 				<span>Audio bitrate (kbps)</span>
 				<input type="number" min={64} max={512} bind:value={audioBitrate} />
-			</label>
-			<label>
-				<span>Default max bitrate (bps, blank = unlimited)</span>
-				<input type="number" min={500000} bind:value={defaultMaxBitrate} />
 			</label>
 			<label>
 				<span>Idle timeout (seconds)</span>

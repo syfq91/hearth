@@ -6938,17 +6938,6 @@
             "title": "Audio Bitrate Kbps",
             "type": "integer"
           },
-          "default_max_bitrate": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Max Bitrate"
-          },
           "force_software": {
             "title": "Force Software",
             "type": "boolean"
@@ -7205,18 +7194,6 @@
               }
             ],
             "title": "Audio Bitrate Kbps"
-          },
-          "default_max_bitrate": {
-            "anyOf": [
-              {
-                "minimum": 500000.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Max Bitrate"
           },
           "force_software": {
             "anyOf": [

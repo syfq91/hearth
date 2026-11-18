@@ -4987,8 +4987,6 @@ export interface components {
         TranscodeSettingsResponse: {
             /** Audio Bitrate Kbps */
             audio_bitrate_kbps: number;
-            /** Default Max Bitrate */
-            default_max_bitrate?: number | null;
             /** Force Software */
             force_software: boolean;
             /** Idle Timeout Seconds */
@@ -5086,8 +5084,6 @@ export interface components {
         UpdateTranscodeSettingsRequest: {
             /** Audio Bitrate Kbps */
             audio_bitrate_kbps?: number | null;
-            /** Default Max Bitrate */
-            default_max_bitrate?: number | null;
             /** Force Software */
             force_software?: boolean | null;
             /** Idle Timeout Seconds */

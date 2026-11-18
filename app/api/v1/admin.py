@@ -165,7 +165,6 @@ class TranscodeSettingsResponse(BaseModel):
     idle_timeout_seconds: float
     segment_duration_seconds: int
     audio_bitrate_kbps: int
-    default_max_bitrate: int | None = None
 
 
 class UpdateTranscodeSettingsRequest(BaseModel):
@@ -178,7 +177,6 @@ class UpdateTranscodeSettingsRequest(BaseModel):
     max_sw_sessions: int | None = Field(default=None, ge=1, le=32)
     idle_timeout_seconds: float | None = Field(default=None, ge=10.0, le=600.0)
     audio_bitrate_kbps: int | None = Field(default=None, ge=64, le=512)
-    default_max_bitrate: int | None = Field(default=None, ge=500_000)
 
 
 class AdminRestoreResponse(BaseModel):
@@ -523,7 +521,6 @@ async def get_transcode_settings(
         idle_timeout_seconds=settings.transcode_idle_timeout_seconds,
         segment_duration_seconds=settings.transcode_segment_duration_seconds,
         audio_bitrate_kbps=settings.transcode_audio_bitrate_kbps,
-        default_max_bitrate=getattr(settings, "default_max_bitrate", None),
     )
 
 
@@ -546,8 +543,6 @@ async def update_transcode_settings(
         settings.transcode_idle_timeout_seconds = body.idle_timeout_seconds
     if body.audio_bitrate_kbps is not None:
         settings.transcode_audio_bitrate_kbps = body.audio_bitrate_kbps
-    if body.default_max_bitrate is not None:
-        settings.default_max_bitrate = body.default_max_bitrate  # type: ignore[attr-defined]
 
     record_audit(
         session,
@@ -566,7 +561,6 @@ async def update_transcode_settings(
         idle_timeout_seconds=settings.transcode_idle_timeout_seconds,
         segment_duration_seconds=settings.transcode_segment_duration_seconds,
         audio_bitrate_kbps=settings.transcode_audio_bitrate_kbps,
-        default_max_bitrate=getattr(settings, "default_max_bitrate", None),
     )
 
 
