@@ -144,16 +144,23 @@ class GoogleBooksPlugin(MetadataPlugin[GoogleBooksConfig]):
         if isbn:
             q = f"isbn:{isbn.replace('-', '').strip()}"
         else:
-            q = f"intitle:{query}"
+            # Use the same free-text relevance search as the Google Books site.
+            # ``intitle:`` is a strict title-field phrase match that misses
+            # volumes whose series/volume number lives in a subtitle or whose
+            # title punctuation differs (e.g. "Railgun Vol. 1" vs "...,
+            # Vol. 1"). Separate terms with spaces, not a literal '+'.
+            q = query
             if author:
-                q += f"+inauthor:{author}"
+                q = f'{q} inauthor:"{author}"'
 
         params: dict[str, str] = {"q": q, "maxResults": "10"}
         api_key = self.config.api_key if self.config else ""
         if api_key:
             params["key"] = api_key
 
-        cache_key = "search:" + (f"isbn:{q}" if isbn else f"{query}:{author or ''}")
+        # Version the key so results cached under the old intitle query are
+        # not replayed after this change.
+        cache_key = f"search:v2:{q}"
         data = await self._get_json(cache_key, f"{self.base_url}/volumes", params)
         if data is None:
             return []
