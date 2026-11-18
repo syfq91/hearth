@@ -731,10 +731,12 @@
     const preset = $("#preset-select").value || "chrome";
     const maxBitrate = $("#max-bitrate-select").value ? Number($("#max-bitrate-select").value) : null;
     const maxResVal = $("#max-res-select").value;
-    let maxRes = null;
+    let maxWidth = null;
+    let maxHeight = null;
     if (maxResVal) {
       const parts = maxResVal.split("x").map(Number);
-      maxRes = [parts[0], parts[1]];
+      maxWidth = parts[0];
+      maxHeight = parts[1];
     }
 
     const audioTrackVal = $("#audio-select").value;
@@ -753,7 +755,8 @@
     const capabilities = {
       preset: preset,
     };
-    if (maxRes) capabilities.max_resolution = maxRes;
+    if (maxWidth !== null) capabilities.max_width = maxWidth;
+    if (maxHeight !== null) capabilities.max_height = maxHeight;
     if (maxBitrate) capabilities.max_bitrate = maxBitrate;
 
     const reqBody = {
