@@ -11,12 +11,47 @@ import type { S } from './api/types';
 export type ClientCapabilities = S['ClientCapabilities'];
 
 let cachedCapabilities: ClientCapabilities | null = null;
+let runtimeWatchInstalled = false;
 
 /**
  * Reset the cached capabilities. Primarily useful in automated test suites.
  */
 export function clearCapabilitiesCache(): void {
 	cachedCapabilities = null;
+}
+
+/**
+ * Invalidate the cache when the display or focus environment changes: docking
+ * an external monitor can change both the usable resolution and HDR support.
+ * The listeners are installed once per page and are a no-op in non-browser
+ * environments (including the node tests).
+ */
+function watchRuntimeChanges(): void {
+	if (runtimeWatchInstalled || typeof window === 'undefined') return;
+	const win = window as unknown as {
+		matchMedia?: (query: string) => {
+			addEventListener?: (type: string, listener: () => void) => void;
+		} | null;
+		addEventListener?: (type: string, listener: () => void) => void;
+	};
+	if (typeof win.matchMedia !== 'function' && typeof win.addEventListener !== 'function') return;
+	let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+
+	if (typeof win.matchMedia === 'function') {
+		try {
+			win.matchMedia('(dynamic-range: high)')?.addEventListener?.('change', clearCapabilitiesCache);
+		} catch {
+			// Feature-detection only; an unsupported query is harmless.
+		}
+	}
+	if (typeof win.addEventListener === 'function') {
+		win.addEventListener('focus', clearCapabilitiesCache);
+		win.addEventListener('resize', () => {
+			if (resizeTimer !== undefined) clearTimeout(resizeTimer);
+			resizeTimer = setTimeout(clearCapabilitiesCache, 500);
+		});
+	}
+	runtimeWatchInstalled = true;
 }
 
 /**
@@ -165,11 +200,31 @@ export function detectBrowserCapabilities(): ClientCapabilities {
 		if (!containers.includes('mp4')) containers.push('mp4');
 	}
 
+	// Encoder preferences are a separate, ordered list from the pass-through
+	// codecs above. The server filters them by what it can actually encode, so
+	// listing a codec here is a preference, not a promise that it is available.
+	const videoTranscodeCodecs = ['h264', 'hevc', 'vp9', 'av1'].filter((codec) =>
+		videoCodecs.includes(codec)
+	);
+	const audioTranscodeCodecs = ['aac', 'ac3', 'eac3', 'mp3'].filter((codec) =>
+		audioCodecs.includes(codec)
+	);
+	if (!audioTranscodeCodecs.includes('aac')) audioTranscodeCodecs.unshift('aac');
+
 	const caps: ClientCapabilities = {
 		containers,
 		video_codecs: videoCodecs,
 		video_profiles: videoProfiles,
 		audio_codecs: audioCodecs,
+		video_transcode_codecs: videoTranscodeCodecs,
+		audio_transcode_codecs: audioTranscodeCodecs,
+		transcode_targets: [
+			{
+				container: 'mp4',
+				video_codecs: videoTranscodeCodecs,
+				audio_codecs: audioTranscodeCodecs
+			}
+		],
 		subtitle_formats: ['vtt', 'ass', 'ssa'],
 		subtitle_profiles: [
 			{ format: 'vtt', method: 'external' },
@@ -180,6 +235,7 @@ export function detectBrowserCapabilities(): ClientCapabilities {
 	};
 
 	cachedCapabilities = caps;
+	watchRuntimeChanges();
 	return caps;
 }
 

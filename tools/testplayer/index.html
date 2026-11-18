@@ -327,6 +327,10 @@
             </select>
           </label>
 
+          <label class="checkbox-label">
+            <input type="checkbox" id="prefer-hevc-toggle"> Prefer HEVC target
+          </label>
+
         </div>
 
         <!-- Transcoding & Playback Debug Panel -->
@@ -729,6 +733,7 @@
     if (!state.item) return;
 
     const preset = $("#preset-select").value || "chrome";
+    const preferHevc = $("#prefer-hevc-toggle").checked;
     const maxBitrate = $("#max-bitrate-select").value ? Number($("#max-bitrate-select").value) : null;
     const maxResVal = $("#max-res-select").value;
     let maxWidth = null;
@@ -758,6 +763,15 @@
     if (maxWidth !== null) capabilities.max_width = maxWidth;
     if (maxHeight !== null) capabilities.max_height = maxHeight;
     if (maxBitrate) capabilities.max_bitrate = maxBitrate;
+    if (preferHevc) {
+      capabilities.transcode_targets = [{
+        container: "mp4",
+        video_codecs: ["hevc", "h264"],
+        audio_codecs: ["aac"],
+        ...(maxWidth !== null ? { max_width: maxWidth } : {}),
+        ...(maxHeight !== null ? { max_height: maxHeight } : {})
+      }];
+    }
 
     const reqBody = {
       capabilities: capabilities,
@@ -950,6 +964,9 @@
 
   // Track and preset change handlers
   $("#preset-select").addEventListener("change", () => {
+    if (state.item) executePlaybackPlan();
+  });
+  $("#prefer-hevc-toggle").addEventListener("change", () => {
     if (state.item) executePlaybackPlan();
   });
   $("#max-res-select").addEventListener("change", () => {

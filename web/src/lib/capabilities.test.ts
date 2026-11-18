@@ -30,6 +30,10 @@ test('detectBrowserCapabilities emits H.264-only profile when MediaSource only s
 		assert.strictEqual(caps.video_codecs?.includes('vp9'), false, 'Should not include vp9');
 		assert.strictEqual(caps.video_codecs?.includes('av1'), false, 'Should not include av1');
 		assert.ok(caps.audio_codecs && caps.audio_codecs.includes('aac'), 'Should include aac');
+		assert.deepStrictEqual(caps.video_transcode_codecs, ['h264']);
+		assert.deepStrictEqual(caps.audio_transcode_codecs, ['aac']);
+		assert.strictEqual(caps.transcode_targets?.length, 1);
+		assert.strictEqual(caps.transcode_targets?.[0].container, 'mp4');
 	} finally {
 		(globalThis as any).window = origWindow;
 		clearCapabilitiesCache();
@@ -101,6 +105,32 @@ test('detectBrowserCapabilities guards against missing MediaSource (e.g. iOS Saf
 	} finally {
 		(globalThis as any).window = origWindow;
 		(globalThis as any).document = origDocument;
+		clearCapabilitiesCache();
+	}
+});
+
+test('detectBrowserCapabilities refreshes the cache when the display changes', () => {
+	clearCapabilitiesCache();
+	const origWindow = (globalThis as any).window;
+	const captured: { onChange?: () => void } = {};
+	(globalThis as any).window = {
+		MediaSource: { isTypeSupported: () => true },
+		matchMedia: () => ({
+			addEventListener: (_type: string, listener: () => void) => {
+				captured.onChange = listener;
+			}
+		}),
+		addEventListener: () => undefined
+	};
+
+	try {
+		const first = detectBrowserCapabilities();
+		assert.strictEqual(detectBrowserCapabilities(), first, 'cached within the page session');
+		assert.ok(captured.onChange, 'display change listener installed');
+		captured.onChange!();
+		assert.notStrictEqual(detectBrowserCapabilities(), first, 'cache invalidated on display change');
+	} finally {
+		(globalThis as any).window = origWindow;
 		clearCapabilitiesCache();
 	}
 });

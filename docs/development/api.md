@@ -192,7 +192,7 @@ For conditional preferences, `transcode_targets` is an ordered list of objects s
 }
 ```
 
-A target applies only when its container is an fMP4-compatible alias and at least one of its codecs can be produced by the server. Applicable targets are ranked by source-codec match (audio match breaks ties), with list order as the final tie-breaker; the chosen target's `max_*` ceilings shape resolution, bitrate and audio channels. `max_video_level` affects ranking but does not set an encoder level flag.
+The web player derives both preference lists and one conditional MP4 target from its browser feature detection, so modern clients can signal a preferred encoder without a server change. A target applies only when its container is an fMP4-compatible alias and at least one of its codecs can be produced by the server. Applicable targets are ranked by source-codec match (audio match breaks ties), with list order as the final tie-breaker; the chosen target's `max_*` ceilings shape resolution, bitrate and audio channels. `max_video_level` affects ranking but does not set an encoder level flag.
 
 ### 3.2 Response Payload
 The server returns the playback mode, stream URLs, stream metadata, and stable machine-readable decision reasons. The `mode` is one of `direct_play`, `remux_hls`, `transcode_hls`; `url` is set for direct play, and `hls_url`/`session_id` are set for the two HLS modes.

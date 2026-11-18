@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- The web client now advertises ordered encoder preferences and one conditional fMP4 transcode target alongside its pass-through codecs, and refreshes cached capabilities when the display changes or the window regains focus. The developer test player gained a "Prefer HEVC target" switch to exercise conditional negotiation.
 - Audio bitrate for HLS transcodes is now derived from the effective total bitrate cap when one is set, with the admin-configured bitrate acting as a ceiling rather than a fixed value. Tight caps (≤ 500 kbps) now get 128 kbps audio instead of 192 kbps.
 - Page loaders for book reading and watch now fetch independent detail/progress/next-up data in parallel; library text filters are debounced, offscreen shelf cards use `content-visibility`, first cards load images eagerly with high fetch priority, and audio prewarming uses `preload="metadata"` with debounced localStorage writes.
 - The API client now caches GET responses for 30 seconds, deduplicates concurrent identical GETs, sends `If-None-Match` and reuses cached bodies on 304, and drops the cache when the access token changes. `cache: false` opts out per request.
