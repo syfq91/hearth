@@ -31,6 +31,12 @@ from app.services.transcode.profile import (
     detect_preset_from_user_agent,
     resolve_client_capabilities,
 )
+from app.services.transcode.targets import (
+    HLS_AUDIO_CODECS,
+    HLS_VIDEO_CODECS,
+    TargetSelection,
+    select_transcode_targets,
+)
 
 __all__ = [
     "ActionType",
@@ -39,6 +45,8 @@ __all__ = [
     "ClientCapabilities",
     "CodecCapability",
     "Container",
+    "HLS_AUDIO_CODECS",
+    "HLS_VIDEO_CODECS",
     "HwAccelMode",
     "PlaybackMode",
     "PlaybackOptions",
@@ -47,6 +55,7 @@ __all__ = [
     "ServerTranscodeCapabilities",
     "SubtitleAction",
     "SubtitleProfile",
+    "TargetSelection",
     "TranscodePlan",
     "TranscodeReason",
     "UserLimits",
@@ -58,4 +67,5 @@ __all__ = [
     "probe_transcode_capabilities",
     "reset_transcode_capabilities_cache",
     "resolve_client_capabilities",
+    "select_transcode_targets",
 ]
