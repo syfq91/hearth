@@ -15,7 +15,8 @@
 		Info,
 		Languages,
 		Captions,
-		Gauge
+		Gauge,
+		MonitorPlay
 	} from '@lucide/svelte';
 	import { api } from '../api/client';
 	import { detectBrowserCapabilities, getCapabilitiesWithBurnInFallback } from '../capabilities';
@@ -24,15 +25,16 @@
 		HlsEngine,
 		isHlsSupported,
 		isNativeHlsSupported,
-		type HlsQualityLevel,
 		type HlsStreamStats
 	} from '../player/hls-engine';
 	import { SubtitleManager } from '../player/subtitles.svelte';
 	import { attachmentFontUrls } from '../video-subtitles';
 	import SubtitleSyncControl from './SubtitleSyncControl.svelte';
-	import type { PlaybackInfoResponse } from '../api/types';
+	import type { PlaybackInfoRequest, PlaybackInfoResponse } from '../api/types';
 	import { session } from '../auth.svelte';
 	import { resolveAutoSubtitle } from '../languages';
+
+	type QualityLevel = NonNullable<PlaybackInfoRequest['quality']>;
 
 	interface Props {
 		itemId: string;
@@ -77,9 +79,8 @@
 	let isMuted = $state(false);
 	let playbackRate = $state(1);
 
-	// Rendition quality levels for HLS
-	let levels = $state<HlsQualityLevel[]>([]);
-	let qualityLevel = $state(-1); // -1 = Auto ABR
+	// User-selected quality ceiling; sent with every playback negotiation.
+	let quality = $state<QualityLevel>('auto');
 	let streamStats = $state<HlsStreamStats | null>(null);
 
 	// Wall clock, ticked so the projected end time stays truthful while paused.
@@ -89,7 +90,7 @@
 	let isUserActive = $state(true);
 	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
 	let showModeBadge = $state(false);
-	let openMenu = $state<'audio' | 'subtitle' | 'speed' | null>(null);
+	let openMenu = $state<'audio' | 'subtitle' | 'speed' | 'quality' | null>(null);
 
 	// Fullscreen & PiP states
 	let isFullscreen = $state(false);
@@ -112,10 +113,18 @@
 	let lastItemId = '';
 	let lastAudioTrack: number | null = null;
 	let lastSubChoice = '';
+	let lastQuality: QualityLevel = 'auto';
 
 	const REPORT_INTERVAL_MS = 10_000;
 	const HIDE_DELAY_MS = 1500;
 	const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+	const QUALITY_OPTIONS: { value: QualityLevel; label: string; detail: string }[] = [
+		{ value: 'auto', label: 'Auto', detail: 'Best available' },
+		{ value: 'sd', label: 'SD', detail: 'up to 480p' },
+		{ value: 'hd', label: 'HD', detail: 'up to 720p' },
+		{ value: 'fhd', label: 'FHD', detail: 'up to 1080p' },
+		{ value: '4k', label: '4K', detail: 'up to 2160p' }
+	];
 
 	const duration = $derived.by(() => {
 		if (rawDuration > 0 && Number.isFinite(rawDuration)) return rawDuration;
@@ -159,7 +168,7 @@
 		triggerActivity();
 	}
 
-	function toggleMenu(menu: 'audio' | 'subtitle' | 'speed'): void {
+	function toggleMenu(menu: 'audio' | 'subtitle' | 'speed' | 'quality'): void {
 		openMenu = openMenu === menu ? null : menu;
 		triggerActivity();
 	}
@@ -548,7 +557,8 @@
 					audio_track_index: audioTrackIndex,
 					subtitle_track_index: embeddedSubtitleIndex,
 					start_time_offset_seconds: offsetSeconds,
-					force_burn_in_subtitles: forceBurnIn
+					force_burn_in_subtitles: forceBurnIn,
+					quality
 				}
 			});
 		} catch (e) {
@@ -598,8 +608,6 @@
 		if (!videoEl) return;
 		resumeApplied = false;
 		lastReportedMs = 0;
-		levels = [];
-		qualityLevel = -1;
 		streamStats = null;
 
 		if (hlsEngine) {
@@ -644,9 +652,6 @@
 			hlsEngine = new HlsEngine(videoEl, source, {
 				startPositionSeconds: resumePositionMs > 0 ? resumePositionMs / 1000 : -1,
 				maxBitrate: response.video_stream?.bit_rate ?? undefined,
-				onLevelLoaded: (loadedLevels) => {
-					levels = loadedLevels;
-				},
 				onStats: (stats) => {
 					streamStats = stats;
 				},
@@ -700,10 +705,12 @@
 		openMenu = null;
 	}
 
-	function handleQualityChange(event: Event): void {
-		const val = Number.parseInt((event.currentTarget as HTMLSelectElement).value, 10);
-		qualityLevel = val;
-		hlsEngine?.setQualityLevel(val);
+	function selectQuality(value: QualityLevel): void {
+		// A quality ceiling changes the negotiated plan, so startPlayback (via
+		// the restart effect) tears down the current HLS session and resumes at
+		// the same position with a fresh session encoded for the new ceiling.
+		quality = value;
+		openMenu = null;
 	}
 
 	function handleOffsetSyncChange(offsetSeconds: number): void {
@@ -776,6 +783,7 @@
 			lastItemId = itemId;
 			lastAudioTrack = audioTrackIndex;
 			lastSubChoice = subtitleChoice;
+			lastQuality = quality;
 			void startPlayback();
 		}
 	});
@@ -783,6 +791,7 @@
 	$effect(() => {
 		const currentItem = itemId;
 		const currentAudio = audioTrackIndex;
+		const currentQuality = quality;
 
 		if (!videoEl || loading) return;
 
@@ -795,9 +804,15 @@
 			resumePositionMs = 0;
 			info = null;
 			forceBurnIn = false;
+			// Quality is a player-level preference and carries over to the next item.
+			lastQuality = currentQuality;
 			void startPlayback();
 		} else if (currentAudio !== lastAudioTrack) {
 			lastAudioTrack = currentAudio;
+			lastQuality = currentQuality;
+			void startPlayback();
+		} else if (currentQuality !== lastQuality) {
+			lastQuality = currentQuality;
 			void startPlayback();
 		}
 	});
@@ -1021,7 +1036,9 @@
 					? 'Audio tracks'
 					: openMenu === 'subtitle'
 						? 'Subtitle tracks'
-						: 'Playback speed'}
+						: openMenu === 'quality'
+							? 'Playback quality'
+							: 'Playback speed'}
 			>
 				{#if openMenu === 'audio'}
 					<div class="menu-heading" role="presentation">Audio</div>
@@ -1081,6 +1098,21 @@
 							onclick={() => selectSubtitle(`emb:${stream.index}`)}
 						>
 							{stream.title ?? stream.language ?? 'Subtitle'} (embedded)
+						</button>
+					{/each}
+				{:else if openMenu === 'quality'}
+					<div class="menu-heading" role="presentation">Quality</div>
+					{#each QUALITY_OPTIONS as option (option.value)}
+						<button
+							type="button"
+							role="menuitemradio"
+							aria-checked={quality === option.value}
+							class="menu-item"
+							class:selected={quality === option.value}
+							onclick={() => selectQuality(option.value)}
+						>
+							<span>{option.label}</span>
+							<span class="menu-item-detail">{option.detail}</span>
 						</button>
 					{/each}
 				{:else}
@@ -1280,25 +1312,19 @@
 					<Gauge size={18} />
 				</button>
 
-				<!-- Quality Selector -->
-				{#if levels.length > 1}
-					<label class="select-label">
-						<span class="visually-hidden">Quality</span>
-						<select
-							class="control-select"
-							value={qualityLevel}
-							onchange={handleQualityChange}
-							aria-label="Quality selection"
-						>
-							<option value={-1}>Auto</option>
-							{#each levels as level (level.index)}
-								<option value={level.index}>
-									{level.height}p ({formatBitrate(level.bitrate)})
-								</option>
-							{/each}
-						</select>
-					</label>
-				{/if}
+				<!-- Quality selector -->
+				<button
+					type="button"
+					class="icon-btn"
+					class:active={openMenu === 'quality' || quality !== 'auto'}
+					onclick={() => toggleMenu('quality')}
+					title="Playback quality"
+					aria-label="Playback quality"
+					aria-haspopup="menu"
+					aria-expanded={openMenu === 'quality'}
+				>
+					<MonitorPlay size={18} />
+				</button>
 
 				<!-- Stream Info -->
 				{#if info}
@@ -1730,34 +1756,6 @@
 		color: var(--muted);
 	}
 
-	.select-label {
-		display: flex;
-		align-items: center;
-	}
-
-	.control-select {
-		background: rgba(22, 27, 34, 0.85);
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		padding: 0.3rem 0.55rem;
-		font-size: 0.8rem;
-		color: var(--text);
-		backdrop-filter: blur(4px);
-		cursor: pointer;
-		outline: none;
-		max-width: 9rem;
-		text-overflow: ellipsis;
-	}
-
-	.control-select:focus-visible {
-		border-color: var(--accent);
-		outline: 2px solid var(--accent);
-	}
-
-	.control-select:hover {
-		border-color: var(--accent);
-	}
-
 	.control-menu {
 		position: absolute;
 		right: 1.5rem;
@@ -1809,6 +1807,13 @@
 	.menu-item.selected {
 		color: var(--accent);
 		font-weight: 600;
+	}
+
+	.menu-item-detail {
+		margin-left: 0.5rem;
+		color: var(--muted);
+		font-size: 0.75rem;
+		font-weight: 400;
 	}
 
 	.buffering-spinner {
