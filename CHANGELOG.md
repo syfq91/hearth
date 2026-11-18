@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The admin **Unmatched** tab now shows the full path of each item's source file(s) (rolling up episode files for series/seasons), accepts an editable metadata search query, and lets the administrator choose which online provider to search via `GET /api/v1/metadata/providers`. `UnmatchedItemResponse` includes a `file_paths` field.
 - A video quality selector (`Auto`, `SD`, `HD`, `FHD`, `4K`) in the player controls. The choice is sent as the new `quality` field on `POST /items/{id}/playback-info` and maps to server-side resolution/bitrate ceilings intersected with device and user limits (ADR 071). Changing it renegotiates playback and resumes at the same position with a fresh transcode session.
 - Structured `playback_decision` logging on every playback-info request: capability source and preset, reason union, chosen encoder targets and dimensions, hardware gate, and the resulting stream URL or session id in one record. The decision engine remains a pure function.
 - Conditional `transcode_targets` in the playback-info capability profile: an ordered list of container/codec targets with typed resolution, bitrate, level and audio-channel ceilings. Targets are filtered by server capability and fMP4/HLS compatibility, ranked by source-codec match, and their ceilings shape the transcode output. A `TranscodeTargetNotSupported` reason reports when no requested target could be honoured (ADR 069).
