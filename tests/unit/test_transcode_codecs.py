@@ -221,3 +221,40 @@ def test_compute_master_codecs_non_high_sources(tmp_path: Path) -> None:
     codecs_hevc = compute_master_codecs(session_hevc)
     assert codecs_hevc == "hvc1.1.6.L93.B0,mp4a.40.2"
     assert "avc1.640028" not in codecs_hevc
+
+
+def test_compute_master_codecs_uses_negotiated_targets(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="transcode",
+        audio_codec="ac3",
+        audio_channels=6,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    session = TranscodeSession(
+        session_id="s_targets",
+        user_id="u1",
+        item_id="i1",
+        file_id="f1",
+        input_path=Path("/media/test.mkv"),
+        output_dir=Path(tmp_path),
+        plan=plan,
+        settings=Settings(transcode_dir=Path(tmp_path)),
+    )
+    assert compute_master_codecs(session) == "avc1.640028,ac-3"
+
+    unknown = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx265",
+        audio_action="transcode",
+        audio_codec="libmp3lame",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    session.plan = unknown
+    assert compute_master_codecs(session) is None

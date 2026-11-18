@@ -237,8 +237,10 @@ def compute_master_codecs(session: TranscodeSession) -> str | None:
 
     # 1. Video stream
     if plan.video_action == "transcode":
-        # Hearth transcode output is always H.264 High Profile Level 4.0
-        video_str = video_codec_string("h264", profile="High", level=4.0)
+        # The plan carries the encoder name chosen during negotiation. H.264
+        # encoders map to High@4.0, which is what the builder produces; an
+        # unknown encoder is omitted rather than given a fabricated string.
+        video_str = video_codec_string(plan.video_codec, profile="High", level=4.0)
     elif plan.video_action == "copy" and session.source_video:
         video_str = video_codec_string(
             session.source_video.codec_name,
@@ -248,8 +250,11 @@ def compute_master_codecs(session: TranscodeSession) -> str | None:
 
     # 2. Audio stream
     if plan.audio_action == "transcode":
-        # Hearth audio transcode target is AAC-LC
-        audio_str = audio_codec_string("aac", profile="LC")
+        target = (plan.audio_codec or "").lower()
+        if target in ("aac", "mp4a"):
+            audio_str = audio_codec_string("aac", profile="LC")
+        else:
+            audio_str = audio_codec_string(target)
     elif plan.audio_action == "copy" and session.source_audio:
         audio_str = audio_codec_string(
             session.source_audio.codec_name,

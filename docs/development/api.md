@@ -179,6 +179,8 @@ Clients provide their codec support, display bounds, and network restrictions, o
 
 All fields are optional. Keys are snake_case only; unknown keys are ignored (ADR 068). Explicit codec/container lists replace the preset's lists, so clients that send overrides should send every limit they intend to enforce.
 
+`video_transcode_codecs` and `audio_transcode_codecs` are ordered encoder preferences, separate from the pass-through `video_codecs`/`audio_codecs` lists. A client that can decode both H.264 and HEVC can, for example, put `hevc` first with `h264` as fallback. The server filters this list through its own encoder capability and an HLS codec allow-list, then prefers a target matching the source codec so quality and channel layout are preserved. Defaults are `["h264"]` and `["aac"]`, so clients that omit these fields keep Hearth's existing output.
+
 ### 3.2 Response Payload
 The server returns the playback mode, stream URLs, stream metadata, and stable machine-readable decision reasons. The `mode` is one of `direct_play`, `remux_hls`, `transcode_hls`; `url` is set for direct play, and `hls_url`/`session_id` are set for the two HLS modes.
 
@@ -226,7 +228,7 @@ The server returns the playback mode, stream URLs, stream metadata, and stable m
 }
 ```
 
-The `reasons` values are stable `TranscodeReason` identifiers, not prose. `plan` and `command` are populated for HLS modes; `command` is the exact ffmpeg argv and is intended for diagnostics.
+The `reasons` values are stable `TranscodeReason` identifiers, not prose. `plan` and `command` are populated for HLS modes; `command` is the exact ffmpeg argv and is intended for diagnostics. `plan.video_codec` and `plan.audio_codec` hold the negotiated ffmpeg encoder names (for example `libx264`/`h264_vaapi` and `aac`); they are the result of the client's ordered target preferences filtered by server capability, not fixed server constants.
 
 ### 3.3 Transcode Session Lifecycle and HLS Delivery
 When `mode` is `transcode_hls` or `remux_hls`:

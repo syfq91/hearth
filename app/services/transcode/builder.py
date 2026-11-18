@@ -201,22 +201,12 @@ def build_ffmpeg_hls_command(
         sw_filters.append("format=yuv420p")
 
         cmd.extend(["-vf", ",".join(sw_filters)])
-        cmd.extend(
-            [
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-crf",
-                "23",
-                "-pix_fmt",
-                "yuv420p",
-                "-force_key_frames",
-                keyframe_expr,
-                "-sc_threshold",
-                "0",
-            ]
-        )
+        software_encoder = plan.video_codec or "libx264"
+        cmd.extend(["-c:v", software_encoder])
+        if software_encoder == "libx264":
+            cmd.extend(["-preset", "veryfast", "-crf", "23", "-sc_threshold", "0"])
+        # Every software target writes 8-bit 4:2:0 into the fMP4 packager.
+        cmd.extend(["-pix_fmt", "yuv420p", "-force_key_frames", keyframe_expr])
         if plan.target_bitrate:
             kbps = int(plan.target_bitrate / 1000)
             max_kbps = int(kbps * 1.2)
@@ -230,7 +220,7 @@ def build_ffmpeg_hls_command(
         cmd.extend(
             [
                 "-c:a",
-                "aac",
+                plan.audio_codec or "aac",
                 "-ac",
                 str(plan.audio_channels or 2),
                 "-b:a",

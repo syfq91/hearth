@@ -604,3 +604,23 @@ def test_builder_short_first_segment_ignored_when_not_shorter(tmp_path: Path) ->
     )
     assert cmd[cmd.index("-force_key_frames") + 1] == "expr:gte(t,n_forced*4)"
     assert cmd[cmd.index("-hls_time") + 1] == "4"
+
+
+def test_builder_uses_negotiated_software_targets(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx265",
+        audio_action="transcode",
+        audio_codec="ac3",
+        audio_channels=6,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(plan, Path("/media/movie.mkv"), tmp_path)
+    assert cmd[cmd.index("-c:v") + 1] == "libx265"
+    assert cmd[cmd.index("-c:a") + 1] == "ac3"
+    assert "-preset" not in cmd
+    assert "-sc_threshold" not in cmd
+    assert cmd[cmd.index("-pix_fmt") + 1] == "yuv420p"
+    assert "-force_key_frames" in cmd
