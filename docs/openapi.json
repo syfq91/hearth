@@ -1609,6 +1609,13 @@
             "title": "Audio Codecs",
             "type": "array"
           },
+          "audio_transcode_codecs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Audio Transcode Codecs",
+            "type": "array"
+          },
           "containers": {
             "items": {
               "type": "string"
@@ -1731,6 +1738,13 @@
               "type": "string"
             },
             "title": "Video Profiles",
+            "type": "array"
+          },
+          "video_transcode_codecs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Video Transcode Codecs",
             "type": "array"
           }
         },

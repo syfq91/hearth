@@ -33,6 +33,11 @@ class ClientCapabilities(BaseModel):
     video_codecs: list[str] = Field(default_factory=list)
     video_profiles: list[str] = Field(default_factory=list)
     audio_codecs: list[str] = Field(default_factory=list)
+    # "Produce this" rules, ordered by preference. Unlike the pass-through lists
+    # above, these name encoder targets, not formats accepted as-is. The server
+    # filters them by what it can encode and by the HLS codec allow-list.
+    video_transcode_codecs: list[str] = Field(default_factory=lambda: ["h264"])
+    audio_transcode_codecs: list[str] = Field(default_factory=lambda: ["aac"])
     max_width: int | None = Field(default=None, gt=0)
     max_height: int | None = Field(default=None, gt=0)
     max_bitrate: int | None = Field(default=None, gt=0)
@@ -268,6 +273,10 @@ def resolve_client_capabilities(
         base.video_profiles = [p.lower().strip() for p in client.video_profiles]
     if client.audio_codecs:
         base.audio_codecs = [a.lower().strip() for a in client.audio_codecs]
+    if client.video_transcode_codecs:
+        base.video_transcode_codecs = [c.lower().strip() for c in client.video_transcode_codecs]
+    if client.audio_transcode_codecs:
+        base.audio_transcode_codecs = [c.lower().strip() for c in client.audio_transcode_codecs]
     if client.subtitle_formats:
         base.subtitle_formats = [s.lower().strip() for s in client.subtitle_formats]
     if client.subtitle_profiles:

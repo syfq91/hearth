@@ -3069,6 +3069,8 @@ export interface components {
         ClientCapabilities: {
             /** Audio Codecs */
             audio_codecs?: string[];
+            /** Audio Transcode Codecs */
+            audio_transcode_codecs?: string[];
             /** Containers */
             containers?: string[];
             /**
@@ -3098,6 +3100,8 @@ export interface components {
             video_codecs?: string[];
             /** Video Profiles */
             video_profiles?: string[];
+            /** Video Transcode Codecs */
+            video_transcode_codecs?: string[];
         };
         /**
          * CodecCapability

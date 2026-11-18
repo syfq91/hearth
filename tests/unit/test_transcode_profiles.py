@@ -214,6 +214,35 @@ def test_explicit_capabilities_win_over_ua_preset() -> None:
     assert res.containers == ["mkv"]
 
 
+def test_transcode_targets_default_to_conservative_codecs() -> None:
+    res = resolve_client_capabilities(None)
+    assert res.video_transcode_codecs == ["h264"]
+    assert res.audio_transcode_codecs == ["aac"]
+
+
+def test_transcode_targets_are_ordered_and_normalized() -> None:
+    client = ClientCapabilities(
+        preset="chrome",
+        video_transcode_codecs=[" HEVC ", "H264"],
+        audio_transcode_codecs=["Opus", " AAC "],
+    )
+    res = resolve_client_capabilities(client)
+    assert res.video_transcode_codecs == ["hevc", "h264"]
+    assert res.audio_transcode_codecs == ["opus", "aac"]
+
+
+def test_transcode_targets_survive_explicit_pass_through_override() -> None:
+    client = ClientCapabilities(
+        video_codecs=["hevc"],
+        containers=["mkv"],
+        video_transcode_codecs=["vp9"],
+    )
+    res = resolve_client_capabilities(client)
+    assert res.video_codecs == ["hevc"]
+    assert res.video_transcode_codecs == ["vp9"]
+    assert res.audio_transcode_codecs == ["aac"]
+
+
 def test_pascal_case_capability_keys_are_not_aliased() -> None:
     """Only snake_case keys are part of the capability contract."""
     profile = SubtitleProfile.model_validate({"Format": "ass", "Method": "External"})
