@@ -149,65 +149,87 @@ flowchart TD
 ```
 
 ### 3.1 Request Payload: Client Capability Profile
-Clients provide their codec support, display bounds, and network restrictions, or choose from built-in device presets (`chrome`, `firefox`, `safari`, `android_tv`, `unknown`).
+Clients provide their codec support, display bounds, and network restrictions, or choose from built-in device presets (`chrome`, `firefox`, `safari`, `android_tv`, `unknown`). The body is optional; omitting it asks the server to use User-Agent detection and the conservative `unknown` preset.
 
 ```json
 {
-  "client": {
+  "file_id": "018f0000-0000-7000-8000-000000000000",
+  "capabilities": {
     "preset": "chrome",
-    "containers": ["mp4", "mkv", "webm"],
-    "video_codecs": ["h264", "hevc", "av1", "vp9"],
-    "audio_codecs": ["aac", "opus", "mp3", "flac"],
+    "containers": ["mp4", "webm"],
+    "video_codecs": ["h264", "vp9", "av1"],
+    "video_profiles": ["baseline", "main", "high"],
+    "audio_codecs": ["aac", "opus", "mp3"],
     "max_width": 1920,
     "max_height": 1080,
-    "max_video_bitrate_kbps": 8000,
-    "supports_hdr": false,
-    "supports_hls_fmp4": true
+    "max_bitrate": 8000000,
+    "max_video_level": 40,
+    "max_audio_channels": 6,
+    "hdr": false,
+    "subtitle_formats": ["vtt"],
+    "subtitle_profiles": [{"format": "vtt", "method": "external"}]
   },
-  "audio_index": 1,
-  "subtitle_index": 0
+  "audio_track_index": 1,
+  "subtitle_track_index": 0,
+  "start_time_offset_seconds": 0.0,
+  "target_max_bitrate": 8000000,
+  "force_burn_in_subtitles": false
 }
 ```
 
+All fields are optional. Keys are snake_case only; unknown keys are ignored (ADR 068). Explicit codec/container lists replace the preset's lists, so clients that send overrides should send every limit they intend to enforce.
+
 ### 3.2 Response Payload
-The server returns the optimal playback method, stream URLs, active audio/subtitle track metadata, and human-readable decision reasons.
+The server returns the playback mode, stream URLs, stream metadata, and stable machine-readable decision reasons. The `mode` is one of `direct_play`, `remux_hls`, `transcode_hls`; `url` is set for direct play, and `hls_url`/`session_id` are set for the two HLS modes.
 
 ```json
 {
-  "method": "transcode_hls",
+  "mode": "transcode_hls",
+  "url": null,
+  "hls_url": "/api/v1/hls/9f2c.../master.m3u8?token=...",
+  "session_id": "9f2c...",
+  "file": {
+    "id": "018f0000-0000-7000-8000-000000000000",
+    "container": "matroska,webm",
+    "duration_seconds": 5400.0,
+    "size_bytes": 123456789
+  },
+  "video_stream": {
+    "index": 0, "codec_type": "video", "codec_name": "hevc",
+    "width": 3840, "height": 2160, "is_hdr": true
+  },
+  "audio_streams": [
+    {"index": 1, "codec_type": "audio", "codec_name": "truehd", "channels": 8, "language": "eng"},
+    {"index": 2, "codec_type": "audio", "codec_name": "ac3", "channels": 6, "language": "spa"}
+  ],
+  "embedded_subtitles": [],
+  "subtitles": [],
+  "attachments": [],
+  "reasons": ["VideoCodecNotSupported", "VideoResolutionNotSupported"],
+  "expires_at": "2026-11-19T02:00:00Z",
   "plan": {
+    "mode": "transcode_hls",
     "video_action": "transcode",
+    "video_codec": "libx264",
     "audio_action": "transcode",
-    "subtitle_action": "burn_in",
-    "target_video_codec": "h264",
-    "target_audio_codec": "aac",
+    "audio_codec": "aac",
+    "audio_channels": 8,
+    "subtitle_action": "none",
     "target_width": 1920,
     "target_height": 1080,
-    "reasons": [
-      "Client max resolution 1920x1080 requires downscaling from 3840x2160",
-      "Source HDR10 requires SDR tonemapping for client",
-      "Bitmap PGS subtitles require video burn-in"
-    ]
+    "target_bitrate": 8000000,
+    "hwaccel": "none",
+    "tonemap_hdr": true,
+    "reasons": ["VideoCodecNotSupported", "VideoResolutionNotSupported"]
   },
-  "stream_url": "/api/v1/hls/session-c70e28f2/master.m3u8",
-  "session_id": "session-c70e28f2",
-  "media_streams": {
-    "video": [
-      {"index": 0, "codec": "hevc", "width": 3840, "height": 2160, "hdr": true}
-    ],
-    "audio": [
-      {"index": 1, "codec": "truehd", "channels": 8, "language": "eng"},
-      {"index": 2, "codec": "ac3", "channels": 6, "language": "spa"}
-    ],
-    "subtitles": [
-      {"index": 0, "format": "pgs", "language": "eng", "forced": false}
-    ]
-  }
+  "command": ["ffmpeg", "-hide_banner", "..."]
 }
 ```
 
+The `reasons` values are stable `TranscodeReason` identifiers, not prose. `plan` and `command` are populated for HLS modes; `command` is the exact ffmpeg argv and is intended for diagnostics.
+
 ### 3.3 Transcode Session Lifecycle and HLS Delivery
-When `method` is `transcode_hls` or `remux_hls`:
+When `mode` is `transcode_hls` or `remux_hls`:
 1. **Master Playlist**: `GET /api/v1/hls/{session_id}/master.m3u8` delays responding until ffmpeg emits the first segment, eliminating player race conditions.
 2. **Media Playlist**: `GET /api/v1/hls/{session_id}/media.m3u8` rewrites segment URLs to preserve media access tokens across child requests. Video transcodes open with a shorter first segment (`HEARTH_TRANSCODE_FIRST_SEGMENT_DURATION_SECONDS`, default 2s) so playback can start before a full segment is encoded; `#EXT-X-TARGETDURATION` reports the longest segment, and every later segment keeps the configured duration.
 3. **Segments**: Init (`init.mp4`) and media chunks (`seg_0.m4s`, `seg_1.m4s`, ...) are served with `Cache-Control`.

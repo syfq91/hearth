@@ -170,8 +170,10 @@ temporary paths. Defaults assume the container filesystem contract:
   read-only and never create the database.
 - Secrets belong in environment variables or `/config`, never the repository.
 - Authentication, roles, media access tokens, login throttling, the durable job
-  queue, scanning, metadata matching and the movie read API are implemented;
-  streaming and transcoding arrive in Phases 3–4.
+  queue, scanning, metadata matching, direct byte-range streaming and VAAPI/x264
+  transcoding are all implemented. Playback negotiation is the pure decision
+  engine in `app/services/transcode/decision.py`; see `api.md` §3 and the
+  playback ADRs for details.
 
 ## Health contract
 
