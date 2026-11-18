@@ -26,6 +26,13 @@ from app.services.metadata.base import (
 
 logger = logging.getLogger("hearth.plugins.tmdb.client")
 
+TMDB_SITE_URL = "https://www.themoviedb.org"
+
+
+def _source_url(kind: str, provider_id: str) -> str:
+    """Link to the public TMDB page for a movie or TV series."""
+    return f"{TMDB_SITE_URL}/{kind}/{provider_id}"
+
 
 def _year_from_date(value: Any) -> int | None:
     if not isinstance(value, str) or len(value) < 4 or not value[:4].isdigit():
@@ -116,6 +123,7 @@ class TMDBClient:
                     poster_url=self._image_url(item.get("poster_path"), "w342"),
                     backdrop_url=self._image_url(item.get("backdrop_path"), "w780"),
                     popularity=_as_float(item.get("popularity")) or 0.0,
+                    source_url=_source_url("movie", str(provider_id)),
                 )
             )
         return results
@@ -263,6 +271,7 @@ class TMDBClient:
                     poster_url=self._image_url(item.get("poster_path"), "w342"),
                     backdrop_url=self._image_url(item.get("backdrop_path"), "w780"),
                     popularity=_as_float(item.get("popularity")) or 0.0,
+                    source_url=_source_url("tv", str(provider_id)),
                 )
             )
         return results

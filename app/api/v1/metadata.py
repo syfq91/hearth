@@ -58,6 +58,7 @@ class SearchResultResponse(BaseModel):
     poster_url: str | None = None
     backdrop_url: str | None = None
     popularity: float = 0.0
+    source_url: str | None = None
 
 
 class MatchRequest(BaseModel):
@@ -180,4 +181,5 @@ def _search_response(result: SearchResult) -> SearchResultResponse:
         poster_url=result.poster_url,
         backdrop_url=result.backdrop_url,
         popularity=result.popularity,
+        source_url=result.source_url,
     )

@@ -25,6 +25,7 @@ class SearchResult:
     poster_url: str | None = None
     backdrop_url: str | None = None
     popularity: float = 0.0
+    source_url: str | None = None
 
 
 @dataclass(frozen=True)

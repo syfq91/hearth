@@ -142,6 +142,8 @@ async def test_search_maps_results_and_sends_api_key(
     assert results[0].year == 1999
     assert results[0].poster_url.endswith("/w342/matrix-poster.jpg")
     assert results[1].poster_url is None
+    assert results[0].source_url == "https://www.themoviedb.org/movie/603"
+    assert results[1].source_url == "https://www.themoviedb.org/movie/604"
     assert requests[0].url.path == "/3/search/movie"
     assert requests[0].url.params["query"] == "The Matrix"
     assert requests[0].url.params["year"] == "1999"
@@ -480,6 +482,8 @@ async def test_search_tv_maps_results_and_sends_first_air_date_year(
     assert results[0].year == 2008
     assert results[0].poster_url.endswith("/w342/breaking-bad-poster.jpg")
     assert results[1].poster_url is None
+    assert results[0].source_url == "https://www.themoviedb.org/tv/1396"
+    assert results[1].source_url == "https://www.themoviedb.org/tv/60059"
     assert requests[0].url.path == "/3/search/tv"
     assert requests[0].url.params["query"] == "Breaking Bad"
     assert requests[0].url.params["first_air_date_year"] == "2008"

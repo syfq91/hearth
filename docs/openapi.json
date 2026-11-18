@@ -5633,6 +5633,17 @@
             "title": "Provider Id",
             "type": "string"
           },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
           "title": {
             "title": "Title",
             "type": "string"

@@ -66,6 +66,7 @@ async def test_openlibrary_search_and_details(settings: Settings) -> None:
     assert results[0].title == "Dune"
     assert results[0].year == 1965
     assert results[0].provider_id == "/works/OL102749W"
+    assert results[0].source_url == "https://openlibrary.org/works/OL102749W"
     assert "5013444" in (results[0].poster_url or "")
 
     details = await provider.fetch_book_details("/works/OL102749W")
@@ -112,6 +113,7 @@ async def test_googlebooks_search_and_details(settings: Settings) -> None:
     assert len(results) == 1
     assert results[0].title == "Dune"
     assert results[0].provider_id == "B1R1CwAAQBAJ"
+    assert results[0].source_url == "https://books.google.com/books?id=B1R1CwAAQBAJ"
 
     details = await provider.fetch_book_details("B1R1CwAAQBAJ")
     assert details is not None

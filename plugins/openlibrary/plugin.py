@@ -166,6 +166,9 @@ class OpenLibraryPlugin(MetadataPlugin[OpenLibraryConfig]):
             if isinstance(overview, list):
                 overview = overview[0] if overview else None
 
+            source_url = (
+                f"{self.base_url}{key}" if key.startswith("/") else f"{self.base_url}/{key}"
+            )
             results.append(
                 SearchResult(
                     provider=self.name,
@@ -174,6 +177,7 @@ class OpenLibraryPlugin(MetadataPlugin[OpenLibraryConfig]):
                     year=year,
                     overview=overview,
                     poster_url=poster_url,
+                    source_url=source_url,
                 )
             )
         return results

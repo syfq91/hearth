@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from pydantic import BaseModel, Field
@@ -191,6 +192,7 @@ class GoogleBooksPlugin(MetadataPlugin[GoogleBooksConfig]):
                     year=year,
                     overview=overview,
                     poster_url=poster_url,
+                    source_url=f"https://books.google.com/books?id={quote(str(v_id), safe='')}",
                 )
             )
         return results

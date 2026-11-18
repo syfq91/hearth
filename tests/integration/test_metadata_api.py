@@ -173,7 +173,14 @@ async def test_search_endpoint_returns_and_filters_results(
     admin = await _setup(api_client)
     provider = FakeProvider(
         results=[
-            SearchResult("tmdb", "603", "The Matrix", 1999, popularity=80.0),
+            SearchResult(
+                "tmdb",
+                "603",
+                "The Matrix",
+                1999,
+                popularity=80.0,
+                source_url="https://www.themoviedb.org/movie/603",
+            ),
             SearchResult("tmdb", "604", "The Matrix Reloaded", 2003, popularity=40.0),
         ]
     )
@@ -188,6 +195,8 @@ async def test_search_endpoint_returns_and_filters_results(
     assert response.status_code == 200, response.text
     body = response.json()
     assert [result["provider_id"] for result in body] == ["603", "604"]
+    assert body[0]["source_url"] == "https://www.themoviedb.org/movie/603"
+    assert body[1]["source_url"] is None
 
     filtered = await api_client.get(
         "/api/v1/metadata/search",

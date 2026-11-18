@@ -4558,6 +4558,8 @@ export interface components {
             provider: string;
             /** Provider Id */
             provider_id: string;
+            /** Source Url */
+            source_url?: string | null;
             /** Title */
             title: string;
             /** Year */

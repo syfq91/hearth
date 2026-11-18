@@ -109,6 +109,10 @@ async def test_search_artist(
         assert results[0].provider_id == "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d"
         assert results[0].title == "The Beatles"
         assert "legendary 60s" in (results[0].overview or "")
+        assert (
+            results[0].source_url
+            == "https://musicbrainz.org/artist/b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d"
+        )
 
         assert len(captured) == 1
         req = captured[0]
@@ -155,6 +159,10 @@ async def test_search_album(
         assert results[0].year == 1969
         assert "coverartarchive.org/release/a6da631a-e4cc-4299-8ab4-3ab833630f9d/front" in (
             results[0].poster_url or ""
+        )
+        assert (
+            results[0].source_url
+            == "https://musicbrainz.org/release/a6da631a-e4cc-4299-8ab4-3ab833630f9d"
         )
     finally:
         await client.aclose()

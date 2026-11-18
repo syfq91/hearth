@@ -24,6 +24,13 @@ from app.services.metadata.base import (
 
 logger = logging.getLogger("hearth.plugins.musicbrainz.client")
 
+MUSICBRAINZ_SITE_URL = "https://musicbrainz.org"
+
+
+def _source_url(kind: str, mbid: str) -> str:
+    """Link to the public MusicBrainz page for an artist or release."""
+    return f"{MUSICBRAINZ_SITE_URL}/{kind}/{mbid}"
+
 
 def _year_from_date(value: Any) -> int | None:
     if not isinstance(value, str) or len(value) < 4 or not value[:4].isdigit():
@@ -124,6 +131,7 @@ class MusicBrainzClient:
                     title=str(name),
                     overview=" - ".join(desc_parts) if desc_parts else None,
                     popularity=score,
+                    source_url=_source_url("artist", str(mbid)),
                 )
             )
         return results
@@ -219,6 +227,7 @@ class MusicBrainzClient:
                     year=year,
                     poster_url=poster_url,
                     popularity=score,
+                    source_url=_source_url("release", str(mbid)),
                 )
             )
         return results

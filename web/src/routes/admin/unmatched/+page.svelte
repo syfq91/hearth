@@ -94,8 +94,8 @@
 </svelte:head>
 
 <p class="intro">
-	Items the matcher could not identify. Search metadata providers and pick the right match, or
-	trigger a rematch with the automatic matcher.
+	Items the matcher could not identify. Search metadata providers and pick the right match — open a
+	candidate's source page to verify it first — or trigger a rematch with the automatic matcher.
 </p>
 
 {#if message}
@@ -177,8 +177,33 @@
 							{#each candidates[item.id] as candidate (`${candidate.provider}:${candidate.provider_id}`)}
 								<li class="candidate">
 									<div class="candidate-info">
-										<strong>{candidate.title}</strong>
-										{#if candidate.year}<span class="muted"> ({candidate.year})</span>{/if}
+										<div class="candidate-title">
+											{#if candidate.source_url}
+												<a
+													class="title-link"
+													href={candidate.source_url}
+													target="_blank"
+													rel="noopener noreferrer"
+													title={`Open ${candidate.title} on ${candidate.provider}`}
+												>
+													<strong>{candidate.title}</strong>
+												</a>
+											{:else}
+												<strong>{candidate.title}</strong>
+											{/if}
+											{#if candidate.year}<span class="muted">({candidate.year})</span>{/if}
+											{#if candidate.source_url}
+												<a
+													class="source-link"
+													href={candidate.source_url}
+													target="_blank"
+													rel="noopener noreferrer"
+													title={`Open source page on ${candidate.provider}`}
+												>
+													View source ↗
+												</a>
+											{/if}
+										</div>
 										<p class="provider">{candidate.provider} · {candidate.provider_id}</p>
 									</div>
 									<button
@@ -300,6 +325,35 @@
 
 	.candidate-info {
 		min-width: 0;
+	}
+
+	.candidate-title {
+		display: flex;
+		align-items: baseline;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+	}
+
+	.title-link {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.title-link:hover strong,
+	.source-link:hover {
+		text-decoration: underline;
+	}
+
+	.source-link {
+		color: var(--accent);
+		font-size: 0.75rem;
+		white-space: nowrap;
+	}
+
+	.source-link:focus-visible,
+	.title-link:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
 	}
 
 	.provider {

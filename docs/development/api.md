@@ -396,7 +396,7 @@ If a client encounters an unrecoverable client-side subtitle crash, it can re-re
 | | `/api/v1/admin/restore` | POST | Admin | Restore database from backup archive |
 | | `/api/v1/admin/unmatched` | GET | Admin | List unmatched/pending items with their source file paths |
 | | `/api/v1/metadata/providers` | GET | Admin | List enabled online providers for manual matching |
-| | `/api/v1/metadata/search` | GET | Admin | Search provider candidates; pass `item_id` to dispatch to that item's media-type provider surface (e.g. `search_book` for books) |
+| | `/api/v1/metadata/search` | GET | Admin | Search provider candidates; pass `item_id` to dispatch to that item's media-type provider surface (e.g. `search_book` for books). Results include a `source_url` linking to the provider's public page when available, so the admin UI can open it to verify a candidate |
 | | `/api/v1/admin/logs` | GET | Admin | Tail structured server logs with level, category, and search filters |
 | | `/api/v1/admin/scanner/settings` | GET, PUT | Admin | Read or update automatic library file scanning interval |
 | | `/api/v1/admin/transcoding/capabilities` | GET | Admin | Inspect hardware VAAPI capabilities |
