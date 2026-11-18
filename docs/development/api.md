@@ -365,6 +365,7 @@ If a client encounters an unrecoverable client-side subtitle crash, it can re-re
 | | `/api/v1/libraries/{id}/scan` | POST | Admin | Trigger background library scan |
 | **Catalog** | `/api/v1/items/{id}` | GET | User | Item detail with ETag and field selection |
 | | `/api/v1/items/{id}/playback-info` | POST | User | Negotiate playback options and stream URLs |
+| | `/api/v1/items/{id}/match` | POST | Admin | Attach a chosen provider candidate to an item (manual match) |
 | | `/api/v1/items/{id}/progress` | POST | User | Update playback progress and watch state |
 | | `/api/v1/items/{id}/favorite` | POST | User | Toggle favorite flag |
 | | `/api/v1/items/{id}/rating` | PUT | User | Set 1–5 star rating |
@@ -393,6 +394,9 @@ If a client encounters an unrecoverable client-side subtitle crash, it can re-re
 | **Admin** | `/api/v1/admin/audit` | GET | Admin | View audit log |
 | | `/api/v1/admin/backup` | POST | Admin | Create online SQLite backup archive |
 | | `/api/v1/admin/restore` | POST | Admin | Restore database from backup archive |
+| | `/api/v1/admin/unmatched` | GET | Admin | List unmatched/pending items with their source file paths |
+| | `/api/v1/metadata/providers` | GET | Admin | List enabled online providers for manual matching |
+| | `/api/v1/metadata/search` | GET | Admin | Search provider candidates; pass `item_id` to dispatch to that item's media-type provider surface (e.g. `search_book` for books) |
 | | `/api/v1/admin/logs` | GET | Admin | Tail structured server logs with level, category, and search filters |
 | | `/api/v1/admin/scanner/settings` | GET, PUT | Admin | Read or update automatic library file scanning interval |
 | | `/api/v1/admin/transcoding/capabilities` | GET | Admin | Inspect hardware VAAPI capabilities |

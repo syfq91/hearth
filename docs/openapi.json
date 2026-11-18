@@ -13570,7 +13570,7 @@
     },
     "/api/v1/metadata/search": {
       "get": {
-        "description": "Search configured metadata providers for a manual match.",
+        "description": "Search configured metadata providers for a manual match.\n\nWhen ``item_id`` is supplied the search is dispatched to providers that\nsupport that item's media type (books need ``search_book``, for example).",
         "operationId": "search_metadata_api_v1_metadata_search_get",
         "parameters": [
           {
@@ -13617,6 +13617,23 @@
                 }
               ],
               "title": "Provider"
+            }
+          },
+          {
+            "in": "query",
+            "name": "item_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Id"
             }
           }
         ],

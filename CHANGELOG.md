@@ -82,6 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `hls_fmp4` client capability flag and the `default_max_bitrate` field on the admin transcoding settings API. Neither ever affected playback: Hearth only emits fMP4 HLS, and no `Settings.default_max_bitrate` existed to read.
 
 ### Fixed
+- Manual matching from the admin **Unmatched** tab now finds books. The search endpoint called the generic provider search surface, which book plugins leave unimplemented, so Google Books never returned candidates and applying one failed with a 502. `GET /api/v1/metadata/search` now accepts `item_id` and dispatches to `search_book`/`fetch_book_details` for book items, passing the item's author (and unedited ISBN) as hints.
+- Google Books searches now use the same free-text relevance query as the website instead of a strict `intitle:` phrase match, so volumes whose number or subtitle differs in punctuation (for example *A Certain Scientific Railgun, Vol. 1*) are found.
 - Video playback no longer blocks on an unnecessary `next-up` request for movies. The watch route only fetches a series' next-up hint after the item is known to be a series, so a slow or stalled request can no longer prevent the player from mounting.
 - Finished items no longer open the player and jump straight to the end. The near-end resume guard now checks the server resume point (it previously checked a value that was always positive by that point, making the guard unreachable).
 - The API client no longer emits an unhandled rejection for failed cacheable GETs, and expired cache entries now send `If-None-Match` so a 304 can reuse the cached body as intended.

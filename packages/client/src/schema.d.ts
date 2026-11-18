@@ -1726,6 +1726,9 @@ export interface paths {
         /**
          * Search Metadata
          * @description Search configured metadata providers for a manual match.
+         *
+         *     When ``item_id`` is supplied the search is dispatched to providers that
+         *     support that item's media type (books need ``search_book``, for example).
          */
         get: operations["search_metadata_api_v1_metadata_search_get"];
         put?: never;
@@ -8331,6 +8334,7 @@ export interface operations {
                 query: string;
                 year?: number | null;
                 provider?: string | null;
+                item_id?: string | null;
             };
             header?: never;
             path?: never;
