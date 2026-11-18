@@ -378,6 +378,47 @@ class MetadataMatcher:
         results.sort(key=lambda result: result.popularity, reverse=True)
         return results
 
+    async def search_for_item(
+        self,
+        item_id: str,
+        query: str,
+        year: int | None = None,
+    ) -> list[SearchResult]:
+        """Search the providers that support an item's media type.
+
+        Book plugins expose ``search_book`` instead of the generic ``search``
+        surface, so the manual-match path must dispatch by media type or it
+        silently returns no candidates for books.
+        """
+        snapshot = await self._load_snapshot(item_id)
+        if snapshot is None:
+            return []
+        if snapshot.type != "book":
+            return await self.search(query, year)
+
+        results: list[SearchResult] = []
+        errors: list[ProviderError] = []
+        for provider in self.get_providers_for("book", library_id=snapshot.library_id):
+            if provider.name == "local" or not provider.enabled:
+                continue
+            self._provider_calls += 1
+            try:
+                # Honour an edited query; only use the local ISBN when the user
+                # is searching with the item's own title.
+                results.extend(
+                    await provider.search_book(
+                        query,
+                        author=snapshot.author_name,
+                        isbn=snapshot.isbn if query == snapshot.title else None,
+                    )
+                )
+            except ProviderError as exc:
+                errors.append(exc)
+        if not results and errors:
+            raise errors[0]
+        results.sort(key=lambda result: result.popularity, reverse=True)
+        return results
+
     async def manual_match(self, item_id: str, provider_name: str, provider_id: str) -> MatchResult:
         """Attach a specific provider candidate to an item, bypassing scoring."""
 
@@ -387,6 +428,8 @@ class MetadataMatcher:
 
         if snapshot.type == "series":
             return await self._apply_series_match(snapshot, provider_name, provider_id, score=1.0)
+        if snapshot.type == "book":
+            return await self._manual_match_book(snapshot, provider_name, provider_id)
 
         provider = next(
             (candidate for candidate in self.providers if candidate.name == provider_name),
@@ -412,6 +455,32 @@ class MetadataMatcher:
                 )
 
         return await self._apply(snapshot, provider_name, provider_id, details, images, None)
+
+    async def _manual_match_book(
+        self, snapshot: _ItemSnapshot, provider_name: str, provider_id: str
+    ) -> MatchResult:
+        """Attach a book candidate using the book-specific provider methods."""
+        provider = self.get_provider(provider_name)
+        if provider is None:
+            raise ProviderUnavailable(f"Provider {provider_name!r} is not configured")
+
+        self._provider_calls += 1
+        details = await provider.fetch_book_details(provider_id)
+        if details is None:
+            raise ProviderError(f"Provider {provider_name!r} has no book {provider_id!r}")
+
+        images = list(details.images)
+        if not images:
+            self._provider_calls += 1
+            try:
+                images = await provider.fetch_book_images(provider_id)
+            except ProviderError:
+                logger.warning(
+                    "book image lookup failed during manual match",
+                    extra={"item_id": snapshot.id, "provider": provider_name},
+                )
+
+        return await self._apply_book_match(snapshot, provider_name, provider_id, details, images)
 
     async def close(self) -> None:
         """Release clients owned by the providers and the artwork handler."""

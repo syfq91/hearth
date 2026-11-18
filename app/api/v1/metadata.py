@@ -85,13 +85,21 @@ async def search_metadata(
     query: Annotated[str, Query(min_length=1, max_length=200)],
     year: Annotated[int | None, Query(ge=1800, le=2100)] = None,
     provider: Annotated[str | None, Query(max_length=32)] = None,
+    item_id: Annotated[str | None, Query(max_length=64)] = None,
 ) -> list[SearchResultResponse]:
-    """Search configured metadata providers for a manual match."""
+    """Search configured metadata providers for a manual match.
+
+    When ``item_id`` is supplied the search is dispatched to providers that
+    support that item's media type (books need ``search_book``, for example).
+    """
 
     if provider is not None and matcher.get_provider(provider) is None:
         raise ValidationError(f"Unknown metadata provider {provider!r}", code="unknown_provider")
     try:
-        results = await matcher.search(query, year)
+        if item_id is not None:
+            results = await matcher.search_for_item(item_id, query, year)
+        else:
+            results = await matcher.search(query, year)
     except ProviderError as exc:
         raise BadGatewayError(str(exc), code="metadata_provider_error") from None
 
