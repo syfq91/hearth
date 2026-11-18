@@ -7125,6 +7125,13 @@
             "title": "Added At",
             "type": "string"
           },
+          "file_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "File Paths",
+            "type": "array"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -13527,6 +13534,37 @@
         "summary": "Get Embedded Subtitle Vtt",
         "tags": [
           "subtitles"
+        ]
+      }
+    },
+    "/api/v1/metadata/providers": {
+      "get": {
+        "description": "List enabled online metadata providers available for manual matching.\n\nThe local NFO provider is omitted: it cannot be searched as an online\nsource and is useful only during automatic matching.",
+        "operationId": "list_metadata_providers_api_v1_metadata_providers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response List Metadata Providers Api V1 Metadata Providers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Metadata Providers",
+        "tags": [
+          "metadata"
         ]
       }
     },

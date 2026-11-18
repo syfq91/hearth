@@ -1693,6 +1693,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/metadata/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Metadata Providers
+         * @description List enabled online metadata providers available for manual matching.
+         *
+         *     The local NFO provider is omitted: it cannot be searched as an online
+         *     source and is useful only during automatic matching.
+         */
+        get: operations["list_metadata_providers_api_v1_metadata_providers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/metadata/search": {
         parameters: {
             query?: never;
@@ -5057,6 +5080,8 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
+            /** File Paths */
+            file_paths?: string[];
             /** Id */
             id: string;
             /** Library Id */
@@ -8276,6 +8301,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_metadata_providers_api_v1_metadata_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
         };

@@ -128,6 +128,7 @@ POLICY: dict[tuple[str, str], str] = {
     ("GET", "/api/v1/media/{file_id}/subtitles/{stream_index}.ass"): "media",
     ("GET", "/api/v1/media/{file_id}/subtitles/{stream_index}.vtt"): "media",
     ("GET", "/api/v1/metadata/search"): "admin",
+    ("GET", "/api/v1/metadata/providers"): "admin",
     ("GET", "/api/v1/music/most-played"): "auth",
     ("GET", "/api/v1/music/random"): "auth",
     ("GET", "/api/v1/music/recently-added"): "auth",

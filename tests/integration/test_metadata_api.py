@@ -14,6 +14,7 @@ from app.services.metadata.base import (
     ProviderUnavailable,
     SearchResult,
 )
+from app.services.metadata.local import LocalProvider
 from app.services.metadata.matching import MetadataMatcher
 from tests.support import FakeProvider
 
@@ -181,6 +182,34 @@ async def test_search_requires_admin(api_client: httpx.AsyncClient, monkeypatch)
     response = await api_client.get("/api/v1/metadata/search", params={"query": "The Matrix"})
 
     assert response.status_code == 401
+
+
+async def test_providers_endpoint_lists_enabled_online_providers(
+    api_client: httpx.AsyncClient, monkeypatch
+) -> None:
+    import app.api.v1.metadata as metadata_module
+
+    class DisabledProvider(FakeProvider):
+        name = "disabled"
+        enabled = False  # type: ignore[assignment]
+
+    admin = await _setup(api_client)
+
+    def build(settings, app_sessionmaker, plugin_manager):  # type: ignore[no-untyped-def]
+        return MetadataMatcher(
+            settings,
+            app_sessionmaker,
+            providers=[LocalProvider(), FakeProvider(), DisabledProvider()],
+        )
+
+    monkeypatch.setattr(metadata_module, "build_matcher", build)
+
+    response = await api_client.get("/api/v1/metadata/providers", headers=_bearer(admin))
+    assert response.status_code == 200, response.text
+    assert response.json() == ["tmdb"]
+
+    anonymous = await api_client.get("/api/v1/metadata/providers")
+    assert anonymous.status_code == 401
 
 
 async def test_search_reuses_one_matcher_for_the_app(

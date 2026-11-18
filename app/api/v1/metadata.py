@@ -100,6 +100,23 @@ async def search_metadata(
     return [_search_response(result) for result in results]
 
 
+@router.get("/metadata/providers", response_model=list[str])
+async def list_metadata_providers(
+    _actor: RequireAdmin,
+    matcher: MetadataMatcherDep,
+) -> list[str]:
+    """List enabled online metadata providers available for manual matching.
+
+    The local NFO provider is omitted: it cannot be searched as an online
+    source and is useful only during automatic matching.
+    """
+    return sorted(
+        provider.name
+        for provider in matcher.providers
+        if provider.enabled and provider.name != "local"
+    )
+
+
 @router.post("/items/{item_id}/match")
 async def manual_match(
     item_id: str,
