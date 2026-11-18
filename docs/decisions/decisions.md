@@ -775,4 +775,20 @@
   - Exposing encoder level/profile flags for non-H.264 software targets: Deferred. The builder applies x264-specific flags only to `libx264`, and the master playlist omits unknown CODECS rather than guessing them.
 
 
+## ADR 070: Move Container Base Image to Debian 13 (Trixie)
+
+- **Date:** 2026-11-18
+- **Status:** Accepted
+- **Context:**
+  ADR 005 established a two-stage build on `python:3.12-slim-bookworm`, which pins the runtime to Debian 12's FFmpeg 5.1. That branch dates from 2022 and predates VA-API AV1 encoding (6.1), VAAPI 10/12-bit 4:2:2 and 4:4:4 HEVC/VP9 (6.0), the `libx264` `P_SKIP` speedup (6.1), and newer VAAPI filters and codec fixes. Debian 13 (trixie) ships FFmpeg `7.1.5-0+deb13u1` with `tonemap_vaapi` still available, Intel's non-free iHD driver 25.2.x, libva 2.22, and Python 3.12 remains available as an official image, so the CI/toolchain pin is unaffected. The fMP4 HLS flags Hearth relies on were already smoke-tested against exactly this FFmpeg version (Phase 3 verification evidence), so the upgrade aligns runtime and evidence. Hardware support stays Intel VA-API only per ADR 064.
+- **Decision:**
+  - Change both the builder and runtime stages in `docker/Dockerfile` to `python:3.12-slim-trixie`. They move together because a builder linked against an older glibc must not feed a newer runtime; the Node web-build stage stays on bookworm because it is independent and gains nothing from the change.
+  - Keep the existing deb822 component enablement for `contrib non-free non-free-firmware`, the amd64-only `intel-media-va-driver-non-free` install, the non-root UID/GID 1000 user, the read-only root filesystem, and the stdlib healthcheck. No ADR 064 hardware scope is reopened.
+  - No application code changes: binary paths are bare names resolved through `PATH`, ffprobe's typed models ignore unfamiliar JSON fields, and the health version regex accepts Debian version strings. Update the sample health version in `docs/development/architecture.md`, the hardware guide, and `CHANGELOG.md`.
+  - The newer iHD driver can require a newer host kernel. CI has no GPU and cannot validate hardware paths, so a manual render-node check (health `vaapi: ok`, capability probe reports H.264 encode, a session negotiates `h264_vaapi` without falling back to `libx264`, and an HDR sample exercises `tonemap_vaapi`) is required before rollout.
+- **Alternatives Considered:**
+  - Stay on bookworm: Rejected. Debian backports carries no FFmpeg for bookworm, so this permanently pins Hearth to FFmpeg 5.1 and forgoes the codec and VAAPI fixes.
+  - Adopt jellyfin-ffmpeg: Rejected for now. Its remaining unique value is HDR/DV tone mapping (`tonemapx`, OpenCL/CUDA), not the 7.x codec and VAAPI improvements, which mainline already provides. Taking a fork plus a new download source and libva pairing is unnecessary to get to FFmpeg 7.1.
+  - Ship a static FFmpeg 9.0 build: Rejected. It has the newest features but needs manual version pinning, checksum management, and a matching libva/driver set — a much larger supply-chain and validation burden for a single-node image.
+
 

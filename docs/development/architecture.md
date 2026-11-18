@@ -184,9 +184,9 @@ temporary paths. Defaults assume the container filesystem contract:
   "status": "ok",
   "version": "0.1.0",
   "database": {"status": "ok", "detail": null},
-  "ffmpeg": {"status": "ok", "detail": null, "version": "5.1.9-0+deb12u1"},
+  "ffmpeg": {"status": "ok", "detail": null, "version": "7.1.5-0+deb13u1"},
   "vaapi": {"status": "ok", "detail": null, "device": "/dev/dri/renderD128",
-            "driver": "Intel iHD driver for Intel(R) Gen Graphics - 23.1.1 ()"}
+            "driver": "Intel iHD driver for Intel(R) Gen Graphics - 25.2.3 ()"}
 }
 ```
 

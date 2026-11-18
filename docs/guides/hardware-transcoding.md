@@ -9,7 +9,7 @@ Hearth supports hardware-accelerated video decoding, scaling, tonemapping, and e
 Hearth's container image includes:
 - `libva2` and standard VA-API runtime libraries
 - `intel-media-va-driver-non-free` (Intel iHD driver for Gen 8+ GPUs)
-- Modern `ffmpeg` compiled with `--enable-vaapi`
+- Modern `ffmpeg` compiled with `--enable-vaapi` (Debian 13 ships FFmpeg 7.1.5)
 
 ### Hardware Support Matrix
 

@@ -3,7 +3,7 @@
 # --- Builder: resolve the locked environment with uv -------------------------
 FROM ghcr.io/astral-sh/uv:0.10.7 AS uv
 
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.12-slim-trixie AS builder
 
 COPY --from=uv /uv /uvx /bin/
 
@@ -39,8 +39,8 @@ COPY packages/client ./packages/client
 COPY web ./web
 RUN cd web && npm run build
 
-# --- Runtime: Debian 12 with ffmpeg and VAAPI drivers ------------------------
-FROM python:3.12-slim-bookworm AS runtime
+# --- Runtime: Debian 13 with ffmpeg and VAAPI drivers ------------------------
+FROM python:3.12-slim-trixie AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -48,7 +48,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH="/app" \
     HOME=/tmp
 
-# Bookworm ships the Intel non-free driver outside main; enable the components
+# Trixie ships the Intel non-free driver outside main; enable the components
 # explicitly rather than relying on host repositories.
 RUN sed -i \
         's/^Components: main$/Components: main contrib non-free non-free-firmware/' \
