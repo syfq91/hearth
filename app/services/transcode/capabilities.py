@@ -46,6 +46,42 @@ _FFMPEG_ENCODER_NAMES: dict[str, str] = {
     "vp9": "vp9_vaapi",
 }
 
+# ffprobe, MSE and client profiles use different names for the same codec.
+_CODEC_ALIASES: dict[str, str] = {
+    "avc": "h264",
+    "avc1": "h264",
+    "h265": "hevc",
+    "hev1": "hevc",
+    "hvc1": "hevc",
+    "av01": "av1",
+    "mp4a": "aac",
+    "mp3float": "mp3",
+    "ac-3": "ac3",
+    "e-ac-3": "eac3",
+    "ec-3": "eac3",
+}
+
+# Software encoders Hearth can invoke. Only the default subset is guaranteed to
+# exist in the image; the rest are used when a build reports them via
+# ``software_encoders``.
+_SOFTWARE_ENCODER_FOR_CODEC: dict[str, str] = {
+    "h264": "libx264",
+    "hevc": "libx265",
+    "av1": "libsvtav1",
+    "vp9": "libvpx-vp9",
+    "aac": "aac",
+    "mp3": "libmp3lame",
+    "opus": "libopus",
+    "ac3": "ac3",
+    "eac3": "eac3",
+}
+
+
+def normalize_codec(codec: str) -> str:
+    """Normalize a codec name or alias to its canonical family name."""
+    normalized = codec.strip().lower()
+    return _CODEC_ALIASES.get(normalized, normalized)
+
 
 class CodecCapability(BaseModel):
     """Capability for a single media codec."""
@@ -93,6 +129,32 @@ class ServerTranscodeCapabilities(BaseModel):
             normalized = "h264"
         cap = self.codecs.get(normalized)
         return bool(cap and cap.decode)
+
+    def can_encode(self, codec: str) -> bool:
+        """Whether either a verified hardware encoder or a software encoder exists."""
+        normalized = normalize_codec(codec)
+        if self.can_vaapi_encode(normalized):
+            return True
+        encoder = _SOFTWARE_ENCODER_FOR_CODEC.get(normalized)
+        return bool(encoder and encoder in self.software_encoders)
+
+    def encoder_for(self, codec: str, *, allow_hardware: bool = True) -> str | None:
+        """Return the ffmpeg encoder name for a codec, or None if unsupported.
+
+        Hardware encoders are preferred only when ``allow_hardware`` is true and
+        the device passed its test encode. Callers that cannot use VA-API for a
+        given source (unsupported decode profile, missing tonemap filter) pass
+        ``allow_hardware=False`` to get the software encoder instead.
+        """
+        normalized = normalize_codec(codec)
+        if allow_hardware:
+            hardware_encoder = _FFMPEG_ENCODER_NAMES.get(normalized)
+            if hardware_encoder and self.can_vaapi_encode(normalized):
+                return hardware_encoder
+        software_encoder = _SOFTWARE_ENCODER_FOR_CODEC.get(normalized)
+        if software_encoder and software_encoder in self.software_encoders:
+            return software_encoder
+        return None
 
 
 def parse_vainfo_output(stdout: str) -> dict[str, tuple[bool, bool]]:
@@ -431,6 +493,7 @@ def reset_transcode_capabilities_cache() -> None:
 __all__ = [
     "CodecCapability",
     "ServerTranscodeCapabilities",
+    "normalize_codec",
     "parse_vainfo_output",
     "probe_transcode_capabilities",
     "reset_transcode_capabilities_cache",

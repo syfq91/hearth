@@ -10,6 +10,7 @@ from app.core.system import CommandOutcome
 from app.services.transcode.capabilities import (
     CodecCapability,
     ServerTranscodeCapabilities,
+    normalize_codec,
     parse_vainfo_output,
     probe_transcode_capabilities,
     reset_transcode_capabilities_cache,
@@ -99,6 +100,36 @@ def test_server_capabilities_helpers() -> None:
     caps.force_software = True
     assert caps.can_vaapi_encode("h264") is False
     assert caps.can_vaapi_decode("h264") is False
+
+
+def test_encoder_capability_resolution() -> None:
+    caps = ServerTranscodeCapabilities(
+        render_device="/dev/dri/renderD128",
+        available=False,
+        software_encoders=["libx264", "aac"],
+    )
+    assert normalize_codec("avc1") == "h264"
+    assert normalize_codec("EC-3") == "eac3"
+
+    # Software encoders are the baseline gate.
+    assert caps.can_encode("h264") is True
+    assert caps.can_encode("avc1") is True
+    assert caps.can_encode("aac") is True
+    assert caps.can_encode("mp3") is False
+    assert caps.can_encode("vp9") is False
+    assert caps.encoder_for("h264") == "libx264"
+    assert caps.encoder_for("aac") == "aac"
+    assert caps.encoder_for("vp9") is None
+    assert caps.encoder_for("unknown-codec") is None
+
+    # A verified hardware encoder wins when allowed, and is ignored otherwise.
+    caps.available = True
+    caps.codecs["h264"] = CodecCapability(
+        codec="h264", decode=True, encode=True, test_encode_ok=True
+    )
+    assert caps.can_encode("h264") is True
+    assert caps.encoder_for("h264") == "h264_vaapi"
+    assert caps.encoder_for("h264", allow_hardware=False) == "libx264"
 
 
 @pytest.mark.asyncio
