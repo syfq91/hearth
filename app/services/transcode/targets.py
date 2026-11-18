@@ -138,6 +138,7 @@ def _rank_target(
     source_audio_codec: str | None,
     source_width: int | None,
     source_height: int | None,
+    source_level: int | None,
 ) -> tuple[int, int]:
     """Rank an applicable target: (video copy potential, audio match).
 
@@ -156,7 +157,10 @@ def _rank_target(
             exceeds_height = bool(
                 source_height and target.max_height and source_height > target.max_height
             )
-            if exceeds_width or exceeds_height:
+            exceeds_level = bool(
+                source_level and target.max_video_level and source_level > target.max_video_level
+            )
+            if exceeds_width or exceeds_height or exceeds_level:
                 video_rank = 1
 
     audio_rank = 1
@@ -185,6 +189,7 @@ def select_transcode_targets(
     source_audio_codec: str | None = None,
     source_width: int | None = None,
     source_height: int | None = None,
+    source_level: int | None = None,
     allow_video_hardware: bool = True,
 ) -> TargetSelection:
     """Choose encoder targets for a transcode session.
@@ -228,6 +233,7 @@ def select_transcode_targets(
                         source_audio_codec=source_audio_codec,
                         source_width=source_width,
                         source_height=source_height,
+                        source_level=source_level,
                     ),
                     item[0],
                 )

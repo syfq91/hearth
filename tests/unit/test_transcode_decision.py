@@ -28,7 +28,7 @@ from app.services.transcode.decision import (
     UserLimits,
     evaluate_playback_plan,
 )
-from app.services.transcode.profile import BUILTIN_PRESETS, ClientCapabilities
+from app.services.transcode.profile import BUILTIN_PRESETS, ClientCapabilities, TranscodeTarget
 
 
 def _make_probe(
@@ -1331,6 +1331,52 @@ def test_transcode_target_preferences_reach_the_plan() -> None:
     assert plan.mode == "transcode_hls"
     assert plan.video_codec == "libx265"
     assert plan.audio_codec == "ac3"
+
+
+def test_conditional_target_ceilings_shape_the_plan() -> None:
+    probe = _make_probe("mkv", "hevc", "Main", 3840, 2160, 20_000_000, False, "dts", 6)
+    caps = ClientCapabilities(
+        containers=["mp4"],
+        video_codecs=["h264"],
+        audio_codecs=["aac"],
+        transcode_targets=[
+            TranscodeTarget(
+                video_codecs=["h264"],
+                audio_codecs=["aac"],
+                max_width=1280,
+                max_height=720,
+                max_bitrate=4_000_000,
+                max_audio_channels=2,
+            )
+        ],
+    )
+    plan = evaluate_playback_plan(probe, caps, UserLimits(), _vaapi_caps(force_sw=True))
+    assert plan.mode == "transcode_hls"
+    assert (plan.target_width, plan.target_height) == (1280, 720)
+    assert plan.target_bitrate == 4_000_000
+    assert plan.audio_channels == 2
+    assert plan.audio_action == "transcode"
+    assert plan.audio_codec == "aac"
+
+
+def test_unproducible_target_is_reported_without_changing_mode() -> None:
+    probe = _make_probe("mp4", "h264", "High", 1920, 1080, 3_000_000, False, "dts", 6)
+    caps = ClientCapabilities(
+        containers=["mp4"],
+        video_codecs=["h264"],
+        audio_codecs=["aac"],
+        transcode_targets=[TranscodeTarget(video_codecs=["h264"], audio_codecs=["aac"])],
+    )
+    plan = evaluate_playback_plan(probe, caps, UserLimits(), _vaapi_caps(force_sw=True))
+    assert plan.mode == "remux_hls"
+    assert TranscodeReason.TranscodeTargetNotSupported not in plan.reasons
+
+    caps_unusable = caps.model_copy(
+        update={"transcode_targets": [TranscodeTarget(video_codecs=["av1"], audio_codecs=["aac"])]}
+    )
+    plan = evaluate_playback_plan(probe, caps_unusable, UserLimits(), _vaapi_caps(force_sw=True))
+    assert plan.mode == "remux_hls"
+    assert TranscodeReason.TranscodeTargetNotSupported in plan.reasons
 
 
 def test_default_transcode_targets_remain_h264_aac() -> None:

@@ -41,6 +41,8 @@ class TranscodeReason(StrEnum):
     ContainerBitrateExceedsLimit = "ContainerBitrateExceedsLimit"
     VideoRangeTypeNotSupported = "VideoRangeTypeNotSupported"
     SubtitleBurnInRequired = "SubtitleBurnInRequired"
+    # Added after the mode decision: a requested target could not be honoured.
+    TranscodeTargetNotSupported = "TranscodeTargetNotSupported"
 
 
 # Aliases matching §3.3 acceptance criteria
@@ -381,6 +383,9 @@ def evaluate_playback_plan(
             server_caps,
             source_video_codec=primary_video.codec_name if primary_video else None,
             source_audio_codec=audio_stream.codec_name if audio_stream else None,
+            source_width=primary_video.width if primary_video else None,
+            source_height=primary_video.height if primary_video else None,
+            source_level=primary_video.level if primary_video else None,
             allow_video_hardware=can_use_video_hardware,
         )
         if mode == "transcode_hls":
@@ -388,6 +393,59 @@ def evaluate_playback_plan(
             hwaccel_mode = "vaapi" if video_codec_target == "h264_vaapi" else "none"
         if audio_transcode_needed:
             audio_codec_target = selection.audio_codec
+
+        constraints = selection.constraints
+        if constraints is not None and mode == "transcode_hls":
+            if constraints.max_bitrate is not None:
+                target_bitrate = (
+                    min(target_bitrate, constraints.max_bitrate)
+                    if target_bitrate is not None
+                    else constraints.max_bitrate
+                )
+            if primary_video and primary_video.width and primary_video.height:
+                max_w = constraints.max_width
+                max_h = constraints.max_height
+                if resolved_client.max_width is not None:
+                    max_w = (
+                        min(max_w, resolved_client.max_width)
+                        if max_w is not None
+                        else resolved_client.max_width
+                    )
+                if resolved_client.max_height is not None:
+                    max_h = (
+                        min(max_h, resolved_client.max_height)
+                        if max_h is not None
+                        else resolved_client.max_height
+                    )
+                scale_w = (
+                    max_w / primary_video.width if max_w and primary_video.width > max_w else 1.0
+                )
+                scale_h = (
+                    max_h / primary_video.height if max_h and primary_video.height > max_h else 1.0
+                )
+                scale = min(scale_w, scale_h)
+                if scale < 1.0:
+                    calc_w = int(primary_video.width * scale)
+                    calc_h = int(primary_video.height * scale)
+                    target_w = calc_w - (calc_w % 2)
+                    target_h = calc_h - (calc_h % 2)
+
+        if (
+            constraints is not None
+            and constraints.max_audio_channels is not None
+            and audio_stream is not None
+            and audio_stream.channels is not None
+            and audio_stream.channels > constraints.max_audio_channels
+        ):
+            target_channels = constraints.max_audio_channels
+            a_action = "transcode"
+            if audio_codec_target == "copy":
+                audio_codec_target = selection.audio_codec
+
+        if selection.fallback_used:
+            # Diagnostic only: appended after mode selection so it cannot
+            # change the direct-play/remux/transcode classification.
+            _add_reason(reasons, TranscodeReason.TranscodeTargetNotSupported)
 
     return TranscodePlan(
         mode=mode,

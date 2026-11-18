@@ -218,6 +218,68 @@ async def test_playback_info_accepts_ordered_transcode_targets(
     assert invalid.status_code == 422
 
 
+async def test_playback_info_applies_conditional_target_ceilings(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    _, item_id, file_ids, _ = await _seed(db_settings, db_sessionmaker, sidecar=False)
+    streams_json = {
+        "container": "mp4",
+        "duration_seconds": 120.0,
+        "bit_rate": 20_000_000,
+        "streams": [
+            {
+                "index": 0,
+                "codec_type": "video",
+                "codec_name": "hevc",
+                "profile": "Main",
+                "width": 3840,
+                "height": 2160,
+            },
+            {
+                "index": 1,
+                "codec_type": "audio",
+                "codec_name": "aac",
+                "channels": 2,
+                "is_default": True,
+            },
+        ],
+    }
+    async with db_sessionmaker() as session:
+        row = await session.get(MediaFile, file_ids[0])
+        assert row is not None
+        row.streams_json = streams_json
+        await session.commit()
+
+    response = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={
+            "capabilities": {
+                "preset": "chrome",
+                "transcode_targets": [
+                    {
+                        "container": "mp4",
+                        "video_codecs": ["h264"],
+                        "audio_codecs": ["aac"],
+                        "max_width": 1280,
+                        "max_height": 720,
+                    }
+                ],
+            }
+        },
+        headers=_bearer(admin),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["mode"] == "transcode_hls"
+    assert body["plan"]["target_width"] == 1280
+    assert body["plan"]["target_height"] == 720
+    assert "TranscodeTargetNotSupported" not in body["reasons"]
+    await api_client.post(f"/api/v1/hls/{body['session_id']}/stop", headers=_bearer(admin))
+
+
 async def test_playback_info_does_not_direct_play_mkv_for_webm_only_clients(
     api_client: httpx.AsyncClient,
     db_settings: Settings,
