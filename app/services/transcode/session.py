@@ -24,7 +24,7 @@ from app.db.base import utcnow
 from app.services.media.attachments import prepare_font_directory
 from app.services.media.probe import AttachmentStream, ProbeStream
 from app.services.transcode.builder import build_ffmpeg_hls_command
-from app.services.transcode.decision import TranscodePlan
+from app.services.transcode.decision import TranscodePlan, budget_audio_bitrate
 
 logger = logging.getLogger("hearth.transcode.session")
 
@@ -375,6 +375,16 @@ class TranscodeSession:
             if self.short_first_segment and start_seg == 0
             else float(self.segment_duration)
         )
+        audio_bitrate_kbps = self.settings.transcode_audio_bitrate_kbps
+        if self.plan.target_bitrate is not None:
+            # A tight total cap lowers the audio share so video keeps enough
+            # room. The admin setting stays the ceiling: a generous cap never
+            # silently raises audio above what the operator configured.
+            audio_bitrate_kbps = min(
+                audio_bitrate_kbps,
+                budget_audio_bitrate(self.plan.target_bitrate) // 1000,
+            )
+
         self.cmd = build_ffmpeg_hls_command(
             self.plan,
             self.input_path,
@@ -385,7 +395,7 @@ class TranscodeSession:
             start_number=start_seg,
             segment_duration=self.segment_duration,
             first_segment_duration=first_segment_duration,
-            audio_bitrate_kbps=self.settings.transcode_audio_bitrate_kbps,
+            audio_bitrate_kbps=audio_bitrate_kbps,
             fonts_dir=fonts_dir,
         )
 
