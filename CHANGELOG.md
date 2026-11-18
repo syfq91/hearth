@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- A video quality selector (`Auto`, `SD`, `HD`, `FHD`, `4K`) in the player controls. The choice is sent as the new `quality` field on `POST /items/{id}/playback-info` and maps to server-side resolution/bitrate ceilings intersected with device and user limits (ADR 071). Changing it renegotiates playback and resumes at the same position with a fresh transcode session.
 - Structured `playback_decision` logging on every playback-info request: capability source and preset, reason union, chosen encoder targets and dimensions, hardware gate, and the resulting stream URL or session id in one record. The decision engine remains a pure function.
 - Conditional `transcode_targets` in the playback-info capability profile: an ordered list of container/codec targets with typed resolution, bitrate, level and audio-channel ceilings. Targets are filtered by server capability and fMP4/HLS compatibility, ranked by source-codec match, and their ceilings shape the transcode output. A `TranscodeTargetNotSupported` reason reports when no requested target could be honoured (ADR 069).
 - Ordered `video_transcode_codecs` and `audio_transcode_codecs` in the playback-info capability profile. Clients can now state which encoder targets they prefer (for example HEVC before H.264); the server filters that list through its own verified encoders and an HLS codec allow-list and prefers a target matching the source codec. Defaults remain H.264/AAC, so existing clients are unaffected.
@@ -40,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- The inert hls.js rendition `<select>` was replaced by the new quality menu; Hearth still emits a single HLS rendition, so quality switches negotiate a new transcode rather than switching ABR levels mid-stream (ADR 071).
 - Container base image moved from Debian 12 (bookworm) to Debian 13 (trixie), upgrading the bundled FFmpeg from 5.1 to 7.1.5 and the Intel VA-API driver to 25.2.x (ADR 070).
 - The web client now advertises ordered encoder preferences and one conditional fMP4 transcode target alongside its pass-through codecs, and refreshes cached capabilities when the display changes or the window regains focus. The developer test player gained a "Prefer HEVC target" switch to exercise conditional negotiation.
 - Audio bitrate for HLS transcodes is now derived from the effective total bitrate cap when one is set, with the admin-configured bitrate acting as a ceiling rather than a fixed value. Tight caps (≤ 500 kbps) now get 128 kbps audio instead of 192 kbps.

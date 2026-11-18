@@ -792,3 +792,21 @@
   - Ship a static FFmpeg 9.0 build: Rejected. It has the newest features but needs manual version pinning, checksum management, and a matching libva/driver set — a much larger supply-chain and validation burden for a single-node image.
 
 
+
+## ADR 071: Quality Selection via Negotiated Ceilings
+
+- **Date:** 2026-11-18
+- **Status:** Accepted
+- **Context:**
+  The web player already exposed a "quality" `<select>`, but it drove hls.js ABR levels while the HLS master playlist contains exactly one rendition (`hls.py` emits a single `#EXT-X-STREAM-INF`). The control was therefore never visible in normal playback. Users still need a simple way to cap streaming quality for bandwidth or CPU reasons, expressed in familiar terms (SD/HD/FHD/4K) rather than raw resolution or bitrate numbers. ADR 069 supplies conditional transcode targets, but those are a client capability contract, not a user preference, and the single-node design target permits only a handful of concurrent ffmpeg processes.
+- **Decision:**
+  - Add a `quality` field to `PlaybackInfoRequest` with the closed values `auto`, `sd`, `hd`, `fhd`, and `4k`, defaulting to `auto`. It is snake_case-only and follows ADR 068's canonical body contract.
+  - Keep the label-to-ceiling mapping on the server in one place (`QUALITY_LIMITS` in `app/services/transcode/profile.py`): 480p/1.5 Mbps, 720p/3 Mbps, 1080p/6 Mbps, 2160p/20 Mbps. `auto` adds no artificial ceiling. The values are ceilings, not rendition targets, so a lower-resolution source still direct plays.
+  - Apply the ceiling to the resolved client capabilities (`max_height`, `max_bitrate`) before the pure decision engine runs. The existing resolution-downscale and bitrate-union logic then combines it with device and per-user limits using the usual minimum, and the existing command builder applies the resulting plan. No new ffmpeg flags or decision reason are needed.
+  - Switching quality is a new negotiation, not an in-player ABR level change: the client stops the current session via the existing stop beacon, re-POSTs playback-info with the new value and its current position, and resumes from a fresh transcode session. The quality choice is a player-level preference and carries over between items.
+  - The old hls.js level `<select>` is removed. `HlsEngine` keeps its level-inspection API for future multi-rendition work, but the player no longer depends on it for the quality setting.
+  - The chosen `quality` value is written to the structured `playback_decision` log alongside capability source and preset.
+- **Alternatives Considered:**
+  - True multi-rendition ABR (an ffmpeg ladder plus a multi-variant master playlist so hls.js switches seamlessly): Rejected for now. It multiplies concurrent encodes per stream and requires changes to the command builder, playlist generation, and session manager; a single-node server with a handful of streams benefits more from one encode per viewer. Can be revisited without changing the client contract, since the `quality` field would simply become the initial rendition hint.
+  - Let the web client map quality to `capabilities.max_height`/`target_max_bitrate` and avoid an API change: Rejected because it mixes a user preference with device capability reporting, spreads the mapping across clients, and removes the server's single source of truth for the labels.
+  - Re-resolution on the client by requesting a new session but keeping the hls.js level selector: Rejected because two quality controls with different meanings would be confusing and the level selector is inert with one rendition.

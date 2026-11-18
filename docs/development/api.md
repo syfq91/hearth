@@ -173,11 +173,14 @@ Clients provide their codec support, display bounds, and network restrictions, o
   "subtitle_track_index": 0,
   "start_time_offset_seconds": 0.0,
   "target_max_bitrate": 8000000,
-  "force_burn_in_subtitles": false
+  "force_burn_in_subtitles": false,
+  "quality": "auto"
 }
 ```
 
 All fields are optional. Keys are snake_case only; unknown keys are ignored (ADR 068). Explicit codec/container lists replace the preset's lists, so clients that send overrides should send every limit they intend to enforce.
+
+`quality` is a user-facing convenience ceiling with five stable values: `auto`, `sd`, `hd`, `fhd`, and `4k` (default `auto`). It maps to resolution and bitrate ceilings (480p/1.5 Mbps, 720p/3 Mbps, 1080p/6 Mbps, and 2160p/20 Mbps respectively); `auto` adds no ceiling. A selected level is intersected with the client's own `max_height`/`max_bitrate` and the user's `max_bitrate`, so device and account limits still win. These are ceilings, not targets: a source already at or below the selected level still direct plays. Changing quality during playback is a new negotiation — the client stops the old session and re-POSTs playback-info with the new value, which yields a fresh transcode session at the same resume position.
 
 `video_transcode_codecs` and `audio_transcode_codecs` are ordered encoder preferences, separate from the pass-through `video_codecs`/`audio_codecs` lists. A client that can decode both H.264 and HEVC can, for example, put `hevc` first with `h264` as fallback. The server filters this list through its own encoder capability and an HLS codec allow-list, then prefers a target matching the source codec so quality and channel layout are preserved. Defaults are `["h264"]` and `["aac"]`, so clients that omit these fields keep Hearth's existing output.
 
@@ -250,7 +253,7 @@ When `mode` is `transcode_hls` or `remux_hls`:
 1. **Master Playlist**: `GET /api/v1/hls/{session_id}/master.m3u8` delays responding until ffmpeg emits the first segment, eliminating player race conditions.
 2. **Media Playlist**: `GET /api/v1/hls/{session_id}/media.m3u8` rewrites segment URLs to preserve media access tokens across child requests. Video transcodes open with a shorter first segment (`HEARTH_TRANSCODE_FIRST_SEGMENT_DURATION_SECONDS`, default 2s) so playback can start before a full segment is encoded; `#EXT-X-TARGETDURATION` reports the longest segment, and every later segment keeps the configured duration.
 3. **Segments**: Init (`init.mp4`) and media chunks (`seg_0.m4s`, `seg_1.m4s`, ...) are served with `Cache-Control`.
-4. **Seeking**: Client seeking initiates a new playback-info or seek request; ffmpeg restarts with `-ss` seeking on keyframes.
+4. **Seeking & quality changes**: Client seeking initiates a new playback-info or seek request; ffmpeg restarts with `-ss` seeking on keyframes. Changing the player's quality selection also initiates a new playback-info request with a different `quality` value and a new session; the client preserves the current position as `start_time_offset_seconds`. Multiple renditions are not produced in one ffmpeg process (ADR 071), so each quality switch rebuffers briefly.
 5. **Idle Reaper**: An active transcode process is automatically reaped if no segment requests arrive within 60 seconds.
 6. **Explicit Stop**: Clients can explicitly release server resources with `POST /api/v1/hls/{session_id}/stop` (supports bearer auth, query string token, or body token for `sendBeacon`).
 7. **Concurrency Caps**: Exceeding server transcoding capacity yields HTTP 503 (`transcode_capacity_exceeded`) with a `Retry-After: 5` header.
