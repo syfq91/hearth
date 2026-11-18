@@ -33,8 +33,10 @@ from app.services.transcode.profile import (
     resolve_client_capabilities,
 )
 from app.services.transcode.targets import (
+    FMP4_CONTAINERS,
     HLS_AUDIO_CODECS,
     HLS_VIDEO_CODECS,
+    TargetConstraints,
     TargetSelection,
     select_transcode_targets,
 )
@@ -46,6 +48,7 @@ __all__ = [
     "ClientCapabilities",
     "CodecCapability",
     "Container",
+    "FMP4_CONTAINERS",
     "HLS_AUDIO_CODECS",
     "HLS_VIDEO_CODECS",
     "HwAccelMode",
@@ -56,6 +59,7 @@ __all__ = [
     "ServerTranscodeCapabilities",
     "SubtitleAction",
     "SubtitleProfile",
+    "TargetConstraints",
     "TargetSelection",
     "TranscodePlan",
     "TranscodeReason",
