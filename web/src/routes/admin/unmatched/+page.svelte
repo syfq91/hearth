@@ -41,7 +41,8 @@
 				query: {
 					query,
 					year: item.year ?? undefined,
-					provider: provider || undefined
+					provider: provider || undefined,
+					item_id: item.id
 				}
 			});
 			candidates = { ...candidates, [item.id]: results };
