@@ -12,6 +12,7 @@ from app.core.config import Settings
 from app.core.plugins.base import MetadataPlugin, PluginContext
 from app.core.plugins.manifest import PluginManifest
 from app.services.metadata.base import (
+    BookMetadata,
     MetadataProvider,
     MovieMetadata,
     ProviderImage,
@@ -90,6 +91,39 @@ class FakeProvider(MetadataProvider):
         if self.error is not None:
             raise self.error
         return list(self.image_list)
+
+
+class FakeBookProvider(FakeProvider):
+    """A scripted book provider exposing the book-specific provider surface."""
+
+    name = "googlebooks"
+
+    def __init__(
+        self,
+        *,
+        book_results: Sequence[SearchResult] | None = None,
+        book_details: dict[str, BookMetadata] | None = None,
+        book_images: Sequence[ProviderImage] | None = None,
+    ) -> None:
+        super().__init__()
+        self.book_results = list(book_results or [])
+        self.book_details = dict(book_details or {})
+        self.book_images = list(book_images or [])
+        self.book_search_calls: list[tuple[str, str | None, str | None]] = []
+        self.book_detail_calls: list[str] = []
+
+    async def search_book(
+        self, query: str, author: str | None = None, isbn: str | None = None
+    ) -> list[SearchResult]:
+        self.book_search_calls.append((query, author, isbn))
+        return list(self.book_results)
+
+    async def fetch_book_details(self, book_id: str) -> BookMetadata | None:
+        self.book_detail_calls.append(book_id)
+        return self.book_details.get(book_id)
+
+    async def fetch_book_images(self, book_id: str) -> list[ProviderImage]:
+        return list(self.book_images)
 
 
 class FakeArtwork:

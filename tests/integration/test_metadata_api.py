@@ -6,9 +6,10 @@ from datetime import UTC, datetime
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import Library, MediaFile, MediaItem, Movie
+from app.db.models import Author, Book, Library, MediaFile, MediaItem, Movie
 from app.services.media.titles import sort_title
 from app.services.metadata.base import (
+    BookMetadata,
     MovieMetadata,
     ProviderImage,
     ProviderUnavailable,
@@ -16,7 +17,7 @@ from app.services.metadata.base import (
 )
 from app.services.metadata.local import LocalProvider
 from app.services.metadata.matching import MetadataMatcher
-from tests.support import FakeProvider
+from tests.support import FakeBookProvider, FakeProvider
 
 ADMIN = {"username": "admin", "password": "correct horse"}
 
@@ -55,6 +56,27 @@ async def _seed_item(sessionmaker: async_sessionmaker[AsyncSession]) -> str:
                 duration_seconds=8160.0,
             )
         )
+        session.add(item)
+        await session.commit()
+        return item.id
+
+
+async def _seed_book(sessionmaker: async_sessionmaker[AsyncSession]) -> str:
+    async with sessionmaker() as session:
+        library = Library(name=f"Books {uuid.uuid4().hex[:8]}", type="book")
+        session.add(library)
+        await session.flush()
+        author = Author(name="Kazuma Kamachi")
+        session.add(author)
+        await session.flush()
+        item = MediaItem(
+            library_id=library.id,
+            type="book",
+            title="A Certain Scientific Railgun Vol. 1",
+            sort_title=sort_title("A Certain Scientific Railgun Vol. 1"),
+            match_state="unmatched",
+        )
+        item.book = Book(author=author)
         session.add(item)
         await session.commit()
         return item.id
@@ -210,6 +232,74 @@ async def test_providers_endpoint_lists_enabled_online_providers(
 
     anonymous = await api_client.get("/api/v1/metadata/providers")
     assert anonymous.status_code == 401
+
+
+async def test_book_search_search_endpoint_uses_book_provider(
+    api_client: httpx.AsyncClient,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+    monkeypatch,
+) -> None:
+    admin = await _setup(api_client)
+    item_id = await _seed_book(db_sessionmaker)
+    provider = FakeBookProvider(
+        book_results=[
+            SearchResult(
+                "googlebooks",
+                "VOL1",
+                "A Certain Scientific Railgun, Vol. 1",
+                2011,
+            )
+        ]
+    )
+    _patch_matcher(monkeypatch, provider)
+
+    response = await api_client.get(
+        "/api/v1/metadata/search",
+        params={"query": "A Certain Scientific Railgun Vol. 1", "item_id": item_id},
+        headers=_bearer(admin),
+    )
+
+    assert response.status_code == 200, response.text
+    assert [result["provider_id"] for result in response.json()] == ["VOL1"]
+    assert provider.book_search_calls == [
+        ("A Certain Scientific Railgun Vol. 1", "Kazuma Kamachi", None)
+    ]
+
+
+async def test_manual_match_book_uses_book_provider(
+    api_client: httpx.AsyncClient,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+    monkeypatch,
+) -> None:
+    admin = await _setup(api_client)
+    item_id = await _seed_book(db_sessionmaker)
+    provider = FakeBookProvider(
+        book_details={
+            "VOL1": BookMetadata(
+                provider="googlebooks",
+                provider_id="VOL1",
+                title="A Certain Scientific Railgun, Vol. 1",
+                author_name="Kazuma Kamachi",
+                published_date="2011",
+            )
+        }
+    )
+    _patch_matcher(monkeypatch, provider)
+
+    response = await api_client.post(
+        f"/api/v1/items/{item_id}/match",
+        json={"provider": "googlebooks", "provider_id": "VOL1"},
+        headers=_bearer(admin),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["state"] == "matched"
+    assert provider.book_detail_calls == ["VOL1"]
+    async with db_sessionmaker() as session:
+        item = await session.get(MediaItem, item_id)
+        assert item is not None
+        assert item.match_state == "matched"
+        assert item.year == 2011
 
 
 async def test_search_reuses_one_matcher_for_the_app(

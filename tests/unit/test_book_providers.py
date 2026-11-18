@@ -124,6 +124,25 @@ async def test_googlebooks_search_and_details(settings: Settings) -> None:
     await provider.close()
 
 
+@pytest.mark.asyncio
+async def test_googlebooks_search_uses_free_text_query(settings: Settings) -> None:
+    urls: list[httpx.URL] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        urls.append(request.url)
+        return httpx.Response(200, json={"totalItems": 0, "items": []})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = make_metadata_plugin(GoogleBooksPlugin, settings=settings, client=client)
+
+    await provider.search_book("A Certain Scientific Railgun Vol. 1", author="Kazuma Kamachi")
+
+    assert len(urls) == 1
+    assert urls[0].params["q"] == ('A Certain Scientific Railgun Vol. 1 inauthor:"Kazuma Kamachi"')
+    assert "intitle:" not in urls[0].params["q"]
+    await provider.close()
+
+
 def test_local_book_opf_and_cover(tmp_path: Path) -> None:
     book_dir = tmp_path / "Dune"
     book_dir.mkdir()
