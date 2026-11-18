@@ -755,4 +755,24 @@
   - Remove the retained platform/correctness workarounds as well: Rejected because SQLite, UID, and clock constraints still apply.
 
 
+## ADR 069: Ordered Conditional Transcode Targets
+
+- **Date:** 2026-11-18
+- **Status:** Accepted
+- **Context:**
+  ADR 036 and ADR 054 established a client-owned capability profile and ADR 055 a pure decision engine, but until Phase 1 the engine always produced H.264 video and AAC audio. A reference study of Jellyfin's `StreamBuilder` showed that an ordered transcoding-profile list, evaluated in two stages (relevance conditions, then ranking by stream-copy potential and codec match), expresses cases a flat codec list cannot: preferring H.264 up to 1080p and HEVC above it, or keeping six audio channels in AAC rather than downmixing a FLAC source that the client only accepts in stereo. Hearth also only emits HLS fMP4, and ADR 064 confines hardware encoding to Intel VA-API H.264. The richer capability document must therefore be additive, snake_case-only (ADR 068), and must not reopen the closed playback `mode` enum or the bearer-only playback-info route.
+- **Decision:**
+  - `ClientCapabilities` gains an optional `transcode_targets` list of `TranscodeTarget` objects, ordered by client preference. Each target carries a container, ordered `video_codecs` and `audio_codecs`, and typed ceilings: `max_width`, `max_height`, `max_bitrate`, `max_video_level`, `max_audio_channels`. No general condition-expression tree is accepted.
+  - Evaluation is two-stage and pure (`app/services/transcode/targets.py`). **Applicability** rejects a target whose container is not an fMP4-compatible alias (`mp4`/`fmp4`/`m4s`) or for which neither codec list contains a codec the server can encode and HLS can carry. **Ranking** prefers a target whose video codec matches the source (unless the source exceeds that target's own ceilings) and then one whose audio codec matches the source, with list order as the tie-breaker. Equal ranks keep client order.
+  - The chosen target's ceilings shape output: aspect-preserving, even-dimension resolution, a bitrate cap combined with the client/user/request caps, and an audio-channel downmix. If no target is applicable, Hearth falls back to the flat `video_transcode_codecs`/`audio_transcode_codecs` lists from Phase 1.
+  - `TranscodeTargetNotSupported` is appended to `reasons` when a requested target could not be honoured. It is added *after* the mode is computed, so it is diagnostic only and cannot turn a direct-play or remux into a transcode. The closed `mode` enum is unchanged.
+  - Codec strings for encoders Hearth cannot describe are omitted from the HLS master playlist rather than fabricated (INV-2). Hardware encoding stays scoped to H.264 (`HARDWARE_VIDEO_FAMILIES`), and the HLS codec allow-lists remain centralized in one module so selection and output cannot disagree.
+- **Alternatives Considered:**
+  - Import Jellyfin's full `DeviceProfile` with `ProfileCondition` trees: Rejected because it conflicts with the snake_case-only, preset-plus-override contract of ADR 054/068 and adds an unbounded rule language for a single-node server. The typed ceilings cover the useful cases with a fixed schema.
+  - A server-side table mapping clients to codecs: Rejected per the reference report; capability must stay client-owned so a device can report a new codec without a server release.
+  - A numeric scoring formula across targets: Rejected in favour of ordered lists plus two rank dimensions, which make priority visible in the data and reproducible from the inputs.
+  - Persistent per-device profiles: Rejected again (as in T04); the cached browser detection and per-request profile are sufficient.
+  - Exposing encoder level/profile flags for non-H.264 software targets: Deferred. The builder applies x264-specific flags only to `libx264`, and the master playlist omits unknown CODECS rather than guessing them.
+
+
 

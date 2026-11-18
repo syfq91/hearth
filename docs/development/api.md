@@ -181,6 +181,19 @@ All fields are optional. Keys are snake_case only; unknown keys are ignored (ADR
 
 `video_transcode_codecs` and `audio_transcode_codecs` are ordered encoder preferences, separate from the pass-through `video_codecs`/`audio_codecs` lists. A client that can decode both H.264 and HEVC can, for example, put `hevc` first with `h264` as fallback. The server filters this list through its own encoder capability and an HLS codec allow-list, then prefers a target matching the source codec so quality and channel layout are preserved. Defaults are `["h264"]` and `["aac"]`, so clients that omit these fields keep Hearth's existing output.
 
+For conditional preferences, `transcode_targets` is an ordered list of objects such as:
+
+```json
+{
+  "transcode_targets": [
+    {"container": "mp4", "video_codecs": ["h264"], "audio_codecs": ["aac"], "max_width": 1920, "max_height": 1080},
+    {"video_codecs": ["h264"], "audio_codecs": ["aac"], "max_width": 3840, "max_height": 2160}
+  ]
+}
+```
+
+A target applies only when its container is an fMP4-compatible alias and at least one of its codecs can be produced by the server. Applicable targets are ranked by source-codec match (audio match breaks ties), with list order as the final tie-breaker; the chosen target's `max_*` ceilings shape resolution, bitrate and audio channels. `max_video_level` affects ranking but does not set an encoder level flag.
+
 ### 3.2 Response Payload
 The server returns the playback mode, stream URLs, stream metadata, and stable machine-readable decision reasons. The `mode` is one of `direct_play`, `remux_hls`, `transcode_hls`; `url` is set for direct play, and `hls_url`/`session_id` are set for the two HLS modes.
 
@@ -228,7 +241,7 @@ The server returns the playback mode, stream URLs, stream metadata, and stable m
 }
 ```
 
-The `reasons` values are stable `TranscodeReason` identifiers, not prose. `plan` and `command` are populated for HLS modes; `command` is the exact ffmpeg argv and is intended for diagnostics. `plan.video_codec` and `plan.audio_codec` hold the negotiated ffmpeg encoder names (for example `libx264`/`h264_vaapi` and `aac`); they are the result of the client's ordered target preferences filtered by server capability, not fixed server constants.
+The `reasons` values are stable `TranscodeReason` identifiers, not prose. `TranscodeTargetNotSupported` is diagnostic only: it records that a requested conditional target could not be honoured and the conservative H.264/AAC fallback was used, and it never changes the chosen `mode`. `plan` and `command` are populated for HLS modes; `command` is the exact ffmpeg argv and is intended for diagnostics. `plan.video_codec` and `plan.audio_codec` hold the negotiated ffmpeg encoder names (for example `libx264`/`h264_vaapi` and `aac`); they are the result of the client's ordered target preferences filtered by server capability, not fixed server constants.
 
 ### 3.3 Transcode Session Lifecycle and HLS Delivery
 When `mode` is `transcode_hls` or `remux_hls`:
