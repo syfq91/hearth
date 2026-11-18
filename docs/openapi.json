@@ -1726,6 +1726,13 @@
             "title": "Subtitle Profiles",
             "type": "array"
           },
+          "transcode_targets": {
+            "items": {
+              "$ref": "#/components/schemas/TranscodeTarget"
+            },
+            "title": "Transcode Targets",
+            "type": "array"
+          },
           "video_codecs": {
             "items": {
               "type": "string"
@@ -7002,6 +7009,99 @@
           "session_id"
         ],
         "title": "TranscodeStopResponse",
+        "type": "object"
+      },
+      "TranscodeTarget": {
+        "description": "One ordered, conditional transcode target.\n\nConditions are a small typed subset (container plus ``max_*`` ceilings),\ndeliberately not a general expression tree. A target is applicable when its\ncontainer is the HLS fMP4 packager and at least one of its codecs can be\nproduced by this server; its ceilings shape the chosen encoder's output.",
+        "properties": {
+          "audio_codecs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Audio Codecs",
+            "type": "array"
+          },
+          "container": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container"
+          },
+          "max_audio_channels": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Audio Channels"
+          },
+          "max_bitrate": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Bitrate"
+          },
+          "max_height": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Height"
+          },
+          "max_video_level": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Video Level"
+          },
+          "max_width": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Width"
+          },
+          "video_codecs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Video Codecs",
+            "type": "array"
+          }
+        },
+        "title": "TranscodeTarget",
         "type": "object"
       },
       "UnmatchedItemResponse": {

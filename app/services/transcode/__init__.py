@@ -28,6 +28,7 @@ from app.services.transcode.profile import (
     ClientCapabilities,
     PresetName,
     SubtitleProfile,
+    TranscodeTarget,
     detect_preset_from_user_agent,
     resolve_client_capabilities,
 )
@@ -58,6 +59,7 @@ __all__ = [
     "TargetSelection",
     "TranscodePlan",
     "TranscodeReason",
+    "TranscodeTarget",
     "UserLimits",
     "budget_audio_bitrate",
     "build_ffmpeg_hls_command",

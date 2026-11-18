@@ -4,6 +4,7 @@ from app.services.transcode.profile import (
     BUILTIN_PRESETS,
     ClientCapabilities,
     SubtitleProfile,
+    TranscodeTarget,
     detect_preset_from_user_agent,
     resolve_client_capabilities,
 )
@@ -229,6 +230,36 @@ def test_transcode_targets_are_ordered_and_normalized() -> None:
     res = resolve_client_capabilities(client)
     assert res.video_transcode_codecs == ["hevc", "h264"]
     assert res.audio_transcode_codecs == ["opus", "aac"]
+
+
+def test_conditional_transcode_targets_are_normalized_and_ordered() -> None:
+    client = ClientCapabilities(
+        preset="chrome",
+        transcode_targets=[
+            TranscodeTarget(
+                container="MP4",
+                video_codecs=[" HEVC ", "H264"],
+                audio_codecs=[" AAC "],
+                max_width=3840,
+                max_height=2160,
+                max_bitrate=12_000_000,
+            ),
+            TranscodeTarget(video_codecs=["h264"], audio_codecs=["aac"]),
+        ],
+    )
+    res = resolve_client_capabilities(client)
+    assert len(res.transcode_targets) == 2
+    first = res.transcode_targets[0]
+    assert first.container == "mp4"
+    assert first.video_codecs == ["hevc", "h264"]
+    assert first.audio_codecs == ["aac"]
+    assert first.max_width == 3840
+    assert first.max_bitrate == 12_000_000
+    assert res.transcode_targets[1].container is None
+
+
+def test_conditional_transcode_targets_default_to_empty() -> None:
+    assert resolve_client_capabilities(None).transcode_targets == []
 
 
 def test_transcode_targets_survive_explicit_pass_through_override() -> None:

@@ -23,6 +23,27 @@ class SubtitleProfile(BaseModel):
     method: str = ""
 
 
+class TranscodeTarget(BaseModel):
+    """One ordered, conditional transcode target.
+
+    Conditions are a small typed subset (container plus ``max_*`` ceilings),
+    deliberately not a general expression tree. A target is applicable when its
+    container is the HLS fMP4 packager and at least one of its codecs can be
+    produced by this server; its ceilings shape the chosen encoder's output.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    container: str | None = Field(default=None, max_length=32)
+    video_codecs: list[str] = Field(default_factory=list)
+    audio_codecs: list[str] = Field(default_factory=list)
+    max_width: int | None = Field(default=None, gt=0)
+    max_height: int | None = Field(default=None, gt=0)
+    max_bitrate: int | None = Field(default=None, gt=0)
+    max_video_level: int | None = Field(default=None, gt=0)
+    max_audio_channels: int | None = Field(default=None, gt=0)
+
+
 class ClientCapabilities(BaseModel):
     """What a client device or browser player supports."""
 
@@ -38,6 +59,8 @@ class ClientCapabilities(BaseModel):
     # filters them by what it can encode and by the HLS codec allow-list.
     video_transcode_codecs: list[str] = Field(default_factory=lambda: ["h264"])
     audio_transcode_codecs: list[str] = Field(default_factory=lambda: ["aac"])
+    # Richer, ordered + conditional targets. Empty means use the flat lists above.
+    transcode_targets: list[TranscodeTarget] = Field(default_factory=list)
     max_width: int | None = Field(default=None, gt=0)
     max_height: int | None = Field(default=None, gt=0)
     max_bitrate: int | None = Field(default=None, gt=0)
@@ -277,6 +300,16 @@ def resolve_client_capabilities(
         base.video_transcode_codecs = [c.lower().strip() for c in client.video_transcode_codecs]
     if client.audio_transcode_codecs:
         base.audio_transcode_codecs = [c.lower().strip() for c in client.audio_transcode_codecs]
+    if client.transcode_targets:
+        targets: list[TranscodeTarget] = []
+        for target in client.transcode_targets:
+            normalized = target.model_copy(deep=True)
+            if normalized.container:
+                normalized.container = normalized.container.lower().strip()
+            normalized.video_codecs = [c.lower().strip() for c in target.video_codecs]
+            normalized.audio_codecs = [c.lower().strip() for c in target.audio_codecs]
+            targets.append(normalized)
+        base.transcode_targets = targets
     if client.subtitle_formats:
         base.subtitle_formats = [s.lower().strip() for s in client.subtitle_formats]
     if client.subtitle_profiles:
@@ -306,6 +339,7 @@ __all__ = [
     "ClientCapabilities",
     "PresetName",
     "SubtitleProfile",
+    "TranscodeTarget",
     "detect_preset_from_user_agent",
     "resolve_client_capabilities",
 ]

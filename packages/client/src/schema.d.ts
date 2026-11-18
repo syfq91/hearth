@@ -3096,6 +3096,8 @@ export interface components {
             subtitle_formats?: string[];
             /** Subtitle Profiles */
             subtitle_profiles?: components["schemas"]["SubtitleProfile"][];
+            /** Transcode Targets */
+            transcode_targets?: components["schemas"]["TranscodeTarget"][];
             /** Video Codecs */
             video_codecs?: string[];
             /** Video Profiles */
@@ -5011,6 +5013,33 @@ export interface components {
             session_id: string;
             /** Status */
             status: string;
+        };
+        /**
+         * TranscodeTarget
+         * @description One ordered, conditional transcode target.
+         *
+         *     Conditions are a small typed subset (container plus ``max_*`` ceilings),
+         *     deliberately not a general expression tree. A target is applicable when its
+         *     container is the HLS fMP4 packager and at least one of its codecs can be
+         *     produced by this server; its ceilings shape the chosen encoder's output.
+         */
+        TranscodeTarget: {
+            /** Audio Codecs */
+            audio_codecs?: string[];
+            /** Container */
+            container?: string | null;
+            /** Max Audio Channels */
+            max_audio_channels?: number | null;
+            /** Max Bitrate */
+            max_bitrate?: number | null;
+            /** Max Height */
+            max_height?: number | null;
+            /** Max Video Level */
+            max_video_level?: number | null;
+            /** Max Width */
+            max_width?: number | null;
+            /** Video Codecs */
+            video_codecs?: string[];
         };
         /**
          * UnmatchedItemResponse
