@@ -241,6 +241,8 @@ The server returns the playback mode, stream URLs, stream metadata, and stable m
 }
 ```
 
+Every negotiation writes one structured `playback_decision` log line with the capability source and preset, the full reason union, chosen encoder targets and dimensions, the server hardware gate, and the resulting URL/session id. The pure decision engine itself performs no logging.
+
 The `reasons` values are stable `TranscodeReason` identifiers, not prose. `TranscodeTargetNotSupported` is diagnostic only: it records that a requested conditional target could not be honoured and the conservative H.264/AAC fallback was used, and it never changes the chosen `mode`. `plan` and `command` are populated for HLS modes; `command` is the exact ffmpeg argv and is intended for diagnostics. `plan.video_codec` and `plan.audio_codec` hold the negotiated ffmpeg encoder names (for example `libx264`/`h264_vaapi` and `aac`); they are the result of the client's ordered target preferences filtered by server capability, not fixed server constants.
 
 ### 3.3 Transcode Session Lifecycle and HLS Delivery

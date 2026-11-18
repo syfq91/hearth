@@ -4,6 +4,7 @@ The auto-watched decision lives in :mod:`app.services.playback_state`; these
 routes only load the item, enforce library access and persist the result.
 """
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -50,18 +51,26 @@ from app.services.playback_state import chapters_from_streams, resolve_watch_sta
 from app.services.ratings import is_rating_permitted
 from app.services.scrobbling.listenbrainz import enqueue_scrobble
 from app.services.subtitles import matches_language
-from app.services.transcode.capabilities import probe_transcode_capabilities
+from app.services.transcode.capabilities import (
+    ServerTranscodeCapabilities,
+    probe_transcode_capabilities,
+)
 from app.services.transcode.decision import (
     BITMAP_SUBTITLE_CODECS,
     PlaybackOptions,
     TranscodePlan,
+    TranscodeReason,
     UserLimits,
     evaluate_playback_plan,
 )
-from app.services.transcode.profile import ClientCapabilities
+from app.services.transcode.profile import (
+    ClientCapabilities,
+    detect_preset_from_user_agent,
+)
 from app.services.transcode.session import get_session_manager
 
 router = APIRouter(tags=["playback"])
+logger = logging.getLogger("app.api.v1.playback")
 
 PlayState = Literal["playing", "paused", "stopped"]
 
@@ -114,6 +123,67 @@ class PlaybackInfoRequest(BaseModel):
     start_time_offset_seconds: float = 0.0
     target_max_bitrate: int | None = Field(default=None, gt=0)
     force_burn_in_subtitles: bool = False
+
+
+def _log_playback_decision(
+    *,
+    item_id: str,
+    file_id: str,
+    user_id: str,
+    request_obj: PlaybackInfoRequest,
+    user_agent: str | None,
+    server_caps: ServerTranscodeCapabilities,
+    plan: TranscodePlan,
+    url: str,
+    session_id: str | None,
+) -> None:
+    """Log the inputs and result of a negotiation together (report lesson 11).
+
+    The decision engine itself stays pure; observable logging happens here,
+    after the plan and the final URL are known.
+    """
+    raw = request_obj.capabilities
+    if raw is not None:
+        source = "request"
+        preset = raw.preset or detect_preset_from_user_agent(user_agent) or "unknown"
+    elif user_agent:
+        source = "user_agent"
+        preset = detect_preset_from_user_agent(user_agent)
+    else:
+        source = "default"
+        preset = "unknown"
+
+    logger.info(
+        "playback decision: mode=%s item=%s file=%s",
+        plan.mode,
+        item_id,
+        file_id,
+        extra={
+            "event": "playback_decision",
+            "item_id": item_id,
+            "file_id": file_id,
+            "user_id": user_id,
+            "capability_source": source,
+            "preset": preset,
+            "mode": plan.mode,
+            "reasons": plan.reasons,
+            "video_action": plan.video_action,
+            "video_codec": plan.video_codec,
+            "audio_action": plan.audio_action,
+            "audio_codec": plan.audio_codec,
+            "audio_channels": plan.audio_channels,
+            "target_width": plan.target_width,
+            "target_height": plan.target_height,
+            "target_bitrate": plan.target_bitrate,
+            "hwaccel": plan.hwaccel,
+            "tonemap_hdr": plan.tonemap_hdr,
+            "server_hw_available": server_caps.available,
+            "force_software": server_caps.force_software,
+            "target_fallback": TranscodeReason.TranscodeTargetNotSupported in plan.reasons,
+            "session_id": session_id,
+            "url": url,
+        },
+    )
 
 
 class AttachmentResponse(BaseModel):
@@ -381,9 +451,21 @@ async def playback_info(
     embedded_subtitle_urls = _embedded_subtitle_urls(embedded_subtitles, media_file, encoded_token)
 
     if plan.mode == "direct_play":
+        url = f"/api/v1/stream/{media_file.id}?token={encoded_token}"
+        _log_playback_decision(
+            item_id=item.id,
+            file_id=media_file.id,
+            user_id=user.id,
+            request_obj=request_obj,
+            user_agent=user_agent,
+            server_caps=server_caps,
+            plan=plan,
+            url=url,
+            session_id=None,
+        )
         return PlaybackInfoResponse(
             mode="direct_play",
-            url=f"/api/v1/stream/{media_file.id}?token={encoded_token}",
+            url=url,
             file=file_resp,
             subtitles=subtitles,
             video_stream=probe_res.primary_video,
@@ -413,9 +495,21 @@ async def playback_info(
         font_attachments=probe_res.font_attachments,
     )
 
+    url = f"/api/v1/hls/{transcode_session.id}/master.m3u8?token={encoded_token}"
+    _log_playback_decision(
+        item_id=item.id,
+        file_id=media_file.id,
+        user_id=user.id,
+        request_obj=request_obj,
+        user_agent=user_agent,
+        server_caps=server_caps,
+        plan=plan,
+        url=url,
+        session_id=transcode_session.id,
+    )
     return PlaybackInfoResponse(
         mode=plan.mode,
-        hls_url=f"/api/v1/hls/{transcode_session.id}/master.m3u8?token={encoded_token}",
+        hls_url=url,
         session_id=transcode_session.id,
         file=file_resp,
         subtitles=subtitles,

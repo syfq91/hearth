@@ -1,9 +1,11 @@
 """Integration tests for the playback-info contract."""
 
+import logging
 import uuid
 from pathlib import Path
 
 import httpx
+from pytest import LogCaptureFixture
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
@@ -155,6 +157,33 @@ async def test_playback_info_accepts_the_full_capability_profile(
         headers=_bearer(admin),
     )
     assert invalid.status_code == 422
+
+
+async def test_playback_info_logs_negotiation_inputs_and_result(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+    caplog: LogCaptureFixture,
+) -> None:
+    admin = await _setup(api_client)
+    _, item_id, _, _ = await _seed(db_settings, db_sessionmaker, sidecar=False)
+    with caplog.at_level(logging.INFO, logger="app.api.v1.playback"):
+        response = await api_client.post(
+            f"/api/v1/items/{item_id}/playback-info",
+            json={"capabilities": {"preset": "chrome"}},
+            headers=_bearer(admin),
+        )
+    assert response.status_code == 200, response.text
+
+    records = [r for r in caplog.records if getattr(r, "event", None) == "playback_decision"]
+    assert len(records) == 1
+    record = records[0]
+    assert record.capability_source == "request"
+    assert record.preset == "chrome"
+    assert record.mode == "direct_play"
+    assert record.reasons == []
+    assert record.url.startswith("/api/v1/stream/")
+    assert record.session_id is None
 
 
 async def test_playback_info_accepts_ordered_transcode_targets(

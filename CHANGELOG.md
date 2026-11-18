@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Structured `playback_decision` logging on every playback-info request: capability source and preset, reason union, chosen encoder targets and dimensions, hardware gate, and the resulting stream URL or session id in one record. The decision engine remains a pure function.
 - Conditional `transcode_targets` in the playback-info capability profile: an ordered list of container/codec targets with typed resolution, bitrate, level and audio-channel ceilings. Targets are filtered by server capability and fMP4/HLS compatibility, ranked by source-codec match, and their ceilings shape the transcode output. A `TranscodeTargetNotSupported` reason reports when no requested target could be honoured (ADR 069).
 - Ordered `video_transcode_codecs` and `audio_transcode_codecs` in the playback-info capability profile. Clients can now state which encoder targets they prefer (for example HEVC before H.264); the server filters that list through its own verified encoders and an HLS codec allow-list and prefers a target matching the source codec. Defaults remain H.264/AAC, so existing clients are unaffected.
 - `embedded_subtitle_urls` on playback-info: a client-renderable URL and format for every embedded text subtitle stream, keyed by the container stream index. The web player now switches embedded text tracks mid-playback without tearing down and re-creating the HLS session; only bitmap tracks (which require burn-in) still renegotiate.
