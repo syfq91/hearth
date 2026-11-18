@@ -128,6 +128,7 @@ ENDPOINT_POLICIES: dict[tuple[str, str], EndpointPolicy] = {
     # Search & Metadata
     ("GET", "/api/v1/search"): EndpointPolicy("user"),
     ("GET", "/api/v1/metadata/search"): EndpointPolicy("user"),
+    ("POST", "/api/v1/metadata/resolve"): EndpointPolicy("admin"),
     ("GET", "/api/v1/metadata/providers"): EndpointPolicy("admin"),
     # Collections (Curated)
     ("GET", "/api/v1/collections"): EndpointPolicy("user"),
