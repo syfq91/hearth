@@ -28,6 +28,11 @@ HLS_AUDIO_CODECS: frozenset[str] = frozenset({"aac", "ac3", "eac3", "mp3"})
 DEFAULT_VIDEO_CODEC = "h264"
 DEFAULT_AUDIO_CODEC = "aac"
 
+# Hardware encoding stays scoped to the Intel VA-API H.264 path (ADR 064).
+# Adding another family here is a deliberate decision, not an accident of a
+# client listing more codecs.
+HARDWARE_VIDEO_FAMILIES: frozenset[str] = frozenset({"h264"})
+
 
 @dataclass(frozen=True)
 class TargetSelection:
@@ -52,6 +57,7 @@ def _choose(
     default_family: str,
     server: ServerTranscodeCapabilities,
     allow_hardware: bool,
+    hardware_families: frozenset[str] = frozenset(),
 ) -> tuple[str, str]:
     """Pick the best (family, encoder) pair from an ordered preference list.
 
@@ -67,7 +73,8 @@ def _choose(
         family = normalize_codec(raw)
         if family not in allowed:
             continue
-        encoder = server.encoder_for(family, allow_hardware=allow_hardware)
+        family_hardware = allow_hardware and family in hardware_families
+        encoder = server.encoder_for(family, allow_hardware=family_hardware)
         if encoder is None:
             continue
         rank = 0 if source_family is not None and family == source_family else 1
@@ -81,7 +88,10 @@ def _choose(
     # No client preference survived the gates. Falling back to the H.264/AAC
     # defaults preserves Hearth's existing behaviour; Phase 2 will report this
     # case explicitly instead of silently substituting a codec.
-    encoder = server.encoder_for(default_family, allow_hardware=allow_hardware)
+    encoder = server.encoder_for(
+        default_family,
+        allow_hardware=allow_hardware and default_family in hardware_families,
+    )
     return default_family, encoder or default_family
 
 
@@ -106,6 +116,7 @@ def select_transcode_targets(
         default_family=DEFAULT_VIDEO_CODEC,
         server=server,
         allow_hardware=allow_video_hardware,
+        hardware_families=HARDWARE_VIDEO_FAMILIES,
     )
     audio_family, audio_encoder = _choose(
         client.audio_transcode_codecs,
@@ -124,6 +135,7 @@ def select_transcode_targets(
 
 
 __all__ = [
+    "HARDWARE_VIDEO_FAMILIES",
     "HLS_AUDIO_CODECS",
     "HLS_VIDEO_CODECS",
     "TargetSelection",

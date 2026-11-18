@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from app.services.media.probe import ProbeResult, ProbeStream
 from app.services.transcode.capabilities import ServerTranscodeCapabilities
 from app.services.transcode.profile import ClientCapabilities, resolve_client_capabilities
+from app.services.transcode.targets import select_transcode_targets
 
 PlaybackMode = Literal["direct_play", "remux_hls", "transcode_hls"]
 ActionType = Literal["copy", "transcode"]
@@ -287,14 +288,12 @@ def evaluate_playback_plan(
 
     # 5. Check Audio Compatibility
     audio_transcode_needed = False
-    audio_codec_target = "copy"
     target_channels = 2
 
     if audio_stream is not None:
         a_codec = (audio_stream.codec_name or "").lower()
         if not resolved_client.supports_audio_codec(a_codec):
             audio_transcode_needed = True
-            audio_codec_target = "aac"
             _add_reason(reasons, TranscodeReason.AudioCodecNotSupported)
         if (
             resolved_client.max_audio_channels is not None
@@ -302,7 +301,6 @@ def evaluate_playback_plan(
             and audio_stream.channels > resolved_client.max_audio_channels
         ):
             audio_transcode_needed = True
-            audio_codec_target = "aac"
             _add_reason(reasons, TranscodeReason.AudioChannelsNotSupported)
         if (
             resolved_client.max_audio_sample_rate is not None
@@ -310,13 +308,10 @@ def evaluate_playback_plan(
             and audio_stream.sample_rate > resolved_client.max_audio_sample_rate
         ):
             audio_transcode_needed = True
-            audio_codec_target = "aac"
             _add_reason(reasons, TranscodeReason.AudioSampleRateNotSupported)
 
         if audio_stream.channels and audio_stream.channels > 2:
             target_channels = audio_stream.channels
-    else:
-        audio_codec_target = "copy"
 
     # 6. Check Container Compatibility
     container_supported = resolved_client.supports_container(
@@ -349,24 +344,25 @@ def evaluate_playback_plan(
             reasons=reasons,
         )
 
-    # 8. Action types, codecs, and hardware vs software selection
+    # 8. Action types, then resolve encoder targets from the ordered client
+    # preferences. The mode and reason set above are unchanged: negotiation only
+    # decides *what* to encode when a copy path is unavailable.
     hwaccel_mode: HwAccelMode = "none"
     video_codec_target = "copy"
+    audio_codec_target = "copy"
 
     if mode == "direct_play":
         v_action: ActionType = "copy"
-        video_codec_target = "copy"
         a_action: ActionType = "copy"
-        audio_codec_target = "copy"
     elif mode == "remux_hls":
         v_action = "copy"
-        video_codec_target = "copy"
         a_action = "transcode" if audio_transcode_needed else "copy"
     else:  # transcode_hls
         v_action = "transcode"
         a_action = "transcode" if audio_transcode_needed else "copy"
 
-        can_vaapi = (
+    if mode != "direct_play":
+        can_use_video_hardware = (
             server_caps.available
             and not server_caps.force_software
             and server_caps.can_vaapi_encode("h264")
@@ -376,17 +372,22 @@ def evaluate_playback_plan(
             and primary_video.codec_name
             and not server_caps.can_vaapi_decode(primary_video.codec_name)
         ):
-            can_vaapi = False
-
+            can_use_video_hardware = False
         if tonemap_needed and not server_caps.tonemap_vaapi:
-            can_vaapi = False
+            can_use_video_hardware = False
 
-        if can_vaapi:
-            hwaccel_mode = "vaapi"
-            video_codec_target = "h264_vaapi"
-        else:
-            hwaccel_mode = "none"
-            video_codec_target = "libx264"
+        selection = select_transcode_targets(
+            resolved_client,
+            server_caps,
+            source_video_codec=primary_video.codec_name if primary_video else None,
+            source_audio_codec=audio_stream.codec_name if audio_stream else None,
+            allow_video_hardware=can_use_video_hardware,
+        )
+        if mode == "transcode_hls":
+            video_codec_target = selection.video_codec
+            hwaccel_mode = "vaapi" if video_codec_target == "h264_vaapi" else "none"
+        if audio_transcode_needed:
+            audio_codec_target = selection.audio_codec
 
     return TranscodePlan(
         mode=mode,

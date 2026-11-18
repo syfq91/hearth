@@ -76,6 +76,16 @@ def test_hardware_encoder_is_used_only_when_allowed() -> None:
     )
 
 
+def test_hardware_encoder_stays_scoped_to_h264() -> None:
+    client = ClientCapabilities(video_transcode_codecs=["hevc"])
+    server = _server(software=("libx264", "libx265", "aac"))
+    server.available = True
+    server.codecs["hevc"] = CodecCapability(
+        codec="hevc", decode=True, encode=True, test_encode_ok=True
+    )
+    assert select_transcode_targets(client, server).video_codec == "libx265"
+
+
 def test_audio_source_match_preserves_codec() -> None:
     client = ClientCapabilities(audio_transcode_codecs=["aac", "ac3"])
     server = _server(software=("libx264", "aac", "ac3"))

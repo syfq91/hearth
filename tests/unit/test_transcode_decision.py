@@ -1312,6 +1312,40 @@ def test_t10_ass_delivered_externally_when_profile_lists_ass_external() -> None:
     assert plan.subtitle_action in ("external_ass", "sidecar_vtt")
 
 
+def test_transcode_target_preferences_reach_the_plan() -> None:
+    """Ordered target lists and source matching decide the encoder targets."""
+    probe = _make_probe("mkv", "hevc", "Main", 3840, 2160, 20_000_000, False, "truehd", 8)
+    caps = ClientCapabilities(
+        containers=["mp4"],
+        video_codecs=["h264"],
+        audio_codecs=["aac"],
+        video_transcode_codecs=["hevc", "h264"],
+        audio_transcode_codecs=["ac3", "aac"],
+    )
+    server = ServerTranscodeCapabilities(
+        render_device="/dev/dri/renderD128",
+        available=False,
+        software_encoders=["libx264", "libx265", "aac", "ac3"],
+    )
+    plan = evaluate_playback_plan(probe, caps, UserLimits(), server)
+    assert plan.mode == "transcode_hls"
+    assert plan.video_codec == "libx265"
+    assert plan.audio_codec == "ac3"
+
+
+def test_default_transcode_targets_remain_h264_aac() -> None:
+    """Clients that send no target list keep Hearth's existing output codecs."""
+    probe = _make_probe("mkv", "hevc", "Main", 3840, 2160, 20_000_000, False, "truehd", 8)
+    caps = ClientCapabilities(
+        containers=["mp4"],
+        video_codecs=["h264"],
+        audio_codecs=["aac"],
+    )
+    plan = evaluate_playback_plan(probe, caps, UserLimits(), _vaapi_caps(force_sw=True))
+    assert plan.video_codec == "libx264"
+    assert plan.audio_codec == "aac"
+
+
 def test_t10_client_lacking_text_method_uses_burn_in() -> None:
     """Any client lacking a text method uses burn-in (SubtitleBurnInRequired)."""
     from app.services.transcode.profile import SubtitleProfile
