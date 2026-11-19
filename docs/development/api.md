@@ -461,6 +461,13 @@ curl "$BASE/api/v1/items/$ITEM_ID" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+`GET /libraries/{id}/items` supports two pagination modes. Keyset pagination
+uses the opaque `next_cursor` from the previous response (`has_more` says whether
+another page exists); this is what infinite-scroll clients use. For numbered
+pagination, send `offset` instead of a cursor — the response includes `total`,
+the number of matching items, so a client can compute page count as
+`ceil(total / limit)`. `offset` is ignored when a `cursor` is supplied.
+
 `GET /items/{id}` returns metadata, credits, versions, and artwork. Artwork is
 served by `GET /api/v1/images/{image_id}`, which accepts a media token in
 `?token=` so it can be used directly in `<img>` tags.

@@ -208,6 +208,48 @@ async def test_list_sorts_by_title_and_paginates(
     assert seen == ["Alpha", "Arrival", "Heat", "The Matrix", "Zulu"]
 
 
+async def test_list_supports_offset_pagination_and_total(
+    api_client: httpx.AsyncClient,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    library_id = await _make_library(db_sessionmaker)
+    for index, title in enumerate(["Zulu", "The Matrix", "Alpha", "Heat", "Arrival"]):
+        await _add_item(
+            db_sessionmaker,
+            library_id,
+            title=title,
+            added_at=datetime.now(UTC) + timedelta(minutes=index),
+        )
+
+    async def page(offset: int) -> dict[str, object]:
+        response = await api_client.get(
+            f"/api/v1/libraries/{library_id}/items",
+            params={"sort": "title", "limit": 2, "offset": offset},
+            headers=_bearer(admin),
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    first = await page(0)
+    assert [item["title"] for item in first["items"]] == ["Alpha", "Arrival"]
+    assert first["total"] == 5
+    assert first["has_more"] is True
+    assert first["next_cursor"] is None
+
+    second = await page(2)
+    assert [item["title"] for item in second["items"]] == ["Heat", "The Matrix"]
+
+    last = await page(4)
+    assert [item["title"] for item in last["items"]] == ["Zulu"]
+    assert last["has_more"] is False
+    assert last["total"] == 5
+
+    empty = await page(6)
+    assert empty["items"] == []
+    assert empty["total"] == 5
+
+
 async def test_list_supports_added_year_and_rating_sorts(
     api_client: httpx.AsyncClient,
     db_sessionmaker: async_sessionmaker[AsyncSession],

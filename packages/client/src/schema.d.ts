@@ -1592,7 +1592,12 @@ export interface paths {
         };
         /**
          * List Library Items
-         * @description List a library's movies, sorted and filtered with keyset pagination.
+         * @description List a library's items, sorted and filtered.
+         *
+         *     Supports two pagination modes: keyset pagination via cursor (the
+         *     default, used by infinite scroll) and numbered pagination via offset
+         *     (used when a client needs page numbers and a total count). Offset is
+         *     ignored when a cursor is supplied.
          *
          *     Book libraries keep their directory structure: the list covers one folder
          *     at a time, defaulting to the library root. ``folder`` is ignored for other
@@ -3644,7 +3649,10 @@ export interface components {
         };
         /**
          * ItemPage
-         * @description One page of items plus an opaque cursor for the next page.
+         * @description One page of items with a total count and an opaque next-page cursor.
+         *
+         *     Cursor clients use next_cursor; numbered pagination uses total together
+         *     with the offset request parameter.
          */
         ItemPage: {
             /**
@@ -3656,6 +3664,11 @@ export interface components {
             items: components["schemas"]["ItemSummary"][];
             /** Next Cursor */
             next_cursor?: string | null;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
         };
         /**
          * ItemSummary
@@ -8172,6 +8185,8 @@ export interface operations {
                 order?: ("asc" | "desc") | null;
                 limit?: number;
                 cursor?: string | null;
+                /** @description Numbered pagination: skip this many items (used when no cursor is given) */
+                offset?: number | null;
                 genre?: string | null;
                 year?: number | null;
                 watched?: boolean | null;

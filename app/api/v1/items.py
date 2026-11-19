@@ -1,4 +1,4 @@
-"""Movie browse and item-detail endpoints with cursor pagination."""
+"""Item browse and detail endpoints with cursor and offset pagination."""
 
 import base64
 import binascii
@@ -159,11 +159,16 @@ class ItemDetail(ItemSummary):
 
 
 class ItemPage(BaseModel):
-    """One page of items plus an opaque cursor for the next page."""
+    """One page of items with a total count and an opaque next-page cursor.
+
+    Cursor clients use next_cursor; numbered pagination uses total together
+    with the offset request parameter.
+    """
 
     items: list[ItemSummary]
     next_cursor: str | None = None
     has_more: bool = False
+    total: int = 0
 
 
 class LibraryFolder(BaseModel):
@@ -192,6 +197,13 @@ async def list_library_items(
     order: Annotated[SortOrder | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
+    offset: Annotated[
+        int | None,
+        Query(
+            ge=0,
+            description="Numbered pagination: skip this many items (used when no cursor is given)",
+        ),
+    ] = None,
     genre: Annotated[str | None, Query(max_length=64)] = None,
     year: Annotated[int | None, Query(ge=1800, le=2100)] = None,
     watched: Annotated[bool | None, Query()] = None,
@@ -203,7 +215,12 @@ async def list_library_items(
         ),
     ] = None,
 ) -> ItemPage:
-    """List a library's movies, sorted and filtered with keyset pagination.
+    """List a library's items, sorted and filtered.
+
+    Supports two pagination modes: keyset pagination via cursor (the
+    default, used by infinite scroll) and numbered pagination via offset
+    (used when a client needs page numbers and a total count). Offset is
+    ignored when a cursor is supplied.
 
     Book libraries keep their directory structure: the list covers one folder
     at a time, defaulting to the library root. ``folder`` is ignored for other
@@ -220,17 +237,17 @@ async def list_library_items(
         item_type = "album"
     else:
         item_type = "movie"
-    query = select(MediaItem).where(
+
+    filters: list[ColumnElement[bool]] = [
         MediaItem.library_id == library.id,
         MediaItem.type == item_type,
-    )
-    query = apply_rating_filter(query, user)
+    ]
     if genre is not None:
         wanted = genre.strip().casefold()
         if wanted:
-            query = query.where(MediaItem.genres.any(func.lower(Genre.name) == wanted))
+            filters.append(MediaItem.genres.any(func.lower(Genre.name) == wanted))
     if year is not None:
-        query = query.where(MediaItem.year == year)
+        filters.append(MediaItem.year == year)
     if watched is not None:
         played = MediaItem.user_states.any(
             and_(
@@ -238,10 +255,16 @@ async def list_library_items(
                 UserItemState.played.is_(True),
             )
         )
-        query = query.where(played if watched else ~played)
+        filters.append(played if watched else ~played)
     if library.type == "book":
-        query = query.where(_in_book_folder(library, _clean_folder(folder)))
+        filters.append(_in_book_folder(library, _clean_folder(folder)))
 
+    count_query = apply_rating_filter(
+        select(func.count()).select_from(MediaItem).where(*filters), user
+    )
+    total = int((await session.scalar(count_query)) or 0)
+
+    query = apply_rating_filter(select(MediaItem).where(*filters), user)
     if cursor is not None:
         cursor_key, cursor_id = _decode_cursor(cursor, sort=sort, direction=direction)
         if direction == "asc":
@@ -258,6 +281,8 @@ async def list_library_items(
                     and_(key_expression == cursor_key, MediaItem.id < cursor_id),
                 )
             )
+    elif offset is not None:
+        query = query.offset(offset)
 
     if direction == "asc":
         query = query.order_by(key_expression.asc(), MediaItem.id.asc())
@@ -278,7 +303,7 @@ async def list_library_items(
     states = await watch_states(session, user.id, [item.id for item in page_items])
 
     next_cursor = None
-    if has_more and page_items:
+    if has_more and page_items and offset is None:
         last = page_items[-1]
         next_cursor = _encode_cursor(
             sort=sort,
@@ -291,6 +316,7 @@ async def list_library_items(
         items=[item_summary(item, states.get(item.id)) for item in page_items],
         next_cursor=next_cursor,
         has_more=has_more,
+        total=total,
     )
 
 

@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- The library page now uses numbered pagination (with Previous/Next and a page window) instead of a "Load more" button. Changing a filter or folder resets to page 1; `GET /libraries/{id}/items` gained an `offset` parameter and a `total` count to support it while keeping cursor pagination for existing clients.
 - The inert hls.js rendition `<select>` was replaced by the new quality menu; Hearth still emits a single HLS rendition, so quality switches negotiate a new transcode rather than switching ABR levels mid-stream (ADR 071).
 - Container base image moved from Debian 12 (bookworm) to Debian 13 (trixie), upgrading the bundled FFmpeg from 5.1 to 7.1.5 and the Intel VA-API driver to 25.2.x (ADR 070).
 - The web client now advertises ordered encoder preferences and one conditional fMP4 transcode target alongside its pass-through codecs, and refreshes cached capabilities when the display changes or the window regains focus. The developer test player gained a "Prefer HEVC target" switch to exercise conditional negotiation.

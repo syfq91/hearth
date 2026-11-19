@@ -45,73 +45,97 @@
 		return () => clearTimeout(timer);
 	});
 
+	const PAGE_SIZE = 48;
+
 	let items = $state<ItemPage['items']>([]);
-	let nextCursor = $state<string | null>(null);
+	let total = $state(0);
+	let page = $state(1);
 	let loading = $state(false);
-	let loadingMore = $state(false);
 	let error = $state<string | null>(null);
 
-	// Reset pagination when any filter or the current folder changes, then
-	// reload the first page.
+	let totalPages = $derived(Math.max(1, Math.ceil(total / PAGE_SIZE)));
+
+	// Changing any filter or folder starts again at the first page.
 	let filterKey = $derived(
 		`${sort}|${order}|${debouncedGenre}|${debouncedYear}|${watched}|${folder}`
 	);
 
 	$effect(() => {
-		void loadFirstPage(filterKey);
+		filterKey;
+		page = 1;
+	});
+
+	$effect(() => {
+		void loadPage();
+	});
+
+	$effect(() => {
 		void loadFolders();
 	});
 
-	async function loadFirstPage(_key: string): Promise<void> {
+	async function loadPage(): Promise<void> {
+		// Read every input before the await so Svelte tracks them: any filter or
+		// page change reloads the list.
+		const currentPage = page;
+		const currentSort = sort;
+		const currentOrder = order;
+		const currentGenre = debouncedGenre;
+		const currentYear = debouncedYear;
+		const currentWatched = watched;
+		const currentFolder = folder;
+		const isBookLibrary = isBook;
+
 		loading = true;
 		error = null;
 		try {
-			const page = await api.get<ItemPage>(`/libraries/${data.library.id}/items`, {
+			const result = await api.get<ItemPage>(`/libraries/${data.library.id}/items`, {
 				query: {
-					sort,
-					order,
-					limit: 48,
-					genre: debouncedGenre || undefined,
-					year: debouncedYear ? Number(debouncedYear) : undefined,
-					watched: watched === '' ? undefined : watched === 'true',
-					folder: isBook && folder ? folder : undefined
+					sort: currentSort,
+					order: currentOrder,
+					limit: PAGE_SIZE,
+					offset: (currentPage - 1) * PAGE_SIZE,
+					genre: currentGenre || undefined,
+					year: currentYear ? Number(currentYear) : undefined,
+					watched: currentWatched === '' ? undefined : currentWatched === 'true',
+					folder: isBookLibrary && currentFolder ? currentFolder : undefined
 				}
 			});
-			items = page.items;
-			nextCursor = page.next_cursor ?? null;
+			items = result.items;
+			total = result.total;
+			// Filters can shrink the result set while an older page is selected.
+			const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+			if (currentPage > lastPage && page === currentPage) page = lastPage;
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 			items = [];
-			nextCursor = null;
+			total = 0;
 		} finally {
 			loading = false;
 		}
 	}
 
-	async function loadMore(): Promise<void> {
-		if (!nextCursor || loadingMore) return;
-		loadingMore = true;
-		try {
-			const page = await api.get<ItemPage>(`/libraries/${data.library.id}/items`, {
-				query: {
-					sort,
-					order,
-					limit: 48,
-					cursor: nextCursor,
-					genre: debouncedGenre || undefined,
-					year: debouncedYear ? Number(debouncedYear) : undefined,
-					watched: watched === '' ? undefined : watched === 'true',
-					folder: isBook && folder ? folder : undefined
-				}
-			});
-			items = [...items, ...page.items];
-			nextCursor = page.next_cursor ?? null;
-		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
-		} finally {
-			loadingMore = false;
-		}
+	function goToPage(next: number): void {
+		page = Math.min(Math.max(next, 1), totalPages);
 	}
+
+	// A window of page numbers around the current page, with gaps for long lists.
+	function pageList(current: number, count: number): (number | 'gap')[] {
+		if (count <= 9) return Array.from({ length: count }, (_, index) => index + 1);
+		const result: (number | 'gap')[] = [];
+		const add = (value: number | 'gap') => {
+			if (result[result.length - 1] !== value) result.push(value);
+		};
+		add(1);
+		const start = Math.max(2, current - 2);
+		const end = Math.min(count - 1, current + 2);
+		if (start > 2) add('gap');
+		for (let n = start; n <= end; n += 1) add(n);
+		if (end < count - 1) add('gap');
+		add(count);
+		return result;
+	}
+
+	let pages = $derived(pageList(page, totalPages));
 
 	async function loadFolders(): Promise<void> {
 		if (!isBook) return;
@@ -275,12 +299,42 @@
 				<li><MediaCard item={item} aspect={isMusic ? '1 / 1' : undefined} /></li>
 			{/each}
 		</ul>
-		{#if nextCursor}
-			<div class="more">
-				<button type="button" class="load-more" onclick={loadMore} disabled={loadingMore}>
-					{loadingMore ? 'Loading…' : 'Load more'}
+		<p class="page-status">Page {page} of {totalPages} · {total} items</p>
+		{#if totalPages > 1}
+			<nav class="pagination" aria-label="Pagination">
+				<button
+					type="button"
+					class="page-btn"
+					onclick={() => goToPage(page - 1)}
+					disabled={page <= 1 || loading}
+				>
+					Previous
 				</button>
-			</div>
+				{#each pages as entry}
+					{#if entry === 'gap'}
+						<span class="page-gap" aria-hidden="true">…</span>
+					{:else}
+						<button
+							type="button"
+							class="page-btn"
+							class:current={entry === page}
+							aria-current={entry === page ? 'page' : undefined}
+							onclick={() => goToPage(entry)}
+							disabled={loading}
+						>
+							{entry}
+						</button>
+					{/if}
+				{/each}
+				<button
+					type="button"
+					class="page-btn"
+					onclick={() => goToPage(page + 1)}
+					disabled={page >= totalPages || loading}
+				>
+					Next
+				</button>
+			</nav>
 		{/if}
 	</section>
 {/if}
@@ -461,27 +515,50 @@
 		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 	}
 
-	.more {
+	.pagination {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: center;
-		padding: 1.5rem 0;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 1.25rem 0 0.25rem;
 	}
 
-	.load-more {
+	.page-btn {
+		min-width: 2.25rem;
+		padding: 0.4rem 0.6rem;
 		background: var(--surface-2);
 		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		padding: 0.6rem 1.4rem;
+		border-radius: 6px;
 		cursor: pointer;
 	}
 
-	.load-more:hover:not(:disabled) {
+	.page-btn:hover:not(:disabled):not(.current) {
 		background: var(--surface);
 	}
 
-	.load-more:disabled {
-		opacity: 0.6;
+	.page-btn.current {
+		background: var(--accent);
+		border-color: var(--accent);
+		color: var(--accent-contrast);
+		font-weight: 600;
+	}
+
+	.page-btn:disabled {
+		opacity: 0.5;
 		cursor: default;
+	}
+
+	.page-gap {
+		color: var(--muted);
+		padding: 0 0.15rem;
+	}
+
+	.page-status {
+		text-align: center;
+		color: var(--muted);
+		font-size: 0.85rem;
+		margin: 0.5rem 0 0;
 	}
 
 	.muted {

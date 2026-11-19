@@ -3085,7 +3085,7 @@
         "type": "object"
       },
       "ItemPage": {
-        "description": "One page of items plus an opaque cursor for the next page.",
+        "description": "One page of items with a total count and an opaque next-page cursor.\n\nCursor clients use next_cursor; numbered pagination uses total together\nwith the offset request parameter.",
         "properties": {
           "has_more": {
             "default": false,
@@ -3109,6 +3109,11 @@
               }
             ],
             "title": "Next Cursor"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
@@ -13126,7 +13131,7 @@
     },
     "/api/v1/libraries/{library_id}/items": {
       "get": {
-        "description": "List a library's movies, sorted and filtered with keyset pagination.\n\nBook libraries keep their directory structure: the list covers one folder\nat a time, defaulting to the library root. ``folder`` is ignored for other\nlibrary types.",
+        "description": "List a library's items, sorted and filtered.\n\nSupports two pagination modes: keyset pagination via cursor (the\ndefault, used by infinite scroll) and numbered pagination via offset\n(used when a client needs page numbers and a total count). Offset is\nignored when a cursor is supplied.\n\nBook libraries keep their directory structure: the list covers one folder\nat a time, defaulting to the library root. ``folder`` is ignored for other\nlibrary types.",
         "operationId": "list_library_items_api_v1_libraries__library_id__items_get",
         "parameters": [
           {
@@ -13201,6 +13206,25 @@
                 }
               ],
               "title": "Cursor"
+            }
+          },
+          {
+            "description": "Numbered pagination: skip this many items (used when no cursor is given)",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Numbered pagination: skip this many items (used when no cursor is given)",
+              "title": "Offset"
             }
           },
           {
