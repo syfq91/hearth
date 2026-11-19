@@ -252,8 +252,8 @@ The `reasons` values are stable `TranscodeReason` identifiers, not prose. `Trans
 When `mode` is `transcode_hls` or `remux_hls`:
 1. **Master Playlist**: `GET /api/v1/hls/{session_id}/master.m3u8` delays responding until ffmpeg emits the first segment, eliminating player race conditions.
 2. **Media Playlist**: `GET /api/v1/hls/{session_id}/media.m3u8` rewrites segment URLs to preserve media access tokens across child requests. Video transcodes open with a shorter first segment (`HEARTH_TRANSCODE_FIRST_SEGMENT_DURATION_SECONDS`, default 2s) so playback can start before a full segment is encoded; `#EXT-X-TARGETDURATION` reports the longest segment, and every later segment keeps the configured duration.
-3. **Segments**: Init (`init.mp4`) and media chunks (`seg_0.m4s`, `seg_1.m4s`, ...) are served with `Cache-Control`.
-4. **Seeking & quality changes**: Client seeking initiates a new playback-info or seek request; ffmpeg restarts with `-ss` seeking on keyframes. Changing the player's quality selection also initiates a new playback-info request with a different `quality` value and a new session; the client preserves the current position as `start_time_offset_seconds`. Multiple renditions are not produced in one ffmpeg process (ADR 071), so each quality switch rebuffers briefly.
+3. **Segments**: Media chunks (`seg_0.m4s`, ...) use atomic writes and are cached for one hour. `init.mp4` is rewritten in place whenever a seek restarts ffmpeg, so it is served with `Cache-Control: no-store` and its playlist URL carries a generation counter (`init.mp4?v=N&token=...`); clients must not reuse an init box across seeks.
+4. **Seeking & quality changes**: Clients should call `POST /api/v1/hls/{session_id}/seek` with `{"position_seconds": N}` immediately after a seek so ffmpeg restarts at the target offset (`-ss`, keyframe aligned) before the browser requests segments that do not exist yet. Without it, a segment request can wait and then return a JSON 503, which native HLS demuxers report as `DEMUXER_ERROR_COULD_NOT_PARSE`. Positions past the item duration are clamped; seeking into an already-produced segment reuses cached files without a restart. Quality changes instead initiate a new playback-info request with a different `quality` value and a new session, preserving the current position as `start_time_offset_seconds`. Multiple renditions are not produced in one ffmpeg process (ADR 071), so each quality switch rebuffers briefly.
 5. **Idle Reaper**: An active transcode process is automatically reaped if no segment requests arrive within 60 seconds.
 6. **Explicit Stop**: Clients can explicitly release server resources with `POST /api/v1/hls/{session_id}/stop` (supports bearer auth, query string token, or body token for `sendBeacon`).
 7. **Concurrency Caps**: Exceeding server transcoding capacity yields HTTP 503 (`transcode_capacity_exceeded`) with a `Retry-After: 5` header.
@@ -376,6 +376,7 @@ If a client encounters an unrecoverable client-side subtitle crash, it can re-re
 | | `/api/v1/hls/{session_id}/master.m3u8` | GET | Viewer | HLS fMP4 master playlist |
 | | `/api/v1/hls/{session_id}/subtitles.m3u8` | GET | Viewer | HLS subtitles playlist |
 | | `/api/v1/hls/{session_id}/subtitles.vtt` | GET | Viewer | HLS WebVTT subtitle track |
+| | `/api/v1/hls/{session_id}/seek` | POST | Viewer | Seek an active transcode session to a media position |
 | | `/api/v1/hls/{session_id}/stop` | POST | Viewer | Terminate active transcode session |
 | | `/api/v1/subtitles/{id}.vtt` | GET | Viewer | WebVTT subtitle track |
 | | `/api/v1/media/{file_id}/subtitles/{index}.vtt` | GET | Viewer | Embedded subtitle extracted as WebVTT |
