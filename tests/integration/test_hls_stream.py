@@ -121,7 +121,7 @@ async def test_hls_endpoints_full_cycle(
     media_res = await api_client.get(f"/api/v1/hls/{session_id}/media.m3u8?token={encoded_token}")
     assert media_res.status_code == 200
     media_text = media_res.text
-    assert f'URI="init.mp4?token={encoded_token}"' in media_text
+    assert f'URI="init.mp4?v=0&token={encoded_token}"' in media_text
     assert f"seg_000.m4s?token={encoded_token}" in media_text
 
     # 7. Fetch init segment

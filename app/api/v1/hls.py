@@ -268,6 +268,10 @@ async def get_media_playlist(
 
     raw_content = m3u8_path.read_text(encoding="utf-8")
     token_suffix = f"?token={quote(token, safe='')}" if token else ""
+    # init.mp4 is rewritten in place whenever a seek restarts ffmpeg. Bump its
+    # URL with the generation so browsers refetch the new init box instead of
+    # reusing the pre-seek one from cache.
+    init_suffix = f"?v={session.init_generation}{token_suffix.replace('?', '&', 1)}"
 
     if session.duration_seconds > 0:
         duration = session.duration_seconds
@@ -278,7 +282,7 @@ async def get_media_playlist(
             f"#EXT-X-TARGETDURATION:{session.playlist_target_duration}",
             "#EXT-X-MEDIA-SEQUENCE:0",
             "#EXT-X-PLAYLIST-TYPE:VOD",
-            f'#EXT-X-MAP:URI="init.mp4{token_suffix}"',
+            f'#EXT-X-MAP:URI="init.mp4{init_suffix}"',
         ]
         for i in range(total_segments):
             d = session.segment_duration_at(i, duration)
@@ -292,7 +296,7 @@ async def get_media_playlist(
         for line in raw_content.splitlines():
             if line.startswith("#EXT-X-MAP:URI="):
                 # e.g. #EXT-X-MAP:URI="init.mp4"
-                line = line.replace('URI="init.mp4"', f'URI="init.mp4{token_suffix}"')
+                line = line.replace('URI="init.mp4"', f'URI="init.mp4{init_suffix}"')
             elif line.endswith(".m4s"):
                 line = f"{line}{token_suffix}"
             lines.append(line)
@@ -450,11 +454,28 @@ async def get_init_segment(
                     retry_after=1,
                 )
 
+        # A seek restarts ffmpeg with -y, truncating and rewriting init.mp4 in
+        # place. Wait until the first segment of this generation is complete
+        # (ffmpeg writes the init box first), so we never return a partial init
+        # file with a 200. A one-hour public cache would otherwise pin clients
+        # to the pre-seek init while the segments around it are regenerated.
+        if session.init_generation > 0:
+            ready = await session.wait_for_segment_ready(
+                session.current_start_segment,
+                settings.transcode_segment_wait_timeout_seconds,
+            )
+            if not ready:
+                raise ServiceUnavailableError(
+                    "Initialization segment is being regenerated; retry shortly",
+                    code="transcode_timeout",
+                    retry_after=1,
+                )
+
         return TrackedFileResponse(
             session=session,
             path=init_path,
             media_type="video/mp4",
-            headers={"Cache-Control": "public, max-age=3600"},
+            headers={"Cache-Control": "no-store"},
         )
     except Exception:
         session.decrement_request()

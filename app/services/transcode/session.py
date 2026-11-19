@@ -76,6 +76,9 @@ class TranscodeSession:
             self.first_segment_duration = float(configured_first)
         self._seek_lock = asyncio.Lock()
         self.current_start_segment = self.segment_index_at(start_offset)
+        # Bumped on every ffmpeg (re)start. The playlist uses it to cache-bust
+        # init.mp4, which ffmpeg truncates and rewrites in place on each seek.
+        self.init_generation = 0
 
         self.created_at = utcnow()
         self.last_activity_at = utcnow()
@@ -363,6 +366,7 @@ class TranscodeSession:
             )
             return
 
+        self.init_generation += 1
         self.output_dir.mkdir(parents=True, exist_ok=True)
         fonts_dir = await self._prepare_burn_in_fonts()
         start_seg = self.segment_index_at(self.start_offset)
@@ -488,7 +492,7 @@ class TranscodeSession:
         """Wait until media.m3u8 and init.mp4 exist on disk."""
         m3u8 = self.output_dir / "media.m3u8"
         init = self.output_dir / "init.mp4"
-        if m3u8.exists() and init.exists():
+        if m3u8.exists() and init.exists() and init.stat().st_size > 0:
             self.record_success()
             return True
 
@@ -498,7 +502,7 @@ class TranscodeSession:
         start = asyncio.get_running_loop().time()
 
         while asyncio.get_running_loop().time() - start < timeout:
-            if m3u8.exists() and init.exists():
+            if m3u8.exists() and init.exists() and init.stat().st_size > 0:
                 self.record_success()
                 return True
             if self.is_circuit_open():
@@ -512,7 +516,32 @@ class TranscodeSession:
                 return False
             await asyncio.sleep(0.1)
 
-        return m3u8.exists() and init.exists()
+        return m3u8.exists() and init.exists() and init.stat().st_size > 0
+
+    async def wait_for_segment_ready(self, segment_index: int, timeout: float) -> bool:
+        """Wait for one segment to be produced without triggering a new seek.
+
+        FFmpeg writes the fMP4 init box before the first media segment, so a
+        complete segment at the current start index proves the rewritten
+        init.mp4 is complete too. The HLS init handler uses this to avoid
+        serving a truncated init file with a 200 right after a seek restarts
+        ffmpeg in place.
+        """
+        seg = self.output_dir / f"seg_{segment_index:03d}.m4s"
+        start = asyncio.get_running_loop().time()
+        while asyncio.get_running_loop().time() - start < timeout:
+            if seg.exists() and seg.stat().st_size > 0:
+                return True
+            if self.is_circuit_open():
+                return False
+            if (
+                self.process
+                and self.process.returncode is not None
+                and (not self.is_hardware or self.has_fallen_back)
+            ):
+                return False
+            await asyncio.sleep(0.05)
+        return seg.exists() and seg.stat().st_size > 0
 
     async def ensure_segment(self, segment_index: int, timeout: float = 30.0) -> bool:
         """Ensure that seg_{segment_index:03d}.m4s exists on disk, seeking if necessary."""

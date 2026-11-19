@@ -455,6 +455,153 @@ async def test_seek_endpoint_validates_position_and_session(
     await manager.stop_all()
 
 
+@pytest.mark.asyncio
+async def test_media_playlist_cache_busts_init_after_seek(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+) -> None:
+    """Each ffmpeg restart bumps the init URL so clients refetch the new init box."""
+    res_setup = await api_client.post(
+        "/api/v1/auth/setup",
+        json={"username": "admin", "password": "correct horse"},
+    )
+    tokens = res_setup.json()
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+    admin_id = (await api_client.get("/api/v1/auth/me", headers=headers)).json()["id"]
+
+    keys = load_keys(db_settings)
+    token, _ = create_media_token(
+        user_id=admin_id,
+        token_version=0,
+        settings=db_settings,
+        key=keys.media,
+        item_id="item_init_bust",
+    )
+    encoded = quote(token, safe="")
+
+    manager = get_session_manager(db_settings)
+    session_id = "test_init_bust_session"
+    out_dir = db_settings.transcode_dir / session_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "init.mp4").write_bytes(b"\x00\x00\x00\x20ftypiso5")
+    (out_dir / "media.m3u8").write_text("#EXTM3U\n", encoding="utf-8")
+    session = TranscodeSession(
+        session_id=session_id,
+        user_id=admin_id,
+        item_id="item_init_bust",
+        file_id="file_init_bust",
+        input_path=Path("/media/test.mp4"),
+        output_dir=out_dir,
+        plan=TranscodePlan(
+            mode="transcode_hls",
+            video_action="transcode",
+            video_codec="libx264",
+            audio_action="copy",
+            audio_codec="copy",
+            audio_channels=2,
+            subtitle_action="none",
+            hwaccel="none",
+        ),
+        settings=db_settings,
+        duration_seconds=20.0,
+    )
+    manager.sessions[session_id] = session
+
+    before = await api_client.get(f"/api/v1/hls/{session_id}/media.m3u8?token={encoded}")
+    assert before.status_code == 200, before.text
+    assert "init.mp4?v=0&token=" in before.text
+
+    with patch(
+        "asyncio.create_subprocess_exec",
+        new=AsyncMock(return_value=MockSubprocess(pid=4003)),
+    ):
+        seek = await api_client.post(
+            f"/api/v1/hls/{session_id}/seek",
+            json={"position_seconds": 8.0},
+            headers=headers,
+        )
+    assert seek.status_code == 200, seek.text
+
+    after = await api_client.get(f"/api/v1/hls/{session_id}/media.m3u8?token={encoded}")
+    assert after.status_code == 200, after.text
+    assert "init.mp4?v=1&token=" in after.text
+
+    await manager.stop_all()
+
+
+@pytest.mark.asyncio
+async def test_init_endpoint_does_not_serve_partially_rewritten_init(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+) -> None:
+    """While ffmpeg is active, init.mp4 is only served after its first segment is complete."""
+    res_setup = await api_client.post(
+        "/api/v1/auth/setup",
+        json={"username": "admin", "password": "correct horse"},
+    )
+    tokens = res_setup.json()
+    admin_id = (
+        await api_client.get(
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {tokens['access_token']}"}
+        )
+    ).json()["id"]
+
+    keys = load_keys(db_settings)
+    token, _ = create_media_token(
+        user_id=admin_id,
+        token_version=0,
+        settings=db_settings,
+        key=keys.media,
+        item_id="item_init_ready",
+    )
+    encoded = quote(token, safe="")
+
+    manager = get_session_manager(db_settings)
+    session_id = "test_init_ready_session"
+    out_dir = db_settings.transcode_dir / session_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "init.mp4").write_bytes(b"\x00\x00\x00\x20ftypiso5")
+    session = TranscodeSession(
+        session_id=session_id,
+        user_id=admin_id,
+        item_id="item_init_ready",
+        file_id="file_init_ready",
+        input_path=Path("/media/test.mp4"),
+        output_dir=out_dir,
+        plan=TranscodePlan(
+            mode="transcode_hls",
+            video_action="transcode",
+            video_codec="libx264",
+            audio_action="copy",
+            audio_codec="copy",
+            audio_channels=2,
+            subtitle_action="none",
+            hwaccel="none",
+        ),
+        settings=db_settings,
+        duration_seconds=20.0,
+    )
+    with patch(
+        "asyncio.create_subprocess_exec",
+        new=AsyncMock(return_value=MockSubprocess(pid=4004)),
+    ):
+        await session.start_process()
+    manager.sessions[session_id] = session
+    db_settings.transcode_segment_wait_timeout_seconds = 0.15
+
+    pending = await api_client.get(f"/api/v1/hls/{session_id}/init.mp4?token={encoded}")
+    assert pending.status_code == 503, pending.text
+    assert pending.json()["error"]["code"] == "transcode_timeout"
+
+    first_segment = out_dir / f"seg_{session.current_start_segment:03d}.m4s"
+    first_segment.write_bytes(b"complete_segment")
+    ready = await api_client.get(f"/api/v1/hls/{session_id}/init.mp4?token={encoded}")
+    assert ready.status_code == 200, ready.text
+    assert ready.headers["cache-control"] == "no-store"
+
+    await manager.stop_all()
+
+
 @pytest.mark.skipif(
     shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
     reason="ffmpeg and ffprobe required for seek timestamp continuity smoke test",
