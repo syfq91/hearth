@@ -47,6 +47,25 @@ export function isNativeHlsSupported(video: HTMLVideoElement): boolean {
 	);
 }
 
+function isAndroidBrowser(): boolean {
+	if (typeof navigator === 'undefined') return false;
+	return /android/i.test(navigator.userAgent);
+}
+
+/**
+ * Decide whether to hand an HLS URL straight to the native `<video>` element.
+ *
+ * Android browsers (Samsung Internet, Via, Chrome) answer "maybe" to
+ * canPlayType() for HLS MIME types, but their native demuxer has no retry for
+ * the JSON 503 responses Hearth returns while a transcode segment is being
+ * generated. hls.js has an explicit Retry-After loader, so prefer it there.
+ * Native HLS stays enabled on Safari and other engines where MSE is absent.
+ */
+export function shouldUseNativeHls(video: HTMLVideoElement): boolean {
+	if (isAndroidBrowser()) return false;
+	return isNativeHlsSupported(video);
+}
+
 export class HlsEngine {
 	private hls: Hls | null = null;
 	private video: HTMLVideoElement | null = null;

@@ -24,7 +24,7 @@
 	import {
 		HlsEngine,
 		isHlsSupported,
-		isNativeHlsSupported,
+		shouldUseNativeHls,
 		type HlsStreamStats
 	} from '../player/hls-engine';
 	import { SubtitleManager } from '../player/subtitles.svelte';
@@ -283,6 +283,28 @@
 		}
 	}
 
+	let seekNotifyTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// Notify the server before the browser asks for segments at the new
+	// position. Hearth's media playlist lists every segment up front, so a
+	// native HLS client can otherwise request a segment ffmpeg has not produced
+	// yet and receive a JSON 503 it cannot parse. Debounced for scrubbing.
+	function notifyHlsSeek(positionSeconds: number): void {
+		const targetSession = sessionId;
+		if (!targetSession) return;
+		if (seekNotifyTimer !== null) clearTimeout(seekNotifyTimer);
+		seekNotifyTimer = setTimeout(() => {
+			seekNotifyTimer = null;
+			void api
+				.post(`/hls/${targetSession}/seek`, {
+					body: { position_seconds: positionSeconds }
+				})
+				.catch(() => {
+					/* Best effort; cached and in-flight segments still resolve. */
+				});
+		}, 200);
+	}
+
 	function seekBy(deltaSeconds: number): void {
 		if (!videoEl) return;
 		const cur = videoEl.currentTime ?? 0;
@@ -290,6 +312,7 @@
 		const nextTime = Math.max(0, Math.min(maxTime, cur + deltaSeconds));
 		videoEl.currentTime = nextTime;
 		currentTime = nextTime;
+		notifyHlsSeek(nextTime);
 		triggerActivity();
 		subtitleManager?.renderManualFrame(true);
 	}
@@ -300,6 +323,7 @@
 		const nextTime = Math.max(0, Math.min(maxTime, targetSeconds));
 		videoEl.currentTime = nextTime;
 		currentTime = nextTime;
+		notifyHlsSeek(nextTime);
 		subtitleManager?.renderManualFrame(true);
 	}
 
@@ -606,6 +630,10 @@
 
 	async function attachSource(response: PlaybackInfoResponse): Promise<void> {
 		if (!videoEl) return;
+		if (seekNotifyTimer !== null) {
+			clearTimeout(seekNotifyTimer);
+			seekNotifyTimer = null;
+		}
 		resumeApplied = false;
 		lastReportedMs = 0;
 		streamStats = null;
@@ -648,7 +676,7 @@
 		expectedDuration = response.file?.duration_seconds ?? 0;
 
 		const isHls = response.mode !== 'direct_play' || source.includes('.m3u8');
-		if (isHls && !isNativeHlsSupported(videoEl) && isHlsSupported()) {
+		if (isHls && !shouldUseNativeHls(videoEl) && isHlsSupported()) {
 			hlsEngine = new HlsEngine(videoEl, source, {
 				startPositionSeconds: resumePositionMs > 0 ? resumePositionMs / 1000 : -1,
 				maxBitrate: response.video_stream?.bit_rate ?? undefined,
@@ -872,6 +900,7 @@
 	$effect(() => {
 		return () => {
 			if (hideTimeout) clearTimeout(hideTimeout);
+			if (seekNotifyTimer !== null) clearTimeout(seekNotifyTimer);
 			destroyed = true;
 			void report('stopped');
 			if (sessionId) {
