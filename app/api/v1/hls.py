@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.types import Receive, Scope, Send
 
 from app.core.deps import (
@@ -81,6 +81,18 @@ class SessionStopResponse(BaseModel):
 
 class SessionStopRequest(BaseModel):
     token: str | None = None
+
+
+class SessionSeekRequest(BaseModel):
+    """A request to move an active transcode session to a new media position."""
+
+    position_seconds: float = Field(ge=0)
+
+
+class SessionSeekResponse(BaseModel):
+    """The media position the session was moved to."""
+
+    position_seconds: float
 
 
 async def get_stop_session_viewer(
@@ -534,6 +546,41 @@ async def get_media_segment(
     except Exception:
         session.decrement_request()
         raise
+
+
+@router.post("/{session_id}/seek")
+async def seek_hls_session(
+    session_id: str,
+    viewer: ViewerDep,
+    settings: SettingsDep,
+    body: SessionSeekRequest,
+) -> SessionSeekResponse:
+    """Move an active transcode session to a new media position.
+
+    Hearth publishes a VOD-style media playlist that lists every segment up
+    front, so a native HLS client can request a segment far beyond the range
+    ffmpeg has produced. Without an explicit seek notification the segment
+    handler can only wait and then return a JSON 503, which a native demuxer
+    treats as unparseable media. Clients call this immediately after a seek so
+    the session restarts ffmpeg at the target offset while the request is still
+    in flight and can be retried.
+    """
+    manager = get_session_manager(settings)
+    session = _get_validated_session(session_id, manager, viewer)
+    session.touch()
+
+    if session.is_circuit_open():
+        raise ServiceUnavailableError(
+            "Transcoding circuit breaker open; retry shortly",
+            code="transcode_circuit_open",
+            retry_after=session.circuit_retry_after(),
+        )
+
+    position = body.position_seconds
+    if session.duration_seconds > 0:
+        position = min(position, session.duration_seconds)
+    await session.seek(position)
+    return SessionSeekResponse(position_seconds=position)
 
 
 @router.post("/{session_id}/stop")

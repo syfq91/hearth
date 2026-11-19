@@ -6280,6 +6280,35 @@
         "title": "ServerTranscodeCapabilities",
         "type": "object"
       },
+      "SessionSeekRequest": {
+        "description": "A request to move an active transcode session to a new media position.",
+        "properties": {
+          "position_seconds": {
+            "minimum": 0.0,
+            "title": "Position Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "position_seconds"
+        ],
+        "title": "SessionSeekRequest",
+        "type": "object"
+      },
+      "SessionSeekResponse": {
+        "description": "The media position the session was moved to.",
+        "properties": {
+          "position_seconds": {
+            "title": "Position Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "position_seconds"
+        ],
+        "title": "SessionSeekResponse",
+        "type": "object"
+      },
       "SessionStopRequest": {
         "properties": {
           "token": {
@@ -11502,6 +11531,82 @@
           }
         ],
         "summary": "Get Media Playlist",
+        "tags": [
+          "hls"
+        ]
+      }
+    },
+    "/api/v1/hls/{session_id}/seek": {
+      "post": {
+        "description": "Move an active transcode session to a new media position.\n\nHearth publishes a VOD-style media playlist that lists every segment up\nfront, so a native HLS client can request a segment far beyond the range\nffmpeg has produced. Without an explicit seek notification the segment\nhandler can only wait and then return a JSON 503, which a native demuxer\ntreats as unparseable media. Clients call this immediately after a seek so\nthe session restarts ffmpeg at the target offset while the request is still\nin flight and can be retried.",
+        "operationId": "seek_hls_session_api_v1_hls__session_id__seek_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionSeekRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSeekResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Seek Hls Session",
         "tags": [
           "hls"
         ]

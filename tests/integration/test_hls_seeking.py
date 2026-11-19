@@ -320,6 +320,141 @@ async def test_segment_endpoint_503_retry_after_on_timeout(
     await manager.stop_all()
 
 
+@pytest.mark.asyncio
+async def test_seek_endpoint_restarts_ffmpeg_at_target_position(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+) -> None:
+    """A client seek notification restarts ffmpeg at the requested offset."""
+    res_setup = await api_client.post(
+        "/api/v1/auth/setup",
+        json={"username": "admin", "password": "correct horse"},
+    )
+    assert res_setup.status_code == 201, res_setup.text
+    tokens = res_setup.json()
+    admin_id = (
+        await api_client.get(
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {tokens['access_token']}"}
+        )
+    ).json()["id"]
+
+    manager = get_session_manager(db_settings)
+    session_id = "test_seek_endpoint_session"
+    out_dir = db_settings.transcode_dir / session_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "init.mp4").write_bytes(b"\x00\x00\x00\x20ftypiso5")
+    (out_dir / "media.m3u8").write_text("#EXTM3U\n", encoding="utf-8")
+
+    session = TranscodeSession(
+        session_id=session_id,
+        user_id=admin_id,
+        item_id="item_seek_endpoint",
+        file_id="file_seek_endpoint",
+        input_path=Path("/media/test.mp4"),
+        output_dir=out_dir,
+        plan=TranscodePlan(
+            mode="transcode_hls",
+            video_action="transcode",
+            video_codec="libx264",
+            audio_action="copy",
+            audio_codec="copy",
+            audio_channels=2,
+            subtitle_action="none",
+            hwaccel="none",
+        ),
+        settings=db_settings,
+        duration_seconds=120.0,
+    )
+    manager.sessions[session_id] = session
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    new_proc = MockSubprocess(pid=4001)
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=new_proc)) as mock_exec:
+        res = await api_client.post(
+            f"/api/v1/hls/{session_id}/seek",
+            json={"position_seconds": 50.0},
+            headers=headers,
+        )
+
+    assert res.status_code == 200, res.text
+    assert res.json() == {"position_seconds": 50.0}
+    mock_exec.assert_awaited_once()
+    assert session.process is new_proc
+    assert session.cmd[session.cmd.index("-ss") + 1] == "50"
+
+    await manager.stop_all()
+
+
+@pytest.mark.asyncio
+async def test_seek_endpoint_validates_position_and_session(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+) -> None:
+    """Unknown sessions 404, negative positions 422, and overshoots clamp to duration."""
+    res_setup = await api_client.post(
+        "/api/v1/auth/setup",
+        json={"username": "admin", "password": "correct horse"},
+    )
+    tokens = res_setup.json()
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+    admin_id = (await api_client.get("/api/v1/auth/me", headers=headers)).json()["id"]
+
+    manager = get_session_manager(db_settings)
+    session_id = "test_seek_validation_session"
+    out_dir = db_settings.transcode_dir / session_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    session = TranscodeSession(
+        session_id=session_id,
+        user_id=admin_id,
+        item_id="item_seek_validation",
+        file_id="file_seek_validation",
+        input_path=Path("/media/test.mp4"),
+        output_dir=out_dir,
+        plan=TranscodePlan(
+            mode="transcode_hls",
+            video_action="transcode",
+            video_codec="libx264",
+            audio_action="copy",
+            audio_codec="copy",
+            audio_channels=2,
+            subtitle_action="none",
+            hwaccel="none",
+        ),
+        settings=db_settings,
+        duration_seconds=20.0,
+    )
+    manager.sessions[session_id] = session
+
+    missing = await api_client.post(
+        "/api/v1/hls/does_not_exist/seek",
+        json={"position_seconds": 1.0},
+        headers=headers,
+    )
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "session_not_found"
+
+    negative = await api_client.post(
+        f"/api/v1/hls/{session_id}/seek",
+        json={"position_seconds": -1.0},
+        headers=headers,
+    )
+    assert negative.status_code == 422
+
+    with patch(
+        "asyncio.create_subprocess_exec",
+        new=AsyncMock(return_value=MockSubprocess(pid=4002)),
+    ):
+        clamped = await api_client.post(
+            f"/api/v1/hls/{session_id}/seek",
+            json={"position_seconds": 999.0},
+            headers=headers,
+        )
+    assert clamped.status_code == 200, clamped.text
+    assert clamped.json() == {"position_seconds": 20.0}
+
+    await manager.stop_all()
+
+
 @pytest.mark.skipif(
     shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
     reason="ffmpeg and ffprobe required for seek timestamp continuity smoke test",

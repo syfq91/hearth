@@ -1086,6 +1086,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hls/{session_id}/seek": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Seek Hls Session
+         * @description Move an active transcode session to a new media position.
+         *
+         *     Hearth publishes a VOD-style media playlist that lists every segment up
+         *     front, so a native HLS client can request a segment far beyond the range
+         *     ffmpeg has produced. Without an explicit seek notification the segment
+         *     handler can only wait and then return a JSON 503, which a native demuxer
+         *     treats as unparseable media. Clients call this immediately after a seek so
+         *     the session restarts ffmpeg at the target offset while the request is still
+         *     in flight and can be retried.
+         */
+        post: operations["seek_hls_session_api_v1_hls__session_id__seek_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/hls/{session_id}/stop": {
         parameters: {
             query?: never;
@@ -4813,6 +4841,22 @@ export interface components {
              */
             tonemap_vaapi: boolean;
         };
+        /**
+         * SessionSeekRequest
+         * @description A request to move an active transcode session to a new media position.
+         */
+        SessionSeekRequest: {
+            /** Position Seconds */
+            position_seconds: number;
+        };
+        /**
+         * SessionSeekResponse
+         * @description The media position the session was moved to.
+         */
+        SessionSeekResponse: {
+            /** Position Seconds */
+            position_seconds: number;
+        };
         /** SessionStopRequest */
         SessionStopRequest: {
             /** Token */
@@ -7270,6 +7314,44 @@ export interface operations {
                 };
                 content: {
                     "application/vnd.apple.mpegurl": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    seek_hls_session_api_v1_hls__session_id__seek_post: {
+        parameters: {
+            query?: {
+                /** @description Media access token */
+                token?: string | null;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionSeekRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionSeekResponse"];
                 };
             };
             /** @description Validation Error */
