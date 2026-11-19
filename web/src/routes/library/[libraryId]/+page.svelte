@@ -2,6 +2,7 @@
 	import { Folder } from '@lucide/svelte';
 	import { api } from '../../../lib/api/client';
 	import MediaCard from '../../../lib/components/MediaCard.svelte';
+	import Pagination from '../../../lib/components/Pagination.svelte';
 	import Poster from '../../../lib/components/Poster.svelte';
 	import type { ItemPage, LibraryFolderPage } from '../../../lib/api/types';
 	import type { PageProps } from './$types';
@@ -117,25 +118,6 @@
 	function goToPage(next: number): void {
 		page = Math.min(Math.max(next, 1), totalPages);
 	}
-
-	// A window of page numbers around the current page, with gaps for long lists.
-	function pageList(current: number, count: number): (number | 'gap')[] {
-		if (count <= 9) return Array.from({ length: count }, (_, index) => index + 1);
-		const result: (number | 'gap')[] = [];
-		const add = (value: number | 'gap') => {
-			if (result[result.length - 1] !== value) result.push(value);
-		};
-		add(1);
-		const start = Math.max(2, current - 2);
-		const end = Math.min(count - 1, current + 2);
-		if (start > 2) add('gap');
-		for (let n = start; n <= end; n += 1) add(n);
-		if (end < count - 1) add('gap');
-		add(count);
-		return result;
-	}
-
-	let pages = $derived(pageList(page, totalPages));
 
 	async function loadFolders(): Promise<void> {
 		if (!isBook) return;
@@ -299,43 +281,13 @@
 				<li><MediaCard item={item} aspect={isMusic ? '1 / 1' : undefined} /></li>
 			{/each}
 		</ul>
-		<p class="page-status">Page {page} of {totalPages} · {total} items</p>
-		{#if totalPages > 1}
-			<nav class="pagination" aria-label="Pagination">
-				<button
-					type="button"
-					class="page-btn"
-					onclick={() => goToPage(page - 1)}
-					disabled={page <= 1 || loading}
-				>
-					Previous
-				</button>
-				{#each pages as entry}
-					{#if entry === 'gap'}
-						<span class="page-gap" aria-hidden="true">…</span>
-					{:else}
-						<button
-							type="button"
-							class="page-btn"
-							class:current={entry === page}
-							aria-current={entry === page ? 'page' : undefined}
-							onclick={() => goToPage(entry)}
-							disabled={loading}
-						>
-							{entry}
-						</button>
-					{/if}
-				{/each}
-				<button
-					type="button"
-					class="page-btn"
-					onclick={() => goToPage(page + 1)}
-					disabled={page >= totalPages || loading}
-				>
-					Next
-				</button>
-			</nav>
-		{/if}
+		<Pagination
+			{page}
+			{totalPages}
+			{total}
+			onPage={goToPage}
+			disabled={loading}
+		/>
 	</section>
 {/if}
 
@@ -513,52 +465,6 @@
 
 	.grid.music-grid {
 		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-	}
-
-	.pagination {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: center;
-		align-items: center;
-		gap: 0.4rem;
-		padding: 1.25rem 0 0.25rem;
-	}
-
-	.page-btn {
-		min-width: 2.25rem;
-		padding: 0.4rem 0.6rem;
-		background: var(--surface-2);
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		cursor: pointer;
-	}
-
-	.page-btn:hover:not(:disabled):not(.current) {
-		background: var(--surface);
-	}
-
-	.page-btn.current {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--accent-contrast);
-		font-weight: 600;
-	}
-
-	.page-btn:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-
-	.page-gap {
-		color: var(--muted);
-		padding: 0 0.15rem;
-	}
-
-	.page-status {
-		text-align: center;
-		color: var(--muted);
-		font-size: 0.85rem;
-		margin: 0.5rem 0 0;
 	}
 
 	.muted {

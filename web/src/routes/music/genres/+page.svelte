@@ -1,5 +1,6 @@
 <script lang="ts">
 	import MusicTabs from '../../../lib/components/MusicTabs.svelte';
+	import Pagination from '../../../lib/components/Pagination.svelte';
 	import { api } from '../../../lib/api/client';
 	import type { GenreListResponse } from '../../../lib/api/types';
 	import { goto } from '$app/navigation';
@@ -8,16 +9,23 @@
 
 	let { data }: PageProps = $props();
 
+	const PAGE_SIZE = 48;
+
 	let search = $state(untrack(() => data.query));
 	let items = $state(untrack(() => data.genres.items));
 	let total = $state(untrack(() => data.genres.total));
-	let loadingMore = $state(false);
+	let page = $state(1);
+	let loading = $state(false);
 	let error = $state<string | null>(null);
 
-	// The first page arrives from the loader; every later page appends here.
+	let totalPages = $derived(Math.max(1, Math.ceil(total / PAGE_SIZE)));
+
+	// The first page arrives from the loader. A new search replaces it and
+	// starts again at page 1.
 	$effect(() => {
 		items = data.genres.items;
 		total = data.genres.total;
+		page = 1;
 	});
 
 	function submitSearch(event: SubmitEvent): void {
@@ -26,20 +34,30 @@
 		void goto(trimmed ? `/music/genres?q=${encodeURIComponent(trimmed)}` : '/music/genres');
 	}
 
-	async function loadMore(): Promise<void> {
-		if (loadingMore || items.length >= total) return;
-		loadingMore = true;
+	function goToPage(next: number): void {
+		const target = Math.min(Math.max(next, 1), totalPages);
+		if (target === page) return;
+		page = target;
+		void loadPage();
+	}
+
+	async function loadPage(): Promise<void> {
+		loading = true;
 		error = null;
 		try {
-			const page = await api.get<GenreListResponse>('/genres', {
-				query: { query: search.trim() || undefined, limit: 48, offset: items.length }
+			const result = await api.get<GenreListResponse>('/genres', {
+				query: {
+					query: search.trim() || undefined,
+					limit: PAGE_SIZE,
+					offset: (page - 1) * PAGE_SIZE
+				}
 			});
-			items = [...items, ...page.items];
-			total = page.total;
+			items = result.items;
+			total = result.total;
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
-			loadingMore = false;
+			loading = false;
 		}
 	}
 </script>
@@ -92,11 +110,14 @@
 		{/each}
 	</ul>
 
-	{#if items.length < total}
-		<button type="button" class="load-more" onclick={loadMore} disabled={loadingMore}>
-			{loadingMore ? 'Loading…' : 'Load more'}
-		</button>
-	{/if}
+	<Pagination
+		{page}
+		{totalPages}
+		{total}
+		onPage={goToPage}
+		disabled={loading}
+		itemLabel="genre"
+	/>
 {/if}
 
 <style>
@@ -154,17 +175,6 @@
 		color: var(--muted);
 		font-size: 0.85rem;
 		margin: 0;
-	}
-
-	.load-more {
-		display: block;
-		margin: 1.5rem auto 0;
-		background: var(--surface-2);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		padding: 0.5rem 1.4rem;
-		cursor: pointer;
-		color: inherit;
 	}
 
 	.muted {

@@ -2,32 +2,36 @@
 	import { api } from '../../lib/api/client';
 	import type { BookListResponse } from '../../lib/api/types';
 	import BookCover from '../../lib/components/BookCover.svelte';
+	import Pagination from '../../lib/components/Pagination.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
 	type Book = BookListResponse['items'][number];
 
-	let initial = $state<BookListResponse | null>(null);
-	let error = $state<string | null>(null);
-	let extraItems = $state<BookListResponse['items']>([]);
-	let total = $state(0);
-	let loadingMore = $state(false);
+	const PAGE_SIZE = 48;
 
-	let items = $derived([...(initial?.items ?? []), ...extraItems]);
-	let currentTotal = $derived(initial ? total || initial.total : 0);
+	let items = $state<Book[]>([]);
+	let total = $state(0);
+	let page = $state(1);
+	let loaded = $state(false);
+	let loading = $state(false);
+	let error = $state<string | null>(null);
+
+	let totalPages = $derived(Math.max(1, Math.ceil(total / PAGE_SIZE)));
 
 	// The loader returns a promise so navigation is not held up by the request.
 	$effect(() => {
 		let cancelled = false;
-		initial = null;
+		loaded = false;
 		error = null;
+		page = 1;
 		void data.books
 			.then((value) => {
 				if (cancelled) return;
-				initial = value;
-				extraItems = [];
+				items = value.items;
 				total = value.total;
+				loaded = true;
 			})
 			.catch((e) => {
 				if (!cancelled) error = e instanceof Error ? e.message : String(e);
@@ -37,17 +41,26 @@
 		};
 	});
 
-	async function loadMore() {
-		if (loadingMore || items.length >= currentTotal) return;
-		loadingMore = true;
+	function goToPage(next: number): void {
+		const target = Math.min(Math.max(next, 1), totalPages);
+		if (target === page) return;
+		page = target;
+		void loadPage();
+	}
+
+	async function loadPage(): Promise<void> {
+		loading = true;
+		error = null;
 		try {
 			const res = await api.get<BookListResponse>('/books', {
-				query: { limit: 96, offset: items.length }
+				query: { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }
 			});
-			extraItems = [...extraItems, ...res.items];
+			items = res.items;
 			total = res.total;
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
 		} finally {
-			loadingMore = false;
+			loading = false;
 		}
 	}
 
@@ -64,7 +77,7 @@
 
 {#if error}
 	<p class="banner" role="alert">{error}</p>
-{:else if initial === null}
+{:else if !loaded}
 	<p class="muted" role="status">Loading books…</p>
 {:else if items.length === 0}
 	<p class="muted">No books yet.</p>
@@ -98,13 +111,14 @@
 			</li>
 		{/each}
 	</ul>
-	{#if items.length < currentTotal}
-		<div class="more">
-			<button type="button" class="load-more" onclick={loadMore} disabled={loadingMore}>
-				{loadingMore ? 'Loading…' : 'Load more'}
-			</button>
-		</div>
-	{/if}
+	<Pagination
+		{page}
+		{totalPages}
+		{total}
+		onPage={goToPage}
+		disabled={loading}
+		itemLabel="book"
+	/>
 {/if}
 
 <style>
@@ -152,29 +166,6 @@
 		display: block;
 		height: 100%;
 		background: var(--accent);
-	}
-
-	.more {
-		margin-top: 2rem;
-		display: flex;
-		justify-content: center;
-	}
-
-	.load-more {
-		background: var(--surface-2);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		padding: 0.6rem 1.4rem;
-		cursor: pointer;
-	}
-
-	.load-more:hover:not(:disabled) {
-		background: var(--surface);
-	}
-
-	.load-more:disabled {
-		opacity: 0.6;
-		cursor: default;
 	}
 
 	.banner {
