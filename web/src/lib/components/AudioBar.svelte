@@ -584,7 +584,7 @@
 		align-items: center;
 		justify-content: center;
 		background: var(--surface-2);
-		border: 1px solid var(--border);
+		border: 1px solid transparent;
 		border-radius: var(--radius);
 		padding: 0.35rem 0.85rem;
 		cursor: pointer;
