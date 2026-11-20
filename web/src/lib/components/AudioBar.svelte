@@ -229,21 +229,109 @@
 
 {#if player.track}
 	<div class="bar" role="region" aria-label="Now playing">
-		<div class="art" aria-hidden="true">
-			{#if artSrc}
-				<img src={artSrc} alt="" width="48" height="48" />
-			{:else}
-				<Music size={22} />
-			{/if}
-		</div>
+		<div class="bar-row">
+			<div class="left">
+				<div class="art" aria-hidden="true">
+					{#if artSrc}
+						<img src={artSrc} alt="" width="48" height="48" />
+					{:else}
+						<Music size={22} />
+					{/if}
+				</div>
 
-		<div class="meta">
-			<span class="title">{player.track.title}</span>
-			{#if player.track.artistName || player.track.albumTitle}
-				<span class="sub">
-					{[player.track.artistName, player.track.albumTitle].filter(Boolean).join(' · ')}
-				</span>
-			{/if}
+				<div class="meta">
+					<span class="title">{player.track.title}</span>
+					{#if player.track.artistName || player.track.albumTitle}
+						<span class="sub">
+							{[player.track.artistName, player.track.albumTitle].filter(Boolean).join(' · ')}
+						</span>
+					{/if}
+				</div>
+			</div>
+
+			<div class="transport">
+				<div class="transport-buttons">
+					<button
+						type="button"
+						class="ghost"
+						onclick={() => void playPrevious()}
+						disabled={player.index < 0}
+						aria-label="Previous track"
+						title="Previous track"
+					>
+						<SkipBack size={16} />
+					</button>
+					<button
+						type="button"
+						class="ghost"
+						onclick={togglePlay}
+						aria-label={player.playing ? 'Pause' : 'Play'}
+						title={player.playing ? 'Pause' : 'Play'}
+					>
+						{#if player.playing}
+							<Pause size={16} />
+						{:else}
+							<Play size={16} />
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="ghost"
+						onclick={() => void playNext()}
+						disabled={player.index < 0 || player.index + 1 >= player.queue.length}
+						aria-label="Next track"
+						title="Next track"
+					>
+						<SkipForward size={16} />
+					</button>
+					<button
+						type="button"
+						class="ghost"
+						onclick={stop}
+						aria-label="Stop playback"
+						title="Stop"
+					>
+						<Square size={16} />
+					</button>
+				</div>
+				<div class="transport-info" aria-hidden="true">
+					{#if player.queue.length > 1}
+						<span class="position">{player.index + 1}/{player.queue.length}</span>
+					{/if}
+					<span class="time">{formatTime(currentTime)} / {formatTime(duration)}</span>
+				</div>
+			</div>
+
+			<div class="right">
+				<div class="volume-control">
+					<button
+						type="button"
+						class="ghost volume-btn"
+						onclick={toggleMute}
+						aria-label={volume === 0 ? 'Unmute' : 'Mute'}
+						title={volume === 0 ? 'Unmute' : 'Mute'}
+					>
+						{#if volume === 0}
+							<VolumeX size={16} />
+						{:else if volume < 0.5}
+							<Volume1 size={16} />
+						{:else}
+							<Volume2 size={16} />
+						{/if}
+					</button>
+					<input
+						type="range"
+						min="0"
+						max="1"
+						step="0.01"
+						bind:value={volume}
+						aria-label="Volume"
+						aria-valuetext={`${Math.round(volume * 100)}%`}
+						title={`Volume: ${Math.round(volume * 100)}%`}
+						class="volume-slider"
+					/>
+				</div>
+			</div>
 		</div>
 
 		<!-- svelte-ignore a11y_media_has_caption -->
@@ -256,88 +344,6 @@
 			onpause={() => (player.playing = false)}
 			onended={() => void playNext()}
 		></audio>
-
-		<div class="controls">
-			{#if player.queue.length > 1}
-				<span class="position" aria-hidden="true">
-					{player.index + 1}/{player.queue.length}
-				</span>
-			{/if}
-			<span class="time" aria-hidden="true">
-				{formatTime(currentTime)} / {formatTime(duration)}
-			</span>
-			<button
-				type="button"
-				class="ghost"
-				onclick={() => void playPrevious()}
-				disabled={player.index < 0}
-				aria-label="Previous track"
-				title="Previous track"
-			>
-				<SkipBack size={16} />
-			</button>
-			<button
-				type="button"
-				class="ghost"
-				onclick={togglePlay}
-				aria-label={player.playing ? 'Pause' : 'Play'}
-				title={player.playing ? 'Pause' : 'Play'}
-			>
-				{#if player.playing}
-					<Pause size={16} />
-				{:else}
-					<Play size={16} />
-				{/if}
-			</button>
-			<button
-				type="button"
-				class="ghost"
-				onclick={() => void playNext()}
-				disabled={player.index < 0 || player.index + 1 >= player.queue.length}
-				aria-label="Next track"
-				title="Next track"
-			>
-				<SkipForward size={16} />
-			</button>
-			<button
-				type="button"
-				class="ghost"
-				onclick={stop}
-				aria-label="Stop playback"
-				title="Stop"
-			>
-				<Square size={16} />
-			</button>
-
-			<div class="volume-control">
-				<button
-					type="button"
-					class="ghost volume-btn"
-					onclick={toggleMute}
-					aria-label={volume === 0 ? 'Unmute' : 'Mute'}
-					title={volume === 0 ? 'Unmute' : 'Mute'}
-				>
-					{#if volume === 0}
-						<VolumeX size={16} />
-					{:else if volume < 0.5}
-						<Volume1 size={16} />
-					{:else}
-						<Volume2 size={16} />
-					{/if}
-				</button>
-				<input
-					type="range"
-					min="0"
-					max="1"
-					step="0.01"
-					bind:value={volume}
-					aria-label="Volume"
-					aria-valuetext={`${Math.round(volume * 100)}%`}
-					title={`Volume: ${Math.round(volume * 100)}%`}
-					class="volume-slider"
-				/>
-			</div>
-		</div>
 	</div>
 
 	{#if player.error}
@@ -350,13 +356,51 @@
 		position: sticky;
 		bottom: 0;
 		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem 1rem;
+		flex-direction: column;
 		padding: 0.6rem 1.25rem;
 		background: var(--surface);
 		border-top: 1px solid var(--border);
 		z-index: 20;
+	}
+
+	.bar-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+		align-items: center;
+		gap: 1rem;
+	}
+
+	.left {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		min-width: 0;
+	}
+
+	.transport {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.2rem;
+	}
+
+	.transport-buttons {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.transport-info {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.right {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		min-width: 0;
 	}
 
 	.art {
@@ -402,22 +446,15 @@
 		white-space: nowrap;
 	}
 
-	.controls {
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-
 	.position {
 		color: var(--muted);
-		font-size: 0.8rem;
+		font-size: 0.75rem;
 		font-variant-numeric: tabular-nums;
 	}
 
 	.time {
 		color: var(--muted);
-		font-size: 0.85rem;
+		font-size: 0.8rem;
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -505,5 +542,27 @@
 		background: var(--surface);
 		color: var(--danger);
 		border-top: 1px solid var(--border);
+	}
+
+	@media (max-width: 720px) {
+		.bar-row {
+			grid-template-columns: minmax(0, 1fr) auto;
+			row-gap: 0.4rem;
+		}
+
+		.left {
+			grid-column: 1;
+			grid-row: 1;
+		}
+
+		.right {
+			grid-column: 2;
+			grid-row: 1;
+		}
+
+		.transport {
+			grid-column: 1 / -1;
+			grid-row: 2;
+		}
 	}
 </style>
