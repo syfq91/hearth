@@ -10,6 +10,7 @@ into the scan.
 import asyncio
 import contextlib
 import logging
+from collections import defaultdict
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -17,7 +18,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Literal, cast
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
@@ -58,6 +59,8 @@ from app.services.metadata.local import (
     LocalProvider,
     find_local_book_cover,
     find_local_book_opf,
+    local_nfo_paths,
+    local_tvshow_nfo_paths,
     parse_local_opf,
 )
 from app.services.metadata.registry import MetadataRegistry
@@ -301,6 +304,118 @@ class MetadataMatcher:
                 await progress((index + 1) / len(item_ids))
         stats.provider_calls = self._provider_calls - before_calls
         return stats
+
+    async def requeue_changed_local_metadata(self, *, library_id: str | None = None) -> int:
+        """Make matched items due again when their local NFO was edited.
+
+        ``match_pending`` deliberately skips matched items, so an NFO changed
+        after the first scan would never be read again. A sidecar whose mtime is
+        newer than the item's ``matched_at`` counts as edited; the item is reset
+        to ``pending`` so the next matching pass re-reads local metadata (which
+        always wins over remote providers). TV changes are attributed to the
+        series because series matching re-applies every season and episode.
+        """
+
+        query = select(MediaItem.id, MediaItem.type, MediaItem.matched_at).where(
+            MediaItem.match_state == "matched",
+            MediaItem.matched_at.is_not(None),
+            MediaItem.type.in_(("movie", "series", "episode", "season")),
+        )
+        if library_id is not None:
+            query = query.where(MediaItem.library_id == library_id)
+
+        async with self.sessionmaker() as session:
+            rows = (await session.execute(query)).all()
+            if not rows:
+                return 0
+
+            item_ids = [row.id for row in rows]
+            file_paths: dict[str, list[Path]] = defaultdict(list)
+            for file_row in await session.execute(
+                select(MediaFile.item_id, MediaFile.path).where(
+                    MediaFile.item_id.in_(item_ids),
+                    MediaFile.missing_since.is_(None),
+                )
+            ):
+                file_paths[file_row.item_id].append(Path(file_row.path))
+
+            episode_series = dict(
+                (
+                    await session.execute(
+                        select(Episode.item_id, Episode.series_id).where(
+                            Episode.item_id.in_(item_ids)
+                        )
+                    )
+                ).all()
+            )
+            season_series = dict(
+                (
+                    await session.execute(
+                        select(Season.item_id, Season.series_id).where(Season.item_id.in_(item_ids))
+                    )
+                ).all()
+            )
+            # Series items rarely own files directly, and their episodes may be
+            # unmatched, so collect episode paths by series rather than by the
+            # matched item ids above. These paths locate tvshow.nfo.
+            series_paths: dict[str, list[Path]] = defaultdict(list)
+            matched_series_ids = [row.id for row in rows if row.type == "series"]
+            if matched_series_ids:
+                for file_row in await session.execute(
+                    select(Episode.series_id, MediaFile.path)
+                    .join(MediaFile, Episode.file_id == MediaFile.id)
+                    .where(
+                        Episode.series_id.in_(matched_series_ids),
+                        MediaFile.missing_since.is_(None),
+                    )
+                ):
+                    series_paths[file_row.series_id].append(Path(file_row.path))
+
+            changed: set[str] = set()
+            for row in rows:
+                paths = list(file_paths.get(row.id, []))
+                if row.type == "series":
+                    paths.extend(series_paths.get(row.id, []))
+                if await asyncio.to_thread(
+                    self._local_sidecar_newer, paths, row.matched_at, row.type
+                ):
+                    changed.add(episode_series.get(row.id) or season_series.get(row.id) or row.id)
+
+            if not changed:
+                return 0
+
+            await session.execute(
+                update(MediaItem)
+                .where(MediaItem.id.in_(changed))
+                .values(
+                    match_state="pending",
+                    match_attempts=0,
+                    match_error=None,
+                    next_match_at=self.clock(),
+                )
+            )
+            await session.commit()
+            return len(changed)
+
+    @staticmethod
+    def _local_sidecar_newer(paths: Sequence[Path], matched_at: datetime, item_type: str) -> bool:
+        """True when any local NFO near ``paths`` postdates the last match."""
+        baseline = matched_at.timestamp()
+        seen: set[Path] = set()
+        for path in paths:
+            candidates = local_nfo_paths(path)
+            if item_type == "series":
+                candidates = [*candidates, *local_tvshow_nfo_paths(path)]
+            for sidecar in candidates:
+                if sidecar in seen:
+                    continue
+                seen.add(sidecar)
+                try:
+                    if sidecar.stat().st_mtime > baseline:
+                        return True
+                except OSError:
+                    continue
+        return False
 
     async def match_item(self, item_id: str, *, force: bool = False) -> MatchResult:
         """Match one item by id, leaving it retryable on any provider failure."""

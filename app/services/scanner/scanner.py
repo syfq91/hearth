@@ -388,6 +388,9 @@ class LibraryScanner:
             await self._check_cancel(is_cancelled)
 
             if self.matcher is not None:
+                # An NFO edited after the first match must be re-read: matched
+                # items are skipped by match_pending, so make changed ones due.
+                await self.matcher.requeue_changed_local_metadata(library_id=library_id)
                 await self._run_matching(library_id, stats, is_cancelled)
 
             if progress:

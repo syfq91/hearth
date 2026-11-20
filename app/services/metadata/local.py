@@ -26,6 +26,33 @@ _POSTER_NAMES = ("poster", "folder", "cover")
 _BACKDROP_NAMES = ("fanart", "backdrop", "background")
 
 
+def local_nfo_paths(path: Path) -> list[Path]:
+    """Return existing NFO sidecars Hearth reads for a media path.
+
+    Ordered by lookup preference: a matching-stem NFO wins, then the generic
+    movie/episode names, then the folder name. Kept separate from parsing so
+    callers can check sidecar timestamps without reading file contents.
+    """
+    if path.is_file() and path.suffix.casefold() == ".nfo":
+        return [path]
+    folder = path if path.is_dir() else path.parent
+    stem = path.stem if path.is_file() else folder.name
+    candidates = (
+        folder / f"{stem}.nfo",
+        folder / "movie.nfo",
+        folder / f"{folder.name}.nfo",
+        folder / "episode.nfo",
+    )
+    return [candidate for candidate in candidates if candidate.is_file()]
+
+
+def local_tvshow_nfo_paths(path: Path) -> list[Path]:
+    """Return existing series-level NFOs reachable from an episode path."""
+    folder = path if path.is_dir() else path.parent
+    candidates = (folder / "tvshow.nfo", folder.parent / "tvshow.nfo")
+    return [candidate for candidate in candidates if candidate.is_file()]
+
+
 def _tag(element: ET.Element) -> str:
     return element.tag.rsplit("}", 1)[-1].casefold()
 
@@ -142,12 +169,8 @@ class LocalProvider(MetadataProvider):
 
     @staticmethod
     def _find_nfo(path: Path) -> Path | None:
-        if path.is_file() and path.suffix.casefold() == ".nfo":
-            return path if path.is_file() else None
-        folder = path if path.is_dir() else path.parent
-        stem = path.stem if path.is_file() else folder.name
-        candidates = [folder / f"{stem}.nfo", folder / "movie.nfo", folder / f"{folder.name}.nfo"]
-        return next((candidate for candidate in candidates if candidate.is_file()), None)
+        paths = local_nfo_paths(path)
+        return paths[0] if paths else None
 
     def _parse_nfo(
         self, nfo: Path, movie_root: Path, *, video: Path | None = None

@@ -1,6 +1,8 @@
 """Integration tests for scanner-driven metadata matching."""
 
+import os
 import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select
@@ -55,9 +57,11 @@ def _matrix_details() -> MovieMetadata:
     )
 
 
-async def _make_library(sessionmaker: async_sessionmaker[AsyncSession], root: Path) -> str:
+async def _make_library(
+    sessionmaker: async_sessionmaker[AsyncSession], root: Path, library_type: str = "movie"
+) -> str:
     async with sessionmaker() as session:
-        library = Library(name=f"Movies {uuid.uuid4().hex[:8]}", type="movie")
+        library = Library(name=f"{library_type.title()} {uuid.uuid4().hex[:8]}", type=library_type)
         library.paths.append(LibraryPath(path=str(root)))
         session.add(library)
         await session.commit()
@@ -164,3 +168,111 @@ async def test_local_nfo_wins_over_remote(
         assert item is not None
         assert item.match_state == "matched"
         assert item.provider_ids["nfo"].endswith("movie.nfo")
+
+
+async def test_edited_nfo_rematches_matched_item(
+    db_settings: Settings, db_sessionmaker: async_sessionmaker[AsyncSession]
+) -> None:
+    """An NFO edited after the first scan must be re-read on the next scan."""
+    root = db_settings.media_dir / "movies"
+    folder = root / "The Matrix (1999)"
+    folder.mkdir(parents=True)
+    (folder / "The Matrix (1999).mkv").write_bytes(b"video")
+    nfo = folder / "movie.nfo"
+    nfo.write_text("<movie><title>The Matrix</title><year>1999</year></movie>", encoding="utf-8")
+    library_id = await _make_library(db_sessionmaker, root)
+
+    # Use a clock ahead of real file mtimes so only the explicit mtime bump
+    # below makes the sidecar look edited.
+    current = datetime(2030, 1, 1, tzinfo=UTC)
+
+    def clock() -> datetime:
+        return current
+
+    remote = FakeProvider(error=ProviderUnavailable("must not be called"))
+    matcher = MetadataMatcher(
+        db_settings, db_sessionmaker, providers=[LocalProvider(), remote], clock=clock
+    )
+    scanner = LibraryScanner(
+        db_settings, db_sessionmaker, probe=FakeProbe(), matcher=matcher, clock=clock
+    )
+
+    first = await scanner.scan_library(library_id)
+    assert first.matched == 1
+    assert first.provider_calls == 0
+    assert remote.search_calls == 0
+
+    # Someone edits the NFO after the initial match.
+    nfo.write_text(
+        "<movie><title>The Matrix Reloaded</title><year>2003</year></movie>", encoding="utf-8"
+    )
+    bumped = (current + timedelta(hours=1)).timestamp()
+    os.utime(nfo, (bumped, bumped))
+    current = current + timedelta(hours=2)
+
+    second = await scanner.scan_library(library_id)
+    assert second.matched == 1
+    assert second.provider_calls == 0
+    assert remote.search_calls == 0
+
+    async with db_sessionmaker() as session:
+        item = await session.scalar(select(MediaItem))
+        assert item is not None
+        assert item.title == "The Matrix Reloaded"
+        assert item.year == 2003
+        assert item.match_state == "matched"
+
+    # With no further edit, a later scan stays quiet.
+    current = current + timedelta(hours=2)
+    third = await scanner.scan_library(library_id)
+    assert third.matched == 0
+    assert third.provider_calls == 0
+
+
+async def test_edited_tvshow_nfo_rematches_series(
+    db_settings: Settings, db_sessionmaker: async_sessionmaker[AsyncSession]
+) -> None:
+    """A series-level NFO edit is attributed to and re-read by the series."""
+    root = db_settings.media_dir / "tv"
+    series_dir = root / "Chernobyl (2019)"
+    season_dir = series_dir / "Season 01"
+    season_dir.mkdir(parents=True)
+    (season_dir / "Chernobyl.S01E01.mkv").write_bytes(b"video")
+    tv_nfo = series_dir / "tvshow.nfo"
+    tv_nfo.write_text(
+        "<tvshow><title>Chernobyl</title><year>2019</year></tvshow>", encoding="utf-8"
+    )
+    library_id = await _make_library(db_sessionmaker, root, library_type="tv")
+
+    current = datetime(2030, 1, 1, tzinfo=UTC)
+
+    def clock() -> datetime:
+        return current
+
+    remote = FakeProvider(error=ProviderUnavailable("must not be called"))
+    matcher = MetadataMatcher(
+        db_settings, db_sessionmaker, providers=[LocalProvider(), remote], clock=clock
+    )
+    scanner = LibraryScanner(
+        db_settings, db_sessionmaker, probe=FakeProbe(), matcher=matcher, clock=clock
+    )
+
+    first = await scanner.scan_library(library_id)
+    assert first.matched == 1
+    assert remote.search_calls == 0
+
+    tv_nfo.write_text(
+        "<tvshow><title>Chernobyl: Extended</title><year>2019</year></tvshow>", encoding="utf-8"
+    )
+    bumped = (current + timedelta(hours=1)).timestamp()
+    os.utime(tv_nfo, (bumped, bumped))
+    current = current + timedelta(hours=2)
+
+    second = await scanner.scan_library(library_id)
+    assert second.matched == 1
+    assert remote.search_calls == 0
+
+    async with db_sessionmaker() as session:
+        series_item = await session.scalar(select(MediaItem).where(MediaItem.type == "series"))
+        assert series_item is not None
+        assert series_item.title == "Chernobyl: Extended"
