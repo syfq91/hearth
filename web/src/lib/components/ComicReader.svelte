@@ -140,18 +140,20 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="comic" role="document" aria-label={`Page ${page} of ${pageCount}`} bind:this={comic}>
-	{#if error}
-		<p class="banner" role="alert">Could not load page: {error}</p>
-	{:else if cache[page]}
-		<img
-			class="page"
-			src={cache[page]}
-			alt={`Page ${page}`}
-			decoding="async"
-		/>
-	{:else}
-		<p class="status" role="status">Loading page…</p>
-	{/if}
+	<div class="page-area">
+		{#if error}
+			<p class="banner" role="alert">Could not load page: {error}</p>
+		{:else if cache[page]}
+			<img
+				class="page"
+				src={cache[page]}
+				alt={`Page ${page}`}
+				decoding="async"
+			/>
+		{:else}
+			<p class="status" role="status">Loading page…</p>
+		{/if}
+	</div>
 
 	<div class="controls">
 		<button type="button" class="ghost" onclick={() => go(-1)} disabled={page <= 1}>
@@ -173,7 +175,6 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		justify-content: center;
 		height: 100%;
 		flex: 1;
 		min-height: 0;
@@ -181,9 +182,20 @@
 		padding: 0.5rem 0;
 	}
 
+	/* The page scales to the space actually left over, so the audio dock
+	   cannot push the controls out of view when music is playing. */
+	.page-area {
+		flex: 1;
+		min-height: 0;
+		width: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
 	.page {
 		max-width: 100%;
-		max-height: calc(100vh - 6.5rem);
+		max-height: 100%;
 		height: auto;
 		width: auto;
 		object-fit: contain;
@@ -195,6 +207,7 @@
 		display: flex;
 		align-items: center;
 		gap: 1rem;
+		flex-shrink: 0;
 	}
 
 	.counter {
