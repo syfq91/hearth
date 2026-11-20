@@ -2,7 +2,7 @@ import { api } from '../../../lib/api/client';
 import type { ItemDetail } from '../../../lib/api/types';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = async ({ params }) => {
+export const load: PageLoad = async ({ params, url }) => {
 	// Only series have a "next up" hint. Fetching it for every item puts a
 	// pointless 404 request for movies on the critical path of the player:
 	// the route cannot render until it settles, so a slow/stalled request
@@ -21,7 +21,8 @@ export const load: PageLoad = async ({ params }) => {
 	}
 	return {
 		item: resolved,
-		// Resume point for movies and episodes alike.
-		startAtMs: resolved.watch_state?.position_ms ?? 0
+		// Resume point for movies and episodes alike, unless the detail page's
+		// "play from start" button explicitly requested a fresh playthrough.
+		startAtMs: url.searchParams.get('start') === '0' ? 0 : (resolved.watch_state?.position_ms ?? 0)
 	};
 };

@@ -81,19 +81,38 @@
 
 		<div class="actions">
 			<a class="play" href={`/watch/${item.id}`}>
-				{#if item.watch_state?.position_ms}
-					<RotateCcw size={16} /> <span>Resume</span>
-				{:else}
-					<Play size={16} /> <span>Play</span>
-				{/if}
+				<Play size={16} />
+				<span>{item.watch_state?.position_ms ? 'Resume' : 'Play'}</span>
 			</a>
-			<button type="button" class="ghost" onclick={setFavorite} disabled={toggling}>
+			{#if item.watch_state?.position_ms}
+				<a
+					class="ghost icon"
+					href={`/watch/${item.id}?start=0`}
+					title="Play from start"
+					aria-label="Play from start"
+				>
+					<RotateCcw size={16} />
+				</a>
+			{/if}
+			<button
+				type="button"
+				class="ghost icon"
+				onclick={setFavorite}
+				disabled={toggling}
+				title={favorite ? 'Remove from favorites' : 'Add to favorites'}
+				aria-label={favorite ? 'Remove from favorites' : 'Add to favorites'}
+			>
 				<Heart size={16} fill={favorite ? 'currentColor' : 'none'} color={favorite ? 'var(--accent)' : 'currentColor'} />
-				<span>{favorite ? 'In favorites' : 'Favorite'}</span>
 			</button>
-			<button type="button" class="ghost" onclick={setWatched} disabled={toggling}>
-				<Check size={16} />
-				<span>{watched ? 'Watched' : 'Mark watched'}</span>
+			<button
+				type="button"
+				class="ghost icon"
+				onclick={setWatched}
+				disabled={toggling}
+				title={watched ? 'Mark as unwatched' : 'Mark as watched'}
+				aria-label={watched ? 'Mark as unwatched' : 'Mark as watched'}
+			>
+				<Check size={16} color={watched ? 'var(--accent)' : 'currentColor'} />
 			</button>
 		</div>
 
@@ -198,6 +217,13 @@
 
 	.ghost:disabled {
 		opacity: 0.6;
+	}
+
+	.ghost.icon {
+		justify-content: center;
+		padding: 0.6rem;
+		min-width: 2.5rem;
+		color: inherit;
 	}
 
 	.genres {
