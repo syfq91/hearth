@@ -263,7 +263,7 @@
 	{#if !isFullscreenMedia}
 		<a class="skip-link" href="#main">Skip to content</a>
 		<header class="topbar" bind:this={topbarRef}>
-			<a class="brand" href="/" data-sveltekit-reload>Hearth</a>
+			<a class="brand" href="/">Hearth</a>
 			<nav aria-label="Primary" bind:this={navRef}>
 				{#if isCombined}
 					{#each groupedLibraries as group (group.type)}
