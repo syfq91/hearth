@@ -36,6 +36,11 @@ test('movie poster overlay toggles favourite and played state', async ({ page, r
 		.filter({ has: page.getByRole('link', { name: `Play ${MOVIE_TITLE}` }) })
 		.first();
 	await expect(card).toBeVisible();
+	await expect(card.locator('a.link')).toHaveAttribute('href', /\/movies\//);
+	await expect(card.getByRole('link', { name: `Play ${MOVIE_TITLE}` })).toHaveAttribute(
+		'href',
+		/\/watch\//
+	);
 
 	const poster = card.locator('.poster-wrap');
 	const overlay = poster.locator('.overlay');

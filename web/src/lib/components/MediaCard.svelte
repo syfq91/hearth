@@ -101,6 +101,23 @@
 		return detailHref(card);
 	});
 
+	const detailTarget = $derived.by(() => {
+		if (isEpisode) return `/episodes/${item.id}`;
+		return detailHref(item as S['ItemSummary']);
+	});
+
+	/** The overlay's play control starts playback; the poster itself opens details. */
+	const playTarget = $derived.by(() => {
+		if (isEpisode) return `/watch/${item.id}`;
+		const card = item as S['ItemSummary'];
+		if (card.type === 'movie' || card.type === 'episode' || card.type === 'series') {
+			return `/watch/${card.id}`;
+		}
+		return detailTarget;
+	});
+
+	const posterTarget = $derived(overlay ? detailTarget : posterHref);
+
 	function extractVolume(title: string): string | null {
 		const match = title.match(/\b(?:vol(?:ume)?\.?|v)\s*(\d+(?:\.\d+)?)\b/i);
 		if (match) {
@@ -174,8 +191,8 @@
 	<div class="poster-wrap">
 		<a
 			class="link"
-			href={withLib(posterHref)}
-			aria-label={isEpisode ? (seriesTitle ? `Play ${seriesTitle}` : `Play ${item.title}`) : item.title}
+			href={withLib(posterTarget)}
+			aria-label={!overlay && isEpisode ? (seriesTitle ? `Play ${seriesTitle}` : `Play ${item.title}`) : item.title}
 		>
 			<Poster image={poster} alt="" {aspect} {priority} />
 			{#if watched}
@@ -197,7 +214,7 @@
 			<PosterOverlay
 				itemId={item.id}
 				title={item.title}
-				playHref={withLib(posterHref)}
+				playHref={withLib(playTarget)}
 				favorite={item.watch_state?.favorite ?? false}
 				{watched}
 				onWatchedChange={(value) => (watchedOverride = value)}
