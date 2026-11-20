@@ -229,6 +229,22 @@
 
 {#if player.track}
 	<div class="bar" role="region" aria-label="Now playing">
+		<div class="seek-row">
+			<input
+				type="range"
+				class="seek"
+				min="0"
+				max={duration > 0 ? duration : 1}
+				step="0.1"
+				bind:value={currentTime}
+				disabled={!(duration > 0)}
+				aria-label="Seek"
+				aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
+				title={formatTime(currentTime)}
+				style={`--progress: ${duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0}%`}
+			/>
+		</div>
+
 		<div class="bar-row">
 			<div class="left">
 				<div class="art" aria-hidden="true">
@@ -361,6 +377,55 @@
 		background: var(--surface);
 		border-top: 1px solid var(--border);
 		z-index: 20;
+	}
+
+	.seek-row {
+		margin: -0.6rem -1.25rem 0.5rem;
+	}
+
+	.seek {
+		display: block;
+		width: 100%;
+		height: 0.3rem;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		appearance: none;
+		-webkit-appearance: none;
+		background: linear-gradient(
+			to right,
+			var(--accent) var(--progress, 0%),
+			var(--border) var(--progress, 0%)
+		);
+		cursor: pointer;
+	}
+
+	.seek:disabled {
+		cursor: default;
+	}
+
+	.seek::-webkit-slider-thumb {
+		appearance: none;
+		-webkit-appearance: none;
+		width: 0.7rem;
+		height: 0.7rem;
+		border-radius: 50%;
+		background: var(--accent);
+		border: none;
+	}
+
+	.seek::-moz-range-thumb {
+		width: 0.7rem;
+		height: 0.7rem;
+		border-radius: 50%;
+		background: var(--accent);
+		border: none;
+	}
+
+	.seek:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
 	}
 
 	.bar-row {
