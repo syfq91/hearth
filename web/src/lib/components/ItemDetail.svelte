@@ -3,6 +3,7 @@
 	import { api } from '../api/client';
 	import type { ItemDetail } from '../api/types';
 	import { formatRuntime } from '../runtime';
+	import { buildMediaInfo, type MediaTrack } from '../media-info';
 	import { Play, RotateCcw, Heart, Check, Star } from '@lucide/svelte';
 
 	interface Props {
@@ -49,6 +50,14 @@
 		].filter(Boolean)
 	);
 
+	// Show the first usable file; multi-version items share the same streams.
+	const mediaFile = $derived(
+		(item.files ?? []).find(
+			(file) => !file.missing && ((file.streams?.length ?? 0) > 0 || (file.subtitles?.length ?? 0) > 0)
+		) ?? item.files?.[0]
+	);
+	const media = $derived(buildMediaInfo(mediaFile));
+
 	const cast = $derived(
 		(item.people ?? [])
 			.filter((credit) => credit.role === 'actor')
@@ -56,6 +65,25 @@
 			.slice(0, 8)
 	);
 </script>
+
+{#snippet trackRow(label: string, tracks: MediaTrack[])}
+	{#if tracks.length > 0}
+		<div class="media-row">
+			<dt>{label}</dt>
+			<dd>
+				{#if tracks.length > 1}
+					<select aria-label={`${label} track`} title={`${label} tracks`}>
+						{#each tracks as track (track.value)}
+							<option value={track.value}>{track.label}</option>
+						{/each}
+					</select>
+				{:else}
+					{tracks[0].label}
+				{/if}
+			</dd>
+		</div>
+	{/if}
+{/snippet}
 
 <article class="detail">
 	<div class="art">
@@ -115,6 +143,16 @@
 				<Check size={16} color={watched ? 'var(--accent)' : 'currentColor'} />
 			</button>
 		</div>
+
+		{#if media.video || media.audio.length > 0 || media.subtitles.length > 0}
+			<dl class="media-info" aria-label="Media information">
+				{#if media.video}
+					<div class="media-row"><dt>Video</dt><dd>{media.video}</dd></div>
+				{/if}
+				{@render trackRow('Audio', media.audio)}
+				{@render trackRow('Subtitles', media.subtitles)}
+			</dl>
+		{/if}
 
 		{#if item.genres.length > 0}
 			<p class="genres">{item.genres.join(' · ')}</p>
@@ -224,6 +262,39 @@
 		padding: 0.6rem;
 		min-width: 2.5rem;
 		color: inherit;
+	}
+
+	.media-info {
+		display: grid;
+		gap: 0.35rem;
+		margin: 0 0 1.25rem;
+		font-size: 0.95rem;
+	}
+
+	.media-row {
+		display: grid;
+		grid-template-columns: 6.5rem minmax(0, 1fr);
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.media-row dt {
+		color: var(--muted);
+	}
+
+	.media-row dd {
+		margin: 0;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+
+	.media-row select {
+		width: min(28rem, 100%);
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		padding: 0.4rem 0.6rem;
+		cursor: pointer;
 	}
 
 	.genres {

@@ -79,6 +79,7 @@ async def _add_item(
     people: tuple[tuple[str, str], ...] = (),
     state_user_id: str | None = None,
     watched: bool = False,
+    streams_json: dict | None = None,
 ) -> str:
     async with sessionmaker() as session:
         item = MediaItem(
@@ -116,6 +117,7 @@ async def _add_item(
                 container="matroska",
                 duration_seconds=7200,
                 bit_rate=8_000_000,
+                streams_json=streams_json or {},
             )
         )
         for kind, path, primary in (
@@ -498,6 +500,29 @@ async def test_item_detail_includes_metadata_people_files_and_artwork(
         title="The Matrix",
         year=1999,
         rating=8.2,
+        streams_json={
+            "container": "matroska",
+            "streams": [
+                {
+                    "index": 0,
+                    "codec_type": "video",
+                    "codec_name": "hevc",
+                    "width": 1920,
+                    "height": 1080,
+                    "color_transfer": "bt709",
+                },
+                {
+                    "index": 1,
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "language": "jpn",
+                    "channels": 2,
+                    "channel_layout": "stereo",
+                    "title": "Japanese",
+                    "is_default": True,
+                },
+            ],
+        },
         genres=("Action", "Science Fiction"),
         poster=poster,
         backdrop=backdrop,
@@ -519,6 +544,10 @@ async def test_item_detail_includes_metadata_people_files_and_artwork(
     assert body["genres"] == ["Action", "Science Fiction"]
     assert body["files"][0]["missing"] is False
     assert body["files"][0]["container"] == "matroska"
+    streams = body["files"][0]["streams"]
+    assert [stream["codec_type"] for stream in streams] == ["video", "audio"]
+    assert streams[0]["height"] == 1080
+    assert streams[1]["is_default"] is True
     assert {(person["name"], person["role"]) for person in body["people"]} == {
         ("Keanu Reeves", "cast"),
         ("Lana Wachowski", "director"),

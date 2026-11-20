@@ -3979,6 +3979,11 @@ export interface components {
             /** Size Bytes */
             size_bytes: number;
             /**
+             * Streams
+             * @default []
+             */
+            streams: components["schemas"]["ProbeStream"][];
+            /**
              * Subtitles
              * @default []
              */

@@ -12,6 +12,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import and_, func, inspect, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -38,6 +39,7 @@ from app.db.models import (
     Image as ImageModel,
 )
 from app.db.session import SessionDep
+from app.services.media.probe import ProbeResult, ProbeStream
 from app.services.ratings import apply_rating_filter, is_rating_permitted
 from app.services.subtitles import (
     discover_subtitles,
@@ -114,6 +116,18 @@ class MediaFileResponse(BaseModel):
     probe_error: str | None = None
     missing: bool = False
     subtitles: list[SubtitleResponse] = []
+    streams: list[ProbeStream] = []
+
+
+def _probe_streams(media_file: MediaFile) -> list[ProbeStream]:
+    """Return the streams stored by the scanner, or none for an unprobed file."""
+    stored = media_file.streams_json
+    if not isinstance(stored, dict) or "container" not in stored:
+        return []
+    try:
+        return ProbeResult.model_validate(stored).streams
+    except PydanticValidationError:
+        return []
 
 
 class ItemSummary(BaseModel):
@@ -486,6 +500,7 @@ async def get_item(
                 probe_error=media_file.probe_error,
                 missing=media_file.missing_since is not None,
                 subtitles=subtitle_responses(media_file.id, media_file.path),
+                streams=_probe_streams(media_file),
             )
             for media_file in files_list
         ],

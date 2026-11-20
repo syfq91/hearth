@@ -1,6 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findMatchingSubtitleTrack, matchesLanguage, resolveAutoSubtitle } from './languages.ts';
+import {
+	findMatchingSubtitleTrack,
+	languageLabel,
+	matchesLanguage,
+	resolveAutoSubtitle
+} from './languages.ts';
+
+test('languageLabel resolves common codes and keeps unknown codes', () => {
+	assert.equal(languageLabel('jpn'), 'Japanese');
+	assert.equal(languageLabel('en'), 'English');
+	assert.equal(languageLabel('zh'), 'Chinese');
+	assert.equal(languageLabel('und'), 'UND');
+	assert.equal(languageLabel(null), null);
+});
 
 test('matchesLanguage matches exact and 2-to-3 letter codes', () => {
 	assert.equal(matchesLanguage('en', 'Audio', 'en'), true);

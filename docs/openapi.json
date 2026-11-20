@@ -3981,6 +3981,14 @@
             "title": "Size Bytes",
             "type": "integer"
           },
+          "streams": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ProbeStream"
+            },
+            "title": "Streams",
+            "type": "array"
+          },
           "subtitles": {
             "default": [],
             "items": {

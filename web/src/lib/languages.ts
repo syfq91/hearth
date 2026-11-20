@@ -47,6 +47,18 @@ const COMMON_LANGUAGE_ALIASES: Record<string, string[]> = {
 	th: ['tha', 'thai']
 };
 
+/** Display name for an ISO 639-1/2 track language, falling back to the code. */
+export function languageLabel(code: string | null | undefined): string | null {
+	if (!code?.trim()) return null;
+	const normalized = code.trim().toLowerCase();
+	for (const { code: short, label } of COMMON_LANGUAGES) {
+		if (normalized === short || COMMON_LANGUAGE_ALIASES[short]?.includes(normalized)) {
+			return label;
+		}
+	}
+	return code.trim().toUpperCase();
+}
+
 function hasWord(text: string, word: string): boolean {
 	if (!text || !word) return false;
 	const regex = new RegExp(`(^|[^a-z0-9])${word}([^a-z0-9]|$)`, 'i');

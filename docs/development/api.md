@@ -330,6 +330,7 @@ If a client encounters an unrecoverable client-side subtitle crash, it can re-re
 ## 6. Item Detail, ETags, and Field Selection
 
 - **Endpoint**: `GET /api/v1/items/{item_id}`
+- **File stream metadata**: Each entry in `files` includes a `streams` array with the stored ffprobe result (video/audio/subtitle codecs, language, resolution, HDR flags, default/forced dispositions). Unprobed files return an empty list. Clients use this to render media information on detail pages without negotiating a playback session.
 - **ETags & 304 Caching**: Responses include a strong `ETag` header derived from catalog metadata and the user's watch state. Sending `If-None-Match: <etag>` returns `304 Not Modified` when unchanged.
 - **Field Selection**:
   `GET /api/v1/items/{item_id}?fields=title,year,rating`
