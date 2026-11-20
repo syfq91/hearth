@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Shelf from '../lib/components/Shelf.svelte';
 	import Poster from '../lib/components/Poster.svelte';
+	import PosterOverlay from '../lib/components/PosterOverlay.svelte';
 	import BookCover from '../lib/components/BookCover.svelte';
 	import { Check, ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import type { PageProps } from './$types';
@@ -102,7 +103,7 @@
 		<p class="banner" role="status">Some shelves failed to load: {home.error}</p>
 	{/if}
 
-	<Shelf title="Continue watching" items={home.continueWatching.items} directPlay />
+	<Shelf title="Continue watching" items={home.continueWatching.items} directPlay overlay />
 
 	{#if home.continueReading.items.length > 0}
 		<section class="shelf" aria-label="Continue reading">
@@ -138,25 +139,39 @@
 					{@const volume = getBookVolume(book)}
 					<li>
 						<article class="book">
-							<a class="cover-link" href={`/books/${book.id}`} aria-label={book.title}>
-								<BookCover coverImageId={book.cover_image_id} alt="" />
-								{#if book.progress?.completed}
-									<div class="badge checkmark-badge" aria-label="Completed">
-										<Check size={13} strokeWidth={2.8} />
-									</div>
-								{:else if book.progress && book.progress.percentage > 0}
-									<div
-										class="progress"
-										role="progressbar"
-										aria-valuenow={Math.round(book.progress.percentage)}
-										aria-valuemin="0"
-										aria-valuemax="100"
-										aria-label="Reading progress"
-									>
-										<span style:width="{book.progress.percentage}%"></span>
-									</div>
-								{/if}
-							</a>
+							<div class="poster-wrap">
+								<a class="cover-link" href={`/books/${book.id}`} aria-label={book.title}>
+									<BookCover coverImageId={book.cover_image_id} alt="" />
+									{#if book.progress?.completed}
+										<div class="badge checkmark-badge" aria-label="Completed">
+											<Check size={13} strokeWidth={2.8} />
+										</div>
+									{:else if book.progress && book.progress.percentage > 0}
+										<div
+											class="progress"
+											role="progressbar"
+											aria-valuenow={Math.round(book.progress.percentage)}
+											aria-valuemin="0"
+											aria-valuemax="100"
+											aria-label="Reading progress"
+										>
+											<span style:width="{book.progress.percentage}%"></span>
+										</div>
+									{/if}
+								</a>
+								<PosterOverlay
+									itemId={book.id}
+									title={book.title}
+									playHref={`/books/${book.id}`}
+									favorite={book.watch_state?.favorite ?? false}
+									watched={book.watch_state?.watched ?? book.progress?.completed ?? false}
+									bookProgress={{
+										locator: book.progress?.locator ?? '',
+										percentage: book.progress?.percentage ?? 0,
+										device_name: book.progress?.device_name
+									}}
+								/>
+							</div>
 							<h3 class="title">{book.title}</h3>
 							{#if volume}
 								<p class="subtitle">{volume}</p>
@@ -170,7 +185,7 @@
 		</section>
 	{/if}
 
-	<Shelf title="Next up" items={home.nextUp.items} />
+	<Shelf title="Next up" items={home.nextUp.items} overlay />
 
 	{#if home.recentAlbums.length > 0}
 		<section class="shelf" aria-label={musicTitle}>
@@ -207,9 +222,18 @@
 				{#each home.recentAlbums as album (album.id)}
 					<li>
 						<article class="album">
-							<a href={`/music/album/${album.id}`} aria-label={album.title}>
-								<Poster image={album.poster} alt="" aspect="1 / 1" width={300} />
-							</a>
+							<div class="poster-wrap">
+								<a href={`/music/album/${album.id}`} aria-label={album.title}>
+									<Poster image={album.poster} alt="" aspect="1 / 1" width={300} />
+								</a>
+								<PosterOverlay
+									itemId={album.id}
+									title={album.title}
+									playHref={`/music/album/${album.id}`}
+									favorite={album.watch_state?.favorite ?? false}
+									watched={album.watch_state?.watched ?? false}
+								/>
+							</div>
 							<h3 class="title">{album.title}</h3>
 							{#if album.artist_name}
 								<p class="subtitle">{album.artist_name}</p>
@@ -226,6 +250,7 @@
 			title={`New in ${entry.library.name}`}
 			items={entry.shelf.items}
 			href={`/library/${entry.library.id}`}
+			overlay
 		/>
 	{/each}
 
@@ -334,6 +359,12 @@
 		flex-direction: column;
 		gap: 0.4rem;
 		width: 100%;
+	}
+
+	.poster-wrap {
+		position: relative;
+		border-radius: var(--radius);
+		overflow: hidden;
 	}
 
 	.cover-link {

@@ -14,9 +14,11 @@
 		directPlay?: boolean;
 		/** Optional destination link for the shelf heading. */
 		href?: string;
+		/** Show playback/favorite/watched controls over each poster. */
+		overlay?: boolean;
 	}
 
-	let { title, items, level = 2, directPlay = false, href }: Props = $props();
+	let { title, items, level = 2, directPlay = false, href, overlay = false }: Props = $props();
 
 	let rowEl = $state<HTMLElement | null>(null);
 	let canScrollLeft = $state(false);
@@ -97,7 +99,7 @@
 	{:else}
 		<ul class="row" bind:this={rowEl}>
 			{#each items as entry, index (entry.id)}
-				<li><MediaCard item={entry} {directPlay} priority={index === 0} /></li>
+				<li><MediaCard item={entry} {directPlay} {overlay} priority={index === 0} /></li>
 			{/each}
 		</ul>
 	{/if}

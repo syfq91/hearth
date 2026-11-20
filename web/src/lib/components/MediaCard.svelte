@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Poster from './Poster.svelte';
+	import PosterOverlay from './PosterOverlay.svelte';
 	import type { S } from '../api/types';
 	import { Check } from '@lucide/svelte';
 
@@ -13,9 +14,21 @@
 		aspect?: string;
 		/** First visible card in a shelf. */
 		priority?: boolean;
+		/** Show playback/favorite/watched controls over the poster (home shelves). */
+		overlay?: boolean;
 	}
 
-	let { item, level = 3, directPlay = false, aspect: propAspect, priority = false }: Props = $props();
+	let {
+		item,
+		level = 3,
+		directPlay = false,
+		aspect: propAspect,
+		priority = false,
+		overlay = false
+	}: Props = $props();
+
+	// Local override keeps the completed badge in sync with the overlay toggle.
+	let watchedOverride = $state<boolean | null>(null);
 
 	// An item is an episode if it's typed 'episode' or has NextUp's series_title
 	const isEpisode = $derived(
@@ -124,7 +137,7 @@
 	const position = $derived(item.watch_state?.position_ms ?? 0);
 	const runtimeMs = $derived((item.runtime_seconds ?? 0) * 1000);
 	const percent = $derived(runtimeMs > 0 ? Math.min(100, (position / runtimeMs) * 100) : 0);
-	const watched = $derived(item.watch_state?.watched ?? false);
+	const watched = $derived(watchedOverride ?? item.watch_state?.watched ?? false);
 
 	function detailHref(card: S['ItemSummary']): string {
 		switch (card.type) {
@@ -158,27 +171,39 @@
 </script>
 
 <article class="card">
-	<a
-		class="link"
-		href={withLib(posterHref)}
-		aria-label={isEpisode ? (seriesTitle ? `Play ${seriesTitle}` : `Play ${item.title}`) : item.title}
-	>
-		<Poster image={poster} alt="" {aspect} {priority} />
-		{#if watched}
-			<div class="badge checkmark-badge" aria-label="Completed">
-				<Check size={13} strokeWidth={2.8} />
-			</div>
-		{:else if episodeCount != null && episodeCount > 1}
-			<div class="badge" aria-label="{episodeCount} new episodes">
-				{episodeCount}
-			</div>
+	<div class="poster-wrap">
+		<a
+			class="link"
+			href={withLib(posterHref)}
+			aria-label={isEpisode ? (seriesTitle ? `Play ${seriesTitle}` : `Play ${item.title}`) : item.title}
+		>
+			<Poster image={poster} alt="" {aspect} {priority} />
+			{#if watched}
+				<div class="badge checkmark-badge" aria-label="Completed">
+					<Check size={13} strokeWidth={2.8} />
+				</div>
+			{:else if episodeCount != null && episodeCount > 1}
+				<div class="badge" aria-label="{episodeCount} new episodes">
+					{episodeCount}
+				</div>
+			{/if}
+			{#if percent > 0 && !watched}
+				<div class="progress" role="presentation">
+					<span style:width="{percent}%"></span>
+				</div>
+			{/if}
+		</a>
+		{#if overlay}
+			<PosterOverlay
+				itemId={item.id}
+				title={item.title}
+				playHref={withLib(posterHref)}
+				favorite={item.watch_state?.favorite ?? false}
+				{watched}
+				onWatchedChange={(value) => (watchedOverride = value)}
+			/>
 		{/if}
-		{#if percent > 0 && !watched}
-			<div class="progress" role="presentation">
-				<span style:width="{percent}%"></span>
-			</div>
-		{/if}
-	</a>
+	</div>
 	{#if isEpisode}
 		<svelte:element this={`h${level}`} class="title">
 			{#if seriesId}
@@ -218,6 +243,12 @@
 	.link:hover {
 		text-decoration: none;
 		filter: brightness(1.08);
+	}
+
+	.poster-wrap {
+		position: relative;
+		border-radius: var(--radius);
+		overflow: hidden;
 	}
 
 	.badge {

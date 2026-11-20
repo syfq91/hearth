@@ -183,8 +183,12 @@ async def continue_reading(
     )
     query = _restrict_to_accessible_libraries(query, user)
     rows = (await session.execute(query.limit(limit + 1))).all()
+    states = await watch_states(session, user.id, [item.id for item, _ in rows[:limit]])
     return BookShelf(
-        items=[_to_book_list_item(item, progress) for item, progress in rows[:limit]],
+        items=[
+            _to_book_list_item(item, progress, states.get(item.id))
+            for item, progress in rows[:limit]
+        ],
         has_more=len(rows) > limit,
     )
 

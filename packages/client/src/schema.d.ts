@@ -3041,6 +3041,7 @@ export interface components {
             sort_title?: string | null;
             /** Title */
             title: string;
+            watch_state?: components["schemas"]["WatchStateResponse"] | null;
             /** Year */
             year?: number | null;
         };

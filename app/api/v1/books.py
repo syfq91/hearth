@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
+from app.api.v1.items import WatchStateResponse, watch_state_response, watch_states
 from app.api.v1.stream import stream_media_file
 from app.core.deps import RequireUser, SettingsDep, ViewerDep, user_can_access_library
 from app.core.errors import NotFoundError, ValidationError
@@ -127,6 +128,7 @@ class BookListItem(BaseModel):
     formats: list[str] = []
     cover_image_id: str | None = None
     progress: BookProgressResponse | None = None
+    watch_state: WatchStateResponse | None = None
 
 
 class BookListResponse(BaseModel):
@@ -207,7 +209,11 @@ class BookSearchResponse(BaseModel):
 # ------------------------------------------------------------- conversion helpers
 
 
-def _to_book_list_item(item: MediaItem, progress: BookProgress | None = None) -> BookListItem:
+def _to_book_list_item(
+    item: MediaItem,
+    progress: BookProgress | None = None,
+    state: UserItemState | None = None,
+) -> BookListItem:
     book = item.book
     author_brief = (
         AuthorBrief(id=book.author.id, name=book.author.name) if book and book.author else None
@@ -234,6 +240,11 @@ def _to_book_list_item(item: MediaItem, progress: BookProgress | None = None) ->
         if progress
         else None
     )
+    watch_state = watch_state_response(state)
+    # Reading progress is the source of truth for a book's completed flag; keep
+    # the generic watch state aligned for books that have no UserItemState row.
+    if progress and progress.completed:
+        watch_state.watched = True
     return BookListItem(
         id=item.id,
         library_id=item.library_id,
@@ -251,6 +262,7 @@ def _to_book_list_item(item: MediaItem, progress: BookProgress | None = None) ->
         formats=formats,
         cover_image_id=_primary_image_id(item),
         progress=prog_resp,
+        watch_state=watch_state,
     )
 
 
@@ -348,9 +360,10 @@ async def list_books(
             )
         )
         prog_map = {p.book_id: p for p in progs}
+    state_map = await watch_states(session, user.id, item_ids)
 
     return BookListResponse(
-        items=[_to_book_list_item(it, prog_map.get(it.id)) for it in items],
+        items=[_to_book_list_item(it, prog_map.get(it.id), state_map.get(it.id)) for it in items],
         total=total,
         limit=limit,
         offset=offset,
@@ -415,9 +428,10 @@ async def search_books(
             )
         )
         prog_map = {p.book_id: p for p in progs}
+    state_map = await watch_states(session, user.id, item_ids)
 
     return BookSearchResponse(
-        items=[_to_book_list_item(it, prog_map.get(it.id)) for it in items],
+        items=[_to_book_list_item(it, prog_map.get(it.id), state_map.get(it.id)) for it in items],
         total=len(items),
     )
 
@@ -833,13 +847,14 @@ async def get_author_detail(
             )
         )
         prog_map = {p.book_id: p for p in progs}
+    state_map = await watch_states(session, user.id, book_ids)
 
     return AuthorDetail(
         id=author.id,
         name=author.name,
         sort_name=author.sort_name,
         overview=author.overview,
-        books=[_to_book_list_item(b, prog_map.get(b.id)) for b in books],
+        books=[_to_book_list_item(b, prog_map.get(b.id), state_map.get(b.id)) for b in books],
     )
 
 
@@ -942,10 +957,11 @@ async def get_series_detail(
             )
         )
         prog_map = {p.book_id: p for p in progs}
+    state_map = await watch_states(session, user.id, book_ids)
 
     return BookSeriesDetail(
         id=series.id,
         name=series.name,
         description=series.description,
-        books=[_to_book_list_item(b, prog_map.get(b.id)) for b in books],
+        books=[_to_book_list_item(b, prog_map.get(b.id), state_map.get(b.id)) for b in books],
     )

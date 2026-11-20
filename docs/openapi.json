@@ -1325,6 +1325,16 @@
             "title": "Title",
             "type": "string"
           },
+          "watch_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatchStateResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "year": {
             "anyOf": [
               {
