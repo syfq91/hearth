@@ -7,6 +7,7 @@
 	import { setTvMode, tv } from '../lib/tv.svelte';
 	import { spatialFocus } from '../lib/actions/spatial-focus';
 	import AudioBar from '../lib/components/AudioBar.svelte';
+	import { player, stop } from '../lib/player.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
@@ -115,10 +116,15 @@
 		return result;
 	});
 
-	const isFullscreenMedia = $derived(
-		page.url.pathname.startsWith('/watch/') ||
-			/\/books\/[^/]+\/read\/?$/.test(page.url.pathname)
-	);
+	// Video and readers both hide the chrome, but only video stops music: the
+	// audio dock stays available (and audible) while reading comics/epubs.
+	const isVideoPlayer = $derived(page.url.pathname.startsWith('/watch/'));
+	const isReader = $derived(/\/books\/[^/]+\/read\/?$/.test(page.url.pathname));
+	const isFullscreenMedia = $derived(isVideoPlayer || isReader);
+
+	$effect(() => {
+		if (isVideoPlayer) stop();
+	});
 
 	let topbarRef = $state<HTMLElement | null>(null);
 	let navRef = $state<HTMLElement | null>(null);
@@ -248,7 +254,12 @@
 	<title>Hearth</title>
 </svelte:head>
 
-<div class="app" class:fullscreen-app={isFullscreenMedia} use:spatialFocus>
+<div
+	class="app"
+	class:fullscreen-app={isFullscreenMedia}
+	class:with-audiobar={!isVideoPlayer && player.track !== null}
+	use:spatialFocus
+>
 	{#if !isFullscreenMedia}
 		<a class="skip-link" href="#main">Skip to content</a>
 		<header class="topbar" bind:this={topbarRef}>
@@ -418,7 +429,7 @@
 	<main id="main" tabindex="-1" class:fullscreen-main={isFullscreenMedia}>
 		{@render children()}
 	</main>
-	{#if !isFullscreenMedia}
+	{#if !isVideoPlayer}
 		<AudioBar />
 	{/if}
 </div>
@@ -434,6 +445,13 @@
 		height: 100vh;
 		min-height: 100vh;
 		overflow: hidden;
+	}
+
+	/* On reader pages the dock shares the viewport with the reader. */
+	.app.fullscreen-app.with-audiobar main.fullscreen-main {
+		height: auto;
+		flex: 1;
+		min-height: 0;
 	}
 
 	.topbar {
