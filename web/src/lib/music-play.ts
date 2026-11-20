@@ -18,7 +18,8 @@ export async function playAlbum(albumId: string, artworkUrl?: string | null): Pr
 			artistName: track.artist_name ?? null,
 			albumTitle: track.album_title ?? null,
 			streamUrl: track.stream_url,
-			artworkUrl
+			artworkUrl,
+			favorite: track.watch_state?.favorite ?? false
 		}))
 	);
 	await playQueue(queue, 0);

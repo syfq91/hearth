@@ -11,6 +11,8 @@
  * wired up in `AudioBar`, which owns the element.
  */
 import { withMediaToken } from './media-token.svelte';
+import { api } from './api/client';
+import { REPEAT_MODES, nextIndex, shuffledUpcoming, type RepeatMode } from './player/queue';
 
 export interface PlayerTrack {
 	id: string;
@@ -21,6 +23,8 @@ export interface PlayerTrack {
 	streamUrl: string;
 	/** Artwork URL (optional; also needs a media token). */
 	artworkUrl?: string | null;
+	/** Server-side favorite flag for this item. */
+	favorite?: boolean;
 }
 
 export const player = $state<{
@@ -33,14 +37,24 @@ export const player = $state<{
 	queue: PlayerTrack[];
 	/** Position of `track` in `queue`, or -1. */
 	index: number;
+	/** Favorite flag of the current track. */
+	favorite: boolean;
+	repeat: RepeatMode;
+	shuffle: boolean;
 }>({
 	track: null,
 	src: null,
 	playing: false,
 	error: null,
 	queue: [],
-	index: -1
+	index: -1,
+	favorite: false,
+	repeat: 'off',
+	shuffle: false
 });
+
+/** Queue order before shuffling, restored when shuffle is switched off. */
+let originalQueue: PlayerTrack[] | null = null;
 
 /** Resolved stream URLs for the next-track prewarm (token lives 6h server-side). */
 const resolved = new Map<string, string>();
@@ -62,7 +76,8 @@ export async function playTrack(track: PlayerTrack): Promise<void> {
 export async function playQueue(tracks: PlayerTrack[], startIndex = 0): Promise<void> {
 	if (tracks.length === 0) return;
 	const index = Math.min(Math.max(0, startIndex), tracks.length - 1);
-	player.queue = tracks;
+	originalQueue = [...tracks];
+	player.queue = player.shuffle ? shuffledUpcoming(tracks, index) : [...tracks];
 	player.error = null;
 	await playIndex(index);
 }
@@ -72,6 +87,7 @@ async function playIndex(index: number): Promise<void> {
 	if (!track) return;
 	player.index = index;
 	player.track = track;
+	player.favorite = track.favorite ?? false;
 	try {
 		player.src = await resolveSrc(track);
 		player.playing = true;
@@ -81,13 +97,14 @@ async function playIndex(index: number): Promise<void> {
 	}
 }
 
-/** Advance to the next queued track; returns false at the end of the queue. */
+/** Advance to the next queued track; wraps when repeat-all is enabled. */
 export async function playNext(): Promise<boolean> {
-	if (player.index < 0 || player.index + 1 >= player.queue.length) {
+	const next = nextIndex(player.index, player.queue.length, player.repeat === 'all');
+	if (next < 0) {
 		player.playing = false;
 		return false;
 	}
-	await playIndex(player.index + 1);
+	await playIndex(next);
 	return true;
 }
 
@@ -117,10 +134,54 @@ export function togglePlay(): void {
 	player.playing = !player.playing;
 }
 
+/** Cycle repeat off → all → one → off. */
+export function cycleRepeat(): RepeatMode {
+	const position = REPEAT_MODES.indexOf(player.repeat);
+	player.repeat = REPEAT_MODES[(position + 1) % REPEAT_MODES.length];
+	return player.repeat;
+}
+
+/** Toggle shuffle, preserving (and restoring) the original queue order. */
+export function toggleShuffle(): boolean {
+	player.shuffle = !player.shuffle;
+	if (player.shuffle) {
+		originalQueue = [...player.queue];
+		player.queue = shuffledUpcoming(player.queue, player.index);
+	} else if (originalQueue) {
+		const currentId = player.track?.id;
+		player.queue = originalQueue;
+		player.index = currentId
+			? Math.max(0, player.queue.findIndex((track) => track.id === currentId))
+			: -1;
+		originalQueue = null;
+	}
+	return player.shuffle;
+}
+
+/** Toggle the current track's server-side favorite flag. */
+export async function toggleFavorite(): Promise<void> {
+	const track = player.track;
+	if (!track) return;
+	const next = !player.favorite;
+	try {
+		await api.post<{ favorite: boolean }>(`/items/${track.id}/favorite`, {
+			body: { favorite: next }
+		});
+		if (player.track?.id === track.id) {
+			player.favorite = next;
+			track.favorite = next;
+		}
+	} catch (e) {
+		player.error = e instanceof Error ? e.message : String(e);
+	}
+}
+
 export function stop(): void {
 	player.track = null;
 	player.src = null;
 	player.playing = false;
+	player.favorite = false;
 	player.queue = [];
 	player.index = -1;
+	originalQueue = null;
 }

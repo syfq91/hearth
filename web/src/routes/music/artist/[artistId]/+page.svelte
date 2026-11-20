@@ -13,7 +13,8 @@
 			artistName: track.artist_name ?? null,
 			albumTitle: track.album_title ?? null,
 			streamUrl: track.stream_url,
-			artworkUrl: data.artist.poster?.url ?? null
+			artworkUrl: data.artist.poster?.url ?? null,
+			favorite: track.watch_state?.favorite ?? false
 		};
 	}
 

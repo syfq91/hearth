@@ -5,7 +5,10 @@
 		stop,
 		playNext,
 		playPrevious,
-		nextTrackSrc
+		nextTrackSrc,
+		cycleRepeat,
+		toggleShuffle,
+		toggleFavorite
 	} from '../player.svelte';
 	import { withMediaToken } from '../media-token.svelte';
 	import {
@@ -17,7 +20,11 @@
 		Volume2,
 		Volume1,
 		VolumeX,
-		Music
+		Music,
+		Repeat,
+		Repeat1,
+		Shuffle,
+		Heart
 	} from '@lucide/svelte';
 
 	let audio = $state<HTMLAudioElement | null>(null);
@@ -161,6 +168,15 @@
 		};
 	});
 
+	function handleEnded(): void {
+		if (player.repeat === 'one' && audio) {
+			audio.currentTime = 0;
+			void audio.play().catch(() => {});
+			return;
+		}
+		void playNext();
+	}
+
 	function handleTimeUpdate(): void {
 		if (!('mediaSession' in navigator) || !audio) return;
 		const duration = audio.duration;
@@ -294,7 +310,8 @@
 						type="button"
 						class="ghost"
 						onclick={() => void playNext()}
-						disabled={player.index < 0 || player.index + 1 >= player.queue.length}
+						disabled={player.index < 0 ||
+							(player.index + 1 >= player.queue.length && player.repeat !== 'all')}
 						aria-label="Next track"
 						title="Next track"
 					>
@@ -319,6 +336,45 @@
 			</div>
 
 			<div class="right">
+				<div class="extra-controls">
+					<button
+						type="button"
+						class="control-btn"
+						class:active={player.repeat !== 'off'}
+						onclick={() => cycleRepeat()}
+						aria-label={`Repeat: ${player.repeat}`}
+						title={`Repeat: ${player.repeat}`}
+					>
+						{#if player.repeat === 'one'}
+							<Repeat1 size={16} />
+						{:else}
+							<Repeat size={16} />
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="control-btn"
+						class:active={player.shuffle}
+						onclick={() => toggleShuffle()}
+						aria-label={player.shuffle ? 'Shuffle on' : 'Shuffle off'}
+						aria-pressed={player.shuffle}
+						title="Shuffle"
+					>
+						<Shuffle size={16} />
+					</button>
+					<button
+						type="button"
+						class="control-btn"
+						class:active={player.favorite}
+						onclick={() => void toggleFavorite()}
+						aria-label={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
+						aria-pressed={player.favorite}
+						title={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
+					>
+						<Heart size={16} />
+					</button>
+				</div>
+
 				<div class="volume-control">
 					<button
 						type="button"
@@ -358,7 +414,7 @@
 			ontimeupdate={handleTimeUpdate}
 			onplay={() => (player.playing = true)}
 			onpause={() => (player.playing = false)}
-			onended={() => void playNext()}
+			onended={handleEnded}
 		></audio>
 	</div>
 
@@ -541,6 +597,42 @@
 	.ghost:disabled {
 		opacity: 0.5;
 		cursor: default;
+	}
+
+	.extra-controls {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin-right: 0.35rem;
+	}
+
+	.control-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: var(--radius);
+		padding: 0.35rem;
+		color: var(--muted);
+		cursor: pointer;
+		transition:
+			color 0.15s ease,
+			background 0.15s ease;
+	}
+
+	.control-btn:hover {
+		background: var(--surface-2);
+		color: var(--text);
+	}
+
+	.control-btn.active {
+		color: var(--accent);
+	}
+
+	.control-btn:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
 	}
 
 	.volume-control {

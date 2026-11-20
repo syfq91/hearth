@@ -41,7 +41,8 @@
 			title: track.title,
 			artistName: track.artist_name ?? null,
 			albumTitle: track.album_title ?? null,
-			streamUrl: track.stream_url
+			streamUrl: track.stream_url,
+			favorite: track.watch_state?.favorite ?? false
 		};
 	}
 
