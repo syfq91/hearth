@@ -92,6 +92,11 @@ test('book cover overlay toggles favourite and read state', async ({ page, reque
 		.filter({ has: page.getByRole('link', { name: `Play ${BOOK_TITLE}` }) })
 		.first();
 	await expect(card).toBeVisible();
+	await expect(card.locator('a.cover-link')).toHaveAttribute('href', /\/books\/[^/]+$/);
+	await expect(card.getByRole('link', { name: `Play ${BOOK_TITLE}` })).toHaveAttribute(
+		'href',
+		/\/books\/[^/]+\/read/
+	);
 	await toggle(card, BOOK_TITLE, 'played');
 	await toggle(card, BOOK_TITLE, 'favorites');
 });

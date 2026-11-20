@@ -162,7 +162,7 @@
 								<PosterOverlay
 									itemId={book.id}
 									title={book.title}
-									playHref={`/books/${book.id}`}
+									playHref={`/books/${book.id}/read`}
 									favorite={book.watch_state?.favorite ?? false}
 									watched={book.watch_state?.watched ?? book.progress?.completed ?? false}
 									bookProgress={{

@@ -113,6 +113,7 @@
 		if (card.type === 'movie' || card.type === 'episode' || card.type === 'series') {
 			return `/watch/${card.id}`;
 		}
+		if (card.type === 'book') return `/books/${card.id}/read`;
 		return detailTarget;
 	});
 
