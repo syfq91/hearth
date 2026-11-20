@@ -49,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- The persistent audio dock now shows album art, centres the transport controls, adds a top-edge seek slider, and hosts repeat (off/all/one), shuffle, and favourite controls beside the volume slider. Music keeps playing across page navigation and stays available in comics/epub readers; opening a video stops playback and hides the dock.
 - Library, books, artists, genres, and songs pages now use numbered pagination (with Previous/Next and a page window) via a shared `Pagination` component instead of "Load more" buttons. Changing a filter, folder, or search resets to page 1. `GET /libraries/{id}/items` gained an `offset` parameter and a `total` count to support it while keeping cursor pagination for existing clients.
 - The inert hls.js rendition `<select>` was replaced by the new quality menu; Hearth still emits a single HLS rendition, so quality switches negotiate a new transcode rather than switching ABR levels mid-stream (ADR 071).
 - Container base image moved from Debian 12 (bookworm) to Debian 13 (trixie), upgrading the bundled FFmpeg from 5.1 to 7.1.5 and the Intel VA-API driver to 25.2.x (ADR 070).
