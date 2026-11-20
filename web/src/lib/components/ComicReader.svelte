@@ -182,22 +182,18 @@
 		padding: 0.5rem 0;
 	}
 
-	/* The page scales to the space actually left over, so the audio dock
+	/* The page fills only the space actually left over, so the audio dock
 	   cannot push the controls out of view when music is playing. */
 	.page-area {
 		flex: 1;
 		min-height: 0;
 		width: 100%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
 	}
 
 	.page {
-		max-width: 100%;
-		max-height: 100%;
-		height: auto;
-		width: auto;
+		display: block;
+		width: 100%;
+		height: 100%;
 		object-fit: contain;
 		background: #000;
 		border-radius: var(--radius);
