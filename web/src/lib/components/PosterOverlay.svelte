@@ -11,6 +11,8 @@
 		watched?: boolean;
 		/** Books store completion in reading progress rather than the generic watched flag. */
 		bookProgress?: { locator: string; percentage: number; device_name?: string | null } | null;
+		/** Hide the played/read toggle (e.g. for music albums). */
+		showWatched?: boolean;
 		/** Lets the parent keep its own watched indicator in sync. */
 		onWatchedChange?: (watched: boolean) => void;
 	}
@@ -22,6 +24,7 @@
 		favorite = false,
 		watched = false,
 		bookProgress = null,
+		showWatched = true,
 		onWatchedChange
 	}: Props = $props();
 
@@ -82,17 +85,19 @@
 		<Play size={26} fill="currentColor" strokeWidth={1.5} />
 	</a>
 	<div class="overlay-actions">
-		<button
-			type="button"
-			class={['round-button', watchedState && 'active']}
-			onclick={toggleWatched}
-			disabled={watchedPending}
-			aria-pressed={watchedState}
-			aria-label={watchedState ? `Mark ${title} as unwatched` : `Mark ${title} as played`}
-			title={watchedState ? 'Mark as unwatched' : 'Mark played'}
-		>
-			<Check size={16} strokeWidth={2.8} />
-		</button>
+		{#if showWatched}
+			<button
+				type="button"
+				class={['round-button', watchedState && 'active']}
+				onclick={toggleWatched}
+				disabled={watchedPending}
+				aria-pressed={watchedState}
+				aria-label={watchedState ? `Mark ${title} as unwatched` : `Mark ${title} as played`}
+				title={watchedState ? 'Mark as unwatched' : 'Mark played'}
+			>
+				<Check size={16} strokeWidth={2.8} />
+			</button>
+		{/if}
 		<button
 			type="button"
 			class={['round-button', 'favorite-button', favoriteState && 'active']}

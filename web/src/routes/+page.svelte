@@ -231,7 +231,7 @@
 									title={album.title}
 									playHref={`/music/album/${album.id}`}
 									favorite={album.watch_state?.favorite ?? false}
-									watched={album.watch_state?.watched ?? false}
+									showWatched={false}
 								/>
 							</div>
 							<h3 class="title">{album.title}</h3>

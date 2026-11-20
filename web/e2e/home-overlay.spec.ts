@@ -48,7 +48,7 @@ test('movie poster overlay toggles favourite and played state', async ({ page, r
 	await toggle(card, MOVIE_TITLE, 'favorites');
 });
 
-test('album poster overlay toggles favourite and played state', async ({ page, request }) => {
+test('album poster overlay toggles favourite without a played control', async ({ page, request }) => {
 	const pair = await seedServer(request);
 	await signIn(page, pair);
 	await page.goto('/');
@@ -58,7 +58,9 @@ test('album poster overlay toggles favourite and played state', async ({ page, r
 		.filter({ has: page.getByRole('link', { name: `Play ${ALBUM_TITLE}` }) })
 		.first();
 	await expect(card).toBeVisible();
-	await toggle(card, ALBUM_TITLE, 'played');
+	await expect(
+		card.getByRole('button', { name: new RegExp(`Mark ${ALBUM_TITLE} as (played|unwatched)`) })
+	).toHaveCount(0);
 	await toggle(card, ALBUM_TITLE, 'favorites');
 });
 
