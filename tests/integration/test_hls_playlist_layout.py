@@ -31,7 +31,7 @@ def _plan() -> TranscodePlan:
     )
 
 
-def _seed_session(settings: Settings) -> TranscodeSession:
+def _seed_session(settings: Settings, start_offset: float = 0.0) -> TranscodeSession:
     manager = get_session_manager(settings)
     output_dir = settings.transcode_dir / "playlist_layout_session"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -47,6 +47,7 @@ def _seed_session(settings: Settings) -> TranscodeSession:
         output_dir=output_dir,
         plan=_plan(),
         settings=settings,
+        start_offset=start_offset,
         duration_seconds=20.0,
     )
     manager.sessions[session.id] = session
@@ -111,3 +112,40 @@ async def test_media_playlist_uniform_when_short_opener_disabled(
     content = response.text
     assert "#EXT-X-TARGETDURATION:4" in content
     assert _extinf(content) == pytest.approx([4.0, 4.0, 4.0, 4.0, 4.0])
+
+
+@pytest.mark.asyncio
+async def test_media_playlist_marks_unproduced_resume_prefix_as_gap(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+) -> None:
+    """A mid-file session must not advertise segments ffmpeg never produced.
+
+    Otherwise a client can request segment 0 before its resume seek, forcing
+    the server to restart ffmpeg at offset 0 and rewrite init.mp4 with a
+    different timestamp base than the resume segments.
+    """
+    headers = await _headers(api_client)
+    db_settings.transcode_segment_duration_seconds = 4
+    db_settings.transcode_first_segment_duration_seconds = 2.0
+    # With a 2s opener and 4s segments, offset 6s starts inside seg_002.
+    session = _seed_session(db_settings, start_offset=6.0)
+    assert session.current_start_segment == 2
+
+    response = await api_client.get(
+        f"/api/v1/hls/{session.id}/media.m3u8",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+    lines = response.text.splitlines()
+    gap_segments = {
+        lines[index + 2].split(".")[0]
+        for index, line in enumerate(lines)
+        if line == "#EXT-X-GAP" and index + 2 < len(lines)
+    }
+    assert gap_segments == {"seg_000", "seg_001"}
+    assert "#EXT-X-MEDIA-SEQUENCE:0" in response.text
+    assert "#EXT-X-START:TIME_OFFSET=6.000" in response.text
+    # Timeline durations stay absolute so the client can seek to the resume point.
+    assert _extinf(response.text) == pytest.approx([2.0, 4.0, 4.0, 4.0, 4.0, 2.0])

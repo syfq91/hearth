@@ -284,8 +284,26 @@ async def get_media_playlist(
             "#EXT-X-PLAYLIST-TYPE:VOD",
             f'#EXT-X-MAP:URI="init.mp4{init_suffix}"',
         ]
+        # Tell clients where the stream actually starts. A mid-file session
+        # produces only segments from the resume offset onward, so without
+        # this hint an HLS client can begin at the playlist's time zero and
+        # buffer segments from a later absolute time than the saved position.
+        if session.start_offset > 0:
+            lines.append(f"#EXT-X-START:TIME_OFFSET={session.start_offset:.3f}")
+
+        # ffmpeg starts at the segment containing the resume offset, so the
+        # earlier segments in this VOD timeline do not exist yet. If they are
+        # advertised as ordinary segments, a client can request segment 0
+        # before it seeks to the resume point; the server then restarts ffmpeg
+        # at offset 0 and rewrites init.mp4 with a different timestamp base.
+        # A later seek lands on segments produced with the old init and the
+        # browser buffers them at the wrong time. Mark the unavailable prefix
+        # as HLS gaps so clients skip it and start at the resume segment while
+        # keeping the absolute (global) media timeline.
         for i in range(total_segments):
             d = session.segment_duration_at(i, duration)
+            if i < session.current_start_segment:
+                lines.append("#EXT-X-GAP")
             lines.append(f"#EXTINF:{d:.3f},")
             lines.append(f"seg_{i:03d}.m4s{token_suffix}")
         lines.append("#EXT-X-ENDLIST")
