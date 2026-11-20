@@ -59,8 +59,10 @@ from app.services.metadata.local import (
     LocalProvider,
     find_local_book_cover,
     find_local_book_opf,
+    find_local_comic_info,
     local_nfo_paths,
     local_tvshow_nfo_paths,
+    parse_local_comic_info,
     parse_local_opf,
 )
 from app.services.metadata.registry import MetadataRegistry
@@ -1599,13 +1601,20 @@ class MetadataMatcher:
         # 1. Local metadata check (always wins)
         for file_path in snapshot.file_paths:
             p = Path(file_path)
-            local_opf = find_local_book_opf(p.parent)
+            comic_info = find_local_comic_info(p)
+            local_opf = find_local_book_opf(p.parent, book_path=p) if comic_info is None else None
+            sidecar = comic_info or local_opf
+            if sidecar is None:
+                continue
             local_cover = find_local_book_cover(p.parent)
-            if local_opf:
-                details = parse_local_opf(local_opf, cover_path=local_cover)
-                return await self._apply_book_match(
-                    snapshot, "local", str(local_opf), details, list(details.images)
-                )
+            details = (
+                parse_local_comic_info(sidecar, cover_path=local_cover)
+                if comic_info is not None
+                else parse_local_opf(sidecar, cover_path=local_cover)
+            )
+            return await self._apply_book_match(
+                snapshot, "local", str(sidecar), details, list(details.images)
+            )
 
         # 2. Remote providers (ordered by priority, e.g. per-library or server default)
         book_providers = [

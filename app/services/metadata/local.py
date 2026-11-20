@@ -5,6 +5,7 @@ import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from app.services.media.books import parse_comic_info
 from app.services.metadata.base import (
     BookMetadata,
     EpisodeMetadata,
@@ -649,8 +650,20 @@ class LocalProvider(MetadataProvider):
         return list(found.values())
 
 
-def find_local_book_opf(directory: Path) -> Path | None:
-    """Find a local OPF file (such as metadata.opf) in a book's directory."""
+def find_local_book_opf(directory: Path, book_path: Path | None = None) -> Path | None:
+    """Find a local OPF sidecar in a book's directory.
+
+    When *book_path* is supplied, an OPF named after the book file's stem
+    (for example ``Dune.opf`` for ``Dune.epub``) takes precedence so several
+    books can share one directory without sharing metadata. Otherwise fall
+    back to ``metadata.opf``, then to any other OPF in the directory.
+    """
+    if book_path is not None:
+        stem = book_path.stem.casefold()
+        for f in directory.iterdir():
+            if f.is_file() and f.suffix.lower() == ".opf" and f.stem.casefold() == stem:
+                return f
+
     candidate = directory / "metadata.opf"
     if candidate.is_file():
         return candidate
@@ -739,4 +752,48 @@ def parse_local_opf(opf_path: Path, cover_path: Path | None = None) -> BookMetad
         language=language,
         overview=overview,
         images=tuple(images),
+    )
+
+
+def find_local_comic_info(book_path: Path) -> Path | None:
+    """Find a ComicInfo sidecar named after a comic (``Watchmen #1.xml``)."""
+    if book_path.suffix.lower() not in {".cbz", ".cbr"}:
+        return None
+    stem = book_path.stem.casefold()
+    for f in book_path.parent.iterdir():
+        if not (f.is_file() and f.suffix.lower() == ".xml" and f.stem.casefold() == stem):
+            continue
+        try:
+            root = ET.fromstring(f.read_bytes())
+        except (ET.ParseError, OSError) as exc:
+            logger.debug("Ignoring invalid ComicInfo sidecar %s: %s", f, exc)
+            continue
+        if root.tag.rsplit("}", 1)[-1].lower() == "comicinfo":
+            return f
+    return None
+
+
+def parse_local_comic_info(xml_path: Path, cover_path: Path | None = None) -> BookMetadata:
+    """Parse a local ComicInfo XML sidecar into normalized book metadata."""
+    info = parse_comic_info(xml_path.read_bytes())
+    images: tuple[ProviderImage, ...] = ()
+    if cover_path and cover_path.is_file():
+        images = (
+            ProviderImage(
+                kind="poster",
+                file_path=str(cover_path.resolve()),
+                is_primary=True,
+            ),
+        )
+    return BookMetadata(
+        provider="local",
+        provider_id=str(xml_path),
+        title=info.title or xml_path.stem,
+        author_name=info.author,
+        series_name=info.series,
+        series_index=info.series_index,
+        published_date=info.published_date,
+        page_count=info.page_count,
+        overview=info.overview,
+        images=images,
     )

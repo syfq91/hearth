@@ -42,6 +42,8 @@ from app.services.metadata.base import BookMetadata, ProviderImage
 from app.services.metadata.local import (
     find_local_book_cover,
     find_local_book_opf,
+    find_local_comic_info,
+    parse_local_comic_info,
     parse_local_opf,
 )
 from app.services.scanner.hashing import partial_hash
@@ -718,14 +720,24 @@ class LibraryScanner:
                 parsed.audio_tags[candidate.path] = read_audio_tags(path, library_root=root_path)
             elif library_type == "book":
                 tag_data = read_book_metadata(path)
-                local_opf = find_local_book_opf(path.parent)
-                local_cover = find_local_book_cover(path.parent) if local_opf is not None else None
-                local_meta = (
-                    parse_local_opf(local_opf, cover_path=local_cover)
-                    if local_opf is not None
-                    else None
+                comic_info = find_local_comic_info(path)
+                local_opf = None if comic_info else find_local_book_opf(path.parent, book_path=path)
+                local_sidecar = comic_info or local_opf
+                local_cover = (
+                    find_local_book_cover(path.parent) if local_sidecar is not None else None
                 )
-                parsed.book_tags[candidate.path] = (tag_data, local_meta, local_opf, local_cover)
+                if comic_info is not None:
+                    local_meta = parse_local_comic_info(comic_info, cover_path=local_cover)
+                elif local_opf is not None:
+                    local_meta = parse_local_opf(local_opf, cover_path=local_cover)
+                else:
+                    local_meta = None
+                parsed.book_tags[candidate.path] = (
+                    tag_data,
+                    local_meta,
+                    local_sidecar,
+                    local_cover,
+                )
             elif library_type == "tv":
                 parsed.episodes[candidate.path] = parse_episode_path(path)
             else:
@@ -1268,11 +1280,11 @@ class LibraryScanner:
                     digest = hashes.get(candidate.path, "")
 
                     # 1. Read tags from book file
-                    tag_data, local_meta, local_opf, local_cover = parsed_data.book_tags[
+                    tag_data, local_meta, local_sidecar, local_cover = parsed_data.book_tags[
                         candidate.path
                     ]
 
-                    # 2. Apply local OPF and sidecar cover overrides (Local always wins)
+                    # 2. Apply local metadata and sidecar cover overrides (Local always wins)
                     if local_meta:
                         if local_meta.title:
                             tag_data.title = local_meta.title
@@ -1342,7 +1354,9 @@ class LibraryScanner:
                             year=year,
                             overview=tag_data.overview,
                             added_at=now,
-                            match_state="matched" if (tag_data.author or local_opf) else "pending",
+                            match_state="matched"
+                            if (tag_data.author or local_sidecar)
+                            else "pending",
                         )
                         session.add(book_item)
 

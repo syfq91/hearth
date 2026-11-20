@@ -66,8 +66,11 @@ You need Docker with Compose v2 and a folder containing your media.
 3. Press **Scan** and follow progress on the admin overview.
 
 Hearth understands common file and folder naming, embedded tags, and local
-`.nfo` / `metadata.opf` files plus sidecar artwork. Online metadata is provided
-by modular plugins: music comes from MusicBrainz, books from Open Library and Google
+`.nfo` / `metadata.opf` files (an OPF named after an individual book, such as
+`Dune.opf` for `Dune.epub`, is also read) plus sidecar artwork. Comics can use a
+ComicInfo sidecar named after the archive, such as `Watchmen #1.xml` for
+`Watchmen #1.cbz`. Online metadata is provided by modular plugins: music comes
+from MusicBrainz, books from Open Library and Google
 Books, and movies and TV from TMDB. Plugins can be configured and toggled from
 **Admin → Plugins**; their settings are stored in the database.
 See [Plugins](docs/guides/plugins.md) and [Configuration](docs/guides/configuration.md).

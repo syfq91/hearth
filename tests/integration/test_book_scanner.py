@@ -201,3 +201,136 @@ async def test_scan_book_library(
         author_names = {a.name for a in authors}
         assert "Frank Herbert" in author_names
         assert "Alan Moore" not in author_names
+
+
+@pytest.mark.asyncio
+async def test_scan_books_with_per_file_opf_sidecars(
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    """Two EPUBs in one folder keep their own metadata from stem-named OPFs."""
+    db_settings.scan_missing_grace_hours = 0
+    media_root = db_settings.media_dir / "books_shared_test"
+    media_root.mkdir(parents=True)
+
+    _create_epub(
+        media_root / "Dune.epub",
+        title="Embedded Dune",
+        author="Embedded Author",
+        series=None,
+        series_index=None,
+        isbn=None,
+    )
+    _create_epub(
+        media_root / "Foundation.epub",
+        title="Embedded Foundation",
+        author="Embedded Author",
+        series=None,
+        series_index=None,
+        isbn=None,
+    )
+
+    def write_opf(path: Path, title: str) -> None:
+        path.write_text(
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0">'
+            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            f"<dc:title>{title}</dc:title>"
+            "<dc:creator>Local Author</dc:creator>"
+            "</metadata></package>",
+            encoding="utf-8",
+        )
+
+    write_opf(media_root / "Dune.opf", "Dune Local")
+    write_opf(media_root / "Foundation.opf", "Foundation Local")
+
+    lib_id = "lib-books-shared"
+    async with db_sessionmaker() as session:
+        lib = Library(id=lib_id, name="Shared Books", type="book")
+        lib.paths.append(LibraryPath(id="lp-bs", library_id=lib_id, path=str(media_root)))
+        session.add(lib)
+        await session.commit()
+
+    img_pipeline = ImagePipeline(settings=db_settings, sessionmaker=db_sessionmaker)
+    matcher = MetadataMatcher(db_settings, db_sessionmaker, providers=[], artwork=img_pipeline)
+    scanner = LibraryScanner(db_settings, db_sessionmaker, matcher=matcher)
+    stats = await scanner.scan_library(lib_id)
+
+    assert stats.added_items == 2
+
+    async with db_sessionmaker() as session:
+        items = list(await session.scalars(select(MediaItem).where(MediaItem.library_id == lib_id)))
+        assert {item.title for item in items} == {"Dune Local", "Foundation Local"}
+        assert all(item.book is not None and item.book.author is not None for item in items)
+        assert {item.book.author.name for item in items} == {"Local Author"}
+
+
+@pytest.mark.asyncio
+async def test_scan_comics_with_per_file_comic_info_sidecars(
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    """Two CBZs in one folder keep their own metadata from <stem>.xml sidecars."""
+    db_settings.scan_missing_grace_hours = 0
+    media_root = db_settings.media_dir / "comics_shared_test"
+    media_root.mkdir(parents=True)
+
+    _create_cbz(
+        media_root / "Watchmen #1.cbz",
+        title="Embedded One",
+        series="Embedded Series",
+        number="1",
+        writer="Embedded Writer",
+    )
+    _create_cbz(
+        media_root / "Watchmen #2.cbz",
+        title="Embedded Two",
+        series="Embedded Series",
+        number="2",
+        writer="Embedded Writer",
+    )
+
+    for filename, title, number, writer in (
+        ("Watchmen #1.xml", "Chapter One", "1", "Alan Moore"),
+        ("Watchmen #2.xml", "Chapter Two", "2", "Dave Gibbons"),
+    ):
+        (media_root / filename).write_text(
+            '<?xml version="1.0"?>'
+            "<ComicInfo>"
+            f"<Title>{title}</Title>"
+            "<Series>Watchmen</Series>"
+            f"<Number>{number}</Number>"
+            f"<Writer>{writer}</Writer>"
+            "<Year>1986</Year>"
+            "<PageCount>2</PageCount>"
+            "</ComicInfo>",
+            encoding="utf-8",
+        )
+
+    lib_id = "lib-comics-shared"
+    async with db_sessionmaker() as session:
+        lib = Library(id=lib_id, name="Shared Comics", type="book")
+        lib.paths.append(LibraryPath(id="lp-cs", library_id=lib_id, path=str(media_root)))
+        session.add(lib)
+        await session.commit()
+
+    img_pipeline = ImagePipeline(settings=db_settings, sessionmaker=db_sessionmaker)
+    matcher = MetadataMatcher(db_settings, db_sessionmaker, providers=[], artwork=img_pipeline)
+    scanner = LibraryScanner(db_settings, db_sessionmaker, matcher=matcher)
+    stats = await scanner.scan_library(lib_id)
+
+    assert stats.added_items == 2
+
+    async with db_sessionmaker() as session:
+        items = list(await session.scalars(select(MediaItem).where(MediaItem.library_id == lib_id)))
+        by_title = {item.title: item for item in items}
+        assert set(by_title) == {"Chapter One", "Chapter Two"}
+        one = by_title["Chapter One"]
+        two = by_title["Chapter Two"]
+        assert one.book is not None and two.book is not None
+        assert one.book.series is not None and two.book.series is not None
+        assert one.book.series.name == two.book.series.name == "Watchmen"
+        assert one.book.series_index == 1.0
+        assert two.book.series_index == 2.0
+        assert one.book.author is not None and one.book.author.name == "Alan Moore"
+        assert two.book.author is not None and two.book.author.name == "Dave Gibbons"

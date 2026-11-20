@@ -10,6 +10,8 @@ from app.services.metadata.base import BookMetadata
 from app.services.metadata.local import (
     find_local_book_cover,
     find_local_book_opf,
+    find_local_comic_info,
+    parse_local_comic_info,
     parse_local_opf,
 )
 from plugins.googlebooks.plugin import GoogleBooksPlugin
@@ -186,3 +188,125 @@ def test_local_book_opf_and_cover(tmp_path: Path) -> None:
     assert len(meta.images) == 1
     assert meta.images[0].file_path == str(found_cover)
     assert meta.images[0].is_primary is True
+
+
+def _write_opf(path: Path, title: str) -> None:
+    path.write_text(
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="2.0">'
+        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+        f"<dc:title>{title}</dc:title>"
+        "</metadata></package>",
+        encoding="utf-8",
+    )
+
+
+def test_local_book_opf_prefers_book_stem(tmp_path: Path) -> None:
+    book_dir = tmp_path / "Books"
+    book_dir.mkdir()
+    _write_opf(book_dir / "Dune.opf", "Dune Local")
+    _write_opf(book_dir / "Foundation.opf", "Foundation Local")
+    _write_opf(book_dir / "metadata.opf", "Shared Fallback")
+
+    dune_opf = find_local_book_opf(book_dir, book_path=book_dir / "Dune.epub")
+    foundation_opf = find_local_book_opf(book_dir, book_path=book_dir / "Foundation.epub")
+
+    assert dune_opf is not None
+    assert foundation_opf is not None
+    assert dune_opf.name == "Dune.opf"
+    assert foundation_opf.name == "Foundation.opf"
+    assert parse_local_opf(dune_opf).title == "Dune Local"
+    assert parse_local_opf(foundation_opf).title == "Foundation Local"
+
+
+def test_local_book_opf_stem_match_is_case_insensitive(tmp_path: Path) -> None:
+    book_dir = tmp_path / "Books"
+    book_dir.mkdir()
+    _write_opf(book_dir / "dune.opf", "Dune Local")
+
+    found = find_local_book_opf(book_dir, book_path=book_dir / "Dune.epub")
+
+    assert found is not None
+    assert found.name == "dune.opf"
+
+
+def test_local_book_opf_falls_back_when_no_stem_match(tmp_path: Path) -> None:
+    book_dir = tmp_path / "Books"
+    book_dir.mkdir()
+    _write_opf(book_dir / "metadata.opf", "Shared Fallback")
+
+    found = find_local_book_opf(book_dir, book_path=book_dir / "Dune.epub")
+
+    assert found is not None
+    assert found.name == "metadata.opf"
+
+
+def test_local_book_opf_without_book_path_keeps_metadata_precedence(tmp_path: Path) -> None:
+    book_dir = tmp_path / "Books"
+    book_dir.mkdir()
+    _write_opf(book_dir / "Dune.opf", "Dune Local")
+    _write_opf(book_dir / "metadata.opf", "Shared Fallback")
+
+    found = find_local_book_opf(book_dir)
+
+    assert found is not None
+    assert found.name == "metadata.opf"
+
+
+def _write_comic_info(path: Path, title: str, number: str, writer: str) -> None:
+    path.write_text(
+        '<?xml version="1.0"?>'
+        "<ComicInfo>"
+        f"<Title>{title}</Title>"
+        "<Series>Watchmen</Series>"
+        f"<Number>{number}</Number>"
+        f"<Writer>{writer}</Writer>"
+        "<Year>1986</Year>"
+        "<PageCount>2</PageCount>"
+        "</ComicInfo>",
+        encoding="utf-8",
+    )
+
+
+def test_local_comic_info_matches_comic_stem(tmp_path: Path) -> None:
+    _write_comic_info(tmp_path / "Watchmen #1.xml", "Chapter One", "1", "Alan Moore")
+    _write_comic_info(tmp_path / "Watchmen #2.xml", "Chapter Two", "2", "Dave Gibbons")
+
+    first = find_local_comic_info(tmp_path / "Watchmen #1.cbz")
+    second = find_local_comic_info(tmp_path / "Watchmen #2.cbz")
+
+    assert first is not None
+    assert second is not None
+    assert first.name == "Watchmen #1.xml"
+    assert second.name == "Watchmen #2.xml"
+
+    first_meta = parse_local_comic_info(first)
+    second_meta = parse_local_comic_info(second)
+    assert first_meta.title == "Chapter One"
+    assert first_meta.series_name == "Watchmen"
+    assert first_meta.series_index == 1.0
+    assert first_meta.author_name == "Alan Moore"
+    assert first_meta.published_date == "1986"
+    assert first_meta.page_count == 2
+    assert second_meta.title == "Chapter Two"
+    assert second_meta.series_index == 2.0
+    assert second_meta.author_name == "Dave Gibbons"
+
+
+def test_local_comic_info_is_case_insensitive_and_comic_only(tmp_path: Path) -> None:
+    _write_comic_info(tmp_path / "watchmen #1.XML", "Chapter One", "1", "Alan Moore")
+
+    found = find_local_comic_info(tmp_path / "Watchmen #1.CBZ")
+
+    assert found is not None
+    assert found.name == "watchmen #1.XML"
+    assert parse_local_comic_info(found).title == "Chapter One"
+    assert find_local_comic_info(tmp_path / "Dune.epub") is None
+
+
+def test_local_comic_info_ignores_unrelated_xml(tmp_path: Path) -> None:
+    (tmp_path / "Watchmen #1.xml").write_text(
+        "<metadata><title>Not ComicInfo</title></metadata>", encoding="utf-8"
+    )
+
+    assert find_local_comic_info(tmp_path / "Watchmen #1.cbz") is None

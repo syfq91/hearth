@@ -72,8 +72,14 @@ longer read from environment variables. TMDB items stay `pending` until its
 API key is set in the plugin configuration.
 
 Local `.nfo` files, `metadata.opf` files, embedded tags, and sidecar artwork are
-always preferred over online providers. Artwork downloads are restricted to an
-allowlist (`HEARTH_IMAGE_ALLOWED_HOSTS`) and capped by size; see
+always preferred over online providers. For books, an OPF named after the book
+file (for example `Dune.opf` alongside `Dune.epub`) is used for that specific
+book, which lets multiple books share one folder; `metadata.opf` remains the
+fallback for books without a matching sidecar. For comics, a ComicInfo sidecar
+named after the archive (for example `Watchmen #1.xml` alongside
+`Watchmen #1.cbz`) overrides embedded ComicInfo for that file and takes
+precedence over OPF sidecars. Artwork downloads are restricted
+to an allowlist (`HEARTH_IMAGE_ALLOWED_HOSTS`) and capped by size; see
 `app/core/config.py` for the image and provider timeouts.
 
 The **Admin → Plugins** tab stores each provider's API key and enabled state in

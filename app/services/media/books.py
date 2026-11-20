@@ -214,6 +214,37 @@ def read_epub_metadata(path: Path) -> BookTagData:
         return BookTagData(title=path.stem)
 
 
+def parse_comic_info(xml_data: bytes) -> BookTagData:
+    """Parse ComicInfo XML fields (used by both embedded and sidecar metadata)."""
+    info = BookTagData(title="")
+    try:
+        root = ET.fromstring(xml_data)
+        for elem in root:
+            tag = _strip_ns(elem.tag).lower()
+            text = (elem.text or "").strip()
+            if not text:
+                continue
+            if tag == "title":
+                info.title = text
+            elif tag == "series":
+                info.series = text
+            elif tag == "number":
+                with contextlib.suppress(ValueError):
+                    info.series_index = float(text)
+            elif tag in ("writer", "author") and not info.author:
+                info.author = text
+            elif tag in ("summary", "overview") and not info.overview:
+                info.overview = text
+            elif tag == "year" and not info.published_date:
+                info.published_date = text
+            elif tag == "pagecount":
+                with contextlib.suppress(ValueError):
+                    info.page_count = int(text)
+    except Exception as exc:
+        logger.debug("Failed parsing ComicInfo.xml: %s", exc)
+    return info
+
+
 def read_cbz_metadata(path: Path) -> BookTagData:
     """Read metadata and cover from a Comic Book Zip (CBZ) archive."""
     try:
@@ -241,31 +272,18 @@ def read_cbz_metadata(path: Path) -> BookTagData:
             )
             if comic_info_name:
                 try:
-                    c_xml = zf.read(comic_info_name)
-                    c_root = ET.fromstring(c_xml)
-                    for elem in c_root:
-                        tag = _strip_ns(elem.tag).lower()
-                        text = (elem.text or "").strip()
-                        if not text:
-                            continue
-                        if tag == "title":
-                            title = text
-                        elif tag == "series":
-                            series = text
-                        elif tag == "number":
-                            with contextlib.suppress(ValueError):
-                                series_index = float(text)
-                        elif tag in ("writer", "author") and not author:
-                            author = text
-                        elif tag in ("summary", "overview") and not overview:
-                            overview = text
-                        elif tag == "year" and not published_date:
-                            published_date = text
-                        elif tag == "pagecount":
-                            with contextlib.suppress(ValueError):
-                                page_count = int(text)
+                    info = parse_comic_info(zf.read(comic_info_name))
+                    title = info.title or title
+                    series = info.series or series
+                    if info.series_index is not None:
+                        series_index = info.series_index
+                    author = info.author or author
+                    overview = info.overview or overview
+                    published_date = info.published_date or published_date
+                    if info.page_count is not None:
+                        page_count = info.page_count
                 except Exception as exc:
-                    logger.debug("Failed parsing ComicInfo.xml in %s: %s", path, exc)
+                    logger.debug("Failed reading ComicInfo.xml in %s: %s", path, exc)
 
             cover_data: bytes | None = None
             cover_mime: str | None = None
