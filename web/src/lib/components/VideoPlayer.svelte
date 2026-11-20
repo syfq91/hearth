@@ -28,6 +28,7 @@
 		type HlsStreamStats
 	} from '../player/hls-engine';
 	import { SubtitleManager } from '../player/subtitles.svelte';
+	import { contentDuration, contentTime } from '../player/seekbar';
 	import { attachmentFontUrls } from '../video-subtitles';
 	import SubtitleSyncControl from './SubtitleSyncControl.svelte';
 	import type { PlaybackInfoRequest, PlaybackInfoResponse } from '../api/types';
@@ -126,12 +127,6 @@
 		{ value: '4k', label: '4K', detail: 'up to 2160p' }
 	];
 
-	const duration = $derived.by(() => {
-		if (rawDuration > 0 && Number.isFinite(rawDuration)) return rawDuration;
-		if (expectedDuration > 0) return expectedDuration;
-		return 0;
-	});
-
 	// Some containers (notably MKV) start their timestamps well after zero.
 	// Media elements report raw file time, so subtract the container offset
 	// everywhere the UI shows or accepts a position. Progress reporting and
@@ -140,8 +135,23 @@
 	const mediaStartSec = $derived(info?.start_time_seconds ?? 0);
 
 	function displayTime(rawSeconds: number): number {
-		return Math.max(0, rawSeconds - mediaStartSec);
+		return contentTime(rawSeconds, mediaStartSec);
 	}
+
+	/** Raw media duration (file time). Used only for the server resume contract. */
+	const mediaDurationRaw = $derived.by(() => {
+		if (rawDuration > 0 && Number.isFinite(rawDuration)) return rawDuration;
+		if (expectedDuration > 0) return expectedDuration;
+		return 0;
+	});
+
+	// UI timeline length in content time. Both the media element's duration and
+	// the probed file duration report raw container time (end timestamp), but
+	// currentTime, buffered ranges and seeks are normalized by displayTime().
+	// Leaving the offset in the denominator stretches the seekbar scale, so on
+	// resume the buffered bar is drawn ahead of the real play position and the
+	// remaining label runs long. Strip the same offset used everywhere else.
+	const duration = $derived(contentDuration(mediaDurationRaw, mediaStartSec));
 
 	const progressPct = $derived.by(() => {
 		if (duration <= 0) return 0;
@@ -234,7 +244,9 @@
 	async function report(state: 'playing' | 'paused' | 'stopped'): Promise<void> {
 		if (!videoEl || destroyed) return;
 		const cur = videoEl.currentTime ?? 0;
-		const dur = duration;
+		// Watch state is stored in file time, so compare against the raw
+		// duration just as position_ms uses the raw media element time.
+		const dur = mediaDurationRaw;
 		const position_ms = Math.max(0, Math.floor(cur * 1000));
 		const duration_ms = dur > 0 ? Math.floor(dur * 1000) : undefined;
 		lastReportedMs = Math.max(lastReportedMs, position_ms);
@@ -272,8 +284,9 @@
 		const targetMs = resumePositionMs > 0 ? resumePositionMs : startAtMs;
 		if (targetMs <= 0) return;
 		resumeApplied = true;
-		const dur = duration;
-		const durationMs = dur * 1000;
+		// Resume positions are file time, so the near-end guard needs the raw
+		// duration, not the offset-normalized UI duration.
+		const durationMs = mediaDurationRaw * 1000;
 		// Near the end the user wants a rewatch prompt, not a jump to credits.
 		// Only skip when the position came from the server resume point. By this
 		// point resumePositionMs is always positive (startPlayback copies
@@ -818,6 +831,16 @@
 		if ((plan?.audio_action ?? 'transcode') === 'copy') return `${src} > copy`;
 		return `${src} > ${plan?.audio_codec ?? 'aac'}`;
 	}
+
+	// The buffered overlay uses the same content-time scale as the played bar.
+	// If the time base settles after a progress event (probe duration replaced
+	// by the element's duration, or a new playback-info response on restart),
+	// refresh the ranges so the grey bar never sits ahead of the playhead.
+	$effect(() => {
+		void duration;
+		void mediaStartSec;
+		if (videoEl) updateBufferedRanges();
+	});
 
 	$effect(() => {
 		if (videoEl && !info && !loadError) {
