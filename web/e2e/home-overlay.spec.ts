@@ -15,6 +15,7 @@ function bearer(pair: Pair): Record<string, string> {
 }
 
 async function toggle(card: Locator, title: string, action: 'played' | 'favorites'): Promise<void> {
+	await card.locator('.poster-wrap').hover();
 	const name =
 		action === 'played'
 			? new RegExp(`Mark ${title} as (played|unwatched)`)
@@ -35,6 +36,14 @@ test('movie poster overlay toggles favourite and played state', async ({ page, r
 		.filter({ has: page.getByRole('link', { name: `Play ${MOVIE_TITLE}` }) })
 		.first();
 	await expect(card).toBeVisible();
+
+	const poster = card.locator('.poster-wrap');
+	const overlay = poster.locator('.overlay');
+	await page.mouse.move(0, 0);
+	await expect(overlay).toHaveCSS('opacity', '0');
+	await poster.hover();
+	await expect(overlay).toHaveCSS('opacity', '1');
+
 	await toggle(card, MOVIE_TITLE, 'played');
 	await toggle(card, MOVIE_TITLE, 'favorites');
 });

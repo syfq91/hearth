@@ -116,6 +116,15 @@
 		align-items: center;
 		justify-content: center;
 		pointer-events: none;
+		opacity: 0;
+		transition: opacity 0.15s ease;
+	}
+
+	/* The poster wrapper is the hover target; the overlay itself never catches
+	   pointer events so the poster link underneath stays clickable. */
+	:global(.poster-wrap:hover) .overlay,
+	:global(.poster-wrap:focus-within) .overlay {
+		opacity: 1;
 	}
 
 	.overlay::before {
@@ -126,8 +135,15 @@
 		pointer-events: none;
 	}
 
-	.play-button {
+	:global(.poster-wrap:hover) .play-button,
+	:global(.poster-wrap:hover) .round-button,
+	:global(.poster-wrap:focus-within) .play-button,
+	:global(.poster-wrap:focus-within) .round-button {
 		pointer-events: auto;
+	}
+
+	.play-button {
+		pointer-events: none;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -158,7 +174,7 @@
 	}
 
 	.round-button {
-		pointer-events: auto;
+		pointer-events: none;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
