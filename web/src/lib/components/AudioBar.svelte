@@ -583,7 +583,7 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		background: var(--surface-2);
+		background: transparent;
 		border: 1px solid transparent;
 		border-radius: var(--radius);
 		padding: 0.35rem 0.85rem;
@@ -591,7 +591,7 @@
 	}
 
 	.ghost:hover:not(:disabled) {
-		background: var(--surface);
+		background: var(--surface-2);
 	}
 
 	.ghost:disabled {
