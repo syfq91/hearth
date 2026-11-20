@@ -16,10 +16,34 @@
 		Square,
 		Volume2,
 		Volume1,
-		VolumeX
+		VolumeX,
+		Music
 	} from '@lucide/svelte';
 
 	let audio = $state<HTMLAudioElement | null>(null);
+
+	// Artwork is URL-based media, so it needs a media token like the stream.
+	let artSrc = $state<string | null>(null);
+
+	$effect(() => {
+		const track = player.track;
+		const artwork = track?.artworkUrl;
+		if (!track || !artwork) {
+			artSrc = null;
+			return;
+		}
+		let cancelled = false;
+		void withMediaToken(artwork)
+			.then((url) => {
+				if (!cancelled && player.track?.id === track.id) artSrc = url;
+			})
+			.catch(() => {
+				/* artwork is decorative */
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	// Drive the element from the store: a new src starts playback, and the
 	// toggle button reflects (and controls) the real element state.
@@ -205,6 +229,14 @@
 
 {#if player.track}
 	<div class="bar" role="region" aria-label="Now playing">
+		<div class="art" aria-hidden="true">
+			{#if artSrc}
+				<img src={artSrc} alt="" width="48" height="48" />
+			{:else}
+				<Music size={22} />
+			{/if}
+		</div>
+
 		<div class="meta">
 			<span class="title">{player.track.title}</span>
 			{#if player.track.artistName || player.track.albumTitle}
@@ -325,6 +357,27 @@
 		background: var(--surface);
 		border-top: 1px solid var(--border);
 		z-index: 20;
+	}
+
+	.art {
+		flex: 0 0 auto;
+		width: 3rem;
+		height: 3rem;
+		border-radius: calc(var(--radius) - 2px);
+		overflow: hidden;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		color: var(--muted);
+	}
+
+	.art img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
 	}
 
 	.meta {
