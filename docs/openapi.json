@@ -4625,6 +4625,11 @@
             ],
             "title": "Session Id"
           },
+          "start_time_seconds": {
+            "default": 0.0,
+            "title": "Start Time Seconds",
+            "type": "number"
+          },
           "subtitles": {
             "items": {
               "$ref": "#/components/schemas/SubtitleResponse"

@@ -132,6 +132,17 @@
 		return 0;
 	});
 
+	// Some containers (notably MKV) start their timestamps well after zero.
+	// Media elements report raw file time, so subtract the container offset
+	// everywhere the UI shows or accepts a position. Progress reporting and
+	// the saved resume point stay in file time, which is what the server seeks
+	// to, so existing watch state keeps working.
+	const mediaStartSec = $derived(info?.start_time_seconds ?? 0);
+
+	function displayTime(rawSeconds: number): number {
+		return Math.max(0, rawSeconds - mediaStartSec);
+	}
+
 	const progressPct = $derived.by(() => {
 		if (duration <= 0) return 0;
 		return Math.min(100, Math.max(0, (currentTime / duration) * 100));
@@ -244,8 +255,8 @@
 		const buf = videoEl.buffered;
 		const ranges: { startPct: number; widthPct: number }[] = [];
 		for (let i = 0; i < buf.length; i++) {
-			const start = buf.start(i);
-			const end = buf.end(i);
+			const start = displayTime(buf.start(i));
+			const end = displayTime(buf.end(i));
 			const startPct = Math.max(0, Math.min(100, (start / duration) * 100));
 			const endPct = Math.max(0, Math.min(100, (end / duration) * 100));
 			ranges.push({
@@ -271,7 +282,7 @@
 			return;
 		}
 		videoEl.currentTime = targetMs / 1000;
-		currentTime = targetMs / 1000;
+		currentTime = displayTime(targetMs / 1000);
 	}
 
 	function togglePlay(): void {
@@ -307,12 +318,13 @@
 
 	function seekBy(deltaSeconds: number): void {
 		if (!videoEl) return;
-		const cur = videoEl.currentTime ?? 0;
+		const cur = displayTime(videoEl.currentTime ?? 0);
 		const maxTime = duration > 0 ? duration : Number.POSITIVE_INFINITY;
 		const nextTime = Math.max(0, Math.min(maxTime, cur + deltaSeconds));
-		videoEl.currentTime = nextTime;
+		const fileTime = nextTime + mediaStartSec;
+		videoEl.currentTime = fileTime;
 		currentTime = nextTime;
-		notifyHlsSeek(nextTime);
+		notifyHlsSeek(fileTime);
 		triggerActivity();
 		subtitleManager?.renderManualFrame(true);
 	}
@@ -321,9 +333,10 @@
 		if (!videoEl) return;
 		const maxTime = duration > 0 ? duration : Number.POSITIVE_INFINITY;
 		const nextTime = Math.max(0, Math.min(maxTime, targetSeconds));
-		videoEl.currentTime = nextTime;
+		const fileTime = nextTime + mediaStartSec;
+		videoEl.currentTime = fileTime;
 		currentTime = nextTime;
-		notifyHlsSeek(nextTime);
+		notifyHlsSeek(fileTime);
 		subtitleManager?.renderManualFrame(true);
 	}
 
@@ -964,7 +977,7 @@
 			}}
 			ontimeupdate={() => {
 				if (!videoEl) return;
-				currentTime = videoEl.currentTime;
+				currentTime = displayTime(videoEl.currentTime);
 				nowMs = Date.now();
 				const positionMs = Math.floor(currentTime * 1000);
 				if (positionMs - lastReportedMs >= REPORT_INTERVAL_MS) {

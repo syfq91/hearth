@@ -228,6 +228,9 @@ class PlaybackInfoResponse(BaseModel):
     hls_url: str | None = None
     session_id: str | None = None
     file: PlaybackFileResponse
+    # Container start offset in seconds. The player subtracts it from raw media
+    # timestamps so the seekbar shows presentation time rather than file time.
+    start_time_seconds: float = 0.0
     subtitles: list[SubtitleResponse] = Field(default_factory=list)
     video_stream: ProbeStream | None = None
     audio_streams: list[ProbeStream] = Field(default_factory=list)
@@ -471,6 +474,7 @@ async def playback_info(
             mode="direct_play",
             url=url,
             file=file_resp,
+            start_time_seconds=probe_res.start_time_seconds,
             subtitles=subtitles,
             video_stream=probe_res.primary_video,
             audio_streams=audio_streams,
@@ -516,6 +520,7 @@ async def playback_info(
         hls_url=url,
         session_id=transcode_session.id,
         file=file_resp,
+        start_time_seconds=probe_res.start_time_seconds,
         subtitles=subtitles,
         video_stream=probe_res.primary_video,
         audio_streams=audio_streams,

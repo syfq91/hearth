@@ -4180,6 +4180,11 @@ export interface components {
             reasons?: string[];
             /** Session Id */
             session_id?: string | null;
+            /**
+             * Start Time Seconds
+             * @default 0
+             */
+            start_time_seconds: number;
             /** Subtitles */
             subtitles?: components["schemas"]["SubtitleResponse"][];
             /** Url */

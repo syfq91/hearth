@@ -75,10 +75,34 @@ def test_parse_payload_maps_format_and_streams() -> None:
     assert result.duration_seconds == pytest.approx(7200.5)
     assert result.bit_rate == 18_000_000
     assert result.size_bytes == 16_200_000_000
+    assert result.start_time_seconds == 0.0
     assert len(result.streams) == 4
     assert [stream.index for stream in result.video_streams] == [0, 3]
     assert len(result.audio_streams) == 1
     assert len(result.subtitle_streams) == 1
+
+
+def test_parse_payload_captures_container_start_time() -> None:
+    payload = {
+        "format": {"format_name": "matroska,webm", "start_time": "232.500000"},
+        "streams": [],
+        "chapters": [],
+    }
+    assert parse_probe_payload(payload).start_time_seconds == pytest.approx(232.5)
+
+    # Containers that only report it on the video stream still work.
+    stream_payload = {
+        "format": {"format_name": "matroska,webm"},
+        "streams": [
+            {"index": 0, "codec_type": "video", "codec_name": "hevc", "start_time": "1.250"}
+        ],
+        "chapters": [],
+    }
+    assert parse_probe_payload(stream_payload).start_time_seconds == pytest.approx(1.25)
+
+    # Negative edit-list offsets are not a presentation offset to subtract.
+    negative = {"format": {"format_name": "mov,mp4", "start_time": "-0.080"}, "streams": []}
+    assert parse_probe_payload(negative).start_time_seconds == 0.0
 
 
 def test_parse_payload_detects_hdr_and_audio_details() -> None:

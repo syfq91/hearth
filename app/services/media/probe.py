@@ -138,6 +138,10 @@ class ProbeResult(BaseModel):
     container: str
     format_long_name: str | None = None
     duration_seconds: float | None = None
+    # Container presentation offset. Some files (notably MKV) start their
+    # timestamps well after zero; players that normalise it show a different
+    # elapsed time than one that reports raw container timestamps.
+    start_time_seconds: float = 0.0
     bit_rate: int | None = None
     size_bytes: int | None = None
     streams: list[ProbeStream] = Field(default_factory=list)
@@ -288,6 +292,16 @@ def parse_probe_payload(payload: dict[str, Any]) -> ProbeResult:
 
     parsed_streams = [_parse_stream(stream) for stream in streams if isinstance(stream, dict)]
 
+    # Prefer the container-wide start_time; fall back to the first video stream
+    # for containers that only report it per stream. Negative values are common
+    # with edit lists and are not a presentation offset to subtract.
+    start_time = _as_float(format_info.get("start_time")) or 0.0
+    if start_time <= 0:
+        for stream in streams:
+            if isinstance(stream, dict) and stream.get("codec_type") == "video":
+                start_time = _as_float(stream.get("start_time")) or 0.0
+                break
+
     raw_attachments = payload.get("attachments")
     if isinstance(raw_attachments, list) and raw_attachments:
         attachment_objects = [
@@ -308,6 +322,7 @@ def parse_probe_payload(payload: dict[str, Any]) -> ProbeResult:
         container=str(format_info.get("format_name") or "unknown"),
         format_long_name=format_info.get("format_long_name"),
         duration_seconds=_as_float(format_info.get("duration")),
+        start_time_seconds=max(0.0, start_time),
         bit_rate=_as_int(format_info.get("bit_rate")),
         size_bytes=_as_int(format_info.get("size")),
         streams=parsed_streams,
