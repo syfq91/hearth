@@ -2,6 +2,7 @@
 	import Poster from './Poster.svelte';
 	import { api } from '../api/client';
 	import type { ItemDetail } from '../api/types';
+	import { formatRuntime } from '../runtime';
 	import { Play, RotateCcw, Heart, Check, Star } from '@lucide/svelte';
 
 	interface Props {
@@ -38,12 +39,7 @@
 		}
 	}
 
-	const runtimeLabel = $derived.by(() => {
-		const seconds = item.runtime_seconds ?? 0;
-		if (seconds <= 0) return null;
-		const minutes = Math.round(seconds / 60);
-		return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-	});
+	const runtimeLabel = $derived(formatRuntime(item.runtime_seconds));
 
 	const meta = $derived(
 		[
