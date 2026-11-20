@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Poster from './Poster.svelte';
 	import PosterOverlay from './PosterOverlay.svelte';
+	import { playAlbum } from '../music-play';
 	import type { S } from '../api/types';
 	import { Check } from '@lucide/svelte';
 
@@ -218,6 +219,8 @@
 				playHref={withLib(playTarget)}
 				favorite={item.watch_state?.favorite ?? false}
 				{watched}
+				showWatched={!isMusic}
+				onPlay={isMusic ? () => void playAlbum(item.id, poster?.url) : undefined}
 				onWatchedChange={(value) => (watchedOverride = value)}
 			/>
 		{/if}

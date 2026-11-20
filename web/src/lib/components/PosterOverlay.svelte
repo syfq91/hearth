@@ -13,6 +13,8 @@
 		bookProgress?: { locator: string; percentage: number; device_name?: string | null } | null;
 		/** Hide the played/read toggle (e.g. for music albums). */
 		showWatched?: boolean;
+		/** Start media in-page instead of navigating (e.g. queue an album). */
+		onPlay?: () => void;
 		/** Lets the parent keep its own watched indicator in sync. */
 		onWatchedChange?: (watched: boolean) => void;
 	}
@@ -25,6 +27,7 @@
 		watched = false,
 		bookProgress = null,
 		showWatched = true,
+		onPlay,
 		onWatchedChange
 	}: Props = $props();
 
@@ -81,9 +84,21 @@
 </script>
 
 <div class="overlay">
-	<a class="play-button" href={playHref} aria-label={`Play ${title}`} title="Play">
-		<Play size={26} fill="currentColor" strokeWidth={1.5} />
-	</a>
+	{#if onPlay}
+		<button
+			type="button"
+			class="play-button"
+			onclick={onPlay}
+			aria-label={`Play ${title}`}
+			title="Play"
+		>
+			<Play size={26} fill="currentColor" strokeWidth={1.5} />
+		</button>
+	{:else}
+		<a class="play-button" href={playHref} aria-label={`Play ${title}`} title="Play">
+			<Play size={26} fill="currentColor" strokeWidth={1.5} />
+		</a>
+	{/if}
 	<div class="overlay-actions">
 		{#if showWatched}
 			<button
@@ -149,6 +164,8 @@
 
 	.play-button {
 		pointer-events: none;
+		border: 0;
+		cursor: pointer;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;

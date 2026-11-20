@@ -3,7 +3,7 @@
  * over the poster cards in the movie, music and book shelves.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { ALBUM_TITLE, BOOK_TITLE, MOVIE_TITLE, seedServer, signIn } from './helpers';
+import { ALBUM_TITLE, BOOK_TITLE, MOVIE_TITLE, TRACK_TITLE, seedServer, signIn } from './helpers';
 
 interface Pair {
 	access_token: string;
@@ -53,19 +53,31 @@ test('movie poster overlay toggles favourite and played state', async ({ page, r
 	await toggle(card, MOVIE_TITLE, 'favorites');
 });
 
-test('album poster overlay toggles favourite without a played control', async ({ page, request }) => {
+test('album poster overlay queues playback and toggles favourite', async ({ page, request }) => {
 	const pair = await seedServer(request);
 	await signIn(page, pair);
 	await page.goto('/');
 
 	const card = page
 		.locator('article.album')
-		.filter({ has: page.getByRole('link', { name: `Play ${ALBUM_TITLE}` }) })
+		.filter({ has: page.getByRole('button', { name: `Play ${ALBUM_TITLE}` }) })
 		.first();
 	await expect(card).toBeVisible();
+	await expect(card.locator('a[href^="/music/album/"]')).toBeVisible();
 	await expect(
 		card.getByRole('button', { name: new RegExp(`Mark ${ALBUM_TITLE} as (played|unwatched)`) })
 	).toHaveCount(0);
+
+	await card.locator('.poster-wrap').hover();
+	await card.getByRole('button', { name: `Play ${ALBUM_TITLE}` }).click();
+
+	const bar = page.getByRole('region', { name: 'Now playing' });
+	await expect(bar).toBeVisible();
+	await expect(bar.getByText(TRACK_TITLE)).toBeVisible();
+	await expect
+		.poll(() => page.locator('audio').evaluate((el: HTMLAudioElement) => el.currentTime), { timeout: 30_000 })
+		.toBeGreaterThan(0.5);
+
 	await toggle(card, ALBUM_TITLE, 'favorites');
 });
 
