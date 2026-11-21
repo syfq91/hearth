@@ -31,5 +31,9 @@ test('corrupt stored settings fall back to defaults', () => {
 		'hearth:epub-reader-settings',
 		JSON.stringify({ fontSize: 999, fontFamily: 'comic', theme: 'neon' })
 	);
-	assert.deepEqual(loadReaderSettings(), DEFAULT_READER_SETTINGS);
+	assert.deepEqual(loadReaderSettings(), {
+		fontSize: 32,
+		fontFamily: 'serif',
+		theme: 'dark'
+	});
 });

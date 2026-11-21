@@ -54,7 +54,8 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 	await page.getByRole('button', { name: 'Reader settings' }).click();
 	const dialog = page.getByRole('dialog', { name: 'Reader settings' });
 	await expect(dialog).toBeVisible();
-	await dialog.getByRole('button', { name: 'Font size 22' }).click();
+	for (let i = 0; i < 4; i++) await dialog.getByRole('button', { name: 'Increase font size' }).click();
+	await expect(dialog.locator('.stepper-value')).toHaveText('22');
 	await dialog.getByRole('button', { name: 'Sepia' }).click();
 	const stored = await page.evaluate(() => localStorage.getItem('hearth:epub-reader-settings'));
 	expect(stored).toContain('"fontSize":22');

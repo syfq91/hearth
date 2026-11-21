@@ -7,7 +7,9 @@ export interface ReaderSettings {
 	theme: 'light' | 'sepia' | 'dark';
 }
 
-export const FONT_SIZES = [14, 18, 22] as const;
+export const MIN_FONT_SIZE = 10;
+export const MAX_FONT_SIZE = 32;
+export const FONT_SIZE_STEP = 1;
 export const FONT_FAMILIES: ReaderSettings['fontFamily'][] = ['serif', 'sans', 'mono'];
 export const THEMES: ReaderSettings['theme'][] = ['light', 'sepia', 'dark'];
 
@@ -25,9 +27,10 @@ export function loadReaderSettings(): ReaderSettings {
 		const raw = localStorage.getItem(STORAGE_KEY);
 		if (!raw) return { ...DEFAULT_READER_SETTINGS };
 		const parsed = JSON.parse(raw) as Partial<ReaderSettings>;
+		const fontSize = Number(parsed.fontSize);
 		return {
-			fontSize: FONT_SIZES.includes(parsed.fontSize as (typeof FONT_SIZES)[number])
-				? (parsed.fontSize as number)
+			fontSize: Number.isFinite(fontSize)
+				? Math.min(Math.max(Math.round(fontSize), MIN_FONT_SIZE), MAX_FONT_SIZE)
 				: DEFAULT_READER_SETTINGS.fontSize,
 			fontFamily: FONT_FAMILIES.includes(parsed.fontFamily as ReaderSettings['fontFamily'])
 				? (parsed.fontFamily as ReaderSettings['fontFamily'])

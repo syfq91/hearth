@@ -10,7 +10,9 @@
 	import { X, Maximize, Minimize, List, Settings2 } from '@lucide/svelte';
 	import {
 		FONT_FAMILIES,
-		FONT_SIZES,
+		FONT_SIZE_STEP,
+		MAX_FONT_SIZE,
+		MIN_FONT_SIZE,
 		THEMES,
 		loadReaderSettings,
 		saveReaderSettings,
@@ -38,6 +40,14 @@
 	function updateSettings(patch: Partial<ReaderSettings>): void {
 		readerSettings = { ...readerSettings, ...patch };
 		saveReaderSettings(readerSettings);
+	}
+
+	function adjustFontSize(delta: number): void {
+		const next = Math.min(
+			Math.max(readerSettings.fontSize + delta, MIN_FONT_SIZE),
+			MAX_FONT_SIZE
+		);
+		updateSettings({ fontSize: next });
 	}
 
 	function selectChapter(item: TocItem): void {
@@ -246,18 +256,28 @@
 
 							<div class="setting-row">
 								<span class="setting-label">Font size</span>
-								<div class="segmented">
-									{#each FONT_SIZES as size (size)}
-										<button
-											type="button"
-											class={['segment', readerSettings.fontSize === size && 'active']}
-											aria-label={`Font size ${size}`}
-											aria-pressed={readerSettings.fontSize === size}
-											onclick={() => updateSettings({ fontSize: size })}
-										>
-											{size}
-										</button>
-									{/each}
+								<div class="stepper">
+									<button
+										type="button"
+										class="step"
+										aria-label="Decrease font size"
+										disabled={readerSettings.fontSize <= MIN_FONT_SIZE}
+										onclick={() => adjustFontSize(-FONT_SIZE_STEP)}
+									>
+										−
+									</button>
+									<span class="stepper-value" aria-live="polite">
+										{readerSettings.fontSize}
+									</span>
+									<button
+										type="button"
+										class="step"
+										aria-label="Increase font size"
+										disabled={readerSettings.fontSize >= MAX_FONT_SIZE}
+										onclick={() => adjustFontSize(FONT_SIZE_STEP)}
+									>
+										+
+									</button>
 								</div>
 							</div>
 
@@ -540,6 +560,41 @@
 	.segmented {
 		display: inline-flex;
 		gap: 0.25rem;
+	}
+
+	.stepper {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+
+	.step {
+		width: 2rem;
+		height: 1.9rem;
+		padding: 0;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: calc(var(--radius) * 0.6);
+		color: var(--text);
+		font-size: 1rem;
+		line-height: 1;
+		cursor: pointer;
+	}
+
+	.step:hover:not(:disabled) {
+		border-color: var(--muted);
+	}
+
+	.step:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.stepper-value {
+		min-width: 2.5ch;
+		text-align: center;
+		font-size: 0.9rem;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.segment {
