@@ -46,6 +46,12 @@
 	let closeButton = $state<HTMLButtonElement | null>(null);
 	let previousFocus: HTMLElement | null = null;
 
+	// Stopping playback removes the audio element and hides this overlay; make
+	// sure the next play starts in the mini dock instead of reopening it.
+	$effect(() => {
+		if (playerUi.expanded && !player.track) closeFullPlayer();
+	});
+
 	$effect(() => {
 		if (playerUi.expanded) {
 			previousFocus =
