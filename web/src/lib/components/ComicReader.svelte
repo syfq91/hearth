@@ -40,6 +40,8 @@
 	const WINDOW_BEFORE = 2;
 	const WINDOW_AFTER = 2;
 
+	const percentage = $derived(pageCount > 0 ? Math.round((page / pageCount) * 100) : 0);
+
 	async function urlFor(target: number): Promise<string> {
 		return withMediaToken(`/api/v1/books/${bookId}/pages/${target}`, { width: 1600 });
 	}
@@ -227,6 +229,7 @@
 	</div>
 
 	<div class="controls">
+		<span class="percentage" aria-live="polite">{percentage}%</span>
 		<span class="counter" aria-live="polite">{page} / {pageCount}</span>
 	</div>
 
@@ -312,13 +315,22 @@
 		align-items: center;
 		gap: 1rem;
 		flex-shrink: 0;
+		padding: 0 1rem;
+	}
+
+	.percentage,
+	.counter {
+		flex: 1;
+		color: var(--muted);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.percentage {
+		text-align: left;
 	}
 
 	.counter {
-		color: var(--muted);
-		font-variant-numeric: tabular-nums;
-		min-width: 6ch;
-		text-align: center;
+		text-align: right;
 	}
 
 	.status {

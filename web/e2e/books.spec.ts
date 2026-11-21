@@ -25,7 +25,7 @@ test('read an EPUB, turn pages, and resume later', async ({ page, request }) => 
 	// The reader is ready once it reports a position; the fixture opens on
 	// its first chapter, not at 0%.
 	const next = page.getByRole('button', { name: 'Next page' });
-	const position = page.locator('.position');
+	const position = page.locator('.percentage');
 	await expect(next).toBeEnabled({ timeout: 30_000 });
 	await expect(position).toHaveText(/^\d+%$/, { timeout: 30_000 });
 	const opened = Number.parseInt((await position.textContent()) ?? '0', 10);

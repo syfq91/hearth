@@ -33,6 +33,9 @@
 	let error = $state<string | null>(null);
 	/** Reading position (0..1) from the last relocate, for the controls. */
 	let fraction = $state(0);
+	/** Current TOC label and section index from the last relocate. */
+	let chapter = $state('');
+	let section = $state({ current: 1, total: 1 });
 
 	// The foliate instance lives outside Svelte's reactivity: it is an
 	// imperative custom element held for the lifetime of the component.
@@ -92,10 +95,19 @@
 		let disposed = false;
 
 		const handleRelocate = (event: Event) => {
-			const detail = (event as CustomEvent<{ cfi?: string; fraction?: number }>).detail;
+			const detail = (
+				event as CustomEvent<{
+					cfi?: string;
+					fraction?: number;
+					tocItem?: { label?: string } | null;
+					section?: { current: number; total: number };
+				}>
+			).detail;
 			if (!detail) return;
 			const percentage = Math.round((detail.fraction ?? 0) * 10000) / 100;
 			fraction = detail.fraction ?? 0;
+			chapter = detail.tocItem?.label ?? `Section ${(detail.section?.current ?? 0) + 1}`;
+			if (detail.section) section = detail.section;
 			onRelocate?.(detail.cfi ?? '', percentage);
 		};
 
@@ -181,8 +193,14 @@
 </div>
 
 <div class="controls">
-	<span class="position" aria-live="polite">
+	<span class="percentage" aria-live="polite">
 		{#if ready}{Math.round(fraction * 100)}%{/if}
+	</span>
+	<span class="chapter" title={chapter}>
+		{#if ready}{chapter}{/if}
+	</span>
+	<span class="counter" aria-live="polite">
+		{#if ready}{section.current} / {section.total}{/if}
 	</span>
 </div>
 
@@ -256,16 +274,34 @@
 	.controls {
 		display: flex;
 		align-items: center;
-		justify-content: center;
 		gap: 1rem;
-		padding: 0.75rem 0;
+		flex-shrink: 0;
+		padding: 0.75rem 1rem;
 	}
 
-	.position {
+	.percentage,
+	.counter {
+		flex: 1;
 		color: var(--muted);
 		font-variant-numeric: tabular-nums;
-		min-width: 4ch;
+	}
+
+	.percentage {
+		text-align: left;
+	}
+
+	.counter {
+		text-align: right;
+	}
+
+	.chapter {
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
 		text-align: center;
+		color: var(--text);
 	}
 
 </style>
