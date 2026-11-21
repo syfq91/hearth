@@ -18,6 +18,7 @@
 		type TapZone
 	} from '../reader/tap-zones';
 	import { DEFAULT_COMIC_SETTINGS, type ComicSettings } from '../reader/comic-settings';
+	import { singleSpread, spreadAt, spreadCount, spreadIndex, spreadStartFor } from '../reader/spreads';
 
 	interface Props {
 		bookId: string;
@@ -56,18 +57,20 @@
 
 	const direction = $derived(settings.direction);
 	const pageMode = $derived(settings.pageMode);
-	const step = $derived(pageMode === 'double' ? 2 : 1);
-	/** First page of the current view; double-page spreads start on an odd page. */
-	const firstPage = $derived(
-		pageMode === 'double' && page % 2 === 0 ? Math.max(1, page - 1) : page
+	const currentStart = $derived(
+		pageMode === 'double' ? spreadStartFor(page, pageCount) : page
 	);
+	const view = $derived(
+		pageMode === 'double' ? spreadAt(currentStart, pageCount) : singleSpread(page, pageCount)
+	);
+	const firstPage = $derived(view.pages[0]);
 	const percentage = $derived(
 		pageCount > 0 ? Math.round((firstPage / pageCount) * 100) : 0
 	);
 	const counter = $derived(
 		pageMode === 'double'
-			? `${Math.ceil(firstPage / 2)} / ${Math.ceil(pageCount / 2)}`
-			: `${firstPage} / ${pageCount}`
+			? `${spreadIndex(currentStart, pageCount)} / ${spreadCount(pageCount)}`
+			: `${page} / ${pageCount}`
 	);
 
 	async function urlFor(target: number): Promise<string> {
@@ -146,8 +149,9 @@
 
 	/** Move by whole views (one page, or one two-page spread). */
 	function go(delta: number): boolean {
-		const next = Math.min(Math.max(firstPage + delta * step, 1), Math.max(pageCount, 1));
-		const changed = next !== firstPage;
+		const target = delta > 0 ? view.next : view.prev;
+		const next = Math.min(Math.max(target, 1), Math.max(pageCount, 1));
+		const changed = next !== currentStart;
 		if (changed) page = next;
 		return changed;
 	}
@@ -239,22 +243,15 @@
 			<p class="banner" role="alert">Could not load page: {error}</p>
 		{:else if cache[firstPage]}
 			<div class="pages" class:double={pageMode === 'double'} class:rtl={direction === 'rtl'}>
-				<img
-					class="page"
-					src={cache[firstPage]}
-					alt={`Page ${firstPage}`}
-					decoding="async"
-					draggable={false}
-				/>
-				{#if pageMode === 'double' && cache[firstPage + 1]}
+				{#each view.pages as number (number)}
 					<img
 						class="page"
-						src={cache[firstPage + 1]}
-						alt={`Page ${firstPage + 1}`}
+						src={cache[number]}
+						alt={`Page ${number}`}
 						decoding="async"
 						draggable={false}
 					/>
-				{/if}
+				{/each}
 			</div>
 		{:else}
 			<p class="status" role="status">Loading page…</p>
@@ -264,7 +261,7 @@
 			type="button"
 			class="edge-nav prev"
 			onclick={() => turn(-1)}
-			disabled={firstPage <= 1}
+			disabled={view.prev === currentStart}
 			aria-label={direction === 'rtl' ? 'Next page' : 'Previous page'}
 			title={direction === 'rtl' ? 'Next page' : 'Previous page'}
 		>
@@ -274,7 +271,7 @@
 			type="button"
 			class="edge-nav next"
 			onclick={() => turn(1)}
-			disabled={firstPage + step > pageCount}
+			disabled={view.next === currentStart}
 			aria-label={direction === 'rtl' ? 'Previous page' : 'Next page'}
 			title={direction === 'rtl' ? 'Previous page' : 'Next page'}
 		>

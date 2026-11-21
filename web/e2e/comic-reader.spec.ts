@@ -33,13 +33,15 @@ test('comic reader: footer edges, spreads, direction and arrow keys', async ({ p
 	await page.getByRole('button', { name: 'Comic settings' }).click();
 	const dialog = page.getByRole('dialog', { name: 'Comic settings' });
 	await dialog.getByRole('button', { name: 'Double' }).click();
-	await expect(counter).toHaveText('1 / 2');
-	await expect(page.locator('.comic .pages img')).toHaveCount(2);
+	// Cover alone, then pages 2-3 and 4: three views for a four-page book.
+	await expect(counter).toHaveText('1 / 3');
+	await expect(page.locator('.comic .pages img')).toHaveCount(1);
 
 	// Arrow keys turn pages anywhere in the reader and hide the header.
 	await page.locator('.comic .counter').click();
 	await page.keyboard.press('ArrowRight');
-	await expect(counter).toHaveText('2 / 2');
+	await expect(counter).toHaveText('2 / 3');
+	await expect(page.locator('.comic .pages img')).toHaveCount(2);
 	await expect(page.locator('.reader-header')).toBeHidden();
 
 	// RTL reverses the physical page movement. Middle-tap restores the header.
@@ -50,5 +52,5 @@ test('comic reader: footer edges, spreads, direction and arrow keys', async ({ p
 	await dialog.getByRole('button', { name: 'R → L' }).click();
 	await page.locator('.comic .counter').click();
 	await page.keyboard.press('ArrowRight');
-	await expect(counter).toHaveText('1 / 2');
+	await expect(counter).toHaveText('1 / 3');
 });
