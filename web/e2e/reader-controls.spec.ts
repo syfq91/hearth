@@ -26,7 +26,7 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 	await expect(page.getByText('EPUB', { exact: true })).toHaveCount(0);
 	// The footer shows the chapter and section progress.
 	await expect(page.locator('.chapter')).toBeVisible();
-	await expect(page.locator('.counter')).toContainText('/');
+	await expect(page.locator('.counter')).toHaveText(/^[1-9]\d* \/ \d+$/);
 
 	// Tapping the right third advances the page.
 	const before = Number.parseInt((await percentage.textContent()) ?? '0', 10);

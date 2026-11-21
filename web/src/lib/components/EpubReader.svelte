@@ -175,7 +175,13 @@
 			const percentage = Math.round((detail.fraction ?? 0) * 10000) / 100;
 			fraction = detail.fraction ?? 0;
 			chapter = detail.tocItem?.label ?? `Section ${(detail.section?.current ?? 0) + 1}`;
-			if (detail.section) section = detail.section;
+			// foliate reports a zero-based section index; show a 1-based count.
+			if (detail.section) {
+				section = {
+					current: detail.section.current + 1,
+					total: detail.section.total
+				};
+			}
 			onRelocate?.(detail.cfi ?? '', percentage);
 		};
 
