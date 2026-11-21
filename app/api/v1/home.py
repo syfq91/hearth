@@ -33,6 +33,7 @@ from app.db.models import (
     UserItemState,
 )
 from app.db.session import SessionDep
+from app.services.media.availability import is_visible
 
 router = APIRouter(tags=["home"])
 
@@ -140,6 +141,7 @@ async def continue_watching(
             UserItemState.played.is_(False),
             UserItemState.position_ms > 0,
             UserItemState.last_played_at.is_not(None),
+            is_visible(),
         )
         .order_by(UserItemState.last_played_at.desc(), MediaItem.id.desc())
         .options(
@@ -172,6 +174,7 @@ async def continue_reading(
             BookProgress.percentage > 0,
             BookProgress.completed.is_(False),
             MediaItem.type == "book",
+            is_visible(),
         )
         .order_by(BookProgress.updated_at.desc(), MediaItem.id.desc())
         .options(
@@ -207,7 +210,7 @@ async def recently_added(
     id_query = (
         select(MediaItem.id, MediaItem.type, Episode.series_id)
         .outerjoin(Episode, Episode.item_id == MediaItem.id)
-        .where(MediaItem.type != "season")
+        .where(MediaItem.type != "season", is_visible())
         .order_by(MediaItem.added_at.desc(), MediaItem.id.desc())
     )
     if library_id is not None:
@@ -350,6 +353,7 @@ async def favorites(
         .where(
             UserItemState.user_id == user.id,
             UserItemState.favorite.is_(True),
+            is_visible(),
         )
         .order_by(UserItemState.updated_at.desc(), MediaItem.id.desc())
         .options(

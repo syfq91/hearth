@@ -14,6 +14,7 @@ from app.core.ids import new_id
 from app.db.base import utcnow
 from app.db.models import LibraryAccess, MediaItem, Playlist, PlaylistItem
 from app.db.session import SessionDep
+from app.services.media.availability import is_visible
 
 router = APIRouter(prefix="/playlists", tags=["playlists"])
 
@@ -428,7 +429,7 @@ async def _get_playlist_detail(
             updated_at=playlist.updated_at,
         )
 
-    media_query = select(MediaItem).where(MediaItem.id.in_(item_ids))
+    media_query = select(MediaItem).where(MediaItem.id.in_(item_ids), is_visible())
     if user.role != "admin":
         media_query = media_query.join(
             LibraryAccess,

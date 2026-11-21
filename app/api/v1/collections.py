@@ -13,6 +13,7 @@ from app.core.errors import NotFoundError
 from app.db.base import utcnow
 from app.db.models import Collection, CollectionItem, LibraryAccess, MediaItem
 from app.db.session import SessionDep
+from app.services.media.availability import is_visible
 
 router = APIRouter(prefix="/collections", tags=["collections"])
 
@@ -382,7 +383,7 @@ async def _get_collection_detail(
         )
 
     # Filter by user library access
-    media_query = select(MediaItem).where(MediaItem.id.in_(item_ids))
+    media_query = select(MediaItem).where(MediaItem.id.in_(item_ids), is_visible())
     if user.role != "admin":
         media_query = media_query.join(
             LibraryAccess,

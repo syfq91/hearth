@@ -33,6 +33,7 @@ from app.db.models import (
     UserItemState,
 )
 from app.db.session import SessionDep
+from app.services.media.availability import is_visible
 from app.services.media.books import extract_comic_page
 
 router = APIRouter(tags=["books"])
@@ -291,6 +292,7 @@ async def list_books(
 
     q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Book, Book.item_id == MediaItem.id)
         .options(
             selectinload(MediaItem.book).selectinload(Book.author),
@@ -392,6 +394,7 @@ async def search_books(
 
     search_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Book, Book.item_id == MediaItem.id)
         .outerjoin(Author, Book.author_id == Author.id)
         .outerjoin(BookSeries, Book.series_id == BookSeries.id)
@@ -445,6 +448,7 @@ async def get_book_detail(
     """Get full details of a single book including files and reading progress."""
     q = (
         select(MediaItem)
+        .where(is_visible())
         .options(
             selectinload(MediaItem.book).selectinload(Book.author),
             selectinload(MediaItem.book).selectinload(Book.series),
@@ -546,7 +550,11 @@ async def download_book_file(
     session: SessionDep,
 ) -> Response:
     """Download or stream a book format with HTTP Range and Content-Disposition."""
-    q = select(MediaItem).where(MediaItem.id == book_id, MediaItem.type == "book")
+    q = (
+        select(MediaItem)
+        .where(is_visible())
+        .where(MediaItem.id == book_id, MediaItem.type == "book")
+    )
     q = _restrict_to_accessible_libraries(q, viewer.user)
     item = await session.scalar(q)
     if item is None:
@@ -603,6 +611,7 @@ async def get_comic_page(
     """Extract and serve the nth (1-indexed) page from a comic with caching and resizing."""
     q = (
         select(MediaItem)
+        .where(is_visible())
         .options(selectinload(MediaItem.files))
         .where(MediaItem.id == book_id, MediaItem.type == "book")
     )
@@ -666,7 +675,11 @@ async def get_reading_progress(
     session: SessionDep,
 ) -> BookProgressResponse:
     """Get the current user's reading progress for a book."""
-    q = select(MediaItem).where(MediaItem.id == book_id, MediaItem.type == "book")
+    q = (
+        select(MediaItem)
+        .where(is_visible())
+        .where(MediaItem.id == book_id, MediaItem.type == "book")
+    )
     q = _restrict_to_accessible_libraries(q, user)
     item = await session.scalar(q)
     if item is None:
@@ -694,7 +707,11 @@ async def record_reading_progress(
     session: SessionDep,
 ) -> BookProgressResponse:
     """Record reading progress (last-write-wins) for a book."""
-    q = select(MediaItem).where(MediaItem.id == book_id, MediaItem.type == "book")
+    q = (
+        select(MediaItem)
+        .where(is_visible())
+        .where(MediaItem.id == book_id, MediaItem.type == "book")
+    )
     q = _restrict_to_accessible_libraries(q, user)
     item = await session.scalar(q)
     if item is None:
@@ -822,6 +839,7 @@ async def get_author_detail(
 
     book_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Book, Book.item_id == MediaItem.id)
         .options(
             selectinload(MediaItem.book).selectinload(Book.author),
@@ -932,6 +950,7 @@ async def get_series_detail(
 
     book_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Book, Book.item_id == MediaItem.id)
         .options(
             selectinload(MediaItem.book).selectinload(Book.author),

@@ -57,6 +57,7 @@ POLICY: dict[tuple[str, str], str] = {
     ("POST", "/api/v1/admin/transcoding/sessions/{session_id}/stop"): "admin",
     ("GET", "/api/v1/admin/transcoding/settings"): "admin",
     ("PUT", "/api/v1/admin/transcoding/settings"): "admin",
+    ("GET", "/api/v1/admin/missing-files"): "admin",
     ("GET", "/api/v1/admin/unmatched"): "admin",
     ("GET", "/api/v1/albums"): "auth",
     ("GET", "/api/v1/albums/{album_id}"): "auth",

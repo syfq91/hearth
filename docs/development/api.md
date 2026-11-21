@@ -332,6 +332,7 @@ If a client encounters an unrecoverable client-side subtitle crash, it can re-re
 - **Endpoint**: `GET /api/v1/items/{item_id}`
 - **File stream metadata**: Each entry in `files` includes a `streams` array with the stored ffprobe result (video/audio/subtitle codecs, language, resolution, HDR flags, default/forced dispositions). Unprobed files return an empty list. Clients use this to render media information on detail pages without negotiating a playback session.
 - **ETags & 304 Caching**: Responses include a strong `ETag` header derived from catalog metadata and the user's watch state. Sending `If-None-Match: <etag>` returns `304 Not Modified` when unchanged.
+- **Missing (soft-deleted) media**: When a source file disappears from disk the scanner marks its `MediaFile` row with `missing_since` and keeps the catalog rows until the grace period expires and a later scan removes them. An item whose *every* file is missing is hidden from library listings, home shelves, search, and detail endpoints (detail returns `404 item_not_found`). Items with a mix of available and missing files stay visible and list the missing files with `missing: true`. Admins can inspect soft-deleted files via `GET /api/v1/admin/missing-files`.
 - **Field Selection**:
   `GET /api/v1/items/{item_id}?fields=title,year,rating`
   Returns only the requested fields while always preserving identity fields (`id` and `type`):
@@ -397,6 +398,7 @@ If a client encounters an unrecoverable client-side subtitle crash, it can re-re
 | | `/api/v1/admin/backup` | POST | Admin | Create online SQLite backup archive |
 | | `/api/v1/admin/restore` | POST | Admin | Restore database from backup archive |
 | | `/api/v1/admin/unmatched` | GET | Admin | List unmatched/pending items with their source file paths |
+| | `/api/v1/admin/missing-files` | GET | Admin | List soft-deleted files with item/library details, newest first (`limit`, `offset`) |
 | | `/api/v1/metadata/providers` | GET | Admin | List enabled online providers for manual matching |
 | | `/api/v1/metadata/search` | GET | Admin | Search provider candidates; pass `item_id` to dispatch to that item's media-type provider surface (e.g. `search_book` for books). Results include a `source_url` linking to the provider's public page when available, so the admin UI can open it to verify a candidate |
 | | `/api/v1/metadata/resolve` | POST | Admin | Fetch the exact item named by a pasted public provider URL (body: `{item_id, url}`). Accepts TMDB movie/series/season/episode pages, Google Books volumes and Open Library work/edition pages. Returns one `SearchResultResponse` candidate; the URL media type must match the item type or the request is rejected with `invalid_provider_url` (422) |

@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.books import BookSeriesDetail
 from app.api.v1.items import (
@@ -35,9 +36,17 @@ from app.db.models import (
     UserItemState,
 )
 from app.db.session import SessionDep
+from app.services.media.availability import is_visible
 from app.services.shows import select_next_up_episode
 
 router = APIRouter(tags=["shows"])
+
+
+async def _visible_item(session: AsyncSession, item_id: str) -> MediaItem | None:
+    """Load a media item only while it still has an available file."""
+    return (
+        await session.execute(select(MediaItem).where(MediaItem.id == item_id, is_visible()))
+    ).scalar_one_or_none()
 
 
 class SeasonSummary(BaseModel):
@@ -127,7 +136,7 @@ async def get_series_detail(
     session: SessionDep,
 ) -> SeriesDetail | BookSeriesDetail:
     """Return complete details for a TV series or book series."""
-    item = await session.get(MediaItem, series_id)
+    item = await _visible_item(session, series_id)
     if (
         item is None
         or item.type != "series"
@@ -145,7 +154,9 @@ async def get_series_detail(
 
     # Load seasons
     seasons_query = (
-        select(Season).where(Season.series_id == series_id).order_by(Season.season_number.asc())
+        select(Season)
+        .where(Season.series_id == series_id, Season.item.has(is_visible()))
+        .order_by(Season.season_number.asc())
     )
     seasons = list(await session.scalars(seasons_query))
     season_item_ids = [s.item_id for s in seasons]
@@ -154,7 +165,7 @@ async def get_series_detail(
     # Episode counts per season
     ep_counts_query = (
         select(Episode.season_id, func.count(Episode.item_id))
-        .where(Episode.series_id == series_id)
+        .where(Episode.series_id == series_id, Episode.item.has(is_visible()))
         .group_by(Episode.season_id)
     )
     ep_counts = dict((await session.execute(ep_counts_query)).all())
@@ -199,7 +210,7 @@ async def list_series_seasons(
     session: SessionDep,
 ) -> list[SeasonSummary]:
     """Return all seasons belonging to a series."""
-    item = await session.get(MediaItem, series_id)
+    item = await _visible_item(session, series_id)
     if (
         item is None
         or item.type != "series"
@@ -209,14 +220,16 @@ async def list_series_seasons(
 
     seasons = list(
         await session.scalars(
-            select(Season).where(Season.series_id == series_id).order_by(Season.season_number.asc())
+            select(Season)
+            .where(Season.series_id == series_id, Season.item.has(is_visible()))
+            .order_by(Season.season_number.asc())
         )
     )
     season_states = await watch_states(session, user.id, [s.item_id for s in seasons])
 
     ep_counts_query = (
         select(Episode.season_id, func.count(Episode.item_id))
-        .where(Episode.series_id == series_id)
+        .where(Episode.series_id == series_id, Episode.item.has(is_visible()))
         .group_by(Episode.season_id)
     )
     ep_counts = dict((await session.execute(ep_counts_query)).all())
@@ -244,7 +257,7 @@ async def get_season_detail(
     session: SessionDep,
 ) -> SeasonDetail:
     """Return season details along with its constituent episodes."""
-    item = await session.get(MediaItem, season_id)
+    item = await _visible_item(session, season_id)
     if (
         item is None
         or item.type != "season"
@@ -259,7 +272,7 @@ async def get_season_detail(
     episodes = list(
         await session.scalars(
             select(Episode)
-            .where(Episode.season_id == season_id)
+            .where(Episode.season_id == season_id, Episode.item.has(is_visible()))
             .order_by(Episode.episode_number.asc())
         )
     )
@@ -289,7 +302,7 @@ async def list_season_episodes(
     session: SessionDep,
 ) -> list[EpisodeSummary]:
     """Return all episodes belonging to a season."""
-    item = await session.get(MediaItem, season_id)
+    item = await _visible_item(session, season_id)
     if (
         item is None
         or item.type != "season"
@@ -300,7 +313,7 @@ async def list_season_episodes(
     episodes = list(
         await session.scalars(
             select(Episode)
-            .where(Episode.season_id == season_id)
+            .where(Episode.season_id == season_id, Episode.item.has(is_visible()))
             .order_by(Episode.episode_number.asc())
         )
     )
@@ -315,7 +328,7 @@ async def get_episode_detail(
     session: SessionDep,
 ) -> EpisodeDetail:
     """Return complete details for a single episode."""
-    item = await session.get(MediaItem, episode_id)
+    item = await _visible_item(session, episode_id)
     if (
         item is None
         or item.type != "episode"
@@ -357,7 +370,7 @@ async def get_series_next_up(
     session: SessionDep,
 ) -> NextUpEpisode:
     """Return the next-up episode for a specific series."""
-    item = await session.get(MediaItem, series_id)
+    item = await _visible_item(session, series_id)
     if (
         item is None
         or item.type != "series"
@@ -368,7 +381,7 @@ async def get_series_next_up(
     episodes = list(
         await session.scalars(
             select(Episode)
-            .where(Episode.series_id == series_id)
+            .where(Episode.series_id == series_id, Episode.item.has(is_visible()))
             .order_by(Episode.season_number.asc(), Episode.episode_number.asc())
         )
     )
@@ -418,6 +431,7 @@ async def list_next_up(
         .where(
             UserItemState.user_id == user.id,
             (UserItemState.played.is_(True) | (UserItemState.position_ms > 0)),
+            Episode.item.has(is_visible()),
         )
     )
     if library_id is not None:
@@ -445,6 +459,7 @@ async def list_next_up(
                 select(MediaItem).where(
                     MediaItem.id.in_(series_ids),
                     MediaItem.type == "series",
+                    is_visible(),
                 )
             )
         ).all()
@@ -454,7 +469,7 @@ async def list_next_up(
     for episode in (
         await session.scalars(
             select(Episode)
-            .where(Episode.series_id.in_(series_ids))
+            .where(Episode.series_id.in_(series_ids), Episode.item.has(is_visible()))
             .order_by(
                 Episode.series_id,
                 Episode.season_number.asc(),
@@ -523,7 +538,7 @@ async def mark_season_watched(
     body: WatchedRequest,
 ) -> WatchStateResponse:
     """Mark all episodes in a season as watched or unwatched."""
-    season_item = await session.get(MediaItem, season_id)
+    season_item = await _visible_item(session, season_id)
     if (
         season_item is None
         or season_item.type != "season"
@@ -532,7 +547,11 @@ async def mark_season_watched(
         raise NotFoundError("Season not found", code="season_not_found")
 
     now = utcnow()
-    episodes = list(await session.scalars(select(Episode).where(Episode.season_id == season_id)))
+    episodes = list(
+        await session.scalars(
+            select(Episode).where(Episode.season_id == season_id, Episode.item.has(is_visible()))
+        )
+    )
     for ep in episodes:
         state = await _load_state(session, user.id, ep.item_id)
         state.played = body.watched
@@ -558,7 +577,11 @@ async def mark_season_watched(
         series_id = season.series_id
         if body.watched:
             all_eps = list(
-                await session.scalars(select(Episode).where(Episode.series_id == series_id))
+                await session.scalars(
+                    select(Episode).where(
+                        Episode.series_id == series_id, Episode.item.has(is_visible())
+                    )
+                )
             )
             all_states = await watch_states(session, user.id, [e.item_id for e in all_eps])
             if all(all_states.get(e.item_id) and all_states[e.item_id].played for e in all_eps):
@@ -584,7 +607,7 @@ async def mark_series_watched(
     body: WatchedRequest,
 ) -> WatchStateResponse:
     """Mark all seasons and episodes in a series as watched or unwatched."""
-    series_item = await session.get(MediaItem, series_id)
+    series_item = await _visible_item(session, series_id)
     if (
         series_item is None
         or series_item.type != "series"
@@ -593,7 +616,11 @@ async def mark_series_watched(
         raise NotFoundError("Series not found", code="series_not_found")
 
     now = utcnow()
-    episodes = list(await session.scalars(select(Episode).where(Episode.series_id == series_id)))
+    episodes = list(
+        await session.scalars(
+            select(Episode).where(Episode.series_id == series_id, Episode.item.has(is_visible()))
+        )
+    )
     for ep in episodes:
         state = await _load_state(session, user.id, ep.item_id)
         state.played = body.watched
@@ -604,7 +631,11 @@ async def mark_series_watched(
         else:
             state.position_ms = 0
 
-    seasons = list(await session.scalars(select(Season).where(Season.series_id == series_id)))
+    seasons = list(
+        await session.scalars(
+            select(Season).where(Season.series_id == series_id, Season.item.has(is_visible()))
+        )
+    )
     for s in seasons:
         season_state = await _load_state(session, user.id, s.item_id)
         season_state.played = body.watched

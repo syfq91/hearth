@@ -810,3 +810,22 @@
   - True multi-rendition ABR (an ffmpeg ladder plus a multi-variant master playlist so hls.js switches seamlessly): Rejected for now. It multiplies concurrent encodes per stream and requires changes to the command builder, playlist generation, and session manager; a single-node server with a handful of streams benefits more from one encode per viewer. Can be revisited without changing the client contract, since the `quality` field would simply become the initial rendition hint.
   - Let the web client map quality to `capabilities.max_height`/`target_max_bitrate` and avoid an API change: Rejected because it mixes a user preference with device capability reporting, spreads the mapping across clients, and removes the server's single source of truth for the labels.
   - Re-resolution on the client by requesting a new session but keeping the hls.js level selector: Rejected because two quality controls with different meanings would be confusing and the level selector is inert with one rendition.
+
+## ADR 072: Visibility of Soft-Deleted Media
+
+- **Date:** 2026-11-21
+- **Status:** Accepted
+- **Context:**
+  ADR 023 soft-deletes files that vanish from disk by setting `MediaFile.missing_since` and keeps the catalog rows for a grace period so a transient unmount does not destroy watch state. The catalog, home, search, and detail endpoints never consulted that flag, so users saw items whose files were gone and could open detail pages with no playable file. A separate admin surface was needed for inspecting what the scanner had set aside, and direct URL access had to stop resolving those items.
+
+- **Decision:**
+  - Add a shared `is_visible()` predicate in `app/services/media/availability.py`. It hides a `MediaItem` only when it has file rows and every one is soft-deleted; items with at least one available file, and items with no file rows at all, stay visible. Series, seasons, albums, and artists derive visibility from their episodes/tracks, including files linked through the type-specific `file_id`.
+  - Apply `is_visible()` to all user-facing catalog, home shelf, search, collection, playlist, and detail queries. A fully missing item returns `404` from its detail endpoint rather than rendering an unavailable page.
+  - Add `GET /api/v1/admin/missing-files` (admin only, with `limit`/`offset`) and a read-only **Missing** admin tab that lists soft-deleted files with their item, library, path, and `missing_since`. The scanner and grace period are unchanged: items return automatically when a file reappears, and are hard-deleted when expiry and a later scan agree.
+  - Cache the predicate objects with `lru_cache`. Rebuilding the multi-branch `CASE`/`EXISTS` expression per query tripled catalog query latency and broke the 15-user load-test p95 target; sharing the immutable clause restores the baseline within ~10%.
+
+- **Alternatives Considered:**
+  - Immediately hard-delete files when they disappear: Rejected because it contradicts ADR 023 and loses state on transient unmounts.
+  - Hide soft-deleted items in the web client only: Rejected because the API would still expose them to other clients and direct URLs would still resolve.
+  - A global `with_loader_criteria` session hook: Rejected because the scanner and the new admin endpoint need to see missing rows, and an opt-out would be easy to miss.
+  - Duplicate inline `missing_since` checks per endpoint: Rejected because the type-specific file linkage (episodes/tracks and containers) would diverge across modules.

@@ -9,19 +9,19 @@ import sqlite3
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.v1.jobs import JobResponse, cancel_job
 from app.core.deps import RequireAdmin, SettingsDep
 from app.core.errors import ForbiddenError, NotFoundError, ValidationError
 from app.core.logging import get_recent_logs
 from app.db.base import utcnow
-from app.db.models import AuditLog, Job, Library, MediaItem, User
+from app.db.models import AuditLog, Job, Library, MediaFile, MediaItem, User
 from app.db.session import SessionDep
 from app.services.audit import record_audit
 from app.services.backup import create_backup, restore_backup
@@ -105,6 +105,32 @@ class UnmatchedItemResponse(BaseModel):
     match_error: str | None = None
     added_at: datetime
     file_paths: list[str] = Field(default_factory=list)
+
+
+class MissingFileResponse(BaseModel):
+    """A file the scanner soft-deleted because it vanished from disk."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    path: str
+    missing_since: datetime
+    item_id: str
+    item_title: str
+    item_type: str
+    library_id: str
+    library_name: str | None = None
+
+
+class MissingFilePage(BaseModel):
+    """A page of soft-deleted files for the admin catalog view."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[MissingFileResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 def unmatched_file_paths(item: MediaItem) -> list[str]:
@@ -382,6 +408,60 @@ async def list_unmatched_items(
     )
     items = list((await session.scalars(query)).all())
     return [unmatched_response(item) for item in items]
+
+
+@router.get("/missing-files", response_model=MissingFilePage)
+async def list_missing_files(
+    _actor: RequireAdmin,
+    session: SessionDep,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> MissingFilePage:
+    """List files the scanner marked missing, newest first.
+
+    Soft-deleted files stay in the catalog until the grace period expires and a
+    later scan removes them. This view lets an admin inspect what is pending
+    removal without exposing those items to regular users.
+    """
+    total = int(
+        (
+            await session.scalar(
+                select(func.count())
+                .select_from(MediaFile)
+                .where(MediaFile.missing_since.is_not(None))
+            )
+        )
+        or 0
+    )
+    rows = (
+        await session.execute(
+            select(MediaFile, MediaItem, Library.name)
+            .join(MediaItem, MediaItem.id == MediaFile.item_id)
+            .outerjoin(Library, Library.id == MediaItem.library_id)
+            .where(MediaFile.missing_since.is_not(None))
+            .order_by(MediaFile.missing_since.desc(), MediaFile.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    return MissingFilePage(
+        items=[
+            MissingFileResponse(
+                id=media_file.id,
+                path=media_file.path,
+                missing_since=cast(datetime, media_file.missing_since),
+                item_id=item.id,
+                item_title=item.title,
+                item_type=item.type,
+                library_id=item.library_id,
+                library_name=library_name,
+            )
+            for media_file, item, library_name in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("/items/{item_id}/rematch", response_model=UnmatchedItemResponse)

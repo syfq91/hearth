@@ -4070,6 +4070,96 @@
         "title": "MediaTokenResponse",
         "type": "object"
       },
+      "MissingFilePage": {
+        "additionalProperties": false,
+        "description": "A page of soft-deleted files for the admin catalog view.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MissingFileResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "MissingFilePage",
+        "type": "object"
+      },
+      "MissingFileResponse": {
+        "additionalProperties": false,
+        "description": "A file the scanner soft-deleted because it vanished from disk.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_title": {
+            "title": "Item Title",
+            "type": "string"
+          },
+          "item_type": {
+            "title": "Item Type",
+            "type": "string"
+          },
+          "library_id": {
+            "title": "Library Id",
+            "type": "string"
+          },
+          "library_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Name"
+          },
+          "missing_since": {
+            "format": "date-time",
+            "title": "Missing Since",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "missing_since",
+          "item_id",
+          "item_title",
+          "item_type",
+          "library_id"
+        ],
+        "title": "MissingFileResponse",
+        "type": "object"
+      },
       "MusicMostPlayedResponse": {
         "properties": {
           "albums": {
@@ -8819,6 +8909,68 @@
           }
         ],
         "summary": "List Admin Logs",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/missing-files": {
+      "get": {
+        "description": "List files the scanner marked missing, newest first.\n\nSoft-deleted files stay in the catalog until the grace period expires and a\nlater scan removes them. This view lets an admin inspect what is pending\nremoval without exposing those items to regular users.",
+        "operationId": "list_missing_files_api_v1_admin_missing_files_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissingFilePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Missing Files",
         "tags": [
           "admin"
         ]

@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import case, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.api.v1.items import (
@@ -31,8 +32,17 @@ from app.db.models import (
     UserItemState,
 )
 from app.db.session import SessionDep
+from app.services.media.availability import is_visible
 
 router = APIRouter(tags=["music"])
+
+
+async def _visible_item(session: AsyncSession, item_id: str) -> MediaItem | None:
+    """Load a media item only while it still has an available file."""
+    return (
+        await session.execute(select(MediaItem).where(MediaItem.id == item_id, is_visible()))
+    ).scalar_one_or_none()
+
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
@@ -259,7 +269,7 @@ async def list_artists(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ArtistListResponse:
     """List artists with pagination and counts."""
-    base = select(MediaItem).where(MediaItem.type == "artist")
+    base = select(MediaItem).where(is_visible()).where(MediaItem.type == "artist")
     base = _restrict_to_accessible_libraries(base, user)
 
     if query:
@@ -334,7 +344,7 @@ async def get_artist_detail(
     session: SessionDep,
 ) -> ArtistDetail:
     """Return artist details with albums and top tracks."""
-    item = await session.get(MediaItem, artist_id)
+    item = await _visible_item(session, artist_id)
     if (
         item is None
         or item.type != "artist"
@@ -345,6 +355,7 @@ async def get_artist_detail(
     # Artist albums
     alb_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Album, Album.item_id == MediaItem.id)
         .where(Album.artist_id == artist_id)
         .order_by(Album.release_date.desc(), MediaItem.year.desc(), MediaItem.title.asc())
@@ -393,6 +404,7 @@ async def get_artist_detail(
     # Top tracks (up to 10 by play count or track position)
     top_tr_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Track, Track.item_id == MediaItem.id)
         .outerjoin(
             UserItemState,
@@ -488,6 +500,7 @@ async def list_albums(
     """List albums with filtering and pagination."""
     base = (
         select(MediaItem)
+        .where(is_visible())
         .join(Album, Album.item_id == MediaItem.id)
         .where(MediaItem.type == "album")
     )
@@ -573,7 +586,7 @@ async def get_album_detail(
     session: SessionDep,
 ) -> AlbumDetail:
     """Return album details with tracklist grouped by disc."""
-    item = await session.get(MediaItem, album_id)
+    item = await _visible_item(session, album_id)
     if (
         item is None
         or item.type != "album"
@@ -588,6 +601,7 @@ async def get_album_detail(
     # Fetch tracks
     tr_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Track, Track.item_id == MediaItem.id)
         .where(Track.album_id == album_id)
         .order_by(Track.disc_number.asc(), Track.track_number.asc(), MediaItem.title.asc())
@@ -651,6 +665,7 @@ async def list_tracks(
     """List tracks with optional album or artist filtering."""
     base = (
         select(MediaItem)
+        .where(is_visible())
         .join(Track, Track.item_id == MediaItem.id)
         .where(MediaItem.type == "track")
     )
@@ -690,7 +705,7 @@ async def get_track_detail(
     session: SessionDep,
 ) -> TrackDetail:
     """Return track details including audio technical properties and ReplayGain."""
-    item = await session.get(MediaItem, track_id)
+    item = await _visible_item(session, track_id)
     if (
         item is None
         or item.type != "track"
@@ -751,6 +766,7 @@ async def random_music(
     """Return random albums and tracks."""
     alb_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Album, Album.item_id == MediaItem.id)
         .where(MediaItem.type == "album")
     )
@@ -779,6 +795,7 @@ async def random_music(
 
     tr_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Track, Track.item_id == MediaItem.id)
         .where(MediaItem.type == "track")
     )
@@ -799,6 +816,7 @@ async def recently_added_albums(
     """Return recently added albums."""
     alb_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Album, Album.item_id == MediaItem.id)
         .where(MediaItem.type == "album")
     )
@@ -838,6 +856,7 @@ async def most_played_music(
     # Most played tracks
     tr_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Track, Track.item_id == MediaItem.id)
         .join(
             UserItemState,
@@ -855,6 +874,7 @@ async def most_played_music(
     # Most played albums (sum of track play counts or album user item state)
     alb_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Album, Album.item_id == MediaItem.id)
         .outerjoin(
             UserItemState,
@@ -902,7 +922,11 @@ async def search_music(
     pattern = f"%{term}%"
 
     # Artists
-    art_q = select(MediaItem).where(MediaItem.type == "artist", MediaItem.title.ilike(pattern))
+    art_q = (
+        select(MediaItem)
+        .where(is_visible())
+        .where(MediaItem.type == "artist", MediaItem.title.ilike(pattern))
+    )
     art_q = _restrict_to_accessible_libraries(art_q, user).limit(limit)
     art_items = list(await session.scalars(art_q))
     artists = [
@@ -921,6 +945,7 @@ async def search_music(
     # Albums
     alb_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Album, Album.item_id == MediaItem.id)
         .where(
             MediaItem.type == "album",
@@ -950,6 +975,7 @@ async def search_music(
     # Tracks
     tr_q = (
         select(MediaItem)
+        .where(is_visible())
         .join(Track, Track.item_id == MediaItem.id)
         .where(MediaItem.type == "track", MediaItem.title.ilike(pattern))
     )

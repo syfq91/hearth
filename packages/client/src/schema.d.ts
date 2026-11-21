@@ -204,6 +204,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/missing-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Missing Files
+         * @description List files the scanner marked missing, newest first.
+         *
+         *     Soft-deleted files stay in the catalog until the grace period expires and a
+         *     later scan removes them. This view lets an admin inspect what is pending
+         *     removal without exposing those items to regular users.
+         */
+        get: operations["list_missing_files_api_v1_admin_missing_files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/restore": {
         parameters: {
             query?: never;
@@ -4010,6 +4034,45 @@ export interface components {
             /** Token */
             token: string;
         };
+        /**
+         * MissingFilePage
+         * @description A page of soft-deleted files for the admin catalog view.
+         */
+        MissingFilePage: {
+            /** Items */
+            items: components["schemas"]["MissingFileResponse"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * MissingFileResponse
+         * @description A file the scanner soft-deleted because it vanished from disk.
+         */
+        MissingFileResponse: {
+            /** Id */
+            id: string;
+            /** Item Id */
+            item_id: string;
+            /** Item Title */
+            item_title: string;
+            /** Item Type */
+            item_type: string;
+            /** Library Id */
+            library_id: string;
+            /** Library Name */
+            library_name?: string | null;
+            /**
+             * Missing Since
+             * Format: date-time
+             */
+            missing_since: string;
+            /** Path */
+            path: string;
+        };
         /** MusicMostPlayedResponse */
         MusicMostPlayedResponse: {
             /** Albums */
@@ -5812,6 +5875,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LogEntryResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_missing_files_api_v1_admin_missing_files_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MissingFilePage"];
                 };
             };
             /** @description Validation Error */

@@ -20,6 +20,7 @@ from app.db.models import (
     UserItemState,
 )
 from app.db.session import SessionDep
+from app.services.media.availability import is_visible
 from app.services.ratings import is_rating_permitted
 
 router = APIRouter(tags=["search"])
@@ -144,7 +145,7 @@ async def search(
     if item_ids:
         loaded_items = await session.scalars(
             select(MediaItem)
-            .where(MediaItem.id.in_(item_ids))
+            .where(MediaItem.id.in_(item_ids), is_visible())
             .options(
                 selectinload(MediaItem.images),
                 selectinload(MediaItem.genres),
@@ -194,12 +195,16 @@ async def search(
                 .where(
                     ItemPerson.person_id == Person.id,
                     MediaItem.library_id.in_(library_ids),
+                    is_visible(),
                 )
             )
             person_query = person_query.where(has_accessible_item.exists())
         else:
             has_any_item = (
-                select(1).select_from(ItemPerson).where(ItemPerson.person_id == Person.id)
+                select(1)
+                .select_from(ItemPerson)
+                .join(MediaItem, MediaItem.id == ItemPerson.item_id)
+                .where(ItemPerson.person_id == Person.id, is_visible())
             )
             person_query = person_query.where(has_any_item.exists())
 

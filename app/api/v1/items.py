@@ -39,6 +39,7 @@ from app.db.models import (
     Image as ImageModel,
 )
 from app.db.session import SessionDep
+from app.services.media.availability import is_visible
 from app.services.media.probe import ProbeResult, ProbeStream
 from app.services.ratings import apply_rating_filter, is_rating_permitted
 from app.services.subtitles import (
@@ -255,6 +256,7 @@ async def list_library_items(
     filters: list[ColumnElement[bool]] = [
         MediaItem.library_id == library.id,
         MediaItem.type == item_type,
+        is_visible(),
     ]
     if genre is not None:
         wanted = genre.strip().casefold()
@@ -435,7 +437,7 @@ async def get_item(
             selectinload(MediaItem.images),
             selectinload(MediaItem.genres),
         )
-        .where(MediaItem.id == item_id)
+        .where(MediaItem.id == item_id, is_visible())
     )
     item = res.scalar_one_or_none()
     if (
