@@ -17,6 +17,7 @@
 		type Point,
 		type TapZone
 	} from '../reader/tap-zones';
+	import { DEFAULT_COMIC_SETTINGS, type ComicSettings } from '../reader/comic-settings';
 
 	interface Props {
 		bookId: string;
@@ -26,9 +27,18 @@
 		onPageChange?: (page: number) => void;
 		/** Middle-third tap toggles the host page's header. */
 		onToggleHeader?: () => void;
+		/** Reading direction and single/double page mode. */
+		settings?: ComicSettings;
 	}
 
-	let { bookId, pageCount, startPage = 1, onPageChange, onToggleHeader }: Props = $props();
+	let {
+		bookId,
+		pageCount,
+		startPage = 1,
+		onPageChange,
+		onToggleHeader,
+		settings = DEFAULT_COMIC_SETTINGS
+	}: Props = $props();
 
 	// Seeded once from the server locator; clamped into the valid range.
 	let page = $state(untrack(() => Math.min(Math.max(startPage, 1), Math.max(pageCount, 1))));
@@ -42,15 +52,29 @@
 	const WINDOW_BEFORE = 2;
 	const WINDOW_AFTER = 2;
 
-	const percentage = $derived(pageCount > 0 ? Math.round((page / pageCount) * 100) : 0);
+	const direction = $derived(settings.direction);
+	const pageMode = $derived(settings.pageMode);
+	const step = $derived(pageMode === 'double' ? 2 : 1);
+	/** First page of the current view; double-page spreads start on an odd page. */
+	const firstPage = $derived(
+		pageMode === 'double' && page % 2 === 0 ? Math.max(1, page - 1) : page
+	);
+	const percentage = $derived(
+		pageCount > 0 ? Math.round((firstPage / pageCount) * 100) : 0
+	);
+	const counter = $derived(
+		pageMode === 'double'
+			? `${Math.ceil(firstPage / 2)} / ${Math.ceil(pageCount / 2)}`
+			: `${firstPage} / ${pageCount}`
+	);
 
 	async function urlFor(target: number): Promise<string> {
 		return withMediaToken(`/api/v1/books/${bookId}/pages/${target}`, { width: 1600 });
 	}
 
 	$effect(() => {
-		// Only depend on `page`, `bookId`, and `pageCount`
-		const current = page;
+		// Only depend on the current view, `bookId`, and `pageCount`
+		const current = firstPage;
 		const total = pageCount;
 		let cancelled = false;
 
@@ -115,11 +139,17 @@
 	});
 
 	$effect(() => {
-		onPageChange?.(page);
+		onPageChange?.(firstPage);
 	});
 
+	/** Move by whole views (one page, or one two-page spread). */
 	function go(delta: number): void {
-		page = Math.min(Math.max(page + delta, 1), Math.max(pageCount, 1));
+		page = Math.min(Math.max(firstPage + delta * step, 1), Math.max(pageCount, 1));
+	}
+
+	/** Turn in reading direction; RTL reverses the physical page movement. */
+	function turn(delta: number): void {
+		go(direction === 'rtl' ? -delta : delta);
 	}
 
 	// A tap is a pointer press/release with almost no movement; the third of
@@ -143,16 +173,16 @@
 		if (!start) return;
 		const swipe = horizontalSwipe(start, event);
 		if (swipe === 'left') {
-			go(1);
+			turn(1);
 			return;
 		}
 		if (swipe === 'right') {
-			go(-1);
+			turn(-1);
 			return;
 		}
 		if (!isTap(start, event)) return;
-		if (start.zone === 'prev') go(-1);
-		else if (start.zone === 'next') go(1);
+		if (start.zone === 'prev') turn(-1);
+		else if (start.zone === 'next') turn(1);
 		else onToggleHeader?.();
 	}
 
@@ -165,17 +195,16 @@
 		if (!root || !root.contains(document.activeElement)) return;
 		const target = event.target as HTMLElement | null;
 		if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT')) return;
-		// RTL comics invert the arrow semantics.
 		switch (event.key) {
 			case 'ArrowRight':
 				event.preventDefault();
 				event.stopPropagation();
-				go(1);
+				turn(1);
 				break;
 			case 'ArrowLeft':
 				event.preventDefault();
 				event.stopPropagation();
-				go(-1);
+				turn(-1);
 				break;
 			default:
 				break;
@@ -197,14 +226,25 @@
 	>
 		{#if error}
 			<p class="banner" role="alert">Could not load page: {error}</p>
-		{:else if cache[page]}
-			<img
-				class="page"
-				src={cache[page]}
-				alt={`Page ${page}`}
-				decoding="async"
-				draggable={false}
-			/>
+		{:else if cache[firstPage]}
+			<div class="pages" class:double={pageMode === 'double'} class:rtl={direction === 'rtl'}>
+				<img
+					class="page"
+					src={cache[firstPage]}
+					alt={`Page ${firstPage}`}
+					decoding="async"
+					draggable={false}
+				/>
+				{#if pageMode === 'double' && cache[firstPage + 1]}
+					<img
+						class="page"
+						src={cache[firstPage + 1]}
+						alt={`Page ${firstPage + 1}`}
+						decoding="async"
+						draggable={false}
+					/>
+				{/if}
+			</div>
 		{:else}
 			<p class="status" role="status">Loading page…</p>
 		{/if}
@@ -212,20 +252,20 @@
 		<button
 			type="button"
 			class="edge-nav prev"
-			onclick={() => go(-1)}
-			disabled={page <= 1}
-			aria-label="Previous page"
-			title="Previous page"
+			onclick={() => turn(-1)}
+			disabled={firstPage <= 1}
+			aria-label={direction === 'rtl' ? 'Next page' : 'Previous page'}
+			title={direction === 'rtl' ? 'Next page' : 'Previous page'}
 		>
 			<ChevronLeft size={28} />
 		</button>
 		<button
 			type="button"
 			class="edge-nav next"
-			onclick={() => go(1)}
-			disabled={page >= pageCount}
-			aria-label="Next page"
-			title="Next page"
+			onclick={() => turn(1)}
+			disabled={firstPage + step > pageCount}
+			aria-label={direction === 'rtl' ? 'Previous page' : 'Next page'}
+			title={direction === 'rtl' ? 'Previous page' : 'Next page'}
 		>
 			<ChevronRight size={28} />
 		</button>
@@ -233,7 +273,7 @@
 
 	<div class="controls">
 		<span class="percentage" aria-live="polite">{percentage}%</span>
-		<span class="counter" aria-live="polite">{page} / {pageCount}</span>
+		<span class="counter" aria-live="polite">{counter}</span>
 	</div>
 
 	{#if loading}
@@ -304,9 +344,24 @@
 		right: 0.75rem;
 	}
 
+	.pages {
+		display: flex;
+		gap: 0.5rem;
+		width: 100%;
+		height: 100%;
+		min-height: 0;
+	}
+
+	/* Manga spreads read right-to-left, so the higher page sits on the left. */
+	.pages.rtl {
+		flex-direction: row-reverse;
+	}
+
 	.page {
 		display: block;
-		width: 100%;
+		flex: 1 1 0;
+		width: 0;
+		min-width: 0;
 		height: 100%;
 		object-fit: contain;
 		background: #000;

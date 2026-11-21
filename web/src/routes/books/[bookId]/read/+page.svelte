@@ -19,6 +19,11 @@
 		type ReaderSettings
 	} from '../../../../lib/reader/settings';
 	import type { TocItem } from '../../../../lib/reader/toc';
+	import {
+		loadComicSettings,
+		saveComicSettings,
+		type ComicSettings
+	} from '../../../../lib/reader/comic-settings';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -34,12 +39,19 @@
 	let epubToc = $state<TocItem[]>([]);
 	let tocOpen = $state(false);
 	let settingsOpen = $state(false);
+	let comicSettingsOpen = $state(false);
 	let epubGoToChapter = $state<((href: string) => void) | undefined>(undefined);
 	let readerSettings = $state<ReaderSettings>(loadReaderSettings());
+	let comicSettings = $state<ComicSettings>(loadComicSettings());
 
 	function updateSettings(patch: Partial<ReaderSettings>): void {
 		readerSettings = { ...readerSettings, ...patch };
 		saveReaderSettings(readerSettings);
+	}
+
+	function updateComicSettings(patch: Partial<ComicSettings>): void {
+		comicSettings = { ...comicSettings, ...patch };
+		saveComicSettings(comicSettings);
 	}
 
 	function adjustFontSize(delta: number): void {
@@ -153,9 +165,10 @@
 		};
 		const onKeydown = (event: KeyboardEvent) => {
 			if (event.key !== 'Escape') return;
-			if (tocOpen || settingsOpen) {
+			if (tocOpen || settingsOpen || comicSettingsOpen) {
 				tocOpen = false;
 				settingsOpen = false;
+				comicSettingsOpen = false;
 			} else if (!document.fullscreenElement) {
 				void goto(`/books/${data.book.id}`);
 			}
@@ -164,6 +177,7 @@
 			if (!(event.target as HTMLElement | null)?.closest('.popover-anchor')) {
 				tocOpen = false;
 				settingsOpen = false;
+				comicSettingsOpen = false;
 			}
 		};
 		document.addEventListener('fullscreenchange', onFsChange);
@@ -317,6 +331,72 @@
 				</div>
 			{/if}
 
+			{#if isComic}
+				<div class="popover-anchor">
+					<button
+						type="button"
+						class="fs-button"
+						onclick={() => {
+							comicSettingsOpen = !comicSettingsOpen;
+							settingsOpen = false;
+							tocOpen = false;
+						}}
+						aria-label="Comic settings"
+						aria-expanded={comicSettingsOpen}
+						title="Comic settings"
+					>
+						<Settings2 size={18} />
+					</button>
+					{#if comicSettingsOpen}
+						<div class="popover settings-popover" role="dialog" aria-label="Comic settings">
+							<div class="popover-heading">Comic settings</div>
+							<div class="setting-row">
+								<span class="setting-label">Direction</span>
+								<div class="segmented">
+									<button
+										type="button"
+										class={['segment', comicSettings.direction === 'ltr' && 'active']}
+										aria-pressed={comicSettings.direction === 'ltr'}
+										onclick={() => updateComicSettings({ direction: 'ltr' })}
+									>
+										L → R
+									</button>
+									<button
+										type="button"
+										class={['segment', comicSettings.direction === 'rtl' && 'active']}
+										aria-pressed={comicSettings.direction === 'rtl'}
+										onclick={() => updateComicSettings({ direction: 'rtl' })}
+									>
+										R → L
+									</button>
+								</div>
+							</div>
+							<div class="setting-row">
+								<span class="setting-label">Pages</span>
+								<div class="segmented">
+									<button
+										type="button"
+										class={['segment', comicSettings.pageMode === 'single' && 'active']}
+										aria-pressed={comicSettings.pageMode === 'single'}
+										onclick={() => updateComicSettings({ pageMode: 'single' })}
+									>
+										Single
+									</button>
+									<button
+										type="button"
+										class={['segment', comicSettings.pageMode === 'double' && 'active']}
+										aria-pressed={comicSettings.pageMode === 'double'}
+										onclick={() => updateComicSettings({ pageMode: 'double' })}
+									>
+										Double
+									</button>
+								</div>
+							</div>
+						</div>
+					{/if}
+				</div>
+			{/if}
+
 			<button
 				type="button"
 				class="fs-button"
@@ -353,6 +433,7 @@
 				startPage={parsePage(progress?.locator)}
 				onPageChange={handleComicPage}
 				onToggleHeader={() => (headerVisible = !headerVisible)}
+				settings={comicSettings}
 			/>
 		{:else if isPdf && fileUrl && PdfReader}
 			<PdfReader
