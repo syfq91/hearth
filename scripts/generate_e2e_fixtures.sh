@@ -43,9 +43,12 @@ with zipfile.ZipFile(path, "w") as z:
         '<rootfiles><rootfile full-path="OEBPS/content.opf" '
         'media-type="application/oebps-package+xml"/></rootfiles></container>',
     )
-    manifest = "".join(
-        f'<item id="{cid}" href="{cid}.xhtml" media-type="application/xhtml+xml"/>'
-        for cid, _, _ in chapters
+    manifest = (
+        '<item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/>'
+        + "".join(
+            f'<item id="{cid}" href="{cid}.xhtml" media-type="application/xhtml+xml"/>'
+            for cid, _, _ in chapters
+        )
     )
     spine = "".join(f'<itemref idref="{cid}"/>' for cid, _, _ in chapters)
     z.writestr(
