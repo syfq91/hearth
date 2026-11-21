@@ -36,13 +36,16 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 		.poll(async () => Number.parseInt((await percentage.textContent()) ?? '0', 10))
 		.toBeGreaterThan(before);
 
-	// Tapping the middle toggles the header, and tapping again restores it.
+	// Tapping the middle toggles the header without resizing the reading area.
+	const viewportHeight = (await viewport.boundingBox())!.height;
 	box = (await viewport.boundingBox())!;
 	await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 	await expect(page.locator('.reader-header')).toBeHidden();
+	expect((await viewport.boundingBox())!.height).toBe(viewportHeight);
 	box = (await viewport.boundingBox())!;
 	await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 	await expect(page.locator('.reader-header')).toBeVisible();
+	expect((await viewport.boundingBox())!.height).toBe(viewportHeight);
 
 	// The chapter button lists the book's TOC.
 	await page.getByRole('button', { name: 'Chapters' }).click();
@@ -57,9 +60,11 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 	for (let i = 0; i < 4; i++) await dialog.getByRole('button', { name: 'Increase font size' }).click();
 	await expect(dialog.locator('.stepper-value')).toHaveText('22');
 	await dialog.getByRole('button', { name: 'Sepia' }).click();
+	await dialog.getByRole('button', { name: 'Double' }).click();
 	const stored = await page.evaluate(() => localStorage.getItem('hearth:epub-reader-settings'));
 	expect(stored).toContain('"fontSize":22');
 	expect(stored).toContain('"sepia"');
+	expect(stored).toContain('"columns":2');
 	await page.keyboard.press('Escape');
 	await expect(dialog).toBeHidden();
 	await expect(menu).toBeHidden();

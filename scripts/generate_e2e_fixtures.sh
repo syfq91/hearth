@@ -82,6 +82,28 @@ with zipfile.ZipFile(path, "w") as z:
 print(f"wrote {path}")
 PY
 
+# --- CBZ: four tiny pages for the comic reader -------------------------------
+python3 - "$FIXTURES/media/books/Sample Comic.cbz" <<'PY'
+import struct, sys, zipfile, zlib
+
+path = sys.argv[1]
+
+def chunk(kind, data):
+    body = kind + data
+    return struct.pack('>I', len(data)) + body + struct.pack('>I', zlib.crc32(body) & 0xffffffff)
+
+def png(rgb):
+    header = struct.pack('>IIBBBBB', 8, 12, 8, 2, 0, 0, 0)
+    rows = b''.join(b'\x00' + bytes(rgb) * 8 for _ in range(12))
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', header)
+            + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b''))
+
+with zipfile.ZipFile(path, 'w') as z:
+    for n, shade in enumerate((60, 110, 160, 210), start=1):
+        z.writestr(f'p{n}.png', png((shade, shade, shade)))
+print(f'wrote {path}')
+PY
+
 # --- Audio + video: ffmpeg inside the Hearth image ---------------------------
 # H.264 + AAC so Chromium can decode without transcoding. The video is 75s on
 # purpose: the player refuses to jump to a resume point within 30s of the end
