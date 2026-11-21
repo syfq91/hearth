@@ -7,7 +7,16 @@
 	import { ProgressSync } from '../../../../lib/reader/progress';
 	import { withMediaToken } from '../../../../lib/media-token.svelte';
 	import { goto } from '$app/navigation';
-	import { X, Maximize, Minimize } from '@lucide/svelte';
+	import { X, Maximize, Minimize, List, Settings2 } from '@lucide/svelte';
+	import {
+		FONT_FAMILIES,
+		FONT_SIZES,
+		THEMES,
+		loadReaderSettings,
+		saveReaderSettings,
+		type ReaderSettings
+	} from '../../../../lib/reader/settings';
+	import type { TocItem } from '../../../../lib/reader/toc';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -18,6 +27,23 @@
 
 	let isNativeFullscreen = $state(false);
 	let headerVisible = $state(true);
+
+	// EPUB header controls: table of contents and display settings.
+	let epubToc = $state<TocItem[]>([]);
+	let tocOpen = $state(false);
+	let settingsOpen = $state(false);
+	let epubGoToChapter = $state<((href: string) => void) | undefined>(undefined);
+	let readerSettings = $state<ReaderSettings>(loadReaderSettings());
+
+	function updateSettings(patch: Partial<ReaderSettings>): void {
+		readerSettings = { ...readerSettings, ...patch };
+		saveReaderSettings(readerSettings);
+	}
+
+	function selectChapter(item: TocItem): void {
+		epubGoToChapter?.(item.href);
+		tocOpen = false;
+	}
 
 	// One syncer per mounted reader; cleanly disposed when switching books or unmounting.
 	let sync = $state<ProgressSync | null>(null);
@@ -116,15 +142,27 @@
 			isNativeFullscreen = Boolean(document.fullscreenElement);
 		};
 		const onKeydown = (event: KeyboardEvent) => {
-			if (event.key === 'Escape' && !document.fullscreenElement) {
+			if (event.key !== 'Escape') return;
+			if (tocOpen || settingsOpen) {
+				tocOpen = false;
+				settingsOpen = false;
+			} else if (!document.fullscreenElement) {
 				void goto(`/books/${data.book.id}`);
+			}
+		};
+		const onPointerDown = (event: PointerEvent) => {
+			if (!(event.target as HTMLElement | null)?.closest('.popover-anchor')) {
+				tocOpen = false;
+				settingsOpen = false;
 			}
 		};
 		document.addEventListener('fullscreenchange', onFsChange);
 		window.addEventListener('keydown', onKeydown);
+		window.addEventListener('pointerdown', onPointerDown);
 		return () => {
 			document.removeEventListener('fullscreenchange', onFsChange);
 			window.removeEventListener('keydown', onKeydown);
+			window.removeEventListener('pointerdown', onPointerDown);
 		};
 	});
 </script>
@@ -153,6 +191,113 @@
 			</div>
 
 			<div class="reader-header-right">
+				{#if isEpub}
+					<div class="popover-anchor">
+						<button
+							type="button"
+							class="fs-button"
+							onclick={() => {
+								tocOpen = !tocOpen;
+								settingsOpen = false;
+							}}
+							aria-label="Chapters"
+							aria-expanded={tocOpen}
+							title="Chapters"
+						>
+							<List size={18} />
+						</button>
+						{#if tocOpen}
+							<div class="popover toc-popover" role="menu" aria-label="Chapters">
+								<div class="popover-heading">Chapters</div>
+								<div class="popover-scroll">
+									{#each epubToc as item (item.href + (item.id ?? ''))}
+										<button
+											type="button"
+											role="menuitem"
+											class="popover-item"
+											onclick={() => selectChapter(item)}
+										>
+											{item.label}
+										</button>
+									{:else}
+										<p class="popover-empty">No chapters</p>
+									{/each}
+								</div>
+							</div>
+						{/if}
+					</div>
+
+					<div class="popover-anchor">
+						<button
+							type="button"
+							class="fs-button"
+							onclick={() => {
+								settingsOpen = !settingsOpen;
+								tocOpen = false;
+							}}
+							aria-label="Reader settings"
+							aria-expanded={settingsOpen}
+							title="Reader settings"
+						>
+							<Settings2 size={18} />
+						</button>
+						{#if settingsOpen}
+							<div class="popover settings-popover" role="dialog" aria-label="Reader settings">
+								<div class="popover-heading">Reader settings</div>
+
+								<div class="setting-row">
+									<span class="setting-label">Font size</span>
+									<div class="segmented">
+										{#each FONT_SIZES as size (size)}
+											<button
+												type="button"
+												class={['segment', readerSettings.fontSize === size && 'active']}
+												aria-label={`Font size ${size}`}
+												aria-pressed={readerSettings.fontSize === size}
+												onclick={() => updateSettings({ fontSize: size })}
+											>
+												{size}
+											</button>
+										{/each}
+									</div>
+								</div>
+
+								<div class="setting-row">
+									<span class="setting-label">Font style</span>
+									<div class="segmented">
+										{#each FONT_FAMILIES as family (family)}
+											<button
+												type="button"
+												class={['segment', readerSettings.fontFamily === family && 'active']}
+												aria-pressed={readerSettings.fontFamily === family}
+												onclick={() => updateSettings({ fontFamily: family })}
+											>
+												{family === 'serif' ? 'Serif' : family === 'sans' ? 'Sans' : 'Mono'}
+											</button>
+										{/each}
+									</div>
+								</div>
+
+								<div class="setting-row">
+									<span class="setting-label">Background</span>
+									<div class="segmented">
+										{#each THEMES as theme (theme)}
+											<button
+												type="button"
+												class={['segment theme', theme, readerSettings.theme === theme && 'active']}
+												aria-pressed={readerSettings.theme === theme}
+												onclick={() => updateSettings({ theme })}
+											>
+												{theme === 'sepia' ? 'Sepia' : theme === 'dark' ? 'Dark' : 'Light'}
+											</button>
+										{/each}
+									</div>
+								</div>
+							</div>
+						{/if}
+					</div>
+				{/if}
+
 				{#if format}
 					<span class="format">{format.toUpperCase()}</span>
 				{/if}
@@ -182,6 +327,9 @@
 				initialCfi={progress && !progress.completed ? progress.locator : null}
 				onRelocate={handleEpubRelocate}
 				onToggleHeader={() => (headerVisible = !headerVisible)}
+				settings={readerSettings}
+				onToc={(toc) => (epubToc = toc)}
+				bind:goToChapter={epubGoToChapter}
 			/>
 		{:else if isComic && ComicReader}
 			<ComicReader
@@ -300,6 +448,123 @@
 	.fs-button:hover {
 		color: var(--text);
 		border-color: var(--muted);
+	}
+
+	.popover-anchor {
+		position: relative;
+		display: inline-flex;
+	}
+
+	.popover {
+		position: absolute;
+		top: calc(100% + 0.5rem);
+		right: 0;
+		z-index: 30;
+		width: max-content;
+		max-width: min(22rem, 85vw);
+		padding: 0.5rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+	}
+
+	.popover-heading {
+		padding: 0.25rem 0.5rem 0.5rem;
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: var(--muted);
+	}
+
+	.popover-scroll {
+		max-height: 60vh;
+		overflow-y: auto;
+	}
+
+	.popover-item,
+	.popover-empty {
+		display: block;
+		width: 100%;
+		padding: 0.45rem 0.6rem;
+		border-radius: calc(var(--radius) * 0.6);
+		text-align: left;
+		color: var(--text);
+		font-size: 0.9rem;
+	}
+
+	.popover-item {
+		background: transparent;
+		border: 0;
+		cursor: pointer;
+	}
+
+	.popover-item:hover {
+		background: var(--surface-2);
+	}
+
+	.popover-empty {
+		margin: 0;
+		color: var(--muted);
+	}
+
+	.settings-popover {
+		width: 17rem;
+	}
+
+	.setting-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: 0.35rem 0.5rem;
+	}
+
+	.setting-label {
+		font-size: 0.85rem;
+		color: var(--muted);
+	}
+
+	.segmented {
+		display: inline-flex;
+		gap: 0.25rem;
+	}
+
+	.segment {
+		min-width: 2.4rem;
+		padding: 0.3rem 0.5rem;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: calc(var(--radius) * 0.6);
+		color: var(--muted);
+		font-size: 0.8rem;
+		cursor: pointer;
+	}
+
+	.segment:hover {
+		color: var(--text);
+	}
+
+	.segment.active {
+		background: var(--accent);
+		border-color: var(--accent);
+		color: #fff;
+	}
+
+	.segment.theme.light {
+		background: #ffffff;
+		color: #1a1a1a;
+	}
+
+	.segment.theme.sepia {
+		background: #f5ecd7;
+		color: #4a3b2c;
+	}
+
+	.segment.theme.dark {
+		background: #181a1b;
+		color: #e6e6e6;
 	}
 
 	.format {

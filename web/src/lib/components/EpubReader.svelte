@@ -10,6 +10,12 @@
 	import { onMount } from 'svelte';
 	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import { isTap, tapZoneAt, type Point, type TapZone } from '../reader/tap-zones';
+	import { DEFAULT_READER_SETTINGS, type ReaderSettings } from '../reader/settings';
+	import type { TocItem } from '../reader/toc';
+
+	interface FoliateRenderer {
+		setStyles?(css: string): void;
+	}
 
 	interface FoliateView extends HTMLElement {
 		open(url: string): Promise<void>;
@@ -17,6 +23,8 @@
 		next(): Promise<void>;
 		prev(): Promise<void>;
 		close(): void;
+		renderer?: FoliateRenderer;
+		book?: { toc?: TocItem[] };
 	}
 
 	interface Props {
@@ -26,9 +34,23 @@
 		onRelocate?: (locator: string, percentage: number) => void;
 		/** Middle-third tap toggles the host page's header. */
 		onToggleHeader?: () => void;
+		/** Display preferences applied to the rendered book. */
+		settings?: ReaderSettings;
+		/** Receives the book's table of contents once it is opened. */
+		onToc?: (toc: TocItem[]) => void;
+		/** Bound by the host page so the header TOC can jump to a chapter. */
+		goToChapter?: (href: string) => void;
 	}
 
-	let { bookUrl, initialCfi = null, onRelocate, onToggleHeader }: Props = $props();
+	let {
+		bookUrl,
+		initialCfi = null,
+		onRelocate,
+		onToggleHeader,
+		settings = DEFAULT_READER_SETTINGS,
+		onToc,
+		goToChapter = $bindable()
+	}: Props = $props();
 
 	let host = $state<HTMLElement | null>(null);
 	let ready = $state(false);
@@ -48,6 +70,49 @@
 		if (delta === 1) void view.next();
 		else void view.prev();
 	}
+
+	function styleFor(prefs: ReaderSettings): string {
+		const palette = {
+			light: { bg: '#ffffff', fg: '#1a1a1a', scheme: 'light' },
+			sepia: { bg: '#f5ecd7', fg: '#4a3b2c', scheme: 'light' },
+			dark: { bg: '#181a1b', fg: '#e6e6e6', scheme: 'dark' }
+		}[prefs.theme];
+		const family = {
+			serif: "Georgia, 'Times New Roman', serif",
+			sans: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+			mono: "ui-monospace, 'SFMono-Regular', Consolas, monospace"
+		}[prefs.fontFamily];
+		return `
+			html {
+				--theme-bg-color: ${palette.bg};
+				--theme-fg-color: ${palette.fg};
+				color-scheme: ${palette.scheme};
+			}
+			body {
+				background-color: ${palette.bg} !important;
+				color: ${palette.fg} !important;
+				font-family: ${family} !important;
+				font-size: ${prefs.fontSize}px !important;
+			}
+			p, li, blockquote, dd {
+				font-family: ${family} !important;
+				font-size: ${prefs.fontSize}px !important;
+			}
+		`;
+	}
+
+	const themeBackground = $derived(
+		settings.theme === 'light'
+			? '#ffffff'
+			: settings.theme === 'sepia'
+				? '#f5ecd7'
+				: '#181a1b'
+	);
+
+	$effect(() => {
+		if (!ready) return;
+		view?.renderer?.setStyles?.(styleFor(settings));
+	});
 
 	// foliate renders pages inside iframes, whose clicks do not bubble to the
 	// host. Listen on each loaded document as well as on the shell, then use
@@ -131,6 +196,10 @@
 				host.append(view);
 				await view.open(bookUrl);
 				if (disposed) return;
+				goToChapter = (href: string) => {
+					if (view) void view.goTo(href);
+				};
+				onToc?.(view.book?.toc ?? []);
 				// Resume at the saved CFI, else start at the text beginning.
 				if (initialCfi) await view.goTo(initialCfi);
 				else await view.next();
@@ -158,6 +227,7 @@
 <div
 	class="epub-shell"
 	role="presentation"
+	style:--reader-bg={themeBackground}
 	onpointerdown={(event) => {
 		if ((event.target as HTMLElement | null)?.closest('button')) return;
 		beginPointer(event, event.currentTarget.getBoundingClientRect());
@@ -214,6 +284,7 @@
 		flex: 1;
 		min-height: 0;
 		width: 100%;
+		background: var(--reader-bg, var(--bg));
 	}
 
 	.epub {
@@ -221,7 +292,7 @@
 		height: 100%;
 		min-height: 0;
 		flex: 1;
-		background: var(--bg);
+		background: transparent;
 	}
 
 	.edge-nav {
