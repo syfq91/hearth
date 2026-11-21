@@ -298,9 +298,6 @@
 					</div>
 				{/if}
 
-				{#if format}
-					<span class="format">{format.toUpperCase()}</span>
-				{/if}
 				<button
 					type="button"
 					class="fs-button"
@@ -565,16 +562,6 @@
 	.segment.theme.dark {
 		background: #181a1b;
 		color: #e6e6e6;
-	}
-
-	.format {
-		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.05em;
-		color: var(--accent);
-		border: 1px solid var(--border);
-		border-radius: 999px;
-		padding: 0.15rem 0.6rem;
 	}
 
 	.reader-viewport {
