@@ -9,6 +9,7 @@
 	 */
 	import { withMediaToken } from '../media-token.svelte';
 	import { untrack } from 'svelte';
+	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
 
 	interface Props {
 		bookId: string;
@@ -153,16 +154,31 @@
 		{:else}
 			<p class="status" role="status">Loading page…</p>
 		{/if}
+
+		<button
+			type="button"
+			class="edge-nav prev"
+			onclick={() => go(-1)}
+			disabled={page <= 1}
+			aria-label="Previous page"
+			title="Previous page"
+		>
+			<ChevronLeft size={28} />
+		</button>
+		<button
+			type="button"
+			class="edge-nav next"
+			onclick={() => go(1)}
+			disabled={page >= pageCount}
+			aria-label="Next page"
+			title="Next page"
+		>
+			<ChevronRight size={28} />
+		</button>
 	</div>
 
 	<div class="controls">
-		<button type="button" class="ghost" onclick={() => go(-1)} disabled={page <= 1}>
-			← Previous
-		</button>
 		<span class="counter" aria-live="polite">{page} / {pageCount}</span>
-		<button type="button" class="ghost" onclick={() => go(1)} disabled={page >= pageCount}>
-			Next →
-		</button>
 	</div>
 
 	{#if loading}
@@ -185,9 +201,50 @@
 	/* The page fills only the space actually left over, so the audio dock
 	   cannot push the controls out of view when music is playing. */
 	.page-area {
+		position: relative;
 		flex: 1;
 		min-height: 0;
 		width: 100%;
+	}
+
+	.edge-nav {
+		position: absolute;
+		top: 50%;
+		transform: translateY(-50%);
+		z-index: 2;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.75rem;
+		height: 2.75rem;
+		padding: 0;
+		background: rgba(0, 0, 0, 0.45);
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		color: #fff;
+		cursor: pointer;
+		opacity: 0.75;
+		transition:
+			opacity 0.15s ease,
+			background 0.15s ease;
+	}
+
+	.edge-nav:hover:not(:disabled) {
+		opacity: 1;
+		background: rgba(0, 0, 0, 0.7);
+	}
+
+	.edge-nav:disabled {
+		opacity: 0.25;
+		cursor: default;
+	}
+
+	.edge-nav.prev {
+		left: 0.75rem;
+	}
+
+	.edge-nav.next {
+		right: 0.75rem;
 	}
 
 	.page {
@@ -211,23 +268,6 @@
 		font-variant-numeric: tabular-nums;
 		min-width: 6ch;
 		text-align: center;
-	}
-
-	.ghost {
-		background: var(--surface-2);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		padding: 0.45rem 1rem;
-		cursor: pointer;
-	}
-
-	.ghost:hover:not(:disabled) {
-		background: var(--surface);
-	}
-
-	.ghost:disabled {
-		opacity: 0.5;
-		cursor: default;
 	}
 
 	.status {

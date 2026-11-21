@@ -8,6 +8,7 @@
 	 * reader fetches the archive directly (no Authorization header).
 	 */
 	import { onMount } from 'svelte';
+	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
 
 	interface FoliateView extends HTMLElement {
 		open(url: string): Promise<void>;
@@ -84,33 +85,98 @@
 	});
 </script>
 
-<div class="epub" bind:this={host}>
-	{#if error}
-		<p class="banner" role="alert">Could not open this book: {error}</p>
-	{:else if !ready}
-		<p class="status" role="status">Opening book…</p>
-	{/if}
+<div class="epub-shell">
+	<div class="epub" bind:this={host}>
+		{#if error}
+			<p class="banner" role="alert">Could not open this book: {error}</p>
+		{:else if !ready}
+			<p class="status" role="status">Opening book…</p>
+		{/if}
+	</div>
+
+	<button
+		type="button"
+		class="edge-nav prev"
+		onclick={() => turnPage(-1)}
+		disabled={!ready}
+		aria-label="Previous page"
+		title="Previous page"
+	>
+		<ChevronLeft size={28} />
+	</button>
+	<button
+		type="button"
+		class="edge-nav next"
+		onclick={() => turnPage(1)}
+		disabled={!ready}
+		aria-label="Next page"
+		title="Next page"
+	>
+		<ChevronRight size={28} />
+	</button>
 </div>
 
 <div class="controls">
-	<button type="button" class="ghost" onclick={() => turnPage(-1)} disabled={!ready}>
-		← Previous
-	</button>
 	<span class="position" aria-live="polite">
 		{#if ready}{Math.round(fraction * 100)}%{/if}
 	</span>
-	<button type="button" class="ghost" onclick={() => turnPage(1)} disabled={!ready}>
-		Next →
-	</button>
 </div>
 
 <style>
+	.epub-shell {
+		position: relative;
+		display: flex;
+		flex: 1;
+		min-height: 0;
+		width: 100%;
+	}
+
 	.epub {
 		width: 100%;
 		height: 100%;
 		min-height: 0;
 		flex: 1;
 		background: var(--bg);
+	}
+
+	.edge-nav {
+		position: absolute;
+		top: 50%;
+		transform: translateY(-50%);
+		z-index: 2;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.75rem;
+		height: 2.75rem;
+		padding: 0;
+		background: rgba(0, 0, 0, 0.45);
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		color: #fff;
+		cursor: pointer;
+		opacity: 0.75;
+		transition:
+			opacity 0.15s ease,
+			background 0.15s ease;
+	}
+
+	.edge-nav:hover:not(:disabled) {
+		opacity: 1;
+		background: rgba(0, 0, 0, 0.7);
+	}
+
+	.edge-nav:disabled {
+		opacity: 0.25;
+		cursor: default;
+	}
+
+	.edge-nav.prev {
+		left: 0.75rem;
+	}
+
+	.edge-nav.next {
+		right: 0.75rem;
 	}
 
 	.status {
@@ -138,17 +204,4 @@
 		text-align: center;
 	}
 
-	.ghost {
-		background: var(--surface-2);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		padding: 0.45rem 1rem;
-		cursor: pointer;
-		color: inherit;
-	}
-
-	.ghost:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
 </style>
