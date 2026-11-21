@@ -5,6 +5,7 @@
 	import type EpubReaderType from '../../../../lib/components/EpubReader.svelte';
 	import type PdfReaderType from '../../../../lib/components/PdfReader.svelte';
 	import { ProgressSync } from '../../../../lib/reader/progress';
+	import { playerUi } from '../../../../lib/player/ui.svelte';
 	import { withMediaToken } from '../../../../lib/media-token.svelte';
 	import { goto } from '$app/navigation';
 	import { ArrowLeft, Maximize, Minimize, List, Settings2 } from '@lucide/svelte';
@@ -34,6 +35,13 @@
 
 	let isNativeFullscreen = $state(false);
 	let headerVisible = $state(true);
+	let chromeTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// The audio dock lives in the root layout; on reader pages it follows the
+	// header so both fade away together and the page keeps its full height.
+	$effect(() => {
+		playerUi.readerChromeVisible = headerVisible;
+	});
 
 	// EPUB header controls: table of contents and display settings.
 	let epubToc = $state<TocItem[]>([]);
@@ -68,14 +76,36 @@
 		comicSettingsOpen = false;
 	}
 
+	function scheduleChromeHide(): void {
+		if (chromeTimer) clearTimeout(chromeTimer);
+		chromeTimer = setTimeout(() => {
+			if (tocOpen || settingsOpen || comicSettingsOpen) {
+				scheduleChromeHide();
+				return;
+			}
+			headerVisible = false;
+			chromeTimer = null;
+		}, 5000);
+	}
+
+	function revealChrome(): void {
+		headerVisible = true;
+		scheduleChromeHide();
+	}
+
 	function hideHeader(): void {
+		if (chromeTimer) clearTimeout(chromeTimer);
+		chromeTimer = null;
 		headerVisible = false;
 		closeHeaderMenus();
 	}
 
 	function toggleHeader(): void {
-		headerVisible = !headerVisible;
-		if (!headerVisible) closeHeaderMenus();
+		if (headerVisible) {
+			hideHeader();
+		} else {
+			revealChrome();
+		}
 	}
 
 	function selectChapter(item: TocItem): void {
@@ -195,14 +225,19 @@
 				settingsOpen = false;
 				comicSettingsOpen = false;
 			}
+			revealChrome();
 		};
+		const onPointerMove = () => revealChrome();
 		document.addEventListener('fullscreenchange', onFsChange);
 		window.addEventListener('keydown', onKeydown);
 		window.addEventListener('pointerdown', onPointerDown);
+		window.addEventListener('pointermove', onPointerMove);
 		return () => {
 			document.removeEventListener('fullscreenchange', onFsChange);
 			window.removeEventListener('keydown', onKeydown);
 			window.removeEventListener('pointerdown', onPointerDown);
+			window.removeEventListener('pointermove', onPointerMove);
+			if (chromeTimer) clearTimeout(chromeTimer);
 		};
 	});
 </script>

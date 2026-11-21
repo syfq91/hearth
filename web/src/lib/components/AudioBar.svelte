@@ -35,6 +35,8 @@
 		Maximize2
 	} from '@lucide/svelte';
 
+	let { readerOverlay = false }: { readerOverlay?: boolean } = $props();
+
 	let audio = $state<HTMLAudioElement | null>(null);
 
 	// Artwork is URL-based media, so it needs a media token like the stream.
@@ -230,7 +232,13 @@
 </script>
 
 {#if player.track}
-	<div class="bar" role="region" aria-label="Now playing">
+	<div
+		class="bar"
+		class:overlay={readerOverlay}
+		class:chrome-hidden={readerOverlay && !playerUi.readerChromeVisible}
+		role="region"
+		aria-label="Now playing"
+	>
 		<div class="seek-row">
 			<input
 				type="range"
@@ -417,7 +425,14 @@
 	</div>
 
 	{#if player.error}
-		<p class="error" role="alert">{player.error}</p>
+		<p
+			class="error"
+			class:overlay={readerOverlay}
+			class:chrome-hidden={readerOverlay && !playerUi.readerChromeVisible}
+			role="alert"
+		>
+			{player.error}
+		</p>
 	{/if}
 {/if}
 
@@ -431,6 +446,28 @@
 		background: var(--surface);
 		border-top: 1px solid var(--border);
 		z-index: 20;
+	}
+
+	/* Reader pages: the dock floats with the header instead of taking space,
+	   and fades out together with it after a page turn or a short idle. */
+	.bar.overlay {
+		position: fixed;
+		left: 0;
+		right: 0;
+		z-index: 35;
+		background: linear-gradient(to top, rgba(14, 17, 22, 0.96), rgba(22, 27, 34, 0.88));
+		backdrop-filter: blur(6px);
+		transition:
+			opacity 0.2s ease,
+			transform 0.2s ease;
+	}
+
+	.bar.chrome-hidden,
+	.error.chrome-hidden {
+		visibility: hidden;
+		opacity: 0;
+		transform: translateY(100%);
+		pointer-events: none;
 	}
 
 	.seek-row {
@@ -731,6 +768,17 @@
 		background: var(--surface);
 		color: var(--danger);
 		border-top: 1px solid var(--border);
+	}
+
+	.error.overlay {
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 36;
+		transition:
+			opacity 0.2s ease,
+			transform 0.2s ease;
 	}
 
 	@media (max-width: 720px) {

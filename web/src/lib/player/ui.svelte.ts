@@ -8,12 +8,15 @@ export const playerUi = $state<{
 	currentTime: number;
 	duration: number;
 	volume: number;
+	/** Mirrors the reader header's visibility so the dock can fade with it. */
+	readerChromeVisible: boolean;
 }>({
 	expanded: false,
 	artworkSrc: null,
 	currentTime: 0,
 	duration: 0,
-	volume: 1
+	volume: 1,
+	readerChromeVisible: true
 });
 
 /** Last non-zero volume, for mute toggling. */

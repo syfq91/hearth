@@ -268,12 +268,7 @@
 	<title>Hearth</title>
 </svelte:head>
 
-<div
-	class="app"
-	class:fullscreen-app={isFullscreenMedia}
-	class:with-audiobar={!isVideoPlayer && player.track !== null}
-	use:spatialFocus
->
+<div class="app" class:fullscreen-app={isFullscreenMedia} use:spatialFocus>
 	{#if !isFullscreenMedia}
 		<a class="skip-link" href="#main">Skip to content</a>
 		<header class="topbar" class:compact={header.compact} bind:this={topbarRef}>
@@ -449,7 +444,7 @@
 		{@render children()}
 	</main>
 	{#if !isVideoPlayer}
-		<AudioBar />
+		<AudioBar readerOverlay={isReader} />
 		<FullPlayer />
 	{/if}
 </div>
@@ -465,13 +460,6 @@
 		height: 100vh;
 		min-height: 100vh;
 		overflow: hidden;
-	}
-
-	/* On reader pages the dock shares the viewport with the reader. */
-	.app.fullscreen-app.with-audiobar main.fullscreen-main {
-		height: auto;
-		flex: 1;
-		min-height: 0;
 	}
 
 	.topbar {
