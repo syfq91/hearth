@@ -42,7 +42,8 @@
 			artistName: track.artist_name ?? null,
 			albumTitle: track.album_title ?? null,
 			streamUrl: track.stream_url,
-			favorite: track.watch_state?.favorite ?? false
+			favorite: track.watch_state?.favorite ?? false,
+			durationSeconds: track.duration_seconds
 		};
 	}
 

@@ -7,7 +7,9 @@
 	import { setTvMode, tv } from '../lib/tv.svelte';
 	import { spatialFocus } from '../lib/actions/spatial-focus';
 	import AudioBar from '../lib/components/AudioBar.svelte';
+	import FullPlayer from '../lib/components/FullPlayer.svelte';
 	import { player, stop } from '../lib/player.svelte';
+	import { closeFullPlayer } from '../lib/player/ui.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
@@ -123,7 +125,10 @@
 	const isFullscreenMedia = $derived(isVideoPlayer || isReader);
 
 	$effect(() => {
-		if (isVideoPlayer) stop();
+		if (isVideoPlayer) {
+			stop();
+			closeFullPlayer();
+		}
 	});
 
 	let topbarRef = $state<HTMLElement | null>(null);
@@ -431,6 +436,7 @@
 	</main>
 	{#if !isVideoPlayer}
 		<AudioBar />
+		<FullPlayer />
 	{/if}
 </div>
 

@@ -12,6 +12,13 @@
 	} from '../player.svelte';
 	import { withMediaToken } from '../media-token.svelte';
 	import {
+		playerUi,
+		openFullPlayer,
+		toggleMute,
+		rememberVolume,
+		formatTime
+	} from '../player/ui.svelte';
+	import {
 		Play,
 		Pause,
 		SkipBack,
@@ -24,25 +31,25 @@
 		Repeat,
 		Repeat1,
 		Shuffle,
-		Heart
+		Heart,
+		Maximize2
 	} from '@lucide/svelte';
 
 	let audio = $state<HTMLAudioElement | null>(null);
 
 	// Artwork is URL-based media, so it needs a media token like the stream.
-	let artSrc = $state<string | null>(null);
-
+	// Store it in shared UI state so the full-page player shows the same art.
 	$effect(() => {
 		const track = player.track;
 		const artwork = track?.artworkUrl;
 		if (!track || !artwork) {
-			artSrc = null;
+			playerUi.artworkSrc = null;
 			return;
 		}
 		let cancelled = false;
 		void withMediaToken(artwork)
 			.then((url) => {
-				if (!cancelled && player.track?.id === track.id) artSrc = url;
+				if (!cancelled && player.track?.id === track.id) playerUi.artworkSrc = url;
 			})
 			.catch(() => {
 				/* artwork is decorative */
@@ -192,18 +199,6 @@
 		}
 	}
 
-	function formatTime(seconds: number): string {
-		if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
-		const m = Math.floor(seconds / 60);
-		const s = Math.floor(seconds % 60);
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	}
-
-	let currentTime = $state(0);
-	let duration = $state(0);
-	let volume = $state(1);
-	let lastVolume = 1;
-
 	// Load persisted volume on client
 	$effect(() => {
 		if (typeof localStorage !== 'undefined') {
@@ -211,8 +206,8 @@
 			if (saved !== null) {
 				const parsed = Number.parseFloat(saved);
 				if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 1) {
-					volume = parsed;
-					if (parsed > 0) lastVolume = parsed;
+					playerUi.volume = parsed;
+					rememberVolume(parsed);
 				}
 			}
 		}
@@ -221,7 +216,7 @@
 	// Keep the audio element in sync immediately; persist after the slider
 	// settles instead of writing localStorage on every tick.
 	$effect(() => {
-		const nextVolume = volume;
+		const nextVolume = playerUi.volume;
 		if (audio) {
 			audio.volume = nextVolume;
 		}
@@ -232,15 +227,6 @@
 		}, 300);
 		return () => clearTimeout(timer);
 	});
-
-	function toggleMute(): void {
-		if (volume > 0) {
-			lastVolume = volume;
-			volume = 0;
-		} else {
-			volume = lastVolume > 0 ? lastVolume : 1;
-		}
-	}
 </script>
 
 {#if player.track}
@@ -250,22 +236,28 @@
 				type="range"
 				class="seek"
 				min="0"
-				max={duration > 0 ? duration : 1}
+				max={playerUi.duration > 0 ? playerUi.duration : 1}
 				step="0.1"
-				bind:value={currentTime}
-				disabled={!(duration > 0)}
+				bind:value={playerUi.currentTime}
+				disabled={!(playerUi.duration > 0)}
 				aria-label="Seek"
-				aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
-				title={formatTime(currentTime)}
-				style={`--progress: ${duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0}%`}
+				aria-valuetext={`${formatTime(playerUi.currentTime)} of ${formatTime(playerUi.duration)}`}
+				title={formatTime(playerUi.currentTime)}
+				style={`--progress: ${playerUi.duration > 0 ? Math.min(100, Math.max(0, (playerUi.currentTime / playerUi.duration) * 100)) : 0}%`}
 			/>
 		</div>
 
 		<div class="bar-row">
-			<div class="left">
+			<button
+				type="button"
+				class="left"
+				onclick={openFullPlayer}
+				aria-label="Open full screen player"
+				title="Open full screen player"
+			>
 				<div class="art" aria-hidden="true">
-					{#if artSrc}
-						<img src={artSrc} alt="" width="48" height="48" />
+					{#if playerUi.artworkSrc}
+						<img src={playerUi.artworkSrc} alt="" width="48" height="48" />
 					{:else}
 						<Music size={22} />
 					{/if}
@@ -279,7 +271,8 @@
 						</span>
 					{/if}
 				</div>
-			</div>
+				<span class="expand-icon"><Maximize2 size={15} aria-hidden="true" /></span>
+			</button>
 
 			<div class="transport">
 				<div class="transport-buttons">
@@ -331,7 +324,9 @@
 					{#if player.queue.length > 1}
 						<span class="position">{player.index + 1}/{player.queue.length}</span>
 					{/if}
-					<span class="time">{formatTime(currentTime)} / {formatTime(duration)}</span>
+					<span class="time">
+						{formatTime(playerUi.currentTime)} / {formatTime(playerUi.duration)}
+					</span>
 				</div>
 			</div>
 
@@ -380,12 +375,12 @@
 						type="button"
 						class="ghost volume-btn"
 						onclick={toggleMute}
-						aria-label={volume === 0 ? 'Unmute' : 'Mute'}
-						title={volume === 0 ? 'Unmute' : 'Mute'}
+						aria-label={playerUi.volume === 0 ? 'Unmute' : 'Mute'}
+						title={playerUi.volume === 0 ? 'Unmute' : 'Mute'}
 					>
-						{#if volume === 0}
+						{#if playerUi.volume === 0}
 							<VolumeX size={16} />
-						{:else if volume < 0.5}
+						{:else if playerUi.volume < 0.5}
 							<Volume1 size={16} />
 						{:else}
 							<Volume2 size={16} />
@@ -396,11 +391,13 @@
 						min="0"
 						max="1"
 						step="0.01"
-						bind:value={volume}
+						bind:value={playerUi.volume}
+						oninput={(event) =>
+							rememberVolume(Number.parseFloat((event.currentTarget as HTMLInputElement).value))}
 						aria-label="Volume"
-						aria-valuetext={`${Math.round(volume * 100)}%`}
-						title={`Volume: ${Math.round(volume * 100)}%`}
-						style={`--volume-progress: ${Math.round(volume * 100)}%`}
+						aria-valuetext={`${Math.round(playerUi.volume * 100)}%`}
+						title={`Volume: ${Math.round(playerUi.volume * 100)}%`}
+						style={`--volume-progress: ${Math.round(playerUi.volume * 100)}%`}
 						class="volume-slider"
 					/>
 				</div>
@@ -410,8 +407,8 @@
 		<!-- svelte-ignore a11y_media_has_caption -->
 		<audio
 			bind:this={audio}
-			bind:currentTime
-			bind:duration
+			bind:currentTime={playerUi.currentTime}
+			bind:duration={playerUi.duration}
 			ontimeupdate={handleTimeUpdate}
 			onplay={() => (player.playing = true)}
 			onpause={() => (player.playing = false)}
@@ -497,6 +494,36 @@
 		align-items: center;
 		gap: 0.75rem;
 		min-width: 0;
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: var(--radius);
+		padding: 0.15rem;
+		margin: -0.15rem;
+		text-align: left;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.left:hover {
+		background: var(--surface-2);
+	}
+
+	.left:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	.expand-icon {
+		flex: 0 0 auto;
+		color: var(--muted);
+		opacity: 0;
+		transition: opacity 0.15s ease;
+	}
+
+	.left:hover .expand-icon,
+	.left:focus-visible .expand-icon {
+		opacity: 1;
 	}
 
 	.transport {

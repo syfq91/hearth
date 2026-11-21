@@ -24,6 +24,11 @@ export function shuffledUpcoming<T>(
 	return [...head, ...tail];
 }
 
+/** Current-track index after removing a different track from the queue. */
+export function indexAfterRemoval(removed: number, current: number): number {
+	return removed < current ? current - 1 : current;
+}
+
 /** Next playable index, or -1 when the queue is exhausted. */
 export function nextIndex(current: number, length: number, repeatAll: boolean): number {
 	if (length <= 0 || current < 0) return -1;

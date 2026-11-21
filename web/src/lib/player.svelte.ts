@@ -12,7 +12,13 @@
  */
 import { withMediaToken } from './media-token.svelte';
 import { api } from './api/client';
-import { REPEAT_MODES, nextIndex, shuffledUpcoming, type RepeatMode } from './player/queue';
+import {
+	REPEAT_MODES,
+	indexAfterRemoval,
+	nextIndex,
+	shuffledUpcoming,
+	type RepeatMode
+} from './player/queue';
 
 export interface PlayerTrack {
 	id: string;
@@ -25,6 +31,8 @@ export interface PlayerTrack {
 	artworkUrl?: string | null;
 	/** Server-side favorite flag for this item. */
 	favorite?: boolean;
+	/** Track length in seconds, shown in the full-page queue. */
+	durationSeconds?: number | null;
 }
 
 export const player = $state<{
@@ -97,6 +105,13 @@ async function playIndex(index: number): Promise<void> {
 	}
 }
 
+/** Jump to a track in the current queue (used by the full-page player). */
+export async function playAt(index: number): Promise<boolean> {
+	if (index < 0 || index >= player.queue.length) return false;
+	await playIndex(index);
+	return true;
+}
+
 /** Advance to the next queued track; wraps when repeat-all is enabled. */
 export async function playNext(): Promise<boolean> {
 	const next = nextIndex(player.index, player.queue.length, player.repeat === 'all');
@@ -158,21 +173,41 @@ export function toggleShuffle(): boolean {
 	return player.shuffle;
 }
 
-/** Toggle the current track's server-side favorite flag. */
-export async function toggleFavorite(): Promise<void> {
-	const track = player.track;
+/** Toggle a track's server-side favorite flag (current track by default). */
+export async function toggleFavorite(track: PlayerTrack | null = player.track): Promise<void> {
 	if (!track) return;
-	const next = !player.favorite;
+	const next = !track.favorite;
 	try {
 		await api.post<{ favorite: boolean }>(`/items/${track.id}/favorite`, {
 			body: { favorite: next }
 		});
-		if (player.track?.id === track.id) {
-			player.favorite = next;
-			track.favorite = next;
-		}
+		track.favorite = next;
+		if (player.track?.id === track.id) player.favorite = next;
 	} catch (e) {
 		player.error = e instanceof Error ? e.message : String(e);
+	}
+}
+
+/** Remove a queued track. Removing the current one advances to its successor. */
+export function removeFromQueue(index: number): void {
+	if (index < 0 || index >= player.queue.length) return;
+	const removed = player.queue[index];
+	const isCurrent = index === player.index;
+	player.queue.splice(index, 1);
+	if (originalQueue) {
+		const originalIndex = originalQueue.findIndex((track) => track.id === removed.id);
+		if (originalIndex >= 0) originalQueue.splice(originalIndex, 1);
+	}
+	if (player.queue.length === 0) {
+		stop();
+		return;
+	}
+	if (isCurrent) {
+		// Let playIndex re-apply src and metadata for the replacement track.
+		player.index = -1;
+		void playAt(Math.min(index, player.queue.length - 1));
+	} else {
+		player.index = indexAfterRemoval(index, player.index);
 	}
 }
 
