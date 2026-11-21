@@ -24,12 +24,12 @@
 		formatTime
 	} from '../player/ui.svelte';
 	import {
+		ChevronDown,
 		X,
 		Play,
 		Pause,
 		SkipBack,
 		SkipForward,
-		Square,
 		Repeat,
 		Repeat1,
 		Shuffle,
@@ -43,7 +43,7 @@
 	} from '@lucide/svelte';
 
 	let overlay = $state<HTMLDivElement | null>(null);
-	let closeButton = $state<HTMLButtonElement | null>(null);
+	let minimizeButton = $state<HTMLButtonElement | null>(null);
 	let previousFocus: HTMLElement | null = null;
 
 	// Stopping playback removes the audio element and hides this overlay; make
@@ -56,12 +56,17 @@
 		if (playerUi.expanded) {
 			previousFocus =
 				document.activeElement instanceof HTMLElement ? document.activeElement : null;
-			closeButton?.focus();
+			minimizeButton?.focus();
 		} else if (previousFocus) {
 			previousFocus.focus();
 			previousFocus = null;
 		}
 	});
+
+	function stopAndClose(): void {
+		stop();
+		closeFullPlayer();
+	}
 
 	function handleKeydown(event: KeyboardEvent): void {
 		if (!playerUi.expanded) return;
@@ -102,15 +107,24 @@
 			<button
 				type="button"
 				class="icon-btn"
-				bind:this={closeButton}
+				bind:this={minimizeButton}
 				onclick={closeFullPlayer}
-				aria-label="Close full screen player"
-				title="Close (Esc)"
+				aria-label="Minimize player"
+				title="Minimize (Esc)"
 			>
-				<X size={20} />
+				<ChevronDown size={20} />
 			</button>
 			<span class="topbar-label">Now playing</span>
 			<span class="topbar-spacer"></span>
+			<button
+				type="button"
+				class="icon-btn"
+				onclick={stopAndClose}
+				aria-label="Stop playback"
+				title="Stop playback"
+			>
+				<X size={20} />
+			</button>
 		</header>
 
 		<div class="content">
@@ -181,15 +195,6 @@
 								title="Next track"
 							>
 								<SkipForward size={22} fill="currentColor" />
-							</button>
-							<button
-								type="button"
-								class="icon-btn"
-								onclick={stop}
-								aria-label="Stop playback"
-								title="Stop"
-							>
-								<Square size={20} fill="currentColor" />
 							</button>
 						</div>
 
