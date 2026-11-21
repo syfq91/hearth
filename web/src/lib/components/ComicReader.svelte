@@ -317,6 +317,7 @@
 		display: flex;
 		align-items: center;
 		gap: 1rem;
+		align-self: stretch;
 		flex-shrink: 0;
 		padding: 0 1rem;
 	}
