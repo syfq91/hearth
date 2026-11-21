@@ -6,6 +6,7 @@
 	import type { LibrarySummary } from '../lib/api/types';
 	import { setTvMode, tv } from '../lib/tv.svelte';
 	import { spatialFocus } from '../lib/actions/spatial-focus';
+	import { initialHeaderLayout, nextHeaderLayout } from '../lib/header-layout';
 	import AudioBar from '../lib/components/AudioBar.svelte';
 	import FullPlayer from '../lib/components/FullPlayer.svelte';
 	import { player, stop } from '../lib/player.svelte';
@@ -133,48 +134,56 @@
 
 	let topbarRef = $state<HTMLElement | null>(null);
 	let navRef = $state<HTMLElement | null>(null);
-	let isCombined = $state(false);
-	let minUncombinedWidth = $state(0);
+	let header = $state(initialHeaderLayout());
 
 	function checkHeaderWidth() {
-		if (typeof window === 'undefined') return;
-		if (!topbarRef || !navRef) return;
+		if (typeof window === 'undefined' || !topbarRef || !navRef) return;
+		const topbar = topbarRef;
+		const actionsEl = topbar.querySelector('.topbar-actions') as HTMLElement | null;
+		if (!actionsEl) return;
 
-		const brandEl = topbarRef.querySelector('.brand') as HTMLElement | null;
-		const actionsEl = topbarRef.querySelector('.topbar-actions') as HTMLElement | null;
-		const brandW = brandEl ? brandEl.offsetWidth : 80;
-		const actionsW = actionsEl ? actionsEl.offsetWidth : 80;
-		const availableForNav = Math.max(0, topbarRef.clientWidth - brandW - actionsW - 64);
+		const items = navRef.querySelectorAll<HTMLElement>(
+			':scope > a, :scope > .lib-dropdown-wrapper'
+		);
+		const lastItem = items[items.length - 1];
+		if (!lastItem) return;
 
-		if (!isCombined) {
-			if (navRef.scrollWidth > availableForNav) {
-				minUncombinedWidth = topbarRef.clientWidth + (navRef.scrollWidth - availableForNav) + 20;
-				isCombined = true;
-			}
-		} else {
-			if (minUncombinedWidth > 0 && topbarRef.clientWidth >= minUncombinedWidth + 15) {
-				isCombined = false;
-			}
-		}
+		// The nav is a shrinkable flex item with non-shrinkable children, so its
+		// own width can be smaller than its content. Compare the painted edges:
+		// the last item must never cross into the actions cluster (e.g. the
+		// favourites heart). Measuring this way accounts for the brand, the
+		// actions and the actual flex gaps without guessing a fixed reserve.
+		const overflow =
+			lastItem.getBoundingClientRect().right > actionsEl.getBoundingClientRect().left - 8;
+
+		const next = nextHeaderLayout(header, topbar.clientWidth, overflow);
+		if (next !== header) header = next;
 	}
 
 	$effect(() => {
-		const _ = userLibraries;
-		minUncombinedWidth = 0;
-		isCombined = false;
+		const _ = [userLibraries, hasFavorites];
+		header = initialHeaderLayout();
 		if (typeof window !== 'undefined') {
-			requestAnimationFrame(() => {
-				checkHeaderWidth();
-			});
+			requestAnimationFrame(() => checkHeaderWidth());
+		}
+	});
+
+	// Switching modes replaces the nav's DOM; measure again once it settles.
+	$effect(() => {
+		const _ = [header.combined, header.compact];
+		if (typeof window !== 'undefined') {
+			requestAnimationFrame(() => checkHeaderWidth());
 		}
 	});
 
 	$effect(() => {
 		if (!topbarRef) return;
-		const ro = new ResizeObserver(() => {
-			checkHeaderWidth();
-		});
+		const actionsEl = topbarRef.querySelector('.topbar-actions');
+		const ro = new ResizeObserver(() => checkHeaderWidth());
 		ro.observe(topbarRef);
+		// The favourites link is loaded after boot, which widens this cluster
+		// without changing the topbar's own width.
+		if (actionsEl) ro.observe(actionsEl);
 		window.addEventListener('resize', checkHeaderWidth);
 		return () => {
 			ro.disconnect();
@@ -267,10 +276,10 @@
 >
 	{#if !isFullscreenMedia}
 		<a class="skip-link" href="#main">Skip to content</a>
-		<header class="topbar" bind:this={topbarRef}>
+		<header class="topbar" class:compact={header.compact} bind:this={topbarRef}>
 			<a class="brand" href="/">Hearth</a>
 			<nav aria-label="Primary" bind:this={navRef}>
-				{#if isCombined}
+				{#if header.combined}
 					{#each groupedLibraries as group (group.type)}
 						{@const Icon = group.icon}
 						{@const active = isGroupActive(group)}
@@ -595,6 +604,23 @@
 		align-items: center;
 		color: var(--muted);
 		opacity: 0.7;
+	}
+
+	/* Narrowest fallback: grouped nav with icons only, selected when even the
+	   grouped labels would overlap the actions cluster. */
+	.topbar.compact .brand {
+		margin-right: 0;
+	}
+
+	.topbar.compact nav a span,
+	.topbar.compact .nav-dropdown-btn span,
+	.topbar.compact .chevron {
+		display: none;
+	}
+
+	.topbar.compact nav a,
+	.topbar.compact .nav-dropdown-btn {
+		padding: 0.35rem;
 	}
 
 	.lib-menu {

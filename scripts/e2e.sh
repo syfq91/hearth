@@ -99,6 +99,6 @@ else
 	log "running first-run acceptance spec"
 	HEARTH_E2E_BASE_URL="$BASE_URL" npx playwright test first-run
 	log "running remaining specs"
-	HEARTH_E2E_BASE_URL="$BASE_URL" npx playwright test auth books music video reader-controls comic-reader
+	HEARTH_E2E_BASE_URL="$BASE_URL" npx playwright test auth books music video reader-controls comic-reader header-layout
 fi
 log "all specs passed"
