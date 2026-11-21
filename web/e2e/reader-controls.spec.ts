@@ -8,7 +8,8 @@ async function openEpub(page: import('@playwright/test').Page): Promise<void> {
 	await page.goto('/books');
 	await page.getByRole('link', { name: BOOK_TITLE }).first().click();
 	await expect(page.getByRole('heading', { level: 1, name: BOOK_TITLE })).toBeVisible();
-	await page.getByRole('link', { name: 'Read EPUB' }).click();
+	// The books spec may have already started this book in the shared server.
+	await page.getByRole('link', { name: /^(Read|Resume) EPUB$/ }).first().click();
 	await expect(page).toHaveURL(/\/read\?format=epub$/);
 	await expect(page.getByRole('button', { name: 'Next page' })).toBeEnabled({ timeout: 30_000 });
 }
