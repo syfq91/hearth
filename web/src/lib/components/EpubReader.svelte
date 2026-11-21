@@ -9,6 +9,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
+	import { isTap, tapZoneAt, type Point, type TapZone } from '../reader/tap-zones';
 
 	interface FoliateView extends HTMLElement {
 		open(url: string): Promise<void>;
@@ -43,6 +44,48 @@
 		else void view.prev();
 	}
 
+	// foliate renders pages inside iframes, whose clicks do not bubble to the
+	// host. Listen on each loaded document as well as on the shell, then use
+	// the same third-of-the-page tap logic in both places.
+	let pointerStart: (Point & { zone: TapZone }) | null = null;
+
+	function beginPointer(event: PointerEvent, rect: DOMRect): void {
+		if (event.button !== 0) return;
+		if ((event.target as HTMLElement | null)?.closest('button')) return;
+		pointerStart = {
+			x: event.clientX,
+			y: event.clientY,
+			zone: tapZoneAt(event.clientX, rect)
+		};
+	}
+
+	function endPointer(event: PointerEvent): void {
+		const start = pointerStart;
+		pointerStart = null;
+		if (!start || !isTap(start, event)) return;
+		if (start.zone === 'prev') turnPage(-1);
+		else if (start.zone === 'next') turnPage(1);
+	}
+
+	// foliate replaces iframe documents between sections, so track the
+	// listeners we add and detach them when the reader closes.
+	const docListeners: Array<{ doc: Document; down: (e: PointerEvent) => void; up: (e: PointerEvent) => void }> = [];
+
+	function listenOnDocument(doc: Document): void {
+		if (docListeners.some((entry) => entry.doc === doc)) return;
+		const down = (event: PointerEvent): void => {
+			// Let foliate handle links and text selection instead of turning a page.
+			const target = event.target as Element | null;
+			if (target?.closest('a[href]')) return;
+			if (doc.getSelection()?.isCollapsed === false) return;
+			beginPointer(event, doc.documentElement.getBoundingClientRect());
+		};
+		const up = (event: PointerEvent): void => endPointer(event);
+		doc.addEventListener('pointerdown', down);
+		doc.addEventListener('pointerup', up);
+		docListeners.push({ doc, down, up });
+	}
+
 	// foliate-js is pure ESM with a custom-element side effect; load it only in
 	// the browser so the static build never tries to SSR it.
 	onMount(() => {
@@ -56,6 +99,11 @@
 			onRelocate?.(detail.cfi ?? '', percentage);
 		};
 
+		const handleLoad = (event: Event) => {
+			const { doc } = (event as CustomEvent<{ doc?: Document }>).detail ?? {};
+			if (doc) listenOnDocument(doc);
+		};
+
 		(async () => {
 			try {
 				await import('foliate-js/view.js');
@@ -64,6 +112,7 @@
 				view.style.display = 'block';
 				view.style.height = '100%';
 				view.addEventListener('relocate', handleRelocate);
+				view.addEventListener('load', handleLoad);
 				host.append(view);
 				await view.open(bookUrl);
 				if (disposed) return;
@@ -79,13 +128,28 @@
 		return () => {
 			disposed = true;
 			view?.removeEventListener('relocate', handleRelocate);
+			view?.removeEventListener('load', handleLoad);
+			for (const { doc, down, up } of docListeners) {
+				doc.removeEventListener('pointerdown', down);
+				doc.removeEventListener('pointerup', up);
+			}
+			docListeners.length = 0;
 			view?.close();
 			view?.remove();
 		};
 	});
 </script>
 
-<div class="epub-shell">
+<div
+	class="epub-shell"
+	role="presentation"
+	onpointerdown={(event) => {
+		if ((event.target as HTMLElement | null)?.closest('button')) return;
+		beginPointer(event, event.currentTarget.getBoundingClientRect());
+	}}
+	onpointerup={(event) => endPointer(event)}
+	onpointercancel={() => (pointerStart = null)}
+>
 	<div class="epub" bind:this={host}>
 		{#if error}
 			<p class="banner" role="alert">Could not open this book: {error}</p>

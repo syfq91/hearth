@@ -10,6 +10,7 @@
 	import { withMediaToken } from '../media-token.svelte';
 	import { untrack } from 'svelte';
 	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
+	import { isTap, tapZoneAt, type Point, type TapZone } from '../reader/tap-zones';
 
 	interface Props {
 		bookId: string;
@@ -28,6 +29,7 @@
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let comic = $state<HTMLElement | null>(null);
+	let pageArea = $state<HTMLElement | null>(null);
 
 	const WINDOW_BEFORE = 2;
 	const WINDOW_AFTER = 2;
@@ -110,6 +112,29 @@
 		page = Math.min(Math.max(page + delta, 1), Math.max(pageCount, 1));
 	}
 
+	// A tap is a pointer press/release with almost no movement; the third of
+	// the page that received it decides which way to turn. Movement above the
+	// tap threshold is a swipe (handled separately) and never double-turns.
+	let pointerStart: (Point & { zone: TapZone }) | null = null;
+
+	function handlePointerDown(event: PointerEvent): void {
+		if (event.button !== 0 || !pageArea) return;
+		if ((event.target as HTMLElement | null)?.closest('button')) return;
+		pointerStart = {
+			x: event.clientX,
+			y: event.clientY,
+			zone: tapZoneAt(event.clientX, pageArea.getBoundingClientRect())
+		};
+	}
+
+	function handlePointerUp(event: PointerEvent): void {
+		const start = pointerStart;
+		pointerStart = null;
+		if (!start || !isTap(start, event)) return;
+		if (start.zone === 'prev') go(-1);
+		else if (start.zone === 'next') go(1);
+	}
+
 	function handleKeydown(event: KeyboardEvent): void {
 		// Arrows only turn pages while focus is inside the reader, so arrows
 		// elsewhere in the app keep their own meaning (spatial navigation,
@@ -141,7 +166,14 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="comic" role="document" aria-label={`Page ${page} of ${pageCount}`} bind:this={comic}>
-	<div class="page-area">
+	<div
+		class="page-area"
+		role="presentation"
+		bind:this={pageArea}
+		onpointerdown={handlePointerDown}
+		onpointerup={handlePointerUp}
+		onpointercancel={() => (pointerStart = null)}
+	>
 		{#if error}
 			<p class="banner" role="alert">Could not load page: {error}</p>
 		{:else if cache[page]}
