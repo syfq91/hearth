@@ -82,7 +82,7 @@ with zipfile.ZipFile(path, "w") as z:
 print(f"wrote {path}")
 PY
 
-# --- CBZ: four tiny pages for the comic reader -------------------------------
+# --- CBZ: five tiny pages, the last one an already-wide spread ----------------
 python3 - "$FIXTURES/media/books/Sample Comic.cbz" <<'PY'
 import struct, sys, zipfile, zlib
 
@@ -92,15 +92,16 @@ def chunk(kind, data):
     body = kind + data
     return struct.pack('>I', len(data)) + body + struct.pack('>I', zlib.crc32(body) & 0xffffffff)
 
-def png(rgb):
-    header = struct.pack('>IIBBBBB', 8, 12, 8, 2, 0, 0, 0)
-    rows = b''.join(b'\x00' + bytes(rgb) * 8 for _ in range(12))
+def png(rgb, width, height):
+    header = struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0)
+    rows = b''.join(b'\x00' + bytes(rgb) * width for _ in range(height))
     return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', header)
             + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b''))
 
 with zipfile.ZipFile(path, 'w') as z:
     for n, shade in enumerate((60, 110, 160, 210), start=1):
-        z.writestr(f'p{n}.png', png((shade, shade, shade)))
+        z.writestr(f'p{n}.png', png((shade, shade, shade), 8, 12))
+    z.writestr('p5.png', png((240, 240, 240), 24, 8))
 print(f'wrote {path}')
 PY
 

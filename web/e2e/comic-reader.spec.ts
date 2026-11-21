@@ -1,27 +1,30 @@
 /**
- * Comic reader footer layout, page modes, reading direction and keyboard
- * page turns.
+ * Comic reader footer layout, page modes, wide pages, reading direction and
+ * keyboard page turns.
  */
 import { expect, test } from '@playwright/test';
 import { seedServer, signIn } from './helpers';
 
-async function openComic(page: import('@playwright/test').Page): Promise<void> {
+async function showHeader(page: import('@playwright/test').Page): Promise<void> {
+	const area = (await page.locator('.comic .page-area').boundingBox())!;
+	await page.mouse.click(area.x + area.width / 2, area.y + area.height / 2);
+	await expect(page.locator('.reader-header')).toBeVisible();
+}
+
+test('comic reader: footer edges, spreads, wide pages, direction and arrows', async ({ page, request }) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
 	await page.goto('/books');
 	await page.getByRole('link', { name: 'Sample Comic' }).first().click();
 	await page.getByRole('link', { name: /^(Read|Resume) CBZ$/ }).first().click();
 	await expect(page.getByRole('button', { name: 'Previous page' })).toBeVisible();
-}
-
-test('comic reader: footer edges, spreads, direction and arrow keys', async ({ page, request }) => {
-	const pair = await seedServer(request);
-	await signIn(page, pair);
-	await openComic(page);
 
 	const footer = page.locator('.comic .controls');
 	const percentage = footer.locator('.percentage');
 	const counter = footer.locator('.counter');
-	await expect(percentage).toHaveText('25%');
-	await expect(counter).toHaveText('1 / 4');
+	const images = page.locator('.comic .pages img');
+	await expect(percentage).toHaveText('20%');
+	await expect(counter).toHaveText('1 / 5');
 
 	// The footer spans the viewport so progress sits at the outer edges.
 	const footerBox = (await footer.boundingBox())!;
@@ -33,24 +36,30 @@ test('comic reader: footer edges, spreads, direction and arrow keys', async ({ p
 	await page.getByRole('button', { name: 'Comic settings' }).click();
 	const dialog = page.getByRole('dialog', { name: 'Comic settings' });
 	await dialog.getByRole('button', { name: 'Double' }).click();
-	// Cover alone, then pages 2-3 and 4: three views for a four-page book.
-	await expect(counter).toHaveText('1 / 3');
-	await expect(page.locator('.comic .pages img')).toHaveCount(1);
+	// Cover alone, then 2-3, then page 4 alone (page 5 is wide), then page 5.
+	await expect(counter).toHaveText('1 / 4');
+	await expect(images).toHaveCount(1);
 
 	// Arrow keys turn pages anywhere in the reader and hide the header.
 	await page.locator('.comic .counter').click();
 	await page.keyboard.press('ArrowRight');
-	await expect(counter).toHaveText('2 / 3');
-	await expect(page.locator('.comic .pages img')).toHaveCount(2);
+	await expect(counter).toHaveText('2 / 4');
+	await expect(images).toHaveCount(2);
 	await expect(page.locator('.reader-header')).toBeHidden();
 
-	// RTL reverses the physical page movement. Middle-tap restores the header.
-	const area = (await page.locator('.comic .page-area').boundingBox())!;
-	await page.mouse.click(area.x + area.width / 2, area.y + area.height / 2);
-	await expect(page.locator('.reader-header')).toBeVisible();
+	// A wide page is shown alone; its partner is not skipped.
+	await page.keyboard.press('ArrowRight');
+	await expect(counter).toHaveText('3 / 4');
+	await expect(images).toHaveCount(1);
+	await page.keyboard.press('ArrowRight');
+	await expect(counter).toHaveText('4 / 4');
+	await expect(images).toHaveCount(1);
+
+	// RTL reverses the physical page movement.
+	await showHeader(page);
 	await page.getByRole('button', { name: 'Comic settings' }).click();
 	await dialog.getByRole('button', { name: 'R → L' }).click();
 	await page.locator('.comic .counter').click();
 	await page.keyboard.press('ArrowRight');
-	await expect(counter).toHaveText('1 / 3');
+	await expect(counter).toHaveText('3 / 4');
 });

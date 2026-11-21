@@ -18,7 +18,14 @@
 		type TapZone
 	} from '../reader/tap-zones';
 	import { DEFAULT_COMIC_SETTINGS, type ComicSettings } from '../reader/comic-settings';
-	import { singleSpread, spreadAt, spreadCount, spreadIndex, spreadStartFor } from '../reader/spreads';
+	import {
+		singleSpread,
+		spreadAt,
+		spreadCount,
+		spreadIndex,
+		spreadStartFor,
+		type PageDimensions
+	} from '../reader/spreads';
 
 	interface Props {
 		bookId: string;
@@ -48,6 +55,8 @@
 	let page = $state(untrack(() => Math.min(Math.max(startPage, 1), Math.max(pageCount, 1))));
 	/** Resolved URLs for the pages currently in the window. */
 	let cache = $state<Record<number, string>>({});
+	/** Measured natural sizes, used to detect already-wide double pages. */
+	let dimensions = $state<Record<number, PageDimensions>>({});
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let pageArea = $state<HTMLElement | null>(null);
@@ -58,10 +67,12 @@
 	const direction = $derived(settings.direction);
 	const pageMode = $derived(settings.pageMode);
 	const currentStart = $derived(
-		pageMode === 'double' ? spreadStartFor(page, pageCount) : page
+		pageMode === 'double' ? spreadStartFor(page, pageCount, dimensions) : page
 	);
 	const view = $derived(
-		pageMode === 'double' ? spreadAt(currentStart, pageCount) : singleSpread(page, pageCount)
+		pageMode === 'double'
+			? spreadAt(currentStart, pageCount, dimensions)
+			: singleSpread(page, pageCount)
 	);
 	const firstPage = $derived(view.pages[0]);
 	const percentage = $derived(
@@ -69,7 +80,7 @@
 	);
 	const counter = $derived(
 		pageMode === 'double'
-			? `${spreadIndex(currentStart, pageCount)} / ${spreadCount(pageCount)}`
+			? `${spreadIndex(currentStart, pageCount, dimensions)} / ${spreadCount(pageCount, dimensions)}`
 			: `${page} / ${pageCount}`
 	);
 
@@ -77,10 +88,26 @@
 		return withMediaToken(`/api/v1/books/${bookId}/pages/${target}`, { width: 1600 });
 	}
 
+	/** Cached pages are already downloaded; decoding them reveals their ratio. */
+	function trackDimensions(number: number, url: string): void {
+		if (untrack(() => dimensions)[number]) return;
+		const image = new Image();
+		image.onload = () => {
+			if (image.naturalWidth && image.naturalHeight) {
+				dimensions = {
+					...untrack(() => dimensions),
+					[number]: { width: image.naturalWidth, height: image.naturalHeight }
+				};
+			}
+		};
+		image.src = url;
+	}
+
 	$effect(() => {
 		// Only depend on the current view, `bookId`, and `pageCount`
 		const current = firstPage;
 		const total = pageCount;
+		const mode = pageMode;
 		let cancelled = false;
 
 		void (async () => {
@@ -92,6 +119,7 @@
 					const resolved = await urlFor(current);
 					if (cancelled) return;
 					cache = { ...untrack(() => cache), [current]: resolved };
+					trackDimensions(current, resolved);
 				} catch (e) {
 					if (cancelled) return;
 					error = e instanceof Error ? e.message : String(e);
@@ -100,8 +128,11 @@
 				}
 			}
 
-			// Prefetch the window around `current`, nearest first.
-			const offsets = [1, -1, 2, -2];
+			// Prefetch the window around `current`, nearest first. Double mode
+			// looks a little further ahead so upcoming wide pages are measured
+			// before their spread becomes current.
+			const offsets =
+				mode === 'double' ? [1, -1, 2, -2, 3, 4] : [1, -1, 2, -2];
 			for (const offset of offsets) {
 				const target = current + offset;
 				if (target < 1 || target > total) continue;
@@ -111,6 +142,7 @@
 					if (cancelled) return;
 					if (untrack(() => cache)[target]) continue;
 					cache = { ...untrack(() => cache), [target]: resolved };
+					trackDimensions(target, resolved);
 				} catch {
 					// Prefetch is best-effort
 				}
