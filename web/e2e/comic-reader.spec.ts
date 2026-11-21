@@ -37,13 +37,14 @@ test('comic reader: footer edges, spreads, wide pages, direction and arrows', as
 	const dialog = page.getByRole('dialog', { name: 'Comic settings' });
 	await dialog.getByRole('button', { name: 'Double' }).click();
 	// Cover alone, then 2-3, then page 4 alone (page 5 is wide), then page 5.
-	await expect(counter).toHaveText('1 / 4');
+	// The counter is raw page numbers: 1, 3, 4, 5 out of 5 images.
+	await expect(counter).toHaveText('1 / 5');
 	await expect(images).toHaveCount(1);
 
 	// Arrow keys turn pages anywhere in the reader and hide the header.
 	await page.locator('.comic .counter').click();
 	await page.keyboard.press('ArrowRight');
-	await expect(counter).toHaveText('2 / 4');
+	await expect(counter).toHaveText('3 / 5');
 	await expect(images).toHaveCount(2);
 	// The two pages meet flush in the middle of the spread.
 	const left = (await images.nth(0).boundingBox())!;
@@ -53,10 +54,10 @@ test('comic reader: footer edges, spreads, wide pages, direction and arrows', as
 
 	// A wide page is shown alone; its partner is not skipped.
 	await page.keyboard.press('ArrowRight');
-	await expect(counter).toHaveText('3 / 4');
+	await expect(counter).toHaveText('4 / 5');
 	await expect(images).toHaveCount(1);
 	await page.keyboard.press('ArrowRight');
-	await expect(counter).toHaveText('4 / 4');
+	await expect(counter).toHaveText('5 / 5');
 	await expect(images).toHaveCount(1);
 
 	// RTL reverses the physical page movement.
@@ -65,5 +66,5 @@ test('comic reader: footer edges, spreads, wide pages, direction and arrows', as
 	await dialog.getByRole('button', { name: 'R → L' }).click();
 	await page.locator('.comic .counter').click();
 	await page.keyboard.press('ArrowRight');
-	await expect(counter).toHaveText('3 / 4');
+	await expect(counter).toHaveText('4 / 5');
 });

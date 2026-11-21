@@ -21,8 +21,6 @@
 	import {
 		singleSpread,
 		spreadAt,
-		spreadCount,
-		spreadIndex,
 		spreadStartFor,
 		type PageDimensions
 	} from '../reader/spreads';
@@ -75,13 +73,14 @@
 			: singleSpread(page, pageCount)
 	);
 	const firstPage = $derived(view.pages[0]);
+	const lastPage = $derived(view.pages[view.pages.length - 1]);
 	const percentage = $derived(
 		pageCount > 0 ? Math.round((firstPage / pageCount) * 100) : 0
 	);
+	// Double page mode still counts raw images: show the last page of the
+	// current view over the total, so turning advances 1 → 3 → 5.
 	const counter = $derived(
-		pageMode === 'double'
-			? `${spreadIndex(currentStart, pageCount, dimensions)} / ${spreadCount(pageCount, dimensions)}`
-			: `${page} / ${pageCount}`
+		pageMode === 'double' ? `${lastPage} / ${pageCount}` : `${page} / ${pageCount}`
 	);
 
 	async function urlFor(target: number): Promise<string> {

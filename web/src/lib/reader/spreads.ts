@@ -76,33 +76,6 @@ export function singleSpread(page: number, pageCount: number): Spread {
 	};
 }
 
-/** Number of views in a book when laid out in double-page mode. */
-export function spreadCount(pageCount: number, dimensions: Dimensions = {}): number {
-	if (pageCount <= 0) return 0;
-	let count = 0;
-	let page = 1;
-	while (page <= pageCount && count <= pageCount) {
-		count += 1;
-		const next = layoutAt(page, pageCount, dimensions).next;
-		if (next === page) break;
-		page = next;
-	}
-	return count;
-}
-
-/** 1-based index of the view that starts at (or contains) `page`. */
-export function spreadIndex(page: number, pageCount: number, dimensions: Dimensions = {}): number {
-	let index = 1;
-	let candidate = 1;
-	while (candidate < page && index <= pageCount) {
-		const next = layoutAt(candidate, pageCount, dimensions).next;
-		if (next === candidate) break;
-		candidate = next;
-		index += 1;
-	}
-	return index;
-}
-
 /** First page of the view containing `page`, used when switching modes. */
 export function spreadStartFor(page: number, pageCount: number, dimensions: Dimensions = {}): number {
 	let candidate = 1;
