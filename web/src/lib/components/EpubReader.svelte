@@ -24,9 +24,11 @@
 		/** Server-side locator (EPUB CFI) to resume from, if any. */
 		initialCfi?: string | null;
 		onRelocate?: (locator: string, percentage: number) => void;
+		/** Middle-third tap toggles the host page's header. */
+		onToggleHeader?: () => void;
 	}
 
-	let { bookUrl, initialCfi = null, onRelocate }: Props = $props();
+	let { bookUrl, initialCfi = null, onRelocate, onToggleHeader }: Props = $props();
 
 	let host = $state<HTMLElement | null>(null);
 	let ready = $state(false);
@@ -68,6 +70,7 @@
 		if (!start || !isTap(start, event)) return;
 		if (start.zone === 'prev') turnPage(-1);
 		else if (start.zone === 'next') turnPage(1);
+		else onToggleHeader?.();
 	}
 
 	// foliate replaces iframe documents between sections, so track the

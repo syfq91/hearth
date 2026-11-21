@@ -17,6 +17,7 @@
 	const progress = $derived(data.progress);
 
 	let isNativeFullscreen = $state(false);
+	let headerVisible = $state(true);
 
 	// One syncer per mounted reader; cleanly disposed when switching books or unmounting.
 	let sync = $state<ProgressSync | null>(null);
@@ -133,42 +134,44 @@
 </svelte:head>
 
 <div class="book-reader-container">
-	<header class="reader-header">
-		<div class="reader-header-left">
-			<a
-				href={`/books/${data.book.id}`}
-				class="close-button"
-				aria-label="Close book"
-				title="Close book (Esc)"
-			>
-				<X size={18} />
-				<span>Close</span>
-			</a>
-			<span class="divider" aria-hidden="true">/</span>
-			<a href={`/books/${data.book.id}`} class="crumbs" aria-label={data.book.title}>
-				{data.book.title}
-			</a>
-		</div>
+	{#if headerVisible}
+		<header class="reader-header">
+			<div class="reader-header-left">
+				<a
+					href={`/books/${data.book.id}`}
+					class="close-button"
+					aria-label="Close book"
+					title="Close book (Esc)"
+				>
+					<X size={18} />
+					<span>Close</span>
+				</a>
+				<span class="divider" aria-hidden="true">/</span>
+				<a href={`/books/${data.book.id}`} class="crumbs" aria-label={data.book.title}>
+					{data.book.title}
+				</a>
+			</div>
 
-		<div class="reader-header-right">
-			{#if format}
-				<span class="format">{format.toUpperCase()}</span>
-			{/if}
-			<button
-				type="button"
-				class="fs-button"
-				onclick={toggleNativeFullscreen}
-				aria-label={isNativeFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-				title={isNativeFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-			>
-				{#if isNativeFullscreen}
-					<Minimize size={18} />
-				{:else}
-					<Maximize size={18} />
+			<div class="reader-header-right">
+				{#if format}
+					<span class="format">{format.toUpperCase()}</span>
 				{/if}
-			</button>
-		</div>
-	</header>
+				<button
+					type="button"
+					class="fs-button"
+					onclick={toggleNativeFullscreen}
+					aria-label={isNativeFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+					title={isNativeFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+				>
+					{#if isNativeFullscreen}
+						<Minimize size={18} />
+					{:else}
+						<Maximize size={18} />
+					{/if}
+				</button>
+			</div>
+		</header>
+	{/if}
 
 	<div class="reader-viewport">
 		{#if !format}
@@ -178,6 +181,7 @@
 				bookUrl={fileUrl}
 				initialCfi={progress && !progress.completed ? progress.locator : null}
 				onRelocate={handleEpubRelocate}
+				onToggleHeader={() => (headerVisible = !headerVisible)}
 			/>
 		{:else if isComic && ComicReader}
 			<ComicReader
@@ -185,6 +189,7 @@
 				pageCount={data.book.page_count ?? 0}
 				startPage={parsePage(progress?.locator)}
 				onPageChange={handleComicPage}
+				onToggleHeader={() => (headerVisible = !headerVisible)}
 			/>
 		{:else if isPdf && fileUrl && PdfReader}
 			<PdfReader

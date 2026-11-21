@@ -24,9 +24,11 @@
 		/** 1-indexed page to start on (from the stored locator `page:N`). */
 		startPage?: number;
 		onPageChange?: (page: number) => void;
+		/** Middle-third tap toggles the host page's header. */
+		onToggleHeader?: () => void;
 	}
 
-	let { bookId, pageCount, startPage = 1, onPageChange }: Props = $props();
+	let { bookId, pageCount, startPage = 1, onPageChange, onToggleHeader }: Props = $props();
 
 	// Seeded once from the server locator; clamped into the valid range.
 	let page = $state(untrack(() => Math.min(Math.max(startPage, 1), Math.max(pageCount, 1))));
@@ -151,6 +153,7 @@
 		if (!isTap(start, event)) return;
 		if (start.zone === 'prev') go(-1);
 		else if (start.zone === 'next') go(1);
+		else onToggleHeader?.();
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
