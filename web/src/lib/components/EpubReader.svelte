@@ -34,6 +34,8 @@
 		onRelocate?: (locator: string, percentage: number) => void;
 		/** Middle-third tap toggles the host page's header. */
 		onToggleHeader?: () => void;
+		/** Fires when a user turn actually changes the displayed page. */
+		onPageTurned?: () => void;
 		/** Display preferences applied to the rendered book. */
 		settings?: ReaderSettings;
 		/** Receives the book's table of contents once it is opened. */
@@ -47,6 +49,7 @@
 		initialCfi = null,
 		onRelocate,
 		onToggleHeader,
+		onPageTurned,
 		settings = DEFAULT_READER_SETTINGS,
 		onToc,
 		goToChapter = $bindable()
@@ -65,10 +68,13 @@
 	// imperative custom element held for the lifetime of the component.
 	let view: FoliateView | null = null;
 
-	function turnPage(delta: 1 | -1): void {
+	async function turnPage(delta: 1 | -1): Promise<void> {
 		if (!view) return;
-		if (delta === 1) void view.next();
-		else void view.prev();
+		// Hide synchronously with the gesture so a quick middle tap right
+		// after turning is not undone by the async relocate that follows.
+		onPageTurned?.();
+		if (delta === 1) await view.next();
+		else await view.prev();
 	}
 
 	function styleFor(prefs: ReaderSettings): string {

@@ -27,6 +27,8 @@
 		onPageChange?: (page: number) => void;
 		/** Middle-third tap toggles the host page's header. */
 		onToggleHeader?: () => void;
+		/** Fires when a user turn actually changes the displayed page. */
+		onPageTurned?: () => void;
 		/** Reading direction and single/double page mode. */
 		settings?: ComicSettings;
 	}
@@ -37,6 +39,7 @@
 		startPage = 1,
 		onPageChange,
 		onToggleHeader,
+		onPageTurned,
 		settings = DEFAULT_COMIC_SETTINGS
 	}: Props = $props();
 
@@ -142,13 +145,16 @@
 	});
 
 	/** Move by whole views (one page, or one two-page spread). */
-	function go(delta: number): void {
-		page = Math.min(Math.max(firstPage + delta * step, 1), Math.max(pageCount, 1));
+	function go(delta: number): boolean {
+		const next = Math.min(Math.max(firstPage + delta * step, 1), Math.max(pageCount, 1));
+		const changed = next !== firstPage;
+		if (changed) page = next;
+		return changed;
 	}
 
 	/** Turn in reading direction; RTL reverses the physical page movement. */
 	function turn(delta: number): void {
-		go(direction === 'rtl' ? -delta : delta);
+		if (go(direction === 'rtl' ? -delta : delta)) onPageTurned?.();
 	}
 
 	// A tap is a pointer press/release with almost no movement; the third of

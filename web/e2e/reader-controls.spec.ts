@@ -28,16 +28,21 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 	await expect(page.locator('.chapter')).toBeVisible();
 	await expect(page.locator('.counter')).toHaveText(/^[1-9]\d* \/ \d+$/);
 
-	// Tapping the right third advances the page.
+	// Tapping the right third advances the page and hides the header.
 	const before = Number.parseInt((await percentage.textContent()) ?? '0', 10);
 	let box = (await viewport.boundingBox())!;
 	await page.mouse.click(box.x + box.width * 0.85, box.y + box.height / 2);
 	await expect
 		.poll(async () => Number.parseInt((await percentage.textContent()) ?? '0', 10))
 		.toBeGreaterThan(before);
+	await expect(page.locator('.reader-header')).toBeHidden();
 
 	// Tapping the middle toggles the header without resizing the reading area.
 	const viewportHeight = (await viewport.boundingBox())!.height;
+	box = (await viewport.boundingBox())!;
+	await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+	await expect(page.locator('.reader-header')).toBeVisible();
+	expect((await viewport.boundingBox())!.height).toBe(viewportHeight);
 	box = (await viewport.boundingBox())!;
 	await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 	await expect(page.locator('.reader-header')).toBeHidden();
@@ -45,7 +50,6 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 	box = (await viewport.boundingBox())!;
 	await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 	await expect(page.locator('.reader-header')).toBeVisible();
-	expect((await viewport.boundingBox())!.height).toBe(viewportHeight);
 
 	// The chapter button lists the book's TOC.
 	await page.getByRole('button', { name: 'Chapters' }).click();

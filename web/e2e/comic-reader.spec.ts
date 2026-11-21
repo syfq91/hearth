@@ -36,12 +36,16 @@ test('comic reader: footer edges, spreads, direction and arrow keys', async ({ p
 	await expect(counter).toHaveText('1 / 2');
 	await expect(page.locator('.comic .pages img')).toHaveCount(2);
 
-	// Arrow keys turn pages anywhere in the reader, even after using a popover.
+	// Arrow keys turn pages anywhere in the reader and hide the header.
 	await page.locator('.comic .counter').click();
 	await page.keyboard.press('ArrowRight');
 	await expect(counter).toHaveText('2 / 2');
+	await expect(page.locator('.reader-header')).toBeHidden();
 
-	// RTL reverses the physical page movement.
+	// RTL reverses the physical page movement. Middle-tap restores the header.
+	const area = (await page.locator('.comic .page-area').boundingBox())!;
+	await page.mouse.click(area.x + area.width / 2, area.y + area.height / 2);
+	await expect(page.locator('.reader-header')).toBeVisible();
 	await page.getByRole('button', { name: 'Comic settings' }).click();
 	await dialog.getByRole('button', { name: 'R → L' }).click();
 	await page.locator('.comic .counter').click();

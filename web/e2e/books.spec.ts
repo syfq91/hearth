@@ -38,6 +38,11 @@ test('read an EPUB, turn pages, and resume later', async ({ page, request }) => 
 		.poll(async () => Number.parseInt((await position.textContent()) ?? '0', 10))
 		.toBeGreaterThan(opened);
 
+	// Turning a page hides the header; tap the middle to bring it back.
+	const area = (await page.locator('.reader-viewport').boundingBox())!;
+	await page.mouse.click(area.x + area.width / 2, area.y + area.height / 2);
+	await expect(page.locator('.reader-header')).toBeVisible();
+
 	// Leave the reader; the breadcrumb on it returns to the detail page.
 	await page.getByRole('link', { name: BOOK_TITLE }).first().click();
 	await expect(page.getByRole('heading', { level: 1, name: BOOK_TITLE })).toBeVisible();

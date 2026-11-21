@@ -49,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
-- Book readers now turn pages with edge chevrons, left/right tap zones and (for comics) left/right swipes; tapping the middle of a page toggles the header. The header floats above the reading area so EPUB text no longer reflows when it is hidden.
+- Book readers now turn pages with edge chevrons, left/right tap zones and (for comics) left/right swipes; tapping the middle of a page toggles the header. The header floats above the reading area so EPUB text no longer reflows when it is hidden, and it hides automatically whenever a page is turned (including EPUB chapter jumps).
 - Reader footers show the book percentage on the left and the page/section count on the right, with the current chapter in the middle for EPUB. The comic footer spans the viewport, and its counter reports spread numbers in double-page mode.
 - EPUB settings offer a ±1px font-size stepper (10–32px), font family, background theme and single/double text columns. Comic settings offer reading direction (left-to-right or right-to-left) and single/double page spreads. All reader preferences persist in local storage.
 - Audio dock transport and volume buttons are now borderless and transparent at rest, matching the repeat/shuffle/favourite toggles.

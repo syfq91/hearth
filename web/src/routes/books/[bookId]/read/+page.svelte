@@ -65,6 +65,7 @@
 	function selectChapter(item: TocItem): void {
 		epubGoToChapter?.(item.href);
 		tocOpen = false;
+		headerVisible = false;
 	}
 
 	// One syncer per mounted reader; cleanly disposed when switching books or unmounting.
@@ -444,6 +445,7 @@
 				initialCfi={progress && !progress.completed ? progress.locator : null}
 				onRelocate={handleEpubRelocate}
 				onToggleHeader={() => (headerVisible = !headerVisible)}
+				onPageTurned={() => (headerVisible = false)}
 				settings={readerSettings}
 				onToc={(toc) => (epubToc = toc)}
 				bind:goToChapter={epubGoToChapter}
@@ -455,6 +457,7 @@
 				startPage={parsePage(progress?.locator)}
 				onPageChange={handleComicPage}
 				onToggleHeader={() => (headerVisible = !headerVisible)}
+				onPageTurned={() => (headerVisible = false)}
 				settings={comicSettings}
 			/>
 		{:else if isPdf && fileUrl && PdfReader}
