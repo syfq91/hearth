@@ -45,6 +45,10 @@ test('comic reader: footer edges, spreads, wide pages, direction and arrows', as
 	await page.keyboard.press('ArrowRight');
 	await expect(counter).toHaveText('2 / 4');
 	await expect(images).toHaveCount(2);
+	// The two pages meet flush in the middle of the spread.
+	const left = (await images.nth(0).boundingBox())!;
+	const right = (await images.nth(1).boundingBox())!;
+	expect(Math.abs(right.x - (left.x + left.width))).toBeLessThan(2);
 	await expect(page.locator('.reader-header')).toBeHidden();
 
 	// A wide page is shown alone; its partner is not skipped.

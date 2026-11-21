@@ -88,6 +88,11 @@
 		return withMediaToken(`/api/v1/books/${bookId}/pages/${target}`, { width: 1600 });
 	}
 
+	function aspectRatio(number: number): string | undefined {
+		const size = dimensions[number];
+		return size ? `${size.width} / ${size.height}` : undefined;
+	}
+
 	/** Cached pages are already downloaded; decoding them reveals their ratio. */
 	function trackDimensions(number: number, url: string): void {
 		if (untrack(() => dimensions)[number]) return;
@@ -282,6 +287,7 @@
 						alt={`Page ${number}`}
 						decoding="async"
 						draggable={false}
+						style:aspect-ratio={aspectRatio(number)}
 					/>
 				{/each}
 			</div>
@@ -386,6 +392,8 @@
 
 	.pages {
 		display: flex;
+		align-items: center;
+		justify-content: center;
 		gap: 0;
 		width: 100%;
 		height: 100%;
@@ -397,15 +405,22 @@
 		flex-direction: row-reverse;
 	}
 
+	/* Each page keeps its natural proportions and is sized to the available
+	   height, so the two halves of a spread meet flush in the middle. */
 	.page {
 		display: block;
-		flex: 1 1 0;
-		width: 0;
-		min-width: 0;
+		flex: 0 0 auto;
+		width: auto;
 		height: 100%;
+		max-width: 100%;
 		object-fit: contain;
 		background: #000;
 		border-radius: var(--radius);
+	}
+
+	/* No inner rounded corners at the seam of a spread. */
+	.pages.double .page {
+		border-radius: 0;
 	}
 
 	.controls {
