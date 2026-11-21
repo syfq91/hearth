@@ -46,7 +46,6 @@
 	let cache = $state<Record<number, string>>({});
 	let loading = $state(false);
 	let error = $state<string | null>(null);
-	let comic = $state<HTMLElement | null>(null);
 	let pageArea = $state<HTMLElement | null>(null);
 
 	const WINDOW_BEFORE = 2;
@@ -187,14 +186,20 @@
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
-		// Arrows only turn pages while focus is inside the reader, so arrows
-		// elsewhere in the app keep their own meaning (spatial navigation,
-		// form controls). The buttons below cover keyboard users who are not
-		// focused inside it.
-		const root = comic;
-		if (!root || !root.contains(document.activeElement)) return;
+		// Arrow keys turn pages anywhere in the reader, including while a
+		// header popover has focus. Form fields and popover controls keep
+		// their own arrow-key meaning.
 		const target = event.target as HTMLElement | null;
-		if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT')) return;
+		if (
+			target &&
+			(target.tagName === 'INPUT' ||
+				target.tagName === 'SELECT' ||
+				target.tagName === 'TEXTAREA' ||
+				target.isContentEditable ||
+				target.closest('[role="dialog"], [role="menu"]'))
+		) {
+			return;
+		}
 		switch (event.key) {
 			case 'ArrowRight':
 				event.preventDefault();
@@ -215,7 +220,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="comic" role="document" aria-label={`Page ${page} of ${pageCount}`} bind:this={comic}>
+<div class="comic" role="document" aria-label={`Page ${page} of ${pageCount}`}>
 	<div
 		class="page-area"
 		role="presentation"

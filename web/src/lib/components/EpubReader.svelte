@@ -138,9 +138,36 @@
 		else onToggleHeader?.();
 	}
 
+	/** Arrow keys turn pages anywhere in the reader, not just on focus. */
+	function handleKeydown(event: KeyboardEvent): void {
+		const target = event.target as HTMLElement | null;
+		if (
+			target &&
+			(target.tagName === 'INPUT' ||
+				target.tagName === 'SELECT' ||
+				target.tagName === 'TEXTAREA' ||
+				target.isContentEditable ||
+				target.closest('[role="dialog"], [role="menu"]'))
+		) {
+			return;
+		}
+		if (event.key === 'ArrowRight') {
+			event.preventDefault();
+			turnPage(1);
+		} else if (event.key === 'ArrowLeft') {
+			event.preventDefault();
+			turnPage(-1);
+		}
+	}
+
 	// foliate replaces iframe documents between sections, so track the
 	// listeners we add and detach them when the reader closes.
-	const docListeners: Array<{ doc: Document; down: (e: PointerEvent) => void; up: (e: PointerEvent) => void }> = [];
+	const docListeners: Array<{
+		doc: Document;
+		down: (e: PointerEvent) => void;
+		up: (e: PointerEvent) => void;
+		key: (e: KeyboardEvent) => void;
+	}> = [];
 
 	function listenOnDocument(doc: Document): void {
 		if (docListeners.some((entry) => entry.doc === doc)) return;
@@ -152,9 +179,11 @@
 			beginPointer(event, doc.documentElement.getBoundingClientRect());
 		};
 		const up = (event: PointerEvent): void => endPointer(event);
+		const key = (event: KeyboardEvent): void => handleKeydown(event);
 		doc.addEventListener('pointerdown', down);
 		doc.addEventListener('pointerup', up);
-		docListeners.push({ doc, down, up });
+		doc.addEventListener('keydown', key);
+		docListeners.push({ doc, down, up, key });
 	}
 
 	// foliate-js is pure ESM with a custom-element side effect; load it only in
@@ -219,9 +248,10 @@
 			disposed = true;
 			view?.removeEventListener('relocate', handleRelocate);
 			view?.removeEventListener('load', handleLoad);
-			for (const { doc, down, up } of docListeners) {
+			for (const { doc, down, up, key } of docListeners) {
 				doc.removeEventListener('pointerdown', down);
 				doc.removeEventListener('pointerup', up);
+				doc.removeEventListener('keydown', key);
 			}
 			docListeners.length = 0;
 			view?.close();
@@ -229,6 +259,8 @@
 		};
 	});
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div
 	class="epub-shell"
