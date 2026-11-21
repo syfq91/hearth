@@ -81,4 +81,8 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 	await page.keyboard.press('Escape');
 	await expect(dialog).toBeHidden();
 	await expect(menu).toBeHidden();
+
+	// The header's back arrow returns to the previous page.
+	await page.getByRole('link', { name: 'Back' }).click();
+	await expect(page).toHaveURL(/\/books\/[^/]+(?:[?#].*)?$/);
 });

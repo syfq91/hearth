@@ -7,7 +7,7 @@
 	import { ProgressSync } from '../../../../lib/reader/progress';
 	import { withMediaToken } from '../../../../lib/media-token.svelte';
 	import { goto } from '$app/navigation';
-	import { X, Maximize, Minimize, List, Settings2 } from '@lucide/svelte';
+	import { ArrowLeft, Maximize, Minimize, List, Settings2 } from '@lucide/svelte';
 	import {
 		FONT_FAMILIES,
 		FONT_SIZE_STEP,
@@ -216,12 +216,18 @@
 		<div class="reader-header-left">
 			<a
 				href={`/books/${data.book.id}`}
-				class="close-button"
-				aria-label="Close book"
-				title="Close book (Esc)"
+				class="back-btn"
+				onclick={(event) => {
+					if (typeof window !== 'undefined' && window.history.length > 1) {
+						event.preventDefault();
+						window.history.back();
+					}
+				}}
+				aria-label="Back"
+				title="Back"
 			>
-				<X size={18} />
-				<span>Close</span>
+				<ArrowLeft size={22} />
+				<span class="visually-hidden">Back</span>
 			</a>
 			<span class="divider" aria-hidden="true">/</span>
 			<a href={`/books/${data.book.id}`} class="crumbs" aria-label={data.book.title}>
@@ -532,29 +538,30 @@
 		min-width: 0;
 	}
 
-	.close-button {
+	.back-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.4rem;
-		background: var(--surface-2);
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		background: rgba(22, 27, 34, 0.7);
 		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		padding: 0.35rem 0.75rem;
 		color: var(--text);
-		font-size: 0.85rem;
-		font-weight: 500;
 		cursor: pointer;
 		text-decoration: none;
+		flex-shrink: 0;
+		backdrop-filter: blur(4px);
 		transition:
 			background 0.15s ease,
 			border-color 0.15s ease,
 			color 0.15s ease;
 	}
 
-	.close-button:hover {
-		background: rgba(255, 107, 107, 0.15);
-		border-color: var(--danger);
-		color: var(--danger);
+	.back-btn:hover {
+		background: var(--surface-2);
+		border-color: var(--accent);
+		color: var(--accent);
 		text-decoration: none;
 	}
 
