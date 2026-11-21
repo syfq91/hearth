@@ -22,6 +22,12 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 	const percentage = page.locator('.percentage');
 	const viewport = page.locator('.reader-viewport');
 
+	// The header is a transparent gradient overlay, like the video player.
+	const headerBackground = await page
+		.locator('.reader-header')
+		.evaluate((el) => getComputedStyle(el).backgroundColor);
+	expect(headerBackground).toBe('rgba(0, 0, 0, 0)');
+
 	// The format badge is gone.
 	await expect(page.getByText('EPUB', { exact: true })).toHaveCount(0);
 	// The footer shows the chapter and section progress.

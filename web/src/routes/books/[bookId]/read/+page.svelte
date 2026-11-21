@@ -516,9 +516,14 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
-		padding: 0.6rem 1.25rem;
-		background: var(--surface);
-		border-bottom: 1px solid var(--border);
+		padding: 1rem 1.5rem;
+		/* Same fade as the video player overlay: no solid bar, no border. */
+		background: linear-gradient(
+			to bottom,
+			rgba(0, 0, 0, 0.85) 0%,
+			rgba(0, 0, 0, 0.4) 60%,
+			transparent 100%
+		);
 		transition:
 			opacity 0.2s ease,
 			transform 0.2s ease;
@@ -538,7 +543,8 @@
 		min-width: 0;
 	}
 
-	.back-btn {
+	.back-btn,
+	.fs-button {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -558,7 +564,8 @@
 			color 0.15s ease;
 	}
 
-	.back-btn:hover {
+	.back-btn:hover,
+	.fs-button:hover {
 		background: var(--surface-2);
 		border-color: var(--accent);
 		color: var(--accent);
@@ -587,26 +594,6 @@
 		align-items: center;
 		gap: 0.75rem;
 		flex-shrink: 0;
-	}
-
-	.fs-button {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--surface-2);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		padding: 0.4rem;
-		color: var(--muted);
-		cursor: pointer;
-		transition:
-			color 0.15s ease,
-			border-color 0.15s ease;
-	}
-
-	.fs-button:hover {
-		color: var(--text);
-		border-color: var(--muted);
 	}
 
 	.popover-anchor {
