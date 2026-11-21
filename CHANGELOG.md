@@ -49,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- Book readers now turn pages with edge chevrons, left/right tap zones and (for comics) left/right swipes; tapping the middle of a page toggles the header. The header floats above the reading area so EPUB text no longer reflows when it is hidden.
+- Reader footers show the book percentage on the left and the page/section count on the right, with the current chapter in the middle for EPUB. The comic footer spans the viewport, and its counter reports spread numbers in double-page mode.
+- EPUB settings offer a ±1px font-size stepper (10–32px), font family, background theme and single/double text columns. Comic settings offer reading direction (left-to-right or right-to-left) and single/double page spreads. All reader preferences persist in local storage.
 - Audio dock transport and volume buttons are now borderless and transparent at rest, matching the repeat/shuffle/favourite toggles.
 - The persistent audio dock now shows album art, centres the transport controls, adds a top-edge seek slider, and hosts repeat (off/all/one), shuffle, and favourite controls beside the volume slider. Music keeps playing across page navigation and stays available in comics/epub readers; opening a video stops playback and hides the dock.
 - Library, books, artists, genres, and songs pages now use numbered pagination (with Previous/Next and a page window) via a shared `Pagination` component instead of "Load more" buttons. Changing a filter, folder, or search resets to page 1. `GET /libraries/{id}/items` gained an `offset` parameter and a `total` count to support it while keeping cursor pagination for existing clients.
@@ -92,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `hls_fmp4` client capability flag and the `default_max_bitrate` field on the admin transcoding settings API. Neither ever affected playback: Hearth only emits fMP4 HLS, and no `Settings.default_max_bitrate` existed to read.
 
 ### Fixed
+- The EPUB section counter now starts at 1, and the Left/Right arrow keys turn pages anywhere in the EPUB or comic reader instead of only when focus is inside it.
 - Comic page navigation stays reachable while music plays: the page image now scales to the space left after the audio dock instead of using a viewport-height cap that pushed the Previous/Next controls out of the reader.
 - Clicking the **Hearth** brand link no longer stops music. The link uses client-side navigation instead of a full page reload, so the persistent player state and audio element survive the trip home.
 - Resuming playback of media with a container start offset (notably MKV) no longer draws an inaccurate seek bar. The player normalized `currentTime` and buffered ranges by the container's `start_time_seconds` but still divided by the raw media duration, stretching the timeline: the buffered bar sat ahead of the play position and the remaining-time label ran long. The seekbar now uses the offset-normalized duration everywhere in the UI, while progress reports and saved resume points stay in file time.
