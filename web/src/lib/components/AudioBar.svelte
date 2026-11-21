@@ -400,6 +400,7 @@
 						aria-label="Volume"
 						aria-valuetext={`${Math.round(volume * 100)}%`}
 						title={`Volume: ${Math.round(volume * 100)}%`}
+						style={`--volume-progress: ${Math.round(volume * 100)}%`}
 						class="volume-slider"
 					/>
 				</div>
@@ -652,7 +653,11 @@
 		width: 5.5rem;
 		height: 0.35rem;
 		border-radius: 999px;
-		background: var(--surface-2);
+		background: linear-gradient(
+			to right,
+			var(--accent) var(--volume-progress, 0%),
+			var(--surface-2) var(--volume-progress, 0%)
+		);
 		border: 1px solid var(--border);
 		outline: none;
 		cursor: pointer;
