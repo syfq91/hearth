@@ -39,7 +39,7 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 	// Tapping the middle toggles the header, and tapping again restores it.
 	box = (await viewport.boundingBox())!;
 	await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-	await expect(page.locator('.reader-header')).toHaveCount(0);
+	await expect(page.locator('.reader-header')).toBeHidden();
 	box = (await viewport.boundingBox())!;
 	await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 	await expect(page.locator('.reader-header')).toBeVisible();

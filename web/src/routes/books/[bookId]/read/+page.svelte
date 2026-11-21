@@ -172,148 +172,146 @@
 </svelte:head>
 
 <div class="book-reader-container">
-	{#if headerVisible}
-		<header class="reader-header">
-			<div class="reader-header-left">
-				<a
-					href={`/books/${data.book.id}`}
-					class="close-button"
-					aria-label="Close book"
-					title="Close book (Esc)"
-				>
-					<X size={18} />
-					<span>Close</span>
-				</a>
-				<span class="divider" aria-hidden="true">/</span>
-				<a href={`/books/${data.book.id}`} class="crumbs" aria-label={data.book.title}>
-					{data.book.title}
-				</a>
-			</div>
+	<header class={['reader-header', !headerVisible && 'header-hidden']}>
+		<div class="reader-header-left">
+			<a
+				href={`/books/${data.book.id}`}
+				class="close-button"
+				aria-label="Close book"
+				title="Close book (Esc)"
+			>
+				<X size={18} />
+				<span>Close</span>
+			</a>
+			<span class="divider" aria-hidden="true">/</span>
+			<a href={`/books/${data.book.id}`} class="crumbs" aria-label={data.book.title}>
+				{data.book.title}
+			</a>
+		</div>
 
-			<div class="reader-header-right">
-				{#if isEpub}
-					<div class="popover-anchor">
-						<button
-							type="button"
-							class="fs-button"
-							onclick={() => {
-								tocOpen = !tocOpen;
-								settingsOpen = false;
-							}}
-							aria-label="Chapters"
-							aria-expanded={tocOpen}
-							title="Chapters"
-						>
-							<List size={18} />
-						</button>
-						{#if tocOpen}
-							<div class="popover toc-popover" role="menu" aria-label="Chapters">
-								<div class="popover-heading">Chapters</div>
-								<div class="popover-scroll">
-									{#each epubToc as item (item.href + (item.id ?? ''))}
+		<div class="reader-header-right">
+			{#if isEpub}
+				<div class="popover-anchor">
+					<button
+						type="button"
+						class="fs-button"
+						onclick={() => {
+							tocOpen = !tocOpen;
+							settingsOpen = false;
+						}}
+						aria-label="Chapters"
+						aria-expanded={tocOpen}
+						title="Chapters"
+					>
+						<List size={18} />
+					</button>
+					{#if tocOpen}
+						<div class="popover toc-popover" role="menu" aria-label="Chapters">
+							<div class="popover-heading">Chapters</div>
+							<div class="popover-scroll">
+								{#each epubToc as item (item.href + (item.id ?? ''))}
+									<button
+										type="button"
+										role="menuitem"
+										class="popover-item"
+										onclick={() => selectChapter(item)}
+									>
+										{item.label}
+									</button>
+								{:else}
+									<p class="popover-empty">No chapters</p>
+								{/each}
+							</div>
+						</div>
+					{/if}
+				</div>
+
+				<div class="popover-anchor">
+					<button
+						type="button"
+						class="fs-button"
+						onclick={() => {
+							settingsOpen = !settingsOpen;
+							tocOpen = false;
+						}}
+						aria-label="Reader settings"
+						aria-expanded={settingsOpen}
+						title="Reader settings"
+					>
+						<Settings2 size={18} />
+					</button>
+					{#if settingsOpen}
+						<div class="popover settings-popover" role="dialog" aria-label="Reader settings">
+							<div class="popover-heading">Reader settings</div>
+
+							<div class="setting-row">
+								<span class="setting-label">Font size</span>
+								<div class="segmented">
+									{#each FONT_SIZES as size (size)}
 										<button
 											type="button"
-											role="menuitem"
-											class="popover-item"
-											onclick={() => selectChapter(item)}
+											class={['segment', readerSettings.fontSize === size && 'active']}
+											aria-label={`Font size ${size}`}
+											aria-pressed={readerSettings.fontSize === size}
+											onclick={() => updateSettings({ fontSize: size })}
 										>
-											{item.label}
+											{size}
 										</button>
-									{:else}
-										<p class="popover-empty">No chapters</p>
 									{/each}
 								</div>
 							</div>
-						{/if}
-					</div>
 
-					<div class="popover-anchor">
-						<button
-							type="button"
-							class="fs-button"
-							onclick={() => {
-								settingsOpen = !settingsOpen;
-								tocOpen = false;
-							}}
-							aria-label="Reader settings"
-							aria-expanded={settingsOpen}
-							title="Reader settings"
-						>
-							<Settings2 size={18} />
-						</button>
-						{#if settingsOpen}
-							<div class="popover settings-popover" role="dialog" aria-label="Reader settings">
-								<div class="popover-heading">Reader settings</div>
-
-								<div class="setting-row">
-									<span class="setting-label">Font size</span>
-									<div class="segmented">
-										{#each FONT_SIZES as size (size)}
-											<button
-												type="button"
-												class={['segment', readerSettings.fontSize === size && 'active']}
-												aria-label={`Font size ${size}`}
-												aria-pressed={readerSettings.fontSize === size}
-												onclick={() => updateSettings({ fontSize: size })}
-											>
-												{size}
-											</button>
-										{/each}
-									</div>
-								</div>
-
-								<div class="setting-row">
-									<span class="setting-label">Font style</span>
-									<div class="segmented">
-										{#each FONT_FAMILIES as family (family)}
-											<button
-												type="button"
-												class={['segment', readerSettings.fontFamily === family && 'active']}
-												aria-pressed={readerSettings.fontFamily === family}
-												onclick={() => updateSettings({ fontFamily: family })}
-											>
-												{family === 'serif' ? 'Serif' : family === 'sans' ? 'Sans' : 'Mono'}
-											</button>
-										{/each}
-									</div>
-								</div>
-
-								<div class="setting-row">
-									<span class="setting-label">Background</span>
-									<div class="segmented">
-										{#each THEMES as theme (theme)}
-											<button
-												type="button"
-												class={['segment theme', theme, readerSettings.theme === theme && 'active']}
-												aria-pressed={readerSettings.theme === theme}
-												onclick={() => updateSettings({ theme })}
-											>
-												{theme === 'sepia' ? 'Sepia' : theme === 'dark' ? 'Dark' : 'Light'}
-											</button>
-										{/each}
-									</div>
+							<div class="setting-row">
+								<span class="setting-label">Font style</span>
+								<div class="segmented">
+									{#each FONT_FAMILIES as family (family)}
+										<button
+											type="button"
+											class={['segment', readerSettings.fontFamily === family && 'active']}
+											aria-pressed={readerSettings.fontFamily === family}
+											onclick={() => updateSettings({ fontFamily: family })}
+										>
+											{family === 'serif' ? 'Serif' : family === 'sans' ? 'Sans' : 'Mono'}
+										</button>
+									{/each}
 								</div>
 							</div>
-						{/if}
-					</div>
-				{/if}
 
-				<button
-					type="button"
-					class="fs-button"
-					onclick={toggleNativeFullscreen}
-					aria-label={isNativeFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-					title={isNativeFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-				>
-					{#if isNativeFullscreen}
-						<Minimize size={18} />
-					{:else}
-						<Maximize size={18} />
+							<div class="setting-row">
+								<span class="setting-label">Background</span>
+								<div class="segmented">
+									{#each THEMES as theme (theme)}
+										<button
+											type="button"
+											class={['segment theme', theme, readerSettings.theme === theme && 'active']}
+											aria-pressed={readerSettings.theme === theme}
+											onclick={() => updateSettings({ theme })}
+										>
+											{theme === 'sepia' ? 'Sepia' : theme === 'dark' ? 'Dark' : 'Light'}
+										</button>
+									{/each}
+								</div>
+							</div>
+						</div>
 					{/if}
-				</button>
-			</div>
-		</header>
-	{/if}
+				</div>
+			{/if}
+
+			<button
+				type="button"
+				class="fs-button"
+				onclick={toggleNativeFullscreen}
+				aria-label={isNativeFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+				title={isNativeFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+			>
+				{#if isNativeFullscreen}
+					<Minimize size={18} />
+				{:else}
+					<Maximize size={18} />
+				{/if}
+			</button>
+		</div>
+	</header>
 
 	<div class="reader-viewport">
 		{#if !format}
@@ -350,6 +348,7 @@
 
 <style>
 	.book-reader-container {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		height: 100%;
@@ -358,7 +357,14 @@
 		overflow: hidden;
 	}
 
+	/* The header floats above the reader: the viewport keeps the same size
+	   whether it is shown or hidden, so EPUB text never reflows on toggle. */
 	.reader-header {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 40;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -366,8 +372,16 @@
 		padding: 0.6rem 1.25rem;
 		background: var(--surface);
 		border-bottom: 1px solid var(--border);
-		z-index: 20;
-		flex-shrink: 0;
+		transition:
+			opacity 0.2s ease,
+			transform 0.2s ease;
+	}
+
+	.reader-header.header-hidden {
+		visibility: hidden;
+		opacity: 0;
+		transform: translateY(-100%);
+		pointer-events: none;
 	}
 
 	.reader-header-left {
