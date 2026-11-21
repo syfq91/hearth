@@ -151,20 +151,6 @@
 							<button
 								type="button"
 								class="icon-btn"
-								class:active={player.repeat !== 'off'}
-								onclick={() => cycleRepeat()}
-								aria-label={`Repeat: ${player.repeat}`}
-								title={`Repeat: ${player.repeat}`}
-							>
-								{#if player.repeat === 'one'}
-									<Repeat1 size={20} />
-								{:else}
-									<Repeat size={20} />
-								{/if}
-							</button>
-							<button
-								type="button"
-								class="icon-btn"
 								onclick={() => void playPrevious()}
 								disabled={player.index < 0}
 								aria-label="Previous track"
@@ -188,15 +174,6 @@
 							<button
 								type="button"
 								class="icon-btn"
-								onclick={stop}
-								aria-label="Stop playback"
-								title="Stop"
-							>
-								<Square size={20} fill="currentColor" />
-							</button>
-							<button
-								type="button"
-								class="icon-btn"
 								onclick={() => void playNext()}
 								disabled={player.index < 0 ||
 									(player.index + 1 >= player.queue.length && player.repeat !== 'all')}
@@ -205,19 +182,31 @@
 							>
 								<SkipForward size={22} fill="currentColor" />
 							</button>
+							<button
+								type="button"
+								class="icon-btn"
+								onclick={stop}
+								aria-label="Stop playback"
+								title="Stop"
+							>
+								<Square size={20} fill="currentColor" />
+							</button>
 						</div>
 
 						<div class="extras">
 							<button
 								type="button"
 								class="icon-btn"
-								class:active={player.favorite}
-								onclick={() => void toggleFavorite()}
-								aria-label={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
-								aria-pressed={player.favorite}
-								title={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
+								class:active={player.repeat !== 'off'}
+								onclick={() => cycleRepeat()}
+								aria-label={`Repeat: ${player.repeat}`}
+								title={`Repeat: ${player.repeat}`}
 							>
-								<Heart size={20} fill={player.favorite ? 'currentColor' : 'none'} />
+								{#if player.repeat === 'one'}
+									<Repeat1 size={20} />
+								{:else}
+									<Repeat size={20} />
+								{/if}
 							</button>
 							<button
 								type="button"
@@ -229,6 +218,17 @@
 								title="Shuffle"
 							>
 								<Shuffle size={20} />
+							</button>
+							<button
+								type="button"
+								class="icon-btn"
+								class:active={player.favorite}
+								onclick={() => void toggleFavorite()}
+								aria-label={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
+								aria-pressed={player.favorite}
+								title={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
+							>
+								<Heart size={20} fill={player.favorite ? 'currentColor' : 'none'} />
 							</button>
 							<div class="volume-control">
 								<button
