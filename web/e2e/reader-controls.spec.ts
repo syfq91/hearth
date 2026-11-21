@@ -27,6 +27,15 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 		.locator('.reader-header')
 		.evaluate((el) => getComputedStyle(el).backgroundColor);
 	expect(headerBackground).toBe('rgba(0, 0, 0, 0)');
+	// No slash divider; the title uses the video player's bold white styling.
+	await expect(page.locator('.reader-header .divider')).toHaveCount(0);
+	const titleStyle = await page
+		.locator('.reader-header .crumbs')
+		.evaluate((el) => {
+			const style = getComputedStyle(el);
+			return { color: style.color, weight: style.fontWeight };
+		});
+	expect(titleStyle).toEqual({ color: 'rgb(255, 255, 255)', weight: '600' });
 
 	// The format badge is gone.
 	await expect(page.getByText('EPUB', { exact: true })).toHaveCount(0);

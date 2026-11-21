@@ -229,7 +229,6 @@
 				<ArrowLeft size={22} />
 				<span class="visually-hidden">Back</span>
 			</a>
-			<span class="divider" aria-hidden="true">/</span>
 			<a href={`/books/${data.book.id}`} class="crumbs" aria-label={data.book.title}>
 				{data.book.title}
 			</a>
@@ -572,21 +571,15 @@
 		text-decoration: none;
 	}
 
-	.divider {
-		color: var(--border);
-	}
-
 	.crumbs {
-		font-size: 0.95rem;
-		font-weight: 500;
-		color: var(--text);
+		font-size: 1.15rem;
+		font-weight: 600;
+		color: #fff;
+		margin: 0;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-	}
-
-	.crumbs:hover {
-		color: var(--accent);
+		text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 	}
 
 	.reader-header-right {
