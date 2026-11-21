@@ -23,3 +23,17 @@ export interface Point {
 export function isTap(start: Point, end: Point, threshold = 12): boolean {
 	return Math.abs(end.x - start.x) <= threshold && Math.abs(end.y - start.y) <= threshold;
 }
+
+export type SwipeDirection = 'left' | 'right';
+
+/**
+ * Detect a mostly-horizontal swipe. A left swipe (finger moves left) advances
+ * the page; a right swipe goes back. Short or mostly-vertical drags are not
+ * swipes so they can still be taps.
+ */
+export function horizontalSwipe(start: Point, end: Point, threshold = 50): SwipeDirection | null {
+	const dx = end.x - start.x;
+	const dy = end.y - start.y;
+	if (Math.abs(dx) < threshold || Math.abs(dx) <= Math.abs(dy)) return null;
+	return dx < 0 ? 'left' : 'right';
+}

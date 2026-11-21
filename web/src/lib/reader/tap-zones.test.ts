@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isTap, tapZoneAt } from './tap-zones.ts';
+import { horizontalSwipe, isTap, tapZoneAt } from './tap-zones.ts';
 
 const rect = (left = 0, width = 300): DOMRect =>
 	({ left, width }) as DOMRect;
@@ -24,4 +24,16 @@ test('isTap ignores pointer drift', () => {
 	assert.equal(isTap({ x: 100, y: 100 }, { x: 105, y: 103 }), true);
 	assert.equal(isTap({ x: 100, y: 100 }, { x: 130, y: 100 }), false);
 	assert.equal(isTap({ x: 100, y: 100 }, { x: 100, y: 130 }), false);
+});
+
+test('horizontal swipe maps left to next and right to previous', () => {
+	const start = { x: 200, y: 100 };
+	assert.equal(horizontalSwipe(start, { x: 120, y: 105 }), 'left');
+	assert.equal(horizontalSwipe(start, { x: 280, y: 95 }), 'right');
+});
+
+test('short and mostly vertical drags are not swipes', () => {
+	const start = { x: 200, y: 100 };
+	assert.equal(horizontalSwipe(start, { x: 180, y: 100 }), null);
+	assert.equal(horizontalSwipe(start, { x: 140, y: 260 }), null);
 });

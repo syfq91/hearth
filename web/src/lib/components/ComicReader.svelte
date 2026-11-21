@@ -10,7 +10,13 @@
 	import { withMediaToken } from '../media-token.svelte';
 	import { untrack } from 'svelte';
 	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
-	import { isTap, tapZoneAt, type Point, type TapZone } from '../reader/tap-zones';
+	import {
+		horizontalSwipe,
+		isTap,
+		tapZoneAt,
+		type Point,
+		type TapZone
+	} from '../reader/tap-zones';
 
 	interface Props {
 		bookId: string;
@@ -130,7 +136,17 @@
 	function handlePointerUp(event: PointerEvent): void {
 		const start = pointerStart;
 		pointerStart = null;
-		if (!start || !isTap(start, event)) return;
+		if (!start) return;
+		const swipe = horizontalSwipe(start, event);
+		if (swipe === 'left') {
+			go(1);
+			return;
+		}
+		if (swipe === 'right') {
+			go(-1);
+			return;
+		}
+		if (!isTap(start, event)) return;
 		if (start.zone === 'prev') go(-1);
 		else if (start.zone === 'next') go(1);
 	}
@@ -182,6 +198,7 @@
 				src={cache[page]}
 				alt={`Page ${page}`}
 				decoding="async"
+				draggable={false}
 			/>
 		{:else}
 			<p class="status" role="status">Loading page…</p>
@@ -237,6 +254,8 @@
 		flex: 1;
 		min-height: 0;
 		width: 100%;
+		touch-action: pan-y;
+		user-select: none;
 	}
 
 	.edge-nav {
