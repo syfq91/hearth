@@ -333,15 +333,20 @@
 						</a>
 					{/each}
 				{/if}
-				{#if hasFavorites}
-					<a href="/favorites" aria-current={isActive('/favorites') ? 'page' : undefined}>
-						<Heart size={16} />
-						<span>Favourites</span>
-					</a>
-				{/if}
 			</nav>
 			<div class="spacer"></div>
 			<div class="topbar-actions">
+				{#if hasFavorites}
+					<a
+						href="/favorites"
+						class="icon-btn"
+						aria-current={isActive('/favorites') ? 'page' : undefined}
+						aria-label="Favourites"
+						title="Favourites"
+					>
+						<Heart size={18} />
+					</a>
+				{/if}
 				<a
 					href="/search"
 					class="icon-btn"
