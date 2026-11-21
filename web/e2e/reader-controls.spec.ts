@@ -57,6 +57,15 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 	await expect(menu).toBeVisible();
 	await expect(menu.getByRole('menuitem').first()).toBeVisible();
 
+	// Hiding the header closes any open menu, and a middle tap restores it.
+	box = (await viewport.boundingBox())!;
+	await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+	await expect(page.locator('.reader-header')).toBeHidden();
+	await expect(menu).toBeHidden();
+	box = (await viewport.boundingBox())!;
+	await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+	await expect(page.locator('.reader-header')).toBeVisible();
+
 	// Settings are applied and persisted.
 	await page.getByRole('button', { name: 'Reader settings' }).click();
 	const dialog = page.getByRole('dialog', { name: 'Reader settings' });

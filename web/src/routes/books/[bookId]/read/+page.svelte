@@ -62,10 +62,25 @@
 		updateSettings({ fontSize: next });
 	}
 
+	function closeHeaderMenus(): void {
+		tocOpen = false;
+		settingsOpen = false;
+		comicSettingsOpen = false;
+	}
+
+	function hideHeader(): void {
+		headerVisible = false;
+		closeHeaderMenus();
+	}
+
+	function toggleHeader(): void {
+		headerVisible = !headerVisible;
+		if (!headerVisible) closeHeaderMenus();
+	}
+
 	function selectChapter(item: TocItem): void {
 		epubGoToChapter?.(item.href);
-		tocOpen = false;
-		headerVisible = false;
+		hideHeader();
 	}
 
 	// One syncer per mounted reader; cleanly disposed when switching books or unmounting.
@@ -444,8 +459,8 @@
 				bookUrl={fileUrl}
 				initialCfi={progress && !progress.completed ? progress.locator : null}
 				onRelocate={handleEpubRelocate}
-				onToggleHeader={() => (headerVisible = !headerVisible)}
-				onPageTurned={() => (headerVisible = false)}
+				onToggleHeader={toggleHeader}
+				onPageTurned={hideHeader}
 				settings={readerSettings}
 				onToc={(toc) => (epubToc = toc)}
 				bind:goToChapter={epubGoToChapter}
@@ -456,8 +471,8 @@
 				pageCount={data.book.page_count ?? 0}
 				startPage={parsePage(progress?.locator)}
 				onPageChange={handleComicPage}
-				onToggleHeader={() => (headerVisible = !headerVisible)}
-				onPageTurned={() => (headerVisible = false)}
+				onToggleHeader={toggleHeader}
+				onPageTurned={hideHeader}
 				settings={comicSettings}
 			/>
 		{:else if isPdf && fileUrl && PdfReader}
