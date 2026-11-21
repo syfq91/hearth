@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `hls_fmp4` client capability flag and the `default_max_bitrate` field on the admin transcoding settings API. Neither ever affected playback: Hearth only emits fMP4 HLS, and no `Settings.default_max_bitrate` existed to read.
 
 ### Fixed
+- The EPUB "Opening book…" message (and open-error banner) is now centred in the reading area instead of sitting at the top behind the floating header.
 - The EPUB section counter now starts at 1, and the Left/Right arrow keys turn pages anywhere in the EPUB or comic reader instead of only when focus is inside it.
 - Comic page navigation stays reachable while music plays: the page image now scales to the space left after the audio dock instead of using a viewport-height cap that pushed the Previous/Next controls out of the reader.
 - Clicking the **Hearth** brand link no longer stops music. The link uses client-side navigation instead of a full page reload, so the persistent player state and audio element survive the trip home.

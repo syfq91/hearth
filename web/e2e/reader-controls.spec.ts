@@ -92,3 +92,23 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 	await page.getByRole('link', { name: 'Back' }).click();
 	await expect(page).toHaveURL(/\/books\/[^/]+(?:[?#].*)?$/);
 });
+
+test('EPUB loading message is centred in the reading area', async ({ page, request }) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
+	// Hold the book response so the loading state stays visible.
+	await page.route('**/file/epub*', async (route) => {
+		await new Promise((resolve) => setTimeout(resolve, 4_000));
+		await route.continue();
+	});
+	await page.goto('/books');
+	await page.getByRole('link', { name: BOOK_TITLE }).first().click();
+	await page.getByRole('link', { name: /^(Read|Resume) EPUB$/ }).first().click();
+
+	const status = page.locator('.epub .status');
+	await expect(status).toBeVisible();
+	const box = (await status.boundingBox())!;
+	const area = (await page.locator('.epub-shell').boundingBox())!;
+	expect(Math.abs(box.x + box.width / 2 - (area.x + area.width / 2))).toBeLessThan(3);
+	expect(Math.abs(box.y + box.height / 2 - (area.y + area.height / 2))).toBeLessThan(3);
+});
