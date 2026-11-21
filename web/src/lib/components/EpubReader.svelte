@@ -13,7 +13,7 @@
 	import { DEFAULT_READER_SETTINGS, type ReaderSettings } from '../reader/settings';
 	import type { TocItem } from '../reader/toc';
 
-	interface FoliateRenderer {
+	interface FoliateRenderer extends HTMLElement {
 		setStyles?(css: string): void;
 	}
 
@@ -112,6 +112,7 @@
 	$effect(() => {
 		if (!ready) return;
 		view?.renderer?.setStyles?.(styleFor(settings));
+		view?.renderer?.setAttribute('max-column-count', String(settings.columns));
 	});
 
 	// foliate renders pages inside iframes, whose clicks do not bubble to the

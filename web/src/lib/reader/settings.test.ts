@@ -19,8 +19,13 @@ test('settings default when nothing is stored', () => {
 
 test('settings survive a save/load round trip', () => {
 	store.clear();
-	saveReaderSettings({ fontSize: 22, fontFamily: 'sans', theme: 'sepia' });
-	assert.deepEqual(loadReaderSettings(), { fontSize: 22, fontFamily: 'sans', theme: 'sepia' });
+	saveReaderSettings({ fontSize: 22, fontFamily: 'sans', theme: 'sepia', columns: 2 });
+	assert.deepEqual(loadReaderSettings(), {
+		fontSize: 22,
+		fontFamily: 'sans',
+		theme: 'sepia',
+		columns: 2
+	});
 });
 
 test('corrupt stored settings fall back to defaults', () => {
@@ -34,6 +39,7 @@ test('corrupt stored settings fall back to defaults', () => {
 	assert.deepEqual(loadReaderSettings(), {
 		fontSize: 32,
 		fontFamily: 'serif',
-		theme: 'dark'
+		theme: 'dark',
+		columns: 1
 	});
 });

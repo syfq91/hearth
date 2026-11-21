@@ -326,6 +326,28 @@
 									{/each}
 								</div>
 							</div>
+
+							<div class="setting-row">
+								<span class="setting-label">Columns</span>
+								<div class="segmented">
+									<button
+										type="button"
+										class={['segment', readerSettings.columns === 1 && 'active']}
+										aria-pressed={readerSettings.columns === 1}
+										onclick={() => updateSettings({ columns: 1 })}
+									>
+										Single
+									</button>
+									<button
+										type="button"
+										class={['segment', readerSettings.columns === 2 && 'active']}
+										aria-pressed={readerSettings.columns === 2}
+										onclick={() => updateSettings({ columns: 2 })}
+									>
+										Double
+									</button>
+								</div>
+							</div>
 						</div>
 					{/if}
 				</div>

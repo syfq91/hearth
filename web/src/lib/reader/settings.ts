@@ -5,6 +5,8 @@ export interface ReaderSettings {
 	fontSize: number;
 	fontFamily: 'serif' | 'sans' | 'mono';
 	theme: 'light' | 'sepia' | 'dark';
+	/** Text columns per screen (foliate's max-column-count). */
+	columns: 1 | 2;
 }
 
 export const MIN_FONT_SIZE = 10;
@@ -16,7 +18,8 @@ export const THEMES: ReaderSettings['theme'][] = ['light', 'sepia', 'dark'];
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
 	fontSize: 18,
 	fontFamily: 'serif',
-	theme: 'dark'
+	theme: 'dark',
+	columns: 1
 };
 
 const STORAGE_KEY = 'hearth:epub-reader-settings';
@@ -37,7 +40,8 @@ export function loadReaderSettings(): ReaderSettings {
 				: DEFAULT_READER_SETTINGS.fontFamily,
 			theme: THEMES.includes(parsed.theme as ReaderSettings['theme'])
 				? (parsed.theme as ReaderSettings['theme'])
-				: DEFAULT_READER_SETTINGS.theme
+				: DEFAULT_READER_SETTINGS.theme,
+			columns: parsed.columns === 2 ? 2 : 1
 		};
 	} catch {
 		return { ...DEFAULT_READER_SETTINGS };
