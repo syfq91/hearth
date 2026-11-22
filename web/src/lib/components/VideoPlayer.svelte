@@ -34,6 +34,9 @@
 	import type { PlaybackInfoRequest, PlaybackInfoResponse } from '../api/types';
 	import { session } from '../auth.svelte';
 	import { resolveAutoSubtitle } from '../languages';
+	import ActivityBridge from '../chrome/ActivityBridge.svelte';
+	import { createAutoHideChrome } from '../chrome/auto-hide.ts';
+	import '../chrome/chrome.css';
 
 	type QualityLevel = NonNullable<PlaybackInfoRequest['quality']>;
 
@@ -88,10 +91,17 @@
 	let nowMs = $state(Date.now());
 
 	// OSD activity state
-	let isUserActive = $state(true);
-	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
+	let chromeVisible = $state(true);
 	let showModeBadge = $state(false);
 	let openMenu = $state<'audio' | 'subtitle' | 'speed' | 'quality' | null>(null);
+
+	const chrome = createAutoHideChrome({
+		persist: () => isPaused || loading || !!loadError || !!openMenu,
+		onChange: (visible) => {
+			chromeVisible = visible;
+		}
+	});
+	$effect(() => () => chrome.dispose());
 
 	// Fullscreen & PiP states
 	let isFullscreen = $state(false);
@@ -117,7 +127,6 @@
 	let lastQuality: QualityLevel = 'auto';
 
 	const REPORT_INTERVAL_MS = 10_000;
-	const HIDE_DELAY_MS = 1500;
 	const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 	const QUALITY_OPTIONS: { value: QualityLevel; label: string; detail: string }[] = [
 		{ value: 'auto', label: 'Auto', detail: 'Best available' },
@@ -158,40 +167,18 @@
 		return Math.min(100, Math.max(0, (currentTime / duration) * 100));
 	});
 
-	function scheduleHide(): void {
-		if (hideTimeout) clearTimeout(hideTimeout);
-		hideTimeout = null;
-		if (isPaused) return;
-		hideTimeout = setTimeout(() => {
-			isUserActive = false;
-			openMenu = null;
-		}, HIDE_DELAY_MS);
-	}
-
-	function triggerActivity(): void {
-		isUserActive = true;
-		scheduleHide();
-	}
-
-	function toggleControls(): void {
+	/** Clicking the picture toggles chrome while playing; paused stays revealed. */
+	function toggleVideoControls(): void {
 		if (isPaused) {
-			isUserActive = true;
-			openMenu = null;
+			chrome.reveal();
 			return;
 		}
-		if (isUserActive) {
-			isUserActive = false;
-			openMenu = null;
-			if (hideTimeout) clearTimeout(hideTimeout);
-			hideTimeout = null;
-			return;
-		}
-		triggerActivity();
+		chrome.toggle();
 	}
 
 	function toggleMenu(menu: 'audio' | 'subtitle' | 'speed' | 'quality'): void {
 		openMenu = openMenu === menu ? null : menu;
-		triggerActivity();
+		chrome.reveal();
 	}
 
 	function formatTime(seconds: number): string {
@@ -338,7 +325,7 @@
 		videoEl.currentTime = fileTime;
 		currentTime = nextTime;
 		notifyHlsSeek(fileTime);
-		triggerActivity();
+		chrome.reveal();
 		subtitleManager?.renderManualFrame(true);
 	}
 
@@ -935,7 +922,6 @@
 	// Teardown
 	$effect(() => {
 		return () => {
-			if (hideTimeout) clearTimeout(hideTimeout);
 			if (seekNotifyTimer !== null) clearTimeout(seekNotifyTimer);
 			destroyed = true;
 			void report('stopped');
@@ -954,17 +940,12 @@
 	const availableEmbeddedSubtitles = $derived(info?.embedded_subtitles ?? []);
 </script>
 
-<svelte:window
-	onpointermove={triggerActivity}
-	onkeydown={(e) => {
-		triggerActivity();
-		handleKeydown(e);
-	}}
-/>
+<ActivityBridge onactivity={chrome.reveal} />
+<svelte:window onkeydown={handleKeydown} />
 
 <div
-	class="player"
-	class:user-inactive={!isPaused && !isUserActive && !loading && !loadError}
+	class="player media-chrome-host"
+	data-chrome-hidden={!chromeVisible}
 	bind:this={containerEl}
 >
 	{#if loadError}
@@ -988,13 +969,12 @@
 			onplay={() => {
 				isPaused = false;
 				nowMs = Date.now();
-				triggerActivity();
+				chrome.reveal();
 			}}
 			onpause={() => {
 				isPaused = true;
 				nowMs = Date.now();
-				isUserActive = true;
-				if (hideTimeout) clearTimeout(hideTimeout);
+				chrome.reveal();
 				subtitleManager?.renderManualFrame(true);
 				void report('paused');
 			}}
@@ -1042,8 +1022,7 @@
 			}}
 			onended={() => {
 				isPaused = true;
-				isUserActive = true;
-				if (hideTimeout) clearTimeout(hideTimeout);
+				chrome.reveal();
 				void report('stopped');
 				onEnded?.();
 			}}
@@ -1052,15 +1031,14 @@
 					loadError = `Playback error: ${videoEl.error.message || 'Media decode failed'}`;
 				}
 			}}
-			onclick={toggleControls}
+			onclick={toggleVideoControls}
 		></video>
 	</div>
 
 	<!-- Top Overlay Navigation Bar -->
 	<div
-		class="top-overlay"
-		class:hidden={!isPaused && !isUserActive && !loading && !loadError}
-		onpointerdown={triggerActivity}
+		class={['top-overlay', 'media-chrome', 'media-chrome--top']}
+		data-hidden={!chromeVisible}
 		role="navigation"
 		aria-label="Player navigation"
 	>
@@ -1086,9 +1064,8 @@
 
 	<!-- Bottom Overlay Controls Bar -->
 	<div
-		class="bottom-overlay"
-		class:hidden={!isPaused && !isUserActive && !loading && !loadError}
-		onpointerdown={triggerActivity}
+		class={['bottom-overlay', 'media-chrome', 'media-chrome--bottom']}
+		data-hidden={!chromeVisible}
 		role="toolbar"
 		aria-label="Player controls"
 		tabindex="-1"
@@ -1448,7 +1425,7 @@
 	{#if showModeBadge && info}
 		<div
 			class="mode-badge-popup"
-			class:hidden={!isPaused && !isUserActive && !loading && !loadError}
+			class:hidden={!chromeVisible}
 			role="status"
 			title={(info.reasons ?? []).join('\n')}
 		>
@@ -1474,10 +1451,6 @@
 		display: flex;
 		flex-direction: column;
 		user-select: none;
-	}
-
-	.player.user-inactive {
-		cursor: none;
 	}
 
 	.video-container {
@@ -1512,39 +1485,14 @@
 		z-index: 1;
 	}
 
+	/* Chrome positioning, gradient, fade and hidden state come from the shared
+	   stylesheet; only player-specific layout stays here. */
 	.top-overlay {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		z-index: 10;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
 		padding: 1rem 1.5rem;
-		background: linear-gradient(
-			to bottom,
-			rgba(0, 0, 0, 0.85) 0%,
-			rgba(0, 0, 0, 0.4) 60%,
-			transparent 100%
-		);
-		transition:
-			opacity 0.15s ease,
-			transform 0.15s ease;
-	}
-
-	.top-overlay.hidden {
-		opacity: 0;
-		pointer-events: none;
-		transform: translateY(-0.5rem);
-	}
-
-	.top-overlay:hover,
-	.top-overlay:focus-within {
-		opacity: 1 !important;
-		pointer-events: auto !important;
-		transform: none !important;
 	}
 
 	.top-left {
@@ -1594,37 +1542,10 @@
 	}
 
 	.bottom-overlay {
-		position: absolute;
-		bottom: 0;
-		left: 0;
-		right: 0;
-		z-index: 10;
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
 		padding: 1.5rem 1.5rem 1rem;
-		background: linear-gradient(
-			to top,
-			rgba(0, 0, 0, 0.9) 0%,
-			rgba(0, 0, 0, 0.5) 70%,
-			transparent 100%
-		);
-		transition:
-			opacity 0.15s ease,
-			transform 0.15s ease;
-	}
-
-	.bottom-overlay.hidden {
-		opacity: 0;
-		pointer-events: none;
-		transform: translateY(0.5rem);
-	}
-
-	.bottom-overlay:hover,
-	.bottom-overlay:focus-within {
-		opacity: 1 !important;
-		pointer-events: auto !important;
-		transform: none !important;
 	}
 
 	.seek-row {
