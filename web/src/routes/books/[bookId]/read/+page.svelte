@@ -7,6 +7,9 @@
 	import { ProgressSync } from '../../../../lib/reader/progress';
 	import { playerUi } from '../../../../lib/player/ui.svelte';
 	import { withMediaToken } from '../../../../lib/media-token.svelte';
+	import ActivityBridge from '../../../../lib/chrome/ActivityBridge.svelte';
+	import { createAutoHideChrome } from '../../../../lib/chrome/auto-hide.ts';
+	import '../../../../lib/chrome/chrome.css';
 	import { goto } from '$app/navigation';
 	import { ArrowLeft, Maximize, Minimize, List, Settings2 } from '@lucide/svelte';
 	import {
@@ -34,13 +37,12 @@
 	const progress = $derived(data.progress);
 
 	let isNativeFullscreen = $state(false);
-	let headerVisible = $state(true);
-	let chromeTimer: ReturnType<typeof setTimeout> | null = null;
+	let chromeVisible = $state(true);
 
 	// The audio dock lives in the root layout; on reader pages it follows the
 	// header so both fade away together and the page keeps its full height.
 	$effect(() => {
-		playerUi.readerChromeVisible = headerVisible;
+		playerUi.readerChromeVisible = chromeVisible;
 	});
 
 	// EPUB header controls: table of contents and display settings.
@@ -51,6 +53,14 @@
 	let epubGoToChapter = $state<((href: string) => void) | undefined>(undefined);
 	let readerSettings = $state<ReaderSettings>(loadReaderSettings());
 	let comicSettings = $state<ComicSettings>(loadComicSettings());
+
+	const chrome = createAutoHideChrome({
+		persist: () => tocOpen || settingsOpen || comicSettingsOpen,
+		onChange: (visible) => {
+			chromeVisible = visible;
+		}
+	});
+	$effect(() => () => chrome.dispose());
 
 	function updateSettings(patch: Partial<ReaderSettings>): void {
 		readerSettings = { ...readerSettings, ...patch };
@@ -76,41 +86,19 @@
 		comicSettingsOpen = false;
 	}
 
-	function scheduleChromeHide(): void {
-		if (chromeTimer) clearTimeout(chromeTimer);
-		chromeTimer = setTimeout(() => {
-			if (tocOpen || settingsOpen || comicSettingsOpen) {
-				scheduleChromeHide();
-				return;
-			}
-			headerVisible = false;
-			chromeTimer = null;
-		}, 5000);
-	}
-
-	function revealChrome(): void {
-		headerVisible = true;
-		scheduleChromeHide();
-	}
-
-	function hideHeader(): void {
-		if (chromeTimer) clearTimeout(chromeTimer);
-		chromeTimer = null;
-		headerVisible = false;
+	function hideChrome(): void {
+		chrome.hide();
 		closeHeaderMenus();
 	}
 
-	function toggleHeader(): void {
-		if (headerVisible) {
-			hideHeader();
-		} else {
-			revealChrome();
-		}
+	function toggleChrome(): void {
+		if (chrome.visible) hideChrome();
+		else chrome.reveal();
 	}
 
 	function selectChapter(item: TocItem): void {
 		epubGoToChapter?.(item.href);
-		hideHeader();
+		hideChrome();
 	}
 
 	// One syncer per mounted reader; cleanly disposed when switching books or unmounting.
@@ -212,32 +200,25 @@
 		const onKeydown = (event: KeyboardEvent) => {
 			if (event.key !== 'Escape') return;
 			if (tocOpen || settingsOpen || comicSettingsOpen) {
-				tocOpen = false;
-				settingsOpen = false;
-				comicSettingsOpen = false;
+				closeHeaderMenus();
 			} else if (!document.fullscreenElement) {
 				void goto(`/books/${data.book.id}`);
 			}
 		};
+		// ActivityBridge owns reveal/re-arm; this only closes popovers on an
+		// outside click, which the shared bridge deliberately knows nothing about.
 		const onPointerDown = (event: PointerEvent) => {
 			if (!(event.target as HTMLElement | null)?.closest('.popover-anchor')) {
-				tocOpen = false;
-				settingsOpen = false;
-				comicSettingsOpen = false;
+				closeHeaderMenus();
 			}
-			revealChrome();
 		};
-		const onPointerMove = () => revealChrome();
 		document.addEventListener('fullscreenchange', onFsChange);
 		window.addEventListener('keydown', onKeydown);
 		window.addEventListener('pointerdown', onPointerDown);
-		window.addEventListener('pointermove', onPointerMove);
 		return () => {
 			document.removeEventListener('fullscreenchange', onFsChange);
 			window.removeEventListener('keydown', onKeydown);
 			window.removeEventListener('pointerdown', onPointerDown);
-			window.removeEventListener('pointermove', onPointerMove);
-			if (chromeTimer) clearTimeout(chromeTimer);
 		};
 	});
 </script>
@@ -246,8 +227,10 @@
 	<title>{data.book.title} · Reading · Hearth</title>
 </svelte:head>
 
-<div class="book-reader-container">
-	<header class={['reader-header', !headerVisible && 'header-hidden']}>
+<ActivityBridge onactivity={chrome.reveal} />
+
+<div class="book-reader-container media-chrome-host" data-chrome-hidden={!chromeVisible}>
+	<header class={['reader-header', 'media-chrome', 'media-chrome--top']} data-hidden={!chromeVisible}>
 		<div class="reader-header-left">
 			<a
 				href={`/books/${data.book.id}`}
@@ -499,8 +482,8 @@
 				bookUrl={fileUrl}
 				initialCfi={progress && !progress.completed ? progress.locator : null}
 				onRelocate={handleEpubRelocate}
-				onToggleHeader={toggleHeader}
-				onPageTurned={hideHeader}
+				onToggleHeader={toggleChrome}
+				onPageTurned={hideChrome}
 				settings={readerSettings}
 				onToc={(toc) => (epubToc = toc)}
 				bind:goToChapter={epubGoToChapter}
@@ -511,8 +494,8 @@
 				pageCount={data.book.page_count ?? 0}
 				startPage={parsePage(progress?.locator)}
 				onPageChange={handleComicPage}
-				onToggleHeader={toggleHeader}
-				onPageTurned={hideHeader}
+				onToggleHeader={toggleChrome}
+				onPageTurned={hideChrome}
 				settings={comicSettings}
 			/>
 		{:else if isPdf && fileUrl && PdfReader}
@@ -538,36 +521,15 @@
 		overflow: hidden;
 	}
 
-	/* The header floats above the reader: the viewport keeps the same size
-	   whether it is shown or hidden, so EPUB text never reflows on toggle. */
+	/* Positioning, gradient and fade live in the shared chrome stylesheet.
+	   Only the reader-specific layout stays here. The header floats above the
+	   reader so the viewport never resizes and EPUB text never reflows. */
 	.reader-header {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		z-index: 40;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
 		padding: 1rem 1.5rem;
-		/* Same fade as the video player overlay: no solid bar, no border. */
-		background: linear-gradient(
-			to bottom,
-			rgba(0, 0, 0, 0.85) 0%,
-			rgba(0, 0, 0, 0.4) 60%,
-			transparent 100%
-		);
-		transition:
-			opacity 0.2s ease,
-			transform 0.2s ease;
-	}
-
-	.reader-header.header-hidden {
-		visibility: hidden;
-		opacity: 0;
-		transform: translateY(-100%);
-		pointer-events: none;
 	}
 
 	.reader-header-left {
