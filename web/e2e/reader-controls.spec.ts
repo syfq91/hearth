@@ -111,6 +111,9 @@ test('EPUB chrome uses the shared idle timer, focus reveal and popover persist',
 	await openEpub(page);
 
 	const header = page.locator('.reader-header');
+	// The book can take longer than the 2.5s delay to open, so establish a
+	// known-visible state instead of assuming the initial bar is still up.
+	await page.keyboard.press('Shift');
 	await expect(header).toBeVisible();
 
 	// The timer starts with the first activity signal and uses one delay for

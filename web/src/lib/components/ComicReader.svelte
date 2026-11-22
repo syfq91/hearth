@@ -200,11 +200,17 @@
 	// A tap is a pointer press/release with almost no movement; the third of
 	// the page that received it decides which way to turn. Movement above the
 	// tap threshold is a swipe (handled separately) and never double-turns.
+	//
+	// Pointer events on the page surface are stopped below so they cannot reach
+	// the shared activity bridge. EPUB pages live in iframes whose pointer
+	// events never bubble to the host, so a middle tap always toggles the state
+	// the reader actually sees; the comic page surface behaves the same way.
 	let pointerStart: (Point & { zone: TapZone }) | null = null;
 
 	function handlePointerDown(event: PointerEvent): void {
 		if (event.button !== 0 || !pageArea) return;
 		if ((event.target as HTMLElement | null)?.closest('button')) return;
+		event.stopPropagation();
 		pointerStart = {
 			x: event.clientX,
 			y: event.clientY,
@@ -274,6 +280,7 @@
 		onpointerdown={handlePointerDown}
 		onpointerup={handlePointerUp}
 		onpointercancel={() => (pointerStart = null)}
+		onpointermove={(event) => event.stopPropagation()}
 	>
 		{#if error}
 			<p class="banner" role="alert">Could not load page: {error}</p>
