@@ -36,6 +36,8 @@
 		onToggleHeader?: () => void;
 		/** Fires when a user turn actually changes the displayed page. */
 		onPageTurned?: () => void;
+		/** Header visibility; the edge buttons fade with the host chrome. */
+		chromeVisible?: boolean;
 		/** Display preferences applied to the rendered book. */
 		settings?: ReaderSettings;
 		/** Receives the book's table of contents once it is opened. */
@@ -50,6 +52,7 @@
 		onRelocate,
 		onToggleHeader,
 		onPageTurned,
+		chromeVisible = true,
 		settings = DEFAULT_READER_SETTINGS,
 		onToc,
 		goToChapter = $bindable()
@@ -291,6 +294,7 @@
 	<button
 		type="button"
 		class="edge-nav prev"
+		data-hidden={!chromeVisible}
 		onclick={() => turnPage(-1)}
 		disabled={!ready}
 		aria-label="Previous page"
@@ -301,6 +305,7 @@
 	<button
 		type="button"
 		class="edge-nav next"
+		data-hidden={!chromeVisible}
 		onclick={() => turnPage(1)}
 		disabled={!ready}
 		aria-label="Next page"
@@ -360,7 +365,8 @@
 		opacity: 0.75;
 		transition:
 			opacity 0.15s ease,
-			background 0.15s ease;
+			background 0.15s ease,
+			visibility 0.15s ease;
 	}
 
 	.edge-nav:hover:not(:disabled) {
@@ -371,6 +377,22 @@
 	.edge-nav:disabled {
 		opacity: 0.25;
 		cursor: default;
+	}
+
+	/* The edge buttons follow the auto-hiding header instead of lingering over
+	   a page the reader has settled on. */
+	.edge-nav[data-hidden='true'] {
+		visibility: hidden;
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	/* Keep keyboard access: a button already focused when the chrome hides
+	   must not vanish mid-navigation, like the header's :focus-within rule. */
+	.edge-nav[data-hidden='true']:focus-visible {
+		visibility: visible;
+		opacity: 1;
+		pointer-events: auto;
 	}
 
 	.edge-nav.prev {

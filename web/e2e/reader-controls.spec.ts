@@ -57,10 +57,12 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 	box = (await viewport.boundingBox())!;
 	await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 	await expect(page.locator('.reader-header')).toBeVisible();
+	await expect(page.locator('.epub-shell .edge-nav.next')).toBeVisible();
 	expect((await viewport.boundingBox())!.height).toBe(viewportHeight);
 	box = (await viewport.boundingBox())!;
 	await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 	await expect(page.locator('.reader-header')).toBeHidden();
+	await expect(page.locator('.epub-shell .edge-nav.next')).toBeHidden();
 	expect((await viewport.boundingBox())!.height).toBe(viewportHeight);
 	box = (await viewport.boundingBox())!;
 	await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
@@ -123,10 +125,14 @@ test('EPUB chrome uses the shared idle timer, focus reveal and popover persist',
 	const viewport = (await page.locator('.reader-viewport').boundingBox())!;
 	await page.mouse.move(viewport.x + viewport.width / 2, viewport.y + viewport.height / 2);
 	await expect(header).toBeHidden({ timeout: 8_000 });
+	await expect(page.locator('.epub-shell .edge-nav')).toHaveCount(2);
+	await expect(page.locator('.epub-shell .edge-nav.prev')).toBeHidden();
+	await expect(page.locator('.epub-shell .edge-nav.next')).toBeHidden();
 	await expect(page.locator('.chapter')).toBeVisible();
 
 	await page.keyboard.press('Tab');
 	await expect(header).toBeVisible();
+	await expect(page.locator('.epub-shell .edge-nav.next')).toBeVisible();
 
 	// An open popover keeps re-arming the timer instead of hiding its own bar.
 	await page.getByRole('button', { name: 'Chapters' }).click();

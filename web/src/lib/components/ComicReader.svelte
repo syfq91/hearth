@@ -35,6 +35,8 @@
 		onToggleHeader?: () => void;
 		/** Fires when a user turn actually changes the displayed page. */
 		onPageTurned?: () => void;
+		/** Header visibility; the edge buttons fade with the host chrome. */
+		chromeVisible?: boolean;
 		/** Reading direction and single/double page mode. */
 		settings?: ComicSettings;
 	}
@@ -46,6 +48,7 @@
 		onPageChange,
 		onToggleHeader,
 		onPageTurned,
+		chromeVisible = true,
 		settings = DEFAULT_COMIC_SETTINGS
 	}: Props = $props();
 
@@ -304,6 +307,7 @@
 		<button
 			type="button"
 			class="edge-nav prev"
+			data-hidden={!chromeVisible}
 			onclick={() => turn(-1)}
 			disabled={view.prev === currentStart}
 			aria-label={direction === 'rtl' ? 'Next page' : 'Previous page'}
@@ -314,6 +318,7 @@
 		<button
 			type="button"
 			class="edge-nav next"
+			data-hidden={!chromeVisible}
 			onclick={() => turn(1)}
 			disabled={view.next === currentStart}
 			aria-label={direction === 'rtl' ? 'Previous page' : 'Next page'}
@@ -375,7 +380,8 @@
 		opacity: 0.75;
 		transition:
 			opacity 0.15s ease,
-			background 0.15s ease;
+			background 0.15s ease,
+			visibility 0.15s ease;
 	}
 
 	.edge-nav:hover:not(:disabled) {
@@ -386,6 +392,22 @@
 	.edge-nav:disabled {
 		opacity: 0.25;
 		cursor: default;
+	}
+
+	/* The edge buttons follow the auto-hiding header instead of lingering over
+	   a page the reader has settled on. */
+	.edge-nav[data-hidden='true'] {
+		visibility: hidden;
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	/* Keep keyboard access: a button already focused when the chrome hides
+	   must not vanish mid-navigation, like the header's :focus-within rule. */
+	.edge-nav[data-hidden='true']:focus-visible {
+		visibility: visible;
+		opacity: 1;
+		pointer-events: auto;
 	}
 
 	.edge-nav.prev {

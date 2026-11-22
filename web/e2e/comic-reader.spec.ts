@@ -78,12 +78,19 @@ test('comic reader chrome auto-hides after idle and focus reveals it', async ({ 
 	await expect(page.getByRole('button', { name: 'Previous page' })).toBeVisible();
 
 	const header = page.locator('.reader-header');
+	const edgeNav = page.locator('.comic .edge-nav');
 	await expect(header).toBeVisible();
+	await expect(edgeNav).toHaveCount(2);
 	// The page surface deliberately does not reveal chrome on hover (the same
 	// as EPUB's iframe pages), so a middle tap toggles what the reader sees.
 	// A key press supplies the activity signal that starts the idle countdown.
 	await page.keyboard.press('Shift');
 	await expect(header).toBeHidden({ timeout: 8_000 });
+	// The prev/next buttons are chrome too: they fade out with the header.
+	await expect(edgeNav.first()).toBeHidden();
+	await expect(edgeNav.last()).toBeHidden();
 	await page.keyboard.press('Tab');
 	await expect(header).toBeVisible();
+	await expect(edgeNav.first()).toBeVisible();
+	await expect(edgeNav.last()).toBeVisible();
 });

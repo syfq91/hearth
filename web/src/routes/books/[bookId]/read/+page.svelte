@@ -484,6 +484,7 @@
 				onRelocate={handleEpubRelocate}
 				onToggleHeader={toggleChrome}
 				onPageTurned={hideChrome}
+				chromeVisible={chromeVisible}
 				settings={readerSettings}
 				onToc={(toc) => (epubToc = toc)}
 				bind:goToChapter={epubGoToChapter}
@@ -496,6 +497,7 @@
 				onPageChange={handleComicPage}
 				onToggleHeader={toggleChrome}
 				onPageTurned={hideChrome}
+				chromeVisible={chromeVisible}
 				settings={comicSettings}
 			/>
 		{:else if isPdf && fileUrl && PdfReader}
