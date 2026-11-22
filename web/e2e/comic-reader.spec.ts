@@ -68,3 +68,19 @@ test('comic reader: footer edges, spreads, wide pages, direction and arrows', as
 	await page.keyboard.press('ArrowRight');
 	await expect(counter).toHaveText('4 / 5');
 });
+
+test('comic reader chrome auto-hides after idle and focus reveals it', async ({ page, request }) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
+	await page.goto('/books');
+	await page.getByRole('link', { name: 'Sample Comic' }).first().click();
+	await page.getByRole('link', { name: /^(Read|Resume) CBZ$/ }).first().click();
+	await expect(page.getByRole('button', { name: 'Previous page' })).toBeVisible();
+
+	const header = page.locator('.reader-header');
+	await expect(header).toBeVisible();
+	await page.mouse.move(10, 10);
+	await expect(header).toBeHidden({ timeout: 8_000 });
+	await page.keyboard.press('Tab');
+	await expect(header).toBeVisible();
+});

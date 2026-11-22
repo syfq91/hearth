@@ -180,3 +180,34 @@ test('selecting a quality renegotiates playback and keeps playing', async ({ pag
 		'true'
 	);
 });
+
+test('chrome fades after idle, returns on focus, and stays while paused', async ({ page, request }) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
+
+	await openMovieDetail(page);
+	await page.getByRole('link', { name: /^(Play|Resume)$/ }).click();
+
+	const video = page.locator('video');
+	const controls = page.getByRole('toolbar', { name: 'Player controls' });
+	const topBar = page.getByRole('navigation', { name: 'Player navigation' });
+	await expect(video).toBeVisible();
+	await expect
+		.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime), { timeout: 30_000 })
+		.toBeGreaterThan(1);
+
+	// Both bars share the 2.5s controller and fade together while playing.
+	await expect(controls).toBeHidden({ timeout: 8_000 });
+	await expect(topBar).toBeHidden();
+
+	// Keyboard focus is an activity signal, so a tab into the chrome reveals it.
+	await page.keyboard.press('Tab');
+	await expect(controls).toBeVisible();
+	await expect(topBar).toBeVisible();
+
+	// Pausing is a persist condition: no amount of idle time hides the chrome.
+	await video.press(' ');
+	await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
+	await page.waitForTimeout(3_000);
+	await expect(controls).toBeVisible();
+});

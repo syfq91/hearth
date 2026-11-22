@@ -102,6 +102,32 @@ test('EPUB reader: TOC, settings, header toggle and tap-to-turn', async ({ page,
 	await expect(page).toHaveURL(/\/books\/[^/]+(?:[?#].*)?$/);
 });
 
+test('EPUB chrome uses the shared idle timer, focus reveal and popover persist', async ({
+	page,
+	request
+}) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
+	await openEpub(page);
+
+	const header = page.locator('.reader-header');
+	await expect(header).toBeVisible();
+
+	// The timer starts with the first activity signal and uses one delay for
+	// every viewer. The footer is deliberately outside the auto-hiding chrome.
+	await page.mouse.move(10, 10);
+	await expect(header).toBeHidden({ timeout: 8_000 });
+	await expect(page.locator('.chapter')).toBeVisible();
+
+	await page.keyboard.press('Tab');
+	await expect(header).toBeVisible();
+
+	// An open popover keeps re-arming the timer instead of hiding its own bar.
+	await page.getByRole('button', { name: 'Chapters' }).click();
+	await page.waitForTimeout(3_000);
+	await expect(header).toBeVisible();
+});
+
 test('EPUB loading message is centred in the reading area', async ({ page, request }) => {
 	const pair = await seedServer(request);
 	await signIn(page, pair);
