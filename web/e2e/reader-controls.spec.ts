@@ -115,7 +115,10 @@ test('EPUB chrome uses the shared idle timer, focus reveal and popover persist',
 
 	// The timer starts with the first activity signal and uses one delay for
 	// every viewer. The footer is deliberately outside the auto-hiding chrome.
-	await page.mouse.move(10, 10);
+	// Park the pointer over the reading area, not the header: hovering chrome
+	// keeps it visible, exactly as it does in the video player.
+	const viewport = (await page.locator('.reader-viewport').boundingBox())!;
+	await page.mouse.move(viewport.x + viewport.width / 2, viewport.y + viewport.height / 2);
 	await expect(header).toBeHidden({ timeout: 8_000 });
 	await expect(page.locator('.chapter')).toBeVisible();
 

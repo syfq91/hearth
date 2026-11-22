@@ -79,7 +79,10 @@ test('comic reader chrome auto-hides after idle and focus reveals it', async ({ 
 
 	const header = page.locator('.reader-header');
 	await expect(header).toBeVisible();
-	await page.mouse.move(10, 10);
+	// Park the pointer in the reading area: hovering the header itself is an
+	// explicit "keep me visible" signal, as in the video player.
+	const area = (await page.locator('.comic .page-area').boundingBox())!;
+	await page.mouse.move(area.x + area.width / 2, area.y + area.height / 2);
 	await expect(header).toBeHidden({ timeout: 8_000 });
 	await page.keyboard.press('Tab');
 	await expect(header).toBeVisible();
