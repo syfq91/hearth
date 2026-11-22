@@ -22,6 +22,8 @@ export interface HlsQualityLevel {
 export interface HlsEngineOptions {
 	startPositionSeconds?: number;
 	maxBitrate?: number;
+	/** Emit timeline diagnostics for resume/buffer investigations. */
+	debug?: boolean;
 	onLevelLoaded?: (levels: HlsQualityLevel[]) => void;
 	onError?: (error: ErrorData) => void;
 	onStats?: (stats: HlsStreamStats) => void;
@@ -47,22 +49,19 @@ export function isNativeHlsSupported(video: HTMLVideoElement): boolean {
 	);
 }
 
-function isAndroidBrowser(): boolean {
-	if (typeof navigator === 'undefined') return false;
-	return /android/i.test(navigator.userAgent);
-}
-
 /**
  * Decide whether to hand an HLS URL straight to the native `<video>` element.
  *
- * Android browsers (Samsung Internet, Via, Chrome) answer "maybe" to
- * canPlayType() for HLS MIME types, but their native demuxer has no retry for
- * the JSON 503 responses Hearth returns while a transcode segment is being
- * generated. hls.js has an explicit Retry-After loader, so prefer it there.
- * Native HLS stays enabled on Safari and other engines where MSE is absent.
+ * Native demuxers answer "maybe" to canPlayType() but have no Retry-After
+ * loader for the JSON 503s Hearth emits while a transcode segment is being
+ * generated, and they cannot be given a start position. On a cold resume the
+ * first segment request can 503, after which a native player stalls with the
+ * playhead stranded outside the buffered range. hls.js handles both (it has a
+ * retry loader and `startPosition`), so prefer it wherever MSE is available.
+ * Native HLS is only a fallback for engines where hls.js cannot run.
  */
 export function shouldUseNativeHls(video: HTMLVideoElement): boolean {
-	if (isAndroidBrowser()) return false;
+	if (Hls.isSupported()) return false;
 	return isNativeHlsSupported(video);
 }
 
@@ -98,6 +97,25 @@ export class HlsEngine {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			loader: RetryLoader as any
 		});
+
+		if (options.debug) {
+			const log = (event: string, detail: Record<string, unknown>) =>
+				console.debug('[hearth:hls]', event, detail);
+			this.hls.on(Events.MANIFEST_PARSED, () =>
+				log('manifestParsed', { startPosition: options.startPositionSeconds })
+			);
+			this.hls.on(Events.INIT_PTS_FOUND, (_event, data) =>
+				log('initPtsFound', {
+					sn: data.frag.sn,
+					fragStart: data.frag.start,
+					initPTS: data.initPTS,
+					timescale: data.timescale
+				})
+			);
+			this.hls.on(Events.BUFFER_APPENDED, (_event, data) =>
+				log('bufferAppended', { type: data.type, sn: data.frag.sn, timeRanges: data.timeRanges })
+			);
+		}
 
 		this.hls.subtitleDisplay = true;
 		this.hls.attachMedia(video);

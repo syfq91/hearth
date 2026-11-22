@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
+import Hls from 'hls.js';
 import {
 	isHlsSupported,
 	isNativeHlsSupported,
@@ -35,48 +36,32 @@ test('isNativeHlsSupported inspects HTMLMediaElement canPlayType', () => {
 	assert.strictEqual(isNativeHlsSupported(mockVideoFalse), false);
 });
 
-test('shouldUseNativeHls prefers hls.js on Android browsers', () => {
-	const original = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+test('shouldUseNativeHls prefers hls.js wherever MSE is available', () => {
+	const originalSupported = Hls.isSupported;
 	const video = {
 		canPlayType: () => 'maybe'
 	} as unknown as HTMLVideoElement;
 	try {
-		Object.defineProperty(globalThis, 'navigator', {
-			configurable: true,
-			value: {
-				userAgent:
-					'Mozilla/5.0 (Linux; Android 14; SM-X700) SamsungBrowser/25.0 Chrome/121.0.6167.0 Mobile Safari/537.36'
-			}
-		});
+		Hls.isSupported = () => true;
 		assert.strictEqual(isNativeHlsSupported(video), true);
 		assert.strictEqual(shouldUseNativeHls(video), false);
 	} finally {
-		if (original) {
-			Object.defineProperty(globalThis, 'navigator', original);
-		} else {
-			delete (globalThis as any).navigator;
-		}
+		Hls.isSupported = originalSupported;
 	}
 });
 
-test('shouldUseNativeHls keeps native HLS on non-Android browsers', () => {
-	const original = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+test('shouldUseNativeHls falls back to native HLS when hls.js cannot run', () => {
+	const originalSupported = Hls.isSupported;
 	const video = {
 		canPlayType: (type: string) =>
 			type === 'application/vnd.apple.mpegurl' ? 'maybe' : ''
 	} as unknown as HTMLVideoElement;
 	try {
-		Object.defineProperty(globalThis, 'navigator', {
-			configurable: true,
-			value: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/17.0 Safari/605.1.15' }
-		});
+		Hls.isSupported = () => false;
 		assert.strictEqual(shouldUseNativeHls(video), true);
+		assert.strictEqual(shouldUseNativeHls({ canPlayType: () => '' } as unknown as HTMLVideoElement), false);
 	} finally {
-		if (original) {
-			Object.defineProperty(globalThis, 'navigator', original);
-		} else {
-			delete (globalThis as any).navigator;
-		}
+		Hls.isSupported = originalSupported;
 	}
 });
 

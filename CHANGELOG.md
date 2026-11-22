@@ -99,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `hls_fmp4` client capability flag and the `default_max_bitrate` field on the admin transcoding settings API. Neither ever affected playback: Hearth only emits fMP4 HLS, and no `Settings.default_max_bitrate` existed to read.
 
 ### Fixed
+- Resuming a transcoded video no longer strands the playhead outside the buffered range when the browser advertises native HLS. Native demuxers cannot retry the `503 Retry-After` responses Hearth emits while generating a segment and cannot be given a start position, so a cold resume could stall with a grey buffered bar disconnected from the played bar. The player now prefers hls.js (which has a retry loader and `startPosition`) whenever MSE is available and uses native HLS only as a fallback; opt-in `?debugseek=1` timeline logs cover resume and buffered time bases.
 - The EPUB "Opening book…" message (and open-error banner) is now centred in the reading area instead of sitting at the top behind the floating header.
 - The EPUB section counter now starts at 1, and the Left/Right arrow keys turn pages anywhere in the EPUB or comic reader instead of only when focus is inside it.
 - Comic page navigation stays reachable while music plays: the page image now scales to the space left after the audio dock instead of using a viewport-height cap that pushed the Previous/Next controls out of the reader.

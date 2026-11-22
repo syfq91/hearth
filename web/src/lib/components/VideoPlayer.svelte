@@ -51,6 +51,17 @@
 
 	let { itemId, startAtMs = 0, title, onEnded }: Props = $props();
 
+	// Opt-in timeline diagnostics. Append ?debugseek=1 to the watch URL to log
+	// the resume and buffered time bases; default playback stays quiet.
+	const DEBUG_SEEK =
+		typeof window !== 'undefined' &&
+		new URLSearchParams(window.location.search).has('debugseek');
+
+	function debugSeek(event: string, detail: Record<string, unknown>): void {
+		if (!DEBUG_SEEK) return;
+		console.debug('[hearth:seek]', event, JSON.stringify({ itemId, ...detail }));
+	}
+
 	let containerEl = $state<HTMLDivElement | null>(null);
 	let videoEl = $state<HTMLVideoElement | null>(null);
 	let seekbarEl = $state<HTMLDivElement | null>(null);
@@ -248,12 +259,15 @@
 
 	function updateBufferedRanges(): void {
 		if (!videoEl || duration <= 0) {
+			debugSeek('buffered:clear', { hasVideo: !!videoEl, duration, mediaStartSec });
 			bufferedRanges = [];
 			return;
 		}
 		const buf = videoEl.buffered;
+		const rawRanges: [number, number][] = [];
 		const ranges: { startPct: number; widthPct: number }[] = [];
 		for (let i = 0; i < buf.length; i++) {
+			rawRanges.push([buf.start(i), buf.end(i)]);
 			const start = displayTime(buf.start(i));
 			const end = displayTime(buf.end(i));
 			const startPct = Math.max(0, Math.min(100, (start / duration) * 100));
@@ -263,6 +277,13 @@
 				widthPct: Math.max(0, endPct - startPct)
 			});
 		}
+		debugSeek('buffered', {
+			rawRanges,
+			ranges,
+			currentTime: videoEl.currentTime,
+			duration,
+			mediaStartSec
+		});
 		bufferedRanges = ranges;
 	}
 
@@ -271,6 +292,13 @@
 		const targetMs = resumePositionMs > 0 ? resumePositionMs : startAtMs;
 		if (targetMs <= 0) return;
 		resumeApplied = true;
+		debugSeek('applyResume', {
+			targetMs,
+			before: videoEl.currentTime,
+			mediaDurationRaw,
+			mediaStartSec,
+			duration
+		});
 		// Resume positions are file time, so the near-end guard needs the raw
 		// duration, not the offset-normalized UI duration.
 		const durationMs = mediaDurationRaw * 1000;
@@ -283,6 +311,7 @@
 		}
 		videoEl.currentTime = targetMs / 1000;
 		currentTime = displayTime(targetMs / 1000);
+		debugSeek('applyResume:done', { after: videoEl.currentTime, currentTime });
 	}
 
 	function togglePlay(): void {
@@ -581,6 +610,7 @@
 			resumePositionMs = startAtMs;
 		}
 		const offsetSeconds = resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
+		debugSeek('startPlayback', { startAtMs, resumePositionMs, offsetSeconds, cur });
 
 		const clientCapabilities = forceBurnIn
 			? getCapabilitiesWithBurnInFallback()
@@ -689,9 +719,18 @@
 		expectedDuration = response.file?.duration_seconds ?? 0;
 
 		const isHls = response.mode !== 'direct_play' || source.includes('.m3u8');
+		const hlsStartPosition = resumePositionMs > 0 ? resumePositionMs / 1000 : -1;
+		debugSeek('attachSource', {
+			mode: response.mode,
+			isHls,
+			startTimeSeconds: response.start_time_seconds,
+			hlsStartPosition,
+			expectedDuration
+		});
 		if (isHls && !shouldUseNativeHls(videoEl) && isHlsSupported()) {
 			hlsEngine = new HlsEngine(videoEl, source, {
-				startPositionSeconds: resumePositionMs > 0 ? resumePositionMs / 1000 : -1,
+				startPositionSeconds: hlsStartPosition,
+				debug: DEBUG_SEEK,
 				maxBitrate: response.video_stream?.bit_rate ?? undefined,
 				onStats: (stats) => {
 					streamStats = stats;
@@ -1003,20 +1042,33 @@
 				if (videoEl && Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
 					rawDuration = videoEl.duration;
 				}
+				debugSeek('loadedmetadata', {
+					duration: videoEl?.duration,
+					currentTime: videoEl?.currentTime
+				});
 				applyResume();
 				subtitleManager?.resize();
 			}}
 			oncanplay={() => {
 				isWaiting = false;
+				debugSeek('canplay', {
+					duration: videoEl?.duration,
+					currentTime: videoEl?.currentTime
+				});
 				applyResume();
 			}}
 			onwaiting={() => {
 				isWaiting = true;
+				debugSeek('waiting', { currentTime: videoEl?.currentTime });
 			}}
 			onplaying={() => {
 				isWaiting = false;
 			}}
+			onseeking={() => {
+				debugSeek('seeking', { currentTime: videoEl?.currentTime });
+			}}
 			onseeked={() => {
+				debugSeek('seeked', { currentTime: videoEl?.currentTime });
 				nowMs = Date.now();
 				subtitleManager?.renderManualFrame(true);
 			}}
