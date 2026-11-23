@@ -278,10 +278,16 @@
 	style:--reader-bg={themeBackground}
 	onpointerdown={(event) => {
 		if ((event.target as HTMLElement | null)?.closest('button')) return;
+		// Keep page-surface taps away from the shared activity bridge, which
+		// would reveal the chrome just before the tap toggles it (the surfaced
+		// iframe handles never bubble, but the host shell does). This mirrors
+		// ComicReader so a middle tap always toggles the state the reader sees.
+		event.stopPropagation();
 		beginPointer(event, event.currentTarget.getBoundingClientRect());
 	}}
 	onpointerup={(event) => endPointer(event)}
 	onpointercancel={() => (pointerStart = null)}
+	onpointermove={(event) => event.stopPropagation()}
 >
 	<div class="epub" bind:this={host}>
 		{#if error}

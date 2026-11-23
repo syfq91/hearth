@@ -64,8 +64,10 @@ test('first-time user sets up Hearth and watches a video', async ({ page, reques
 	}
 
 	// 6. Wait for the scan to surface the movie on Home (scan is a job).
-	// The title appears on both the poster and the text link in the shelf card.
-	const movieCard = page.getByRole('link', { name: MOVIE_TITLE }).first();
+	// Use the text title link, not the poster: hovering the poster enables the
+	// overlay's pointer-events, so a click aimed at the poster lands on the
+	// overlay's Play link and Playwright waits forever for the poster link.
+	const movieCard = page.getByRole('link', { name: MOVIE_TITLE }).last();
 	await expect(async () => {
 		await page.goto('/');
 		await expect(movieCard).toBeVisible({ timeout: 5_000 });

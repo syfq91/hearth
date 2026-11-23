@@ -19,7 +19,9 @@ test('read an EPUB, turn pages, and resume later', async ({ page, request }) => 
 	await expect(bookCard).toBeVisible();
 	await bookCard.click();
 	await expect(page.getByRole('heading', { level: 1, name: BOOK_TITLE })).toBeVisible();
-	await page.getByRole('link', { name: 'Read EPUB' }).click();
+	// A retried run resumes from progress the first attempt already saved, so
+	// the detail page offers "Resume EPUB" instead of "Read EPUB".
+	await page.getByRole('link', { name: /^(Read|Resume) EPUB$/ }).click();
 	await expect(page).toHaveURL(/\/read\?format=epub$/);
 
 	// The reader is ready once it reports a position; the fixture opens on
@@ -38,10 +40,14 @@ test('read an EPUB, turn pages, and resume later', async ({ page, request }) => 
 		.poll(async () => Number.parseInt((await position.textContent()) ?? '0', 10))
 		.toBeGreaterThan(opened);
 
-	// Turning a page hides the header; tap the middle to bring it back.
+	// Turning a page hides the header; tap the middle to bring it back. foliate
+	// replaces the page iframe after a section turn, so an immediate tap can be
+	// swallowed by the swap. Retry the gesture until the chrome responds.
 	const area = (await page.locator('.reader-viewport').boundingBox())!;
-	await page.mouse.click(area.x + area.width / 2, area.y + area.height / 2);
-	await expect(page.locator('.reader-header')).toBeVisible();
+	await expect(async () => {
+		await page.mouse.click(area.x + area.width / 2, area.y + area.height / 2);
+		await expect(page.locator('.reader-header')).toBeVisible({ timeout: 2_000 });
+	}).toPass({ timeout: 15_000 });
 
 	// Leave the reader; the breadcrumb on it returns to the detail page.
 	await page.getByRole('link', { name: BOOK_TITLE }).first().click();
