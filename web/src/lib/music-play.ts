@@ -1,31 +1,57 @@
 /**
- * Start album playback from anywhere in the app.
+ * Start album, artist or single-track playback from anywhere in the app.
  *
- * Album summaries on home shelves only carry a track count, so fetching the
- * detail payload here keeps the card lightweight while still letting the play
- * control queue the whole album without leaving the page.
+ * Shelf cards only carry a small summary, so fetching the detail payload here
+ * keeps the cards lightweight while still letting the play control queue the
+ * whole album without leaving the page.
  */
 import { api } from './api/client';
-import type { AlbumDetail } from './api/types';
+import type { AlbumDetail, ArtistDetail, S, TrackSummary } from './api/types';
 import { playQueue, type PlayerTrack } from './player.svelte';
 
-export async function playAlbum(albumId: string, artworkUrl?: string | null): Promise<void> {
+function toPlayerTrack(
+	track: TrackSummary | S['TrackDetail'],
+	artworkUrl?: string | null
+): PlayerTrack {
+	return {
+		id: track.id,
+		title: track.title,
+		artistName: track.artist_name ?? null,
+		albumTitle: track.album_title ?? null,
+		streamUrl: track.stream_url,
+		artworkUrl,
+		favorite: track.watch_state?.favorite ?? false,
+		durationSeconds: track.duration_seconds,
+		replayGainTrackGain: track.replaygain_track_gain,
+		replayGainTrackPeak: track.replaygain_track_peak,
+		replayGainAlbumGain: track.replaygain_album_gain,
+		replayGainAlbumPeak: track.replaygain_album_peak
+	};
+}
+
+/** Queue a whole album, optionally starting at one of its tracks. */
+export async function playAlbum(
+	albumId: string,
+	artworkUrl?: string | null,
+	startTrackId?: string | null
+): Promise<void> {
 	const album = await api.get<AlbumDetail>(`/albums/${albumId}`);
 	const queue: PlayerTrack[] = album.discs.flatMap((disc) =>
-		disc.tracks.map((track) => ({
-			id: track.id,
-			title: track.title,
-			artistName: track.artist_name ?? null,
-			albumTitle: track.album_title ?? null,
-			streamUrl: track.stream_url,
-			artworkUrl,
-			favorite: track.watch_state?.favorite ?? false,
-			durationSeconds: track.duration_seconds,
-			replayGainTrackGain: track.replaygain_track_gain,
-			replayGainTrackPeak: track.replaygain_track_peak,
-			replayGainAlbumGain: track.replaygain_album_gain,
-			replayGainAlbumPeak: track.replaygain_album_peak
-		}))
+		disc.tracks.map((track) => toPlayerTrack(track, artworkUrl))
 	);
+	const start = startTrackId ? queue.findIndex((track) => track.id === startTrackId) : -1;
+	await playQueue(queue, Math.max(0, start));
+}
+
+/** Queue an artist's top tracks. */
+export async function playArtist(artistId: string, artworkUrl?: string | null): Promise<void> {
+	const artist = await api.get<ArtistDetail>(`/artists/${artistId}`);
+	const queue = artist.top_tracks.map((track) => toPlayerTrack(track, artworkUrl));
 	await playQueue(queue, 0);
+}
+
+/** Queue a single track (used when it has no album to expand into). */
+export async function playTrack(trackId: string, artworkUrl?: string | null): Promise<void> {
+	const track = await api.get<S['TrackDetail']>(`/tracks/${trackId}`);
+	await playQueue([toPlayerTrack(track, artworkUrl)], 0);
 }

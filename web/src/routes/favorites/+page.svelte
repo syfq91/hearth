@@ -1,5 +1,6 @@
 <script lang="ts">
 	import MediaCard from '../../lib/components/MediaCard.svelte';
+	import FavoriteMusicCard from '../../lib/components/FavoriteMusicCard.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -19,7 +20,13 @@
 	{:else}
 		<ul class="grid">
 			{#each favorites.items as item (item.id)}
-				<li><MediaCard item={item} /></li>
+				<li>
+					{#if item.type === 'album' || item.type === 'music' || item.type === 'artist' || item.type === 'track'}
+						<FavoriteMusicCard {item} />
+					{:else}
+						<MediaCard {item} />
+					{/if}
+				</li>
 			{/each}
 		</ul>
 	{/if}
