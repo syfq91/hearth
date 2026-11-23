@@ -94,10 +94,10 @@ This is reachable from external data: `plugins/googlebooks/plugin.py:226-236` co
 Unlike streaming, attachments, and subtitles — which validate paths with `path_is_within_roots` — NFO artwork accepts a plain filesystem path from text:
 
 ```python
-candidate = Path(text)                       # e.g. "/etc/..." or "../../other/private.jpg"
+candidate = Path(text)  # e.g. "/etc/..." or "../../other/private.jpg"
 if not candidate.is_absolute():
     candidate = folder / candidate
-add(kind, candidate)                         # ProviderImage(file_path=str(candidate.resolve()))
+add(kind, candidate)  # ProviderImage(file_path=str(candidate.resolve()))
 ```
 
 `ImagePipeline.store_image` then calls `_read_local(Path(provider_image.file_path))`, which opens that path and copies it into `/config/cache/images`. Any image-readable file on the mounted filesystem, including another library's artwork outside the current root, can be copied and served through the authenticated `/images/{id}` endpoint — an access-control bypass for cross-library data. Resolve the candidate and enforce containment within the registered library roots before storing it.
