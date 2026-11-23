@@ -300,6 +300,7 @@ If a client encounters an unrecoverable client-side subtitle crash, it can re-re
 - **Favorites & Ratings**:
   - `POST /api/v1/items/{item_id}/favorite` (`{"favorite": true}`)
   - `PUT /api/v1/items/{item_id}/rating` (`{"rating": 5}`)
+  - `GET /api/v1/home/favorites` returns the caller's favorites as catalog `ItemSummary` cards. For a favorited `track`, `album_id` holds its parent album and `poster` falls back to the album's cover, so clients can show artwork and link to `/music/album/{album_id}`.
 - **Audio Scrobbling**: Playing an audio track past 50% or 4 minutes automatically queues a scrobble to ListenBrainz if the user has configured a token via `PUT /api/v1/users/me/listenbrainz`.
 
 ---

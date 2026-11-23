@@ -17,10 +17,12 @@
 
 	const subtitle = $derived(isArtist ? 'Artist' : isTrack ? 'Song' : 'Album');
 
-	// The title is a separate link so the art can start playback without navigating.
-	const detailTarget = $derived(
-		isArtist ? `/music/artist/${item.id}` : `/music/album/${item.id}`
-	);
+	// Tracks link to their parent album: a track id is not a valid album id.
+	const detailTarget = $derived.by(() => {
+		if (isArtist) return `/music/artist/${item.id}`;
+		if (isTrack && item.album_id) return `/music/album/${item.album_id}`;
+		return `/music/album/${item.id}`;
+	});
 
 	let playing = $state(false);
 	let playError = $state<string | null>(null);

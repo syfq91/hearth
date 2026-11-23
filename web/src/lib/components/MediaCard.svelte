@@ -166,8 +166,12 @@
 				return `/episodes/${card.id}`;
 			case 'music':
 			case 'album':
-			case 'track':
 				return `/music/album/${card.id}`;
+			case 'track':
+				// A track id is not an album id; use the parent album when known.
+				return `/music/album/${card.album_id ?? card.id}`;
+			case 'artist':
+				return `/music/artist/${card.id}`;
 			case 'book':
 				return `/books/${card.id}`;
 			default:
