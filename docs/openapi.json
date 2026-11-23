@@ -6881,6 +6881,50 @@
             "title": "Id",
             "type": "string"
           },
+          "replaygain_album_gain": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaygain Album Gain"
+          },
+          "replaygain_album_peak": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaygain Album Peak"
+          },
+          "replaygain_track_gain": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaygain Track Gain"
+          },
+          "replaygain_track_peak": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaygain Track Peak"
+          },
           "sample_rate": {
             "anyOf": [
               {

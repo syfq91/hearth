@@ -10,6 +10,7 @@
 		toggleShuffle,
 		toggleFavorite
 	} from '../player.svelte';
+	import { ReplayGainGraph, replayGainLinear } from '../player/replaygain';
 	import { withMediaToken } from '../media-token.svelte';
 	import {
 		playerUi,
@@ -38,6 +39,10 @@
 	let { readerOverlay = false }: { readerOverlay?: boolean } = $props();
 
 	let audio = $state<HTMLAudioElement | null>(null);
+
+	// ReplayGain runs through a Web Audio gain node so quiet tracks can be
+	// boosted above 100%; the element's own volume stays the user's control.
+	const replayGain = new ReplayGainGraph();
 
 	// Artwork is URL-based media, so it needs a media token like the stream.
 	// Store it in shared UI state so the full-page player shows the same art.
@@ -155,6 +160,7 @@
 			}
 		};
 		set('play', () => {
+			replayGain.resume();
 			player.playing = true;
 		});
 		set('pause', () => {
@@ -176,6 +182,26 @@
 			set('seekto', null);
 		};
 	});
+
+	// Route the persistent audio element through the ReplayGain gain node, and
+	// retarget it whenever the current track changes. The graph is recreated if
+	// the element itself is replaced (playback stopped and later restarted).
+	$effect(() => {
+		const element = audio;
+		if (element) replayGain.connect(element);
+		else replayGain.disconnect();
+	});
+
+	$effect(() => {
+		replayGain.setLinear(replayGainLinear(player.track));
+	});
+
+	function handlePlay(): void {
+		// AudioContext starts suspended until a user gesture; playback starts
+		// from a click or a media key, both of which allow a resume here.
+		replayGain.resume();
+		player.playing = true;
+	}
 
 	function handleEnded(): void {
 		if (player.repeat === 'one' && audio) {
@@ -216,7 +242,8 @@
 	});
 
 	// Keep the audio element in sync immediately; persist after the slider
-	// settles instead of writing localStorage on every tick.
+	// settles instead of writing localStorage on every tick. This is the user's
+	// volume; ReplayGain is applied separately by the gain node above.
 	$effect(() => {
 		const nextVolume = playerUi.volume;
 		if (audio) {
@@ -418,7 +445,7 @@
 			bind:currentTime={playerUi.currentTime}
 			bind:duration={playerUi.duration}
 			ontimeupdate={handleTimeUpdate}
-			onplay={() => (player.playing = true)}
+			onplay={handlePlay}
 			onpause={() => (player.playing = false)}
 			onended={handleEnded}
 		></audio>

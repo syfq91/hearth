@@ -87,6 +87,10 @@ class TrackSummary(BaseModel):
     bitrate: int | None = None
     sample_rate: int | None = None
     channels: int | None = None
+    replaygain_track_gain: float | None = None
+    replaygain_track_peak: float | None = None
+    replaygain_album_gain: float | None = None
+    replaygain_album_peak: float | None = None
     stream_url: str
     watch_state: WatchStateResponse | None = None
 
@@ -250,6 +254,10 @@ def _track_summary(track_item: MediaItem, state: UserItemState | None) -> TrackS
         bitrate=tr.bitrate if tr else None,
         sample_rate=tr.sample_rate if tr else None,
         channels=tr.channels if tr else None,
+        replaygain_track_gain=tr.replaygain_track_gain if tr else None,
+        replaygain_track_peak=tr.replaygain_track_peak if tr else None,
+        replaygain_album_gain=tr.replaygain_album_gain if tr else None,
+        replaygain_album_peak=tr.replaygain_album_peak if tr else None,
         stream_url=f"/api/v1/stream/audio/{track_item.id}",
         watch_state=watch_state_response(state),
     )

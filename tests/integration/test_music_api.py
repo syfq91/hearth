@@ -234,6 +234,8 @@ async def _seed_music_data(
             channels=2,
             replaygain_track_gain=-6.2,
             replaygain_track_peak=0.98,
+            replaygain_album_gain=-7.1,
+            replaygain_album_peak=0.99,
         )
         session.add_all([tr1_item, file1, tr1])
 
@@ -512,6 +514,14 @@ async def test_tracks_api(
     data = res.json()
     assert data["total"] == 2
     assert [t["track_number"] for t in data["items"]] == [1, 2]
+
+    # Summaries carry ReplayGain so the web player can level playback without
+    # fetching every track's detail payload.
+    summary = next(t for t in data["items"] if t["id"] == ids["tr1_id"])
+    assert summary["replaygain_track_gain"] == -6.2
+    assert summary["replaygain_track_peak"] == 0.98
+    assert summary["replaygain_album_gain"] == -7.1
+    assert summary["replaygain_album_peak"] == 0.99
 
     # Track detail
     res = await api_client.get(f"/api/v1/tracks/{ids['tr1_id']}", headers=_bearer(admin))

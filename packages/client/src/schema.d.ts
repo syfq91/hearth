@@ -5081,6 +5081,14 @@ export interface components {
             duration_seconds?: number | null;
             /** Id */
             id: string;
+            /** Replaygain Album Gain */
+            replaygain_album_gain?: number | null;
+            /** Replaygain Album Peak */
+            replaygain_album_peak?: number | null;
+            /** Replaygain Track Gain */
+            replaygain_track_gain?: number | null;
+            /** Replaygain Track Peak */
+            replaygain_track_peak?: number | null;
             /** Sample Rate */
             sample_rate?: number | null;
             /** Stream Url */

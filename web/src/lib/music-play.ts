@@ -20,7 +20,11 @@ export async function playAlbum(albumId: string, artworkUrl?: string | null): Pr
 			streamUrl: track.stream_url,
 			artworkUrl,
 			favorite: track.watch_state?.favorite ?? false,
-			durationSeconds: track.duration_seconds
+			durationSeconds: track.duration_seconds,
+			replayGainTrackGain: track.replaygain_track_gain,
+			replayGainTrackPeak: track.replaygain_track_peak,
+			replayGainAlbumGain: track.replaygain_album_gain,
+			replayGainAlbumPeak: track.replaygain_album_peak
 		}))
 	);
 	await playQueue(queue, 0);

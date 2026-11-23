@@ -33,6 +33,11 @@ export interface PlayerTrack {
 	favorite?: boolean;
 	/** Track length in seconds, shown in the full-page queue. */
 	durationSeconds?: number | null;
+	/** ReplayGain tags, used to level playback volume in the audio player. */
+	replayGainTrackGain?: number | null;
+	replayGainTrackPeak?: number | null;
+	replayGainAlbumGain?: number | null;
+	replayGainAlbumPeak?: number | null;
 }
 
 export const player = $state<{
