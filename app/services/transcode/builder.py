@@ -230,13 +230,21 @@ def build_ffmpeg_hls_command(
 
     # Timestamp continuity for mid-file start (T03 / §3.5 / §6.3):
     # Input seek (-ss before -i) resets output container timestamps to 0.0.
-    # Setting -output_ts_offset ensures segment packets carry global timeline
-    # timestamps (matching start_number * segment_duration), allowing post-seek
-    # segments to play back-to-back with pre-seek segments without clock jumps.
+    # -output_ts_offset carries the global timeline offset. The playlist's
+    # start_number/gaps and the client's fragment offset remain the source of
+    # truth; the muxer must not also encode the offset as an empty edit list
+    # (see -hls_segment_options below).
     if start_offset > 0.0:
         cmd.extend(["-output_ts_offset", f"{start_offset:g}"])
 
-    # Output HLS fMP4 configuration
+    # Output HLS fMP4 configuration.
+    #
+    # -output_ts_offset used to make ffmpeg write an empty edit list (edts/elst)
+    # of the resume offset into init.mp4. Chromium ignores it, but Firefox's MSE
+    # honours it while hls.js also applies its own fragment timestampOffset, so a
+    # resumed stream buffered a full resume-offset ahead of the playhead (for a
+    # 100s resume the buffer started near 199s) and stalled. Suppress the edit
+    # list; players place the fragments from the playlist and fragment start.
     cmd.extend(
         [
             "-f",
@@ -245,6 +253,8 @@ def build_ffmpeg_hls_command(
             "fmp4",
             "-hls_time",
             hls_time,
+            "-hls_segment_options",
+            "use_editlist=0",
         ]
     )
     if start_number > 0:
