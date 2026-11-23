@@ -367,6 +367,36 @@ def test_builder_start_offset_zero_omits_output_ts_offset(tmp_path: Path) -> Non
     assert "-output_ts_offset" not in cmd
 
 
+@pytest.mark.parametrize("start_offset", [0.0, 100.0])
+def test_builder_suppresses_fmp4_edit_lists(tmp_path: Path, start_offset: float) -> None:
+    """ffmpeg must not encode the resume offset as an fMP4 edit list.
+
+    `-output_ts_offset` otherwise becomes an empty `edts/elst` in init.mp4.
+    Firefox's MSE applies that edit list while hls.js also applies its own
+    fragment timestampOffset, which buffers a resumed stream a full resume
+    offset ahead of the playhead and stalls.
+    """
+    plan = TranscodePlan(
+        mode="remux_hls",
+        video_action="copy",
+        video_codec="copy",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        start_offset=start_offset,
+    )
+    assert cmd.count("-hls_segment_options") == 1
+    options = cmd[cmd.index("-hls_segment_options") + 1]
+    assert "use_editlist=0" in options.split(":")
+
+
 def test_builder_hls_flags_temp_file_default(tmp_path: Path) -> None:
     plan = TranscodePlan(
         mode="remux_hls",
