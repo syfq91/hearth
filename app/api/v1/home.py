@@ -23,12 +23,14 @@ from app.api.v1.music import AlbumSummary, recently_added_albums
 from app.api.v1.shows import NextUpShelf, list_next_up
 from app.core.deps import RequireUser, SessionmakerDep, require_library_access
 from app.db.models import (
+    Album,
     Book,
     BookProgress,
     Episode,
     LibraryAccess,
     MediaItem,
     Series,
+    Track,
     User,
     UserItemState,
 )
@@ -361,6 +363,11 @@ async def favorites(
             selectinload(MediaItem.genres),
             selectinload(MediaItem.book),
             selectinload(MediaItem.episode).selectinload(Episode.series).selectinload(Series.item),
+            # Track cards need the parent album's poster and id.
+            selectinload(MediaItem.track)
+            .selectinload(Track.album)
+            .selectinload(Album.item)
+            .selectinload(MediaItem.images),
         )
     )
     query = _restrict_to_accessible_libraries(query, user)

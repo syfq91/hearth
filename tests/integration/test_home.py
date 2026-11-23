@@ -9,12 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.db.models import (
+    Album,
     Book,
     BookProgress,
+    Image,
     Library,
     LibraryPath,
     MediaItem,
     Movie,
+    Track,
     User,
     UserItemState,
 )
@@ -449,6 +452,62 @@ async def test_favorites_are_per_user_and_ordered_by_recent_change(
 
     bob_response = await api_client.get("/api/v1/home/favorites", headers=_bearer(bob))
     assert await _titles(bob_response) == ["First"]
+
+
+async def test_favorites_include_album_art_and_album_id_for_tracks(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    library = await _library(db_settings, db_sessionmaker, "Music", library_type="music")
+    alice = await _add_user(api_client, admin, "alice", [library])
+    alice_id = await _user_id(db_sessionmaker, "alice")
+
+    async with db_sessionmaker() as session:
+        album_item = MediaItem(
+            library_id=library,
+            type="album",
+            title="Album",
+            sort_title="Album",
+            added_at=NOW,
+            match_state="matched",
+        )
+        album_item.album = Album()
+        album_item.images.append(
+            Image(
+                kind="poster",
+                local_path="/art.jpg",
+                width=600,
+                height=600,
+                is_primary=True,
+            )
+        )
+        track_item = MediaItem(
+            library_id=library,
+            type="track",
+            title="Song",
+            sort_title="Song",
+            added_at=NOW,
+            match_state="matched",
+        )
+        session.add_all([album_item, track_item])
+        await session.flush()  # IDs are generated on insert.
+        track_item.track = Track(album_id=album_item.id)
+        await session.commit()
+        album_id, track_id = album_item.id, track_item.id
+
+    await _state(db_sessionmaker, alice_id, track_id, favorite=True)
+
+    response = await api_client.get("/api/v1/home/favorites", headers=_bearer(alice))
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["id"] == track_id
+    assert items[0]["type"] == "track"
+    assert items[0]["album_id"] == album_id
+    assert items[0]["poster"] is not None
+    assert items[0]["poster"]["url"].startswith("/api/v1/images/")
 
 
 async def test_home_overview_returns_composite_shelves(

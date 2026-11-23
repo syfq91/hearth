@@ -157,6 +157,8 @@ class ItemSummary(BaseModel):
     episode_number: int | None = None
     episode_count: int | None = None
     volume: str | None = None
+    # The album a track belongs to; track cards link and queue through it.
+    album_id: str | None = None
 
 
 class ItemDetail(ItemSummary):
@@ -765,6 +767,8 @@ def item_summary(
     season_number: int | None = None
     episode_number: int | None = None
     volume: str | None = None
+    album_id: str | None = None
+    poster: ImageResponse | None = _primary_image(item, "poster")
     if item.type == "episode":
         ep = getattr(item, "episode", None)
         if ep is not None:
@@ -782,6 +786,16 @@ def item_summary(
         if book is not None and book.series_index is not None:
             idx = book.series_index
             volume = f"Vol. {int(idx)}" if idx == int(idx) else f"Vol. {idx}"
+    elif item.type == "track":
+        # Track items have no artwork of their own; the album cover is the art
+        # shown on cards, and the album id is what links/queues the track.
+        tr = getattr(item, "track", None) if _is_loaded(item, "track") else None
+        if tr is not None:
+            album_id = tr.album_id
+            if poster is None and _is_loaded(tr, "album") and tr.album is not None:
+                album_item = tr.album.item if _is_loaded(tr.album, "item") else None
+                if album_item is not None:
+                    poster = _primary_image(album_item, "poster")
 
     return ItemSummary(
         id=item.id,
@@ -797,7 +811,7 @@ def item_summary(
         added_at=item.added_at,
         match_state=item.match_state,
         genres=sorted(genre.name for genre in item.genres),
-        poster=_primary_image(item, "poster"),
+        poster=poster,
         backdrop=_primary_image(item, "backdrop"),
         watch_state=watch_state_response(state),
         series_id=series_id,
@@ -807,6 +821,7 @@ def item_summary(
         episode_number=episode_number,
         episode_count=episode_count,
         volume=volume,
+        album_id=album_id,
     )
 
 

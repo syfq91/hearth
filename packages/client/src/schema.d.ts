@@ -3621,6 +3621,8 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
+            /** Album Id */
+            album_id?: string | null;
             backdrop?: components["schemas"]["ImageResponse"] | null;
             /** Content Rating */
             content_rating?: string | null;
@@ -3733,6 +3735,8 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
+            /** Album Id */
+            album_id?: string | null;
             backdrop?: components["schemas"]["ImageResponse"] | null;
             /** Content Rating */
             content_rating?: string | null;
@@ -4792,6 +4796,8 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
+            /** Album Id */
+            album_id?: string | null;
             backdrop?: components["schemas"]["ImageResponse"] | null;
             /** Content Rating */
             content_rating?: string | null;

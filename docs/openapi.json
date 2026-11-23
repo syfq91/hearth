@@ -2801,6 +2801,17 @@
             "title": "Added At",
             "type": "string"
           },
+          "album_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album Id"
+          },
           "backdrop": {
             "anyOf": [
               {
@@ -3139,6 +3150,17 @@
             "format": "date-time",
             "title": "Added At",
             "type": "string"
+          },
+          "album_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album Id"
           },
           "backdrop": {
             "anyOf": [
@@ -6041,6 +6063,17 @@
             "format": "date-time",
             "title": "Added At",
             "type": "string"
+          },
+          "album_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album Id"
           },
           "backdrop": {
             "anyOf": [
