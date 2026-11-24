@@ -839,7 +839,6 @@
 	@media (max-width: 720px) {
 		.bar-row {
 			grid-template-columns: minmax(0, 1fr) auto;
-			row-gap: 0.4rem;
 		}
 
 		.left {
@@ -847,19 +846,24 @@
 			grid-row: 1;
 		}
 
-		.right {
+		/* Phones keep the dock to the essentials: metadata on the left and
+		   prev/play/stop/next on the right. Extra controls, volume and the
+		   time readout live in the full-screen player. */
+		.transport {
 			grid-column: 2;
 			grid-row: 1;
 		}
 
-		.transport {
-			grid-column: 1 / -1;
-			grid-row: 2;
+		.transport-buttons {
+			gap: 0.25rem;
 		}
 
-		/* Phones keep the mute button, but the slider steals room from the
-		   transport row — use the system volume instead. */
-		.volume-slider {
+		.ghost {
+			padding: 0.35rem 0.5rem;
+		}
+
+		.right,
+		.transport-info {
 			display: none;
 		}
 	}
