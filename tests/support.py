@@ -104,8 +104,9 @@ class FakeBookProvider(FakeProvider):
         book_results: Sequence[SearchResult] | None = None,
         book_details: dict[str, BookMetadata] | None = None,
         book_images: Sequence[ProviderImage] | None = None,
+        error: Exception | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(error=error)
         self.book_results = list(book_results or [])
         self.book_details = dict(book_details or {})
         self.book_images = list(book_images or [])
@@ -116,13 +117,19 @@ class FakeBookProvider(FakeProvider):
         self, query: str, author: str | None = None, isbn: str | None = None
     ) -> list[SearchResult]:
         self.book_search_calls.append((query, author, isbn))
+        if self.error is not None:
+            raise self.error
         return list(self.book_results)
 
     async def fetch_book_details(self, book_id: str) -> BookMetadata | None:
         self.book_detail_calls.append(book_id)
+        if self.error is not None:
+            raise self.error
         return self.book_details.get(book_id)
 
     async def fetch_book_images(self, book_id: str) -> list[ProviderImage]:
+        if self.error is not None:
+            raise self.error
         return list(self.book_images)
 
 

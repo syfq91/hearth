@@ -23,6 +23,7 @@ from app.services.metadata.base import (
     EpisodeMetadata,
     MovieMetadata,
     ProviderImage,
+    ProviderRateLimited,
     ProviderUnavailable,
     SearchResult,
     SeasonMetadata,
@@ -440,6 +441,31 @@ async def test_resolve_url_fetches_book_metadata_directly(
     assert body[0]["season_number"] is None
     assert body[0]["episode_number"] is None
     assert provider.book_detail_calls == ["B1R1CwAAQBAJ"]
+
+
+async def test_resolve_url_maps_provider_rate_limit_to_distinct_error(
+    api_client: httpx.AsyncClient,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+    monkeypatch,
+) -> None:
+    admin = await _setup(api_client)
+    item_id = await _seed_book(db_sessionmaker)
+    provider = FakeBookProvider(error=ProviderRateLimited("Google Books quota exceeded (HTTP 429)"))
+    _patch_matcher(monkeypatch, provider)
+
+    response = await api_client.post(
+        "/api/v1/metadata/resolve",
+        json={
+            "item_id": item_id,
+            "url": "https://books.google.com/books?id=EELNEQAAQBAJ",
+        },
+        headers=_bearer(admin),
+    )
+
+    assert response.status_code == 502, response.text
+    body = response.json()["error"]
+    assert body["code"] == "metadata_provider_rate_limited"
+    assert "quota exceeded" in body["message"]
 
 
 async def test_resolve_url_fetches_episode_metadata_directly(

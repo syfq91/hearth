@@ -13,6 +13,14 @@ class ProviderUnavailable(ProviderError):
     """The provider is not configured or rejected its credentials."""
 
 
+class ProviderRateLimited(ProviderError):
+    """The provider rejected a call because of a rate limit or exhausted quota."""
+
+    def __init__(self, message: str, retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 @dataclass(frozen=True)
 class SearchResult:
     """One candidate returned by a provider search."""

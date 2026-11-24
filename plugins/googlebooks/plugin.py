@@ -15,12 +15,26 @@ from app.core.plugins.manifest import PluginManifest
 from app.services.metadata.base import (
     BookMetadata,
     MovieMetadata,
+    ProviderError,
     ProviderImage,
+    ProviderRateLimited,
+    ProviderUnavailable,
     SearchResult,
 )
 from app.services.metadata.provider_cache import RateLimiter, cache_get, cache_set
 
 logger = logging.getLogger("hearth.plugins.googlebooks")
+
+
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    """Read a numeric Retry-After header; ignore absent or malformed values."""
+    raw = response.headers.get("Retry-After")
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return None
 
 
 class GoogleBooksConfig(BaseModel):
@@ -103,16 +117,33 @@ class GoogleBooksPlugin(MetadataPlugin[GoogleBooksConfig]):
         try:
             response = await client.get(url, params=params)
             if response.status_code == 429:
-                retry_after = float(response.headers.get("Retry-After", "1") or 1)
-                await asyncio.sleep(min(max(retry_after, 0.0), 5.0))
+                retry_after = _retry_after_seconds(response)
+                await asyncio.sleep(min(retry_after if retry_after is not None else 1.0, 5.0))
                 await self._limiter.wait()
                 response = await client.get(url, params=params)
-            if response.status_code != 200:
-                return None
-            payload = response.json()
         except Exception as exc:
             logger.warning("Google Books request failed: %s", exc)
+            raise ProviderError(f"Google Books request failed ({type(exc).__name__})") from None
+
+        if response.status_code == 429:
+            raise ProviderRateLimited(
+                "Google Books quota exceeded (HTTP 429). "
+                "Add an API key under Admin → Plugins or wait for the quota to reset.",
+                retry_after=_retry_after_seconds(response),
+            )
+        if response.status_code in (401, 403):
+            raise ProviderUnavailable(
+                f"Google Books rejected the API key (HTTP {response.status_code})"
+            )
+        if response.status_code >= 500:
+            raise ProviderError(f"Google Books server error (HTTP {response.status_code})")
+        if response.status_code != 200:
             return None
+        try:
+            payload = response.json()
+        except Exception as exc:
+            logger.warning("Google Books returned invalid JSON: %s", exc)
+            raise ProviderError("Google Books returned invalid JSON") from None
 
         if not isinstance(payload, dict):
             return None

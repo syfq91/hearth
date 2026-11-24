@@ -12,7 +12,7 @@ from app.core.errors import BadGatewayError, NotFoundError, ValidationError
 from app.db.models import MediaItem
 from app.db.session import SessionDep
 from app.services.audit import record_audit
-from app.services.metadata.base import ProviderError, SearchResult
+from app.services.metadata.base import ProviderError, ProviderRateLimited, SearchResult
 from app.services.metadata.factory import build_metadata_matcher
 from app.services.metadata.matching import MetadataMatcher
 from app.services.metadata.urls import UrlResolutionError
@@ -44,6 +44,17 @@ def get_metadata_matcher(
 
 
 MetadataMatcherDep = Annotated[MetadataMatcher, Depends(get_metadata_matcher)]
+
+
+def _provider_bad_gateway(exc: ProviderError) -> BadGatewayError:
+    """Preserve the upstream reason instead of masking it as a missing item."""
+    if isinstance(exc, ProviderRateLimited):
+        return BadGatewayError(
+            str(exc),
+            code="metadata_provider_rate_limited",
+            details={"retry_after": exc.retry_after} if exc.retry_after is not None else None,
+        )
+    return BadGatewayError(str(exc), code="metadata_provider_error")
 
 
 class SearchResultResponse(BaseModel):
@@ -114,7 +125,7 @@ async def search_metadata(
         else:
             results = await matcher.search(query, year)
     except ProviderError as exc:
-        raise BadGatewayError(str(exc), code="metadata_provider_error") from None
+        raise _provider_bad_gateway(exc) from None
 
     if provider is not None:
         results = [result for result in results if result.provider == provider]
@@ -138,7 +149,7 @@ async def resolve_metadata_url(
     except UrlResolutionError as exc:
         raise ValidationError(str(exc), code="invalid_provider_url") from None
     except ProviderError as exc:
-        raise BadGatewayError(str(exc), code="metadata_provider_error") from None
+        raise _provider_bad_gateway(exc) from None
     return [_search_response(result) for result in results]
 
 
@@ -182,7 +193,7 @@ async def manual_match(
             episode_number=payload.episode_number,
         )
     except ProviderError as exc:
-        raise BadGatewayError(str(exc), code="metadata_provider_error") from None
+        raise _provider_bad_gateway(exc) from None
 
     if result.error == "Item not found":
         raise NotFoundError("Item not found", code="item_not_found")

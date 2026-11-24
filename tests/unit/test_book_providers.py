@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app.core.config import Settings
-from app.services.metadata.base import BookMetadata
+from app.services.metadata.base import BookMetadata, ProviderRateLimited
 from app.services.metadata.local import (
     find_local_book_cover,
     find_local_book_opf,
@@ -144,6 +144,35 @@ async def test_googlebooks_search_uses_free_text_query(settings: Settings) -> No
     assert len(urls) == 1
     assert urls[0].params["q"] == ('A Certain Scientific Railgun Vol. 1 inauthor:"Kazuma Kamachi"')
     assert "intitle:" not in urls[0].params["q"]
+    await provider.close()
+
+
+@pytest.mark.asyncio
+async def test_googlebooks_quota_failure_keeps_upstream_reason(settings: Settings) -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(429, headers={"Retry-After": "0"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = make_metadata_plugin(GoogleBooksPlugin, settings=settings, client=client)
+
+    with pytest.raises(ProviderRateLimited, match="quota exceeded") as exc_info:
+        await provider.fetch_book_details("EELNEQAAQBAJ")
+
+    assert "HTTP 429" in str(exc_info.value)
+    assert calls == 2  # one retry before giving up
+    await provider.close()
+
+
+@pytest.mark.asyncio
+async def test_googlebooks_missing_volume_still_returns_none(settings: Settings) -> None:
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(404)))
+    provider = make_metadata_plugin(GoogleBooksPlugin, settings=settings, client=client)
+
+    assert await provider.fetch_book_details("MISSING") is None
     await provider.close()
 
 
