@@ -73,3 +73,10 @@ export function formatTime(seconds: number): string {
 	const s = Math.floor(seconds % 60);
 	return `${m}:${s.toString().padStart(2, '0')}`;
 }
+
+/** Time left in a track, displayed as a countdown (for example `-3:29`). */
+export function formatRemaining(current: number, duration: number): string {
+	if (!Number.isFinite(duration) || duration <= 0) return '0:00';
+	const left = Number.isFinite(current) ? Math.max(0, duration - current) : duration;
+	return `-${formatTime(left)}`;
+}

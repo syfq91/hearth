@@ -21,7 +21,8 @@
 		closeFullPlayer,
 		toggleMute,
 		rememberVolume,
-		formatTime
+		formatTime,
+		formatRemaining
 	} from '../player/ui.svelte';
 	import { resolveTrackArtworkSrc } from '../music-artwork';
 	import {
@@ -206,7 +207,7 @@
 							aria-valuetext={`${formatTime(playerUi.currentTime)} of ${formatTime(playerUi.duration)}`}
 							style={`--progress: ${playerUi.duration > 0 ? Math.min(100, Math.max(0, (playerUi.currentTime / playerUi.duration) * 100)) : 0}%`}
 						/>
-						<span class="time">{formatTime(playerUi.duration)}</span>
+						<span class="time">{formatRemaining(playerUi.currentTime, playerUi.duration)}</span>
 					</div>
 
 					<div class="controls-row">

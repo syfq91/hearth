@@ -18,6 +18,7 @@
 		toggleMute,
 		rememberVolume,
 		formatTime,
+		formatRemaining,
 		loadReplayGain
 	} from '../player/ui.svelte';
 	import {
@@ -374,7 +375,7 @@
 						<span class="position">{player.index + 1}/{player.queue.length}</span>
 					{/if}
 					<span class="time">
-						{formatTime(playerUi.currentTime)} / {formatTime(playerUi.duration)}
+						{formatTime(playerUi.currentTime)} / {formatRemaining(playerUi.currentTime, playerUi.duration)}
 					</span>
 				</div>
 			</div>

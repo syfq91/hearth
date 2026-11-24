@@ -30,6 +30,7 @@ test('play a track from an album', async ({ page, request }) => {
 	const bar = page.getByRole('region', { name: 'Now playing' });
 	await expect(bar).toBeVisible();
 	await expect(bar.getByText(TRACK_TITLE)).toBeVisible();
+	await expect(bar.getByText(/-\d+:\d{2}/)).toBeVisible();
 
 	const audio = page.locator('audio');
 	await expect
@@ -119,6 +120,9 @@ test('album poster menu queues the whole album', async ({ page, request }) => {
 	await page.getByRole('menuitem', { name: 'Play next' }).click();
 	await bar.getByRole('button', { name: 'Open full screen player' }).click();
 	await expect(page.getByRole('heading', { name: /Queue/ })).toContainText('2');
+	await expect(
+		page.getByRole('dialog', { name: 'Full screen player' }).getByText(/-\d+:\d{2}/)
+	).toBeVisible();
 });
 
 test('queueing from idle never starts playback', async ({ page, request }) => {
