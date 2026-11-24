@@ -9,7 +9,7 @@
  * The token is refreshed lazily: callers ask for a URL, and the store mints or
  * reuses a token that has not yet expired.
  */
-import { mintMediaToken } from './api/client';
+import { mintMediaToken } from './api/client.ts';
 
 /** Refresh this many ms before the server-side expiry. */
 const SAFETY_MARGIN_MS = 60_000;

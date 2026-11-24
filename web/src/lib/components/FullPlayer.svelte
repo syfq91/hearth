@@ -23,6 +23,7 @@
 		rememberVolume,
 		formatTime
 	} from '../player/ui.svelte';
+	import { resolveTrackArtworkSrc } from '../music-artwork';
 	import {
 		ChevronDown,
 		X,
@@ -45,6 +46,26 @@
 	let overlay = $state<HTMLDivElement | null>(null);
 	let minimizeButton = $state<HTMLButtonElement | null>(null);
 	let previousFocus: HTMLElement | null = null;
+	/** Tokenized cover per queued track id, resolved independently of the hero art. */
+	let queueArtwork = $state<Record<string, string>>({});
+
+	$effect(() => {
+		const queue = player.queue;
+		let cancelled = false;
+		void (async () => {
+			const next: Record<string, string> = {};
+			await Promise.all(
+				queue.map(async (track) => {
+					const src = await resolveTrackArtworkSrc(track);
+					if (src && !cancelled) next[track.id] = src;
+				})
+			);
+			if (!cancelled) queueArtwork = next;
+		})();
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	// Stopping playback removes the audio element and hides this overlay; make
 	// sure the next play starts in the mini dock instead of reopening it.
@@ -302,8 +323,8 @@
 									aria-label={`Play ${track.title}`}
 								>
 									<span class="thumb" aria-hidden="true">
-										{#if playerUi.artworkSrc}
-											<img src={playerUi.artworkSrc} alt="" />
+										{#if queueArtwork[track.id]}
+											<img src={queueArtwork[track.id]} alt="" />
 										{:else}
 											<Music size={14} />
 										{/if}

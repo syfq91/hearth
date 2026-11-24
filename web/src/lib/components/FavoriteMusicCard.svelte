@@ -35,7 +35,7 @@
 			if (isAlbum) {
 				await playAlbum(item.id, item.poster?.url);
 			} else if (isArtist) {
-				await playArtist(item.id, item.poster?.url);
+				await playArtist(item.id);
 			} else if (item.album_id) {
 				// Queue the album but start at the favourited song.
 				await playAlbum(item.album_id, item.poster?.url, item.id);

@@ -13,7 +13,7 @@
 			artistName: track.artist_name ?? null,
 			albumTitle: track.album_title ?? null,
 			streamUrl: track.stream_url,
-			artworkUrl: data.artist.poster?.url ?? null,
+			albumId: track.album_id ?? null,
 			favorite: track.watch_state?.favorite ?? false,
 			durationSeconds: track.duration_seconds,
 			replayGainTrackGain: track.replaygain_track_gain,

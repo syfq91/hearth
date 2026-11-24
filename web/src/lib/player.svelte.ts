@@ -27,8 +27,10 @@ export interface PlayerTrack {
 	albumTitle: string | null;
 	/** API stream path, e.g. `/api/v1/stream/audio/<id>`. */
 	streamUrl: string;
-	/** Artwork URL (optional; also needs a media token). */
+	/** Artwork URL when the caller already knows the album cover. */
 	artworkUrl?: string | null;
+	/** Album id used to resolve the cover when `artworkUrl` is absent. */
+	albumId?: string | null;
 	/** Server-side favorite flag for this item. */
 	favorite?: boolean;
 	/** Track length in seconds, shown in the full-page queue. */

@@ -50,6 +50,7 @@
 			albumTitle: track.album_title ?? null,
 			streamUrl: track.stream_url,
 			artworkUrl: data.album.poster?.url ?? null,
+			albumId: track.album_id ?? data.album.id,
 			favorite: track.watch_state?.favorite ?? false,
 			durationSeconds: track.duration_seconds,
 			replayGainTrackGain: track.replaygain_track_gain,

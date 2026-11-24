@@ -11,7 +11,7 @@
 		toggleFavorite
 	} from '../player.svelte';
 	import { ReplayGainGraph, replayGainLinear } from '../player/replaygain';
-	import { withMediaToken } from '../media-token.svelte';
+	import { resolveTrackArtworkSrc } from '../music-artwork';
 	import {
 		playerUi,
 		openFullPlayer,
@@ -52,13 +52,12 @@
 	// Store it in shared UI state so the full-page player shows the same art.
 	$effect(() => {
 		const track = player.track;
-		const artwork = track?.artworkUrl;
-		if (!track || !artwork) {
+		if (!track) {
 			playerUi.artworkSrc = null;
 			return;
 		}
 		let cancelled = false;
-		void withMediaToken(artwork)
+		void resolveTrackArtworkSrc(track)
 			.then((url) => {
 				if (!cancelled && player.track?.id === track.id) playerUi.artworkSrc = url;
 			})
@@ -129,22 +128,15 @@
 			artist: track.artistName ?? '',
 			album: track.albumTitle ?? ''
 		});
-		const artwork = track.artworkUrl;
-		if (artwork) {
-			void withMediaToken(artwork)
-				.then((url) => {
-					if (player.track?.id !== track.id || !('mediaSession' in navigator)) return;
-					navigator.mediaSession.metadata = new MediaMetadata({
-						title: track.title,
-						artist: track.artistName ?? '',
-						album: track.albumTitle ?? '',
-						artwork: [{ src: url }]
-					});
-				})
-				.catch(() => {
-					/* artwork is decorative */
-				});
-		}
+		void resolveTrackArtworkSrc(track).then((url) => {
+			if (!url || player.track?.id !== track.id || !('mediaSession' in navigator)) return;
+			navigator.mediaSession.metadata = new MediaMetadata({
+				title: track.title,
+				artist: track.artistName ?? '',
+				album: track.albumTitle ?? '',
+				artwork: [{ src: url }]
+			});
+		});
 	});
 
 	$effect(() => {

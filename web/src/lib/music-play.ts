@@ -20,6 +20,7 @@ function toPlayerTrack(
 		albumTitle: track.album_title ?? null,
 		streamUrl: track.stream_url,
 		artworkUrl,
+		albumId: track.album_id ?? null,
 		favorite: track.watch_state?.favorite ?? false,
 		durationSeconds: track.duration_seconds,
 		replayGainTrackGain: track.replaygain_track_gain,
@@ -43,10 +44,10 @@ export async function playAlbum(
 	await playQueue(queue, Math.max(0, start));
 }
 
-/** Queue an artist's top tracks. */
-export async function playArtist(artistId: string, artworkUrl?: string | null): Promise<void> {
+/** Queue an artist's top tracks; each track resolves its own album cover. */
+export async function playArtist(artistId: string): Promise<void> {
 	const artist = await api.get<ArtistDetail>(`/artists/${artistId}`);
-	const queue = artist.top_tracks.map((track) => toPlayerTrack(track, artworkUrl));
+	const queue = artist.top_tracks.map((track) => toPlayerTrack(track));
 	await playQueue(queue, 0);
 }
 
