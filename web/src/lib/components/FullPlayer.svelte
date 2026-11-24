@@ -665,7 +665,7 @@
 		.hero {
 			flex-direction: column;
 			align-items: center;
-			text-align: center;
+			text-align: left;
 		}
 
 		.details {
