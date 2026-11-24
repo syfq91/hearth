@@ -147,7 +147,7 @@
 						</div>
 						<button
 							type="button"
-							class="icon-btn fav-btn"
+							class="icon-btn fav-btn title-fav"
 							class:active={player.favorite}
 							onclick={() => void toggleFavorite()}
 							aria-label={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
@@ -239,6 +239,17 @@
 						</div>
 
 						<div class="extras">
+							<button
+								type="button"
+								class="icon-btn fav-btn controls-fav"
+								class:active={player.favorite}
+								onclick={() => void toggleFavorite()}
+								aria-label={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
+								aria-pressed={player.favorite}
+								title={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
+							>
+								<Heart size={20} fill={player.favorite ? 'currentColor' : 'none'} />
+							</button>
 							<div class="volume-control">
 								<button
 									type="button"
@@ -441,6 +452,16 @@
 
 	.fav-btn {
 		flex: 0 0 auto;
+	}
+
+	/* One favourite control, two placements: beside the volume on wide
+	   screens, beside the track details on narrow ones. */
+	.title-fav {
+		display: none;
+	}
+
+	.controls-fav {
+		display: inline-flex;
 	}
 
 	.details h1 {
@@ -701,6 +722,14 @@
 
 		.controls-row {
 			justify-content: center;
+		}
+
+		.title-fav {
+			display: inline-flex;
+		}
+
+		.controls-fav {
+			display: none;
 		}
 
 		.track-artist {
