@@ -1,10 +1,23 @@
 <script lang="ts">
 	import Poster from '../../../../lib/components/Poster.svelte';
-	import { playQueue, player, type PlayerTrack } from '../../../../lib/player.svelte';
+	import { api } from '../../../../lib/api/client';
+	import {
+		playQueue,
+		player,
+		toggleShuffle,
+		type PlayerTrack
+	} from '../../../../lib/player.svelte';
 	import type { TrackSummary } from '../../../../lib/api/types';
 	import type { PageProps } from './$types';
+	import { Heart, Shuffle } from '@lucide/svelte';
 
 	let { data }: PageProps = $props();
+
+	// Local override so the heart reacts instantly; the next navigation refetches
+	// the authoritative watch state.
+	let favoriteOverride = $state<boolean | null>(null);
+	let favoritePending = $state(false);
+	const favorite = $derived(favoriteOverride ?? data.album.watch_state?.favorite ?? false);
 
 	function toPlayerTrack(track: TrackSummary): PlayerTrack {
 		return {
@@ -37,6 +50,29 @@
 	function playAll(): void {
 		const queue = albumQueue();
 		if (queue.length > 0) void playQueue(queue, 0);
+	}
+
+	/** Start the album with shuffle enabled (the player's global shuffle mode). */
+	function shuffleAll(): void {
+		const queue = albumQueue();
+		if (queue.length === 0) return;
+		if (!player.shuffle) toggleShuffle();
+		void playQueue(queue, 0);
+	}
+
+	async function toggleFavorite(): Promise<void> {
+		if (favoritePending) return;
+		const previous = favorite;
+		const next = !previous;
+		favoriteOverride = next;
+		favoritePending = true;
+		try {
+			await api.post(`/items/${data.album.id}/favorite`, { body: { favorite: next } });
+		} catch {
+			favoriteOverride = previous;
+		} finally {
+			favoritePending = false;
+		}
 	}
 
 	function formatDuration(seconds: number | null | undefined): string {
@@ -81,6 +117,27 @@
 		</p>
 		<div class="actions">
 			<button type="button" class="play" onclick={playAll}>Play album</button>
+			<button
+				type="button"
+				class="ghost icon"
+				onclick={shuffleAll}
+				aria-label="Shuffle album"
+				title="Shuffle album"
+			>
+				<Shuffle size={18} />
+			</button>
+			<button
+				type="button"
+				class="ghost icon"
+				class:active={favorite}
+				onclick={() => void toggleFavorite()}
+				disabled={favoritePending}
+				aria-label={favorite ? 'Remove album from favorites' : 'Add album to favorites'}
+				aria-pressed={favorite}
+				title={favorite ? 'Remove from favorites' : 'Favourite'}
+			>
+				<Heart size={18} fill={favorite ? 'currentColor' : 'none'} />
+			</button>
 		</div>
 	</div>
 </article>
@@ -152,6 +209,42 @@
 
 	.play:hover {
 		filter: brightness(1.05);
+	}
+
+	.actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.ghost.icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 2.5rem;
+		height: 2.55rem;
+		padding: 0.6rem;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: inherit;
+		cursor: pointer;
+	}
+
+	.ghost.icon:hover:not(:disabled) {
+		background: var(--surface);
+		color: var(--accent);
+		border-color: var(--accent);
+	}
+
+	.ghost.icon:disabled {
+		opacity: 0.6;
+		cursor: default;
+	}
+
+	.ghost.icon.active {
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 
 	.disc h2 {

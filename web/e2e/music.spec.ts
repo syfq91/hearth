@@ -34,6 +34,38 @@ test('play a track from an album', async ({ page, request }) => {
 	await expect.poll(() => audio.evaluate((el: HTMLAudioElement) => el.paused)).toBe(true);
 });
 
+test('album actions shuffle playback and toggle the album favorite', async ({
+	page,
+	request
+}) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
+
+	await page.goto('/music');
+	await page.getByRole('link', { name: ALBUM_TITLE }).first().click();
+
+	const shuffle = page.getByRole('button', { name: 'Shuffle album' });
+	const favorite = page.getByRole('button', { name: 'Add album to favorites' });
+	await expect(shuffle).toBeVisible();
+	await expect(favorite).toBeVisible();
+	await expect(favorite).toHaveAttribute('aria-pressed', 'false');
+
+	await favorite.click();
+	const unfavorite = page.getByRole('button', { name: 'Remove album from favorites' });
+	await expect(unfavorite).toHaveAttribute('aria-pressed', 'true');
+
+	// The toggle persists server-side, not just in local state.
+	await page.reload();
+	await expect(
+		page.getByRole('button', { name: 'Remove album from favorites' })
+	).toHaveAttribute('aria-pressed', 'true');
+
+	await shuffle.click();
+	const bar = page.getByRole('region', { name: 'Now playing' });
+	await expect(bar).toBeVisible();
+	await expect(bar.getByRole('button', { name: 'Shuffle on' })).toBeVisible();
+});
+
 test('the artists screen lists the scanned artist', async ({ page, request }) => {
 	const pair = await seedServer(request);
 	await signIn(page, pair);
