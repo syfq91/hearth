@@ -33,6 +33,17 @@
 		canScrollRight = scrollLeft + clientWidth < scrollWidth - 4;
 	}
 
+	// Scroll fires far more often than the browser paints. Coalesce the
+	// layout reads and state writes into one animation frame.
+	let scrollFrame = 0;
+	function scheduleScrollState() {
+		if (scrollFrame) return;
+		scrollFrame = requestAnimationFrame(() => {
+			scrollFrame = 0;
+			updateScrollState();
+		});
+	}
+
 	function scrollRow(direction: 'left' | 'right') {
 		if (!rowEl) return;
 		const distance = rowEl.clientWidth * 0.75;
@@ -47,15 +58,15 @@
 		const el = rowEl;
 		updateScrollState();
 
-		el.addEventListener('scroll', updateScrollState, { passive: true });
-		const ro = new ResizeObserver(() => {
-			updateScrollState();
-		});
+		el.addEventListener('scroll', scheduleScrollState, { passive: true });
+		const ro = new ResizeObserver(scheduleScrollState);
 		ro.observe(el);
 
 		return () => {
-			el.removeEventListener('scroll', updateScrollState);
+			el.removeEventListener('scroll', scheduleScrollState);
 			ro.disconnect();
+			if (scrollFrame) cancelAnimationFrame(scrollFrame);
+			scrollFrame = 0;
 		};
 	});
 </script>
