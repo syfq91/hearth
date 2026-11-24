@@ -165,6 +165,20 @@
 							<button
 								type="button"
 								class="icon-btn"
+								class:active={player.repeat !== 'off'}
+								onclick={() => cycleRepeat()}
+								aria-label={`Repeat: ${player.repeat}`}
+								title={`Repeat: ${player.repeat}`}
+							>
+								{#if player.repeat === 'one'}
+									<Repeat1 size={20} />
+								{:else}
+									<Repeat size={20} />
+								{/if}
+							</button>
+							<button
+								type="button"
+								class="icon-btn"
 								onclick={() => void playPrevious()}
 								disabled={player.index < 0}
 								aria-label="Previous track"
@@ -196,23 +210,6 @@
 							>
 								<SkipForward size={22} fill="currentColor" />
 							</button>
-						</div>
-
-						<div class="extras">
-							<button
-								type="button"
-								class="icon-btn"
-								class:active={player.repeat !== 'off'}
-								onclick={() => cycleRepeat()}
-								aria-label={`Repeat: ${player.repeat}`}
-								title={`Repeat: ${player.repeat}`}
-							>
-								{#if player.repeat === 'one'}
-									<Repeat1 size={20} />
-								{:else}
-									<Repeat size={20} />
-								{/if}
-							</button>
 							<button
 								type="button"
 								class="icon-btn"
@@ -224,6 +221,9 @@
 							>
 								<Shuffle size={20} />
 							</button>
+						</div>
+
+						<div class="extras">
 							<button
 								type="button"
 								class="icon-btn"
