@@ -14,6 +14,7 @@ from app.api.v1.books import BookListItem, _to_book_list_item
 from app.api.v1.items import (
     ItemSummary,
     _primary_image,
+    card_load_options,
     item_summary,
     watch_state_response,
     watch_states,
@@ -23,14 +24,11 @@ from app.api.v1.music import AlbumSummary, recently_added_albums
 from app.api.v1.shows import NextUpShelf, list_next_up
 from app.core.deps import RequireUser, SessionmakerDep, require_library_access
 from app.db.models import (
-    Album,
     Book,
     BookProgress,
     Episode,
     LibraryAccess,
     MediaItem,
-    Series,
-    Track,
     User,
     UserItemState,
 )
@@ -146,12 +144,7 @@ async def continue_watching(
             is_visible(),
         )
         .order_by(UserItemState.last_played_at.desc(), MediaItem.id.desc())
-        .options(
-            selectinload(MediaItem.images),
-            selectinload(MediaItem.genres),
-            selectinload(MediaItem.book),
-            selectinload(MediaItem.episode).selectinload(Episode.series).selectinload(Series.item),
-        )
+        .options(*card_load_options())
     )
     query = _restrict_to_accessible_libraries(query, user)
     rows = (await session.execute(query.limit(limit + 1))).all()
@@ -257,21 +250,7 @@ async def recently_added(
 
     selected_ids = [item_id for item_id, _ in page_card_ids]
     items_query = (
-        select(MediaItem)
-        .where(MediaItem.id.in_(selected_ids))
-        .options(
-            selectinload(MediaItem.images),
-            selectinload(MediaItem.genres),
-            selectinload(MediaItem.book),
-            selectinload(MediaItem.episode)
-            .selectinload(Episode.series)
-            .selectinload(Series.item)
-            .selectinload(MediaItem.images),
-            selectinload(MediaItem.episode)
-            .selectinload(Episode.series)
-            .selectinload(Series.item)
-            .selectinload(MediaItem.genres),
-        )
+        select(MediaItem).where(MediaItem.id.in_(selected_ids)).options(*card_load_options())
     )
     loaded_map = {item.id: item for item in (await session.scalars(items_query)).all()}
     page_cards = [
@@ -358,17 +337,7 @@ async def favorites(
             is_visible(),
         )
         .order_by(UserItemState.updated_at.desc(), MediaItem.id.desc())
-        .options(
-            selectinload(MediaItem.images),
-            selectinload(MediaItem.genres),
-            selectinload(MediaItem.book),
-            selectinload(MediaItem.episode).selectinload(Episode.series).selectinload(Series.item),
-            # Track cards need the parent album's poster and id.
-            selectinload(MediaItem.track)
-            .selectinload(Track.album)
-            .selectinload(Album.item)
-            .selectinload(MediaItem.images),
-        )
+        .options(*card_load_options())
     )
     query = _restrict_to_accessible_libraries(query, user)
     rows = (await session.execute(query.limit(limit + 1))).all()

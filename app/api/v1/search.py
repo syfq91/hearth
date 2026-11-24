@@ -6,17 +6,14 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import bindparam, select, text
-from sqlalchemy.orm import selectinload
 
-from app.api.v1.items import ItemSummary, item_summary, watch_states
+from app.api.v1.items import ItemSummary, card_load_options, item_summary, watch_states
 from app.core.deps import RequireUser
 from app.db.models import (
-    Episode,
     ItemPerson,
     LibraryAccess,
     MediaItem,
     Person,
-    Series,
     UserItemState,
 )
 from app.db.session import SessionDep
@@ -146,14 +143,7 @@ async def search(
         loaded_items = await session.scalars(
             select(MediaItem)
             .where(MediaItem.id.in_(item_ids), is_visible())
-            .options(
-                selectinload(MediaItem.images),
-                selectinload(MediaItem.genres),
-                selectinload(MediaItem.episode)
-                .selectinload(Episode.series)
-                .selectinload(Series.item)
-                .selectinload(MediaItem.images),
-            )
+            .options(*card_load_options())
         )
         items_by_id = {item.id: item for item in loaded_items.all()}
         states = await watch_states(session, user.id, list(items_by_id.keys()))

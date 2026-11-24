@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import and_, func, inspect, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import lazyload, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.deps import (
@@ -25,6 +25,7 @@ from app.core.deps import (
 )
 from app.core.errors import NotFoundError, ValidationError
 from app.db.models import (
+    Album,
     Episode,
     Genre,
     ItemPerson,
@@ -33,6 +34,7 @@ from app.db.models import (
     MediaItem,
     Person,
     Series,
+    Track,
     UserItemState,
 )
 from app.db.models import (
@@ -306,14 +308,7 @@ async def list_library_items(
         query = query.order_by(key_expression.asc(), MediaItem.id.asc())
     else:
         query = query.order_by(key_expression.desc(), MediaItem.id.desc())
-    query = query.options(
-        selectinload(MediaItem.images),
-        selectinload(MediaItem.genres),
-        selectinload(MediaItem.episode)
-        .selectinload(Episode.series)
-        .selectinload(Series.item)
-        .selectinload(MediaItem.images),
-    )
+    query = query.options(*card_load_options())
     rows = list(await session.scalars(query.limit(limit + 1)))
 
     has_more = len(rows) > limit
@@ -754,6 +749,57 @@ def _is_loaded(instance: object, attr: str) -> bool:
         return attr not in insp.unloaded
     except Exception:
         return True
+
+
+# MediaItem declares every subtype relation lazy="selectin". Without an
+# override, a page of cards also loads movies, seasons, files and the whole
+# nested series/season/episode graph, none of which item_summary reads.
+_CARD_UNUSED = (
+    lazyload(MediaItem.movie),
+    lazyload(MediaItem.series),
+    lazyload(MediaItem.season),
+    lazyload(MediaItem.artist),
+    lazyload(MediaItem.album),
+    lazyload(MediaItem.files),
+)
+
+
+def card_load_options() -> tuple[Any, ...]:
+    """Eager-load only what :func:`item_summary` reads for a catalog card.
+
+    Use on any query whose rows are passed to ``item_summary``. Detail
+    endpoints need their full relationship graph and must not use this.
+    """
+    nested_item = (
+        *_CARD_UNUSED,
+        lazyload(MediaItem.book),
+        lazyload(MediaItem.track),
+        lazyload(MediaItem.episode),
+        lazyload(MediaItem.genres),
+        selectinload(MediaItem.images),
+    )
+    series = (
+        lazyload(Series.seasons),
+        lazyload(Series.episodes),
+        selectinload(Series.item).options(*nested_item),
+    )
+    album = (lazyload(Album.tracks), selectinload(Album.item).options(*nested_item))
+    return (
+        *_CARD_UNUSED,
+        selectinload(MediaItem.images),
+        selectinload(MediaItem.genres),
+        selectinload(MediaItem.book),
+        selectinload(MediaItem.track).options(
+            lazyload(Track.file),
+            lazyload(Track.artist),
+            selectinload(Track.album).options(*album),
+        ),
+        selectinload(MediaItem.episode).options(
+            lazyload(Episode.file),
+            lazyload(Episode.season),
+            selectinload(Episode.series).options(*series),
+        ),
+    )
 
 
 def item_summary(

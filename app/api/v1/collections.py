@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.items import ItemSummary, item_summary, watch_states
+from app.api.v1.items import ItemSummary, card_load_options, item_summary, watch_states
 from app.core.deps import RequireAdmin, RequireUser
 from app.core.errors import NotFoundError
 from app.db.base import utcnow
@@ -383,7 +383,11 @@ async def _get_collection_detail(
         )
 
     # Filter by user library access
-    media_query = select(MediaItem).where(MediaItem.id.in_(item_ids), is_visible())
+    media_query = (
+        select(MediaItem)
+        .where(MediaItem.id.in_(item_ids), is_visible())
+        .options(*card_load_options())
+    )
     if user.role != "admin":
         media_query = media_query.join(
             LibraryAccess,
