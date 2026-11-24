@@ -1,7 +1,6 @@
 <script lang="ts">
 	import '../app.css';
 	import { logout, session } from '../lib/auth.svelte';
-	import { api } from '../lib/api/client';
 	import type { LibrarySummary } from '../lib/api/types';
 	import { setTvMode, tv } from '../lib/tv.svelte';
 	import { spatialFocus } from '../lib/actions/spatial-focus';
@@ -33,31 +32,16 @@
 	let hasFavorites = $state(false);
 
 	$effect(() => {
-		if (data.libraries && data.libraries.length > 0) {
-			userLibraries = data.libraries;
-		} else if (session.status === 'authenticated') {
-			void api
-				.get<LibrarySummary[]>('/libraries')
-				.then((libs) => {
-					userLibraries = libs;
-				})
-				.catch(() => {});
-		} else {
-			userLibraries = [];
-		}
-
-		if (typeof data.hasFavorites === 'boolean') {
-			hasFavorites = data.hasFavorites;
-		} else if (session.status === 'authenticated') {
-			void api
-				.get<{ items: unknown[] }>('/home/favorites', { query: { limit: 1 } })
-				.then((res) => {
-					hasFavorites = res.items.length > 0;
-				})
-				.catch(() => {});
-		} else {
-			hasFavorites = false;
-		}
+		const pending = data.nav;
+		let cancelled = false;
+		void pending.then((nav) => {
+			if (cancelled) return;
+			userLibraries = nav.libraries;
+			hasFavorites = nav.hasFavorites;
+		});
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	function getLibraryIcon(type: string) {
@@ -159,8 +143,14 @@
 		if (next !== header) header = next;
 	}
 
+	// Layout data arrives on every navigation with a fresh array reference.
+	// Resetting from that alone made the nav jump back to its widest mode for
+	// one frame on narrow screens. Only reset when the nav items change.
+	let headerKey = '';
 	$effect(() => {
-		const _ = [userLibraries, hasFavorites];
+		const key = `${userLibraries.map((lib) => lib.id).join(',')}|${hasFavorites}`;
+		if (key === headerKey) return;
+		headerKey = key;
 		header = initialHeaderLayout();
 		if (typeof window !== 'undefined') {
 			requestAnimationFrame(() => checkHeaderWidth());

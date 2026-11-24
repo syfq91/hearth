@@ -6,11 +6,23 @@
 	import { playAlbum, queueAlbum } from '../lib/music-play';
 	import { Check, ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import type { PageProps } from './$types';
-	import type { BookShelf } from '../lib/api/types';
+	import type { BookShelf, LibrarySummary } from '../lib/api/types';
 
 	let { data }: PageProps = $props();
 
-	const musicLibrary = $derived(data.libraries?.find((l) => l.type === 'music'));
+	let libraries = $state<LibrarySummary[]>([]);
+	$effect(() => {
+		const pending = data.nav;
+		let cancelled = false;
+		void pending.then((nav) => {
+			if (!cancelled) libraries = nav.libraries;
+		});
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	const musicLibrary = $derived(libraries.find((l) => l.type === 'music'));
 	const musicTitle = $derived(musicLibrary ? `New in ${musicLibrary.name}` : 'New in Music');
 	const musicHref = $derived(musicLibrary ? `/library/${musicLibrary.id}` : '/music');
 

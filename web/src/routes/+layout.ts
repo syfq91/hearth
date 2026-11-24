@@ -9,6 +9,24 @@ export const ssr = false;
 /** Routes reachable without a session. */
 const PUBLIC_ROUTES = ['/login', '/setup'];
 
+interface NavData {
+	libraries: LibrarySummary[];
+	hasFavorites: boolean;
+}
+
+async function loadNavData(): Promise<NavData> {
+	// Neither request may hold up navigation. `api.get` already coalesces and
+	// caches them; the promise is passed to the layout and resolved in place.
+	const [libsResult, favsResult] = await Promise.allSettled([
+		api.get<LibrarySummary[]>('/libraries'),
+		api.get<{ items: unknown[] }>('/home/favorites', { query: { limit: 1 } })
+	]);
+	return {
+		libraries: libsResult.status === 'fulfilled' ? libsResult.value : [],
+		hasFavorites: favsResult.status === 'fulfilled' && favsResult.value.items.length > 0
+	};
+}
+
 export const load: LayoutLoad = async ({ url }) => {
 	await bootstrap();
 
@@ -30,20 +48,10 @@ export const load: LayoutLoad = async ({ url }) => {
 		throw redirect(307, '/');
 	}
 
-	let libraries: LibrarySummary[] = [];
-	let hasFavorites = false;
-	if (session.status === 'authenticated' && !isPublic) {
-		const [libsResult, favsResult] = await Promise.allSettled([
-			api.get<LibrarySummary[]>('/libraries'),
-			api.get<{ items: unknown[] }>('/home/favorites', { query: { limit: 1 } })
-		]);
-		if (libsResult.status === 'fulfilled') {
-			libraries = libsResult.value;
-		}
-		if (favsResult.status === 'fulfilled') {
-			hasFavorites = favsResult.value.items.length > 0;
-		}
-	}
+	const nav: Promise<NavData> =
+		session.status === 'authenticated' && !isPublic
+			? loadNavData()
+			: Promise.resolve({ libraries: [], hasFavorites: false });
 
-	return { auth: session.status, libraries, hasFavorites };
+	return { auth: session.status, nav };
 };
