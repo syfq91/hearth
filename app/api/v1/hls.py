@@ -291,19 +291,15 @@ async def get_media_playlist(
         if session.start_offset > 0:
             lines.append(f"#EXT-X-START:TIME_OFFSET={session.start_offset:.3f}")
 
-        # ffmpeg starts at the segment containing the resume offset, so the
-        # earlier segments in this VOD timeline do not exist yet. If they are
-        # advertised as ordinary segments, a client can request segment 0
-        # before it seeks to the resume point; the server then restarts ffmpeg
-        # at offset 0 and rewrites init.mp4 with a different timestamp base.
-        # A later seek lands on segments produced with the old init and the
-        # browser buffers them at the wrong time. Mark the unavailable prefix
-        # as HLS gaps so clients skip it and start at the resume segment while
-        # keeping the absolute (global) media timeline.
+        # Advertise the whole VOD timeline as ordinary segments. ffmpeg only
+        # produces segments from the resume/seek offset onward, but the segment
+        # handler generates any missing segment on demand, and POST /seek
+        # restarts ffmpeg before the client requests it. Marking the prefix as
+        # EXT-X-GAP instead frozen that state in the cached VOD playlist: a
+        # later backward seek kept skipping those segments and played from the
+        # original resume point. The media timeline stays absolute throughout.
         for i in range(total_segments):
             d = session.segment_duration_at(i, duration)
-            if i < session.current_start_segment:
-                lines.append("#EXT-X-GAP")
             lines.append(f"#EXTINF:{d:.3f},")
             lines.append(f"seg_{i:03d}.m4s{token_suffix}")
         lines.append("#EXT-X-ENDLIST")

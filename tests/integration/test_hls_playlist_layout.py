@@ -115,15 +115,16 @@ async def test_media_playlist_uniform_when_short_opener_disabled(
 
 
 @pytest.mark.asyncio
-async def test_media_playlist_marks_unproduced_resume_prefix_as_gap(
+async def test_media_playlist_advertises_full_timeline_after_resume(
     api_client: httpx.AsyncClient,
     db_settings: Settings,
 ) -> None:
-    """A mid-file session must not advertise segments ffmpeg never produced.
+    """A mid-file session must keep every segment requestable.
 
-    Otherwise a client can request segment 0 before its resume seek, forcing
-    the server to restart ffmpeg at offset 0 and rewrite init.mp4 with a
-    different timestamp base than the resume segments.
+    Marking the pre-resume prefix as EXT-X-GAP freezes that state in VOD
+    playlists, which hls.js caches. A later backward seek then skips those
+    segments and plays from the original resume point. Missing segments are
+    generated on demand instead.
     """
     headers = await _headers(api_client)
     db_settings.transcode_segment_duration_seconds = 4
@@ -138,14 +139,10 @@ async def test_media_playlist_marks_unproduced_resume_prefix_as_gap(
     )
     assert response.status_code == 200, response.text
 
-    lines = response.text.splitlines()
-    gap_segments = {
-        lines[index + 2].split(".")[0]
-        for index, line in enumerate(lines)
-        if line == "#EXT-X-GAP" and index + 2 < len(lines)
-    }
-    assert gap_segments == {"seg_000", "seg_001"}
+    assert "#EXT-X-GAP" not in response.text
+    assert "seg_000.m4s" in response.text
+    assert "seg_001.m4s" in response.text
     assert "#EXT-X-MEDIA-SEQUENCE:0" in response.text
     assert "#EXT-X-START:TIME_OFFSET=6.000" in response.text
-    # Timeline durations stay absolute so the client can seek to the resume point.
+    # Timeline durations stay absolute so the client can seek anywhere.
     assert _extinf(response.text) == pytest.approx([2.0, 4.0, 4.0, 4.0, 4.0, 2.0])
