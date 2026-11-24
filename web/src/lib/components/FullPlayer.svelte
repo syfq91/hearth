@@ -732,6 +732,11 @@
 			display: none;
 		}
 
+		/* Phones use the device volume keys and the media session controls. */
+		.volume-control {
+			display: none;
+		}
+
 		.track-artist {
 			display: none;
 		}
