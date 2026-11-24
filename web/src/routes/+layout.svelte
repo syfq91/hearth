@@ -1,6 +1,5 @@
 <script lang="ts">
 	import '../app.css';
-	import favicon from '#lib/assets/favicon.svg';
 	import { logout, session } from '../lib/auth.svelte';
 	import { api } from '../lib/api/client';
 	import type { LibrarySummary } from '../lib/api/types';
@@ -264,7 +263,8 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+	<link rel="icon" type="image/png" href="/icons/icon-192.png" />
 	<title>Hearth</title>
 </svelte:head>
 
