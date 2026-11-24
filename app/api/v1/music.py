@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload, lazyload, selectinload
 
 from app.api.v1.items import (
     ImageResponse,
@@ -832,6 +832,24 @@ async def recently_added_albums(
         _restrict_to_accessible_libraries(alb_q, user)
         .order_by(MediaItem.added_at.desc())
         .limit(limit)
+    )
+    # This shelf feeds /home. Cap the subtype and artist/album collections:
+    # otherwise each album walks Artist -> albums -> tracks -> MediaItem.
+    alb_q = alb_q.options(
+        lazyload(MediaItem.movie),
+        lazyload(MediaItem.series),
+        lazyload(MediaItem.season),
+        lazyload(MediaItem.artist),
+        lazyload(MediaItem.track),
+        lazyload(MediaItem.book),
+        lazyload(MediaItem.episode),
+        lazyload(MediaItem.files),
+        lazyload(MediaItem.genres),
+        selectinload(MediaItem.images),
+        selectinload(MediaItem.album).options(
+            lazyload(Album.tracks),
+            selectinload(Album.artist).options(lazyload(Artist.albums), lazyload(Artist.tracks)),
+        ),
     )
     alb_items = list(await session.scalars(alb_q))
     alb_states = await watch_states(session, user.id, [a.id for a in alb_items])
