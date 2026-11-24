@@ -7,7 +7,7 @@
  */
 import { api } from './api/client';
 import type { AlbumDetail, ArtistDetail, S, TrackSummary } from './api/types';
-import { playQueue, type PlayerTrack } from './player.svelte';
+import { addTracksToQueue, playQueue, type PlayerTrack } from './player.svelte';
 
 function toPlayerTrack(
 	track: TrackSummary | S['TrackDetail'],
@@ -42,6 +42,19 @@ export async function playAlbum(
 	);
 	const start = startTrackId ? queue.findIndex((track) => track.id === startTrackId) : -1;
 	await playQueue(queue, Math.max(0, start));
+}
+
+/** Add every album track to the queue without starting playback. */
+export async function queueAlbum(
+	albumId: string,
+	artworkUrl?: string | null,
+	mode: 'end' | 'next' = 'end'
+): Promise<void> {
+	const album = await api.get<AlbumDetail>(`/albums/${albumId}`);
+	const queue: PlayerTrack[] = album.discs.flatMap((disc) =>
+		disc.tracks.map((track) => toPlayerTrack(track, artworkUrl))
+	);
+	addTracksToQueue(queue, mode);
 }
 
 /** Queue an artist's top tracks; each track resolves its own album cover. */

@@ -100,6 +100,27 @@ test('album track menu queues a track and inserts another next', async ({ page, 
 	await expect(bar.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
 });
 
+test('album poster menu queues the whole album', async ({ page, request }) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
+
+	await page.goto('/music');
+	const poster = page.locator('.poster-wrap').first();
+	await poster.hover();
+	await page.getByRole('button', { name: `More options for ${ALBUM_TITLE}` }).click();
+	await page.getByRole('menuitem', { name: 'Add to queue' }).click();
+
+	const bar = page.getByRole('region', { name: 'Now playing' });
+	await expect(bar).toBeVisible();
+	await expect(page.locator('audio')).toHaveJSProperty('paused', true);
+
+	await poster.hover();
+	await page.getByRole('button', { name: `More options for ${ALBUM_TITLE}` }).click();
+	await page.getByRole('menuitem', { name: 'Play next' }).click();
+	await bar.getByRole('button', { name: 'Open full screen player' }).click();
+	await expect(page.getByRole('heading', { name: /Queue/ })).toContainText('2');
+});
+
 test('the artists screen lists the scanned artist', async ({ page, request }) => {
 	const pair = await seedServer(request);
 	await signIn(page, pair);

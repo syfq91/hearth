@@ -161,6 +161,40 @@ export function queueNext(track: PlayerTrack): void {
 	}
 }
 
+/**
+ * Queue a whole list without interrupting playback. `next` inserts after the
+ * current track in order; `end` appends. When nothing is queued, the first
+ * track is prepared paused so Play can start the list.
+ */
+export function addTracksToQueue(tracks: PlayerTrack[], mode: 'end' | 'next'): void {
+	if (tracks.length === 0) return;
+	if (player.queue.length === 0) {
+		void prepareFirstTrack(tracks[0]);
+		for (const track of tracks.slice(1)) {
+			player.queue.push(track);
+			originalQueue?.push(track);
+		}
+		return;
+	}
+	if (mode === 'end') {
+		for (const track of tracks) {
+			player.queue.push(track);
+			originalQueue?.push(track);
+		}
+		return;
+	}
+	const insertAt = Math.min(player.index + 1, player.queue.length);
+	player.queue.splice(insertAt, 0, ...tracks);
+	if (originalQueue) {
+		const currentId = player.track?.id;
+		const originalIndex = currentId
+			? originalQueue.findIndex((item) => item.id === currentId)
+			: -1;
+		const target = originalIndex >= 0 ? originalIndex + 1 : originalQueue.length;
+		originalQueue.splice(target, 0, ...tracks);
+	}
+}
+
 /** Advance to the next queued track; wraps when repeat-all is enabled. */
 export async function playNext(): Promise<boolean> {
 	const next = nextIndex(player.index, player.queue.length, player.repeat === 'all');

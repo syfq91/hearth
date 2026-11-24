@@ -3,7 +3,7 @@
 	import Poster from '../lib/components/Poster.svelte';
 	import PosterOverlay from '../lib/components/PosterOverlay.svelte';
 	import BookCover from '../lib/components/BookCover.svelte';
-	import { playAlbum } from '../lib/music-play';
+	import { playAlbum, queueAlbum } from '../lib/music-play';
 	import { Check, ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import type { PageProps } from './$types';
 	import type { BookShelf } from '../lib/api/types';
@@ -234,6 +234,8 @@
 									favorite={album.watch_state?.favorite ?? false}
 									showWatched={false}
 									onPlay={() => void playAlbum(album.id, album.poster?.url)}
+									onAddToQueue={() => void queueAlbum(album.id, album.poster?.url)}
+									onPlayNext={() => void queueAlbum(album.id, album.poster?.url, 'next')}
 								/>
 							</div>
 							<h3 class="title">{album.title}</h3>

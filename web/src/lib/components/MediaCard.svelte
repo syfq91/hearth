@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Poster from './Poster.svelte';
 	import PosterOverlay from './PosterOverlay.svelte';
-	import { playAlbum } from '../music-play';
+	import { playAlbum, queueAlbum } from '../music-play';
 	import type { S } from '../api/types';
 	import { Check } from '@lucide/svelte';
 
@@ -42,6 +42,13 @@
 			'type' in item &&
 			(item.type === 'album' || item.type === 'artist' || item.type === 'track' || item.type === 'music')
 	);
+
+	/** Album id used by the poster queue actions (never an artist id). */
+	const albumQueueId = $derived.by(() => {
+		const card = item as S['ItemSummary'];
+		if (card.type === 'album' || card.type === 'music') return card.id;
+		return card.album_id ?? null;
+	});
 
 	const episodeCount = $derived('episode_count' in item ? item.episode_count : null);
 
@@ -224,7 +231,14 @@
 				favorite={item.watch_state?.favorite ?? false}
 				{watched}
 				showWatched={!isMusic}
+				showPlay={!isMusic}
 				onPlay={isMusic ? () => void playAlbum(item.id, poster?.url) : undefined}
+				onAddToQueue={albumQueueId
+					? () => void queueAlbum(albumQueueId, poster?.url)
+					: undefined}
+				onPlayNext={albumQueueId
+					? () => void queueAlbum(albumQueueId, poster?.url, 'next')
+					: undefined}
 				onWatchedChange={(value) => (watchedOverride = value)}
 			/>
 		{/if}

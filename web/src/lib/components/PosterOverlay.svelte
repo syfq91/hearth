@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { api } from '../api/client';
-	import { Check, Heart, Play } from '@lucide/svelte';
+	import { Check, CornerDownRight, Ellipsis, Heart, ListPlus, Play } from '@lucide/svelte';
 
 	interface Props {
 		itemId: string;
@@ -13,8 +13,13 @@
 		bookProgress?: { locator: string; percentage: number; device_name?: string | null } | null;
 		/** Hide the played/read toggle (e.g. for music albums). */
 		showWatched?: boolean;
+		/** Show the centre play control; disable where the poster itself navigates. */
+		showPlay?: boolean;
 		/** Start media in-page instead of navigating (e.g. queue an album). */
 		onPlay?: () => void;
+		/** Album queue actions; when supplied, an ellipsis menu appears by the heart. */
+		onAddToQueue?: () => void;
+		onPlayNext?: () => void;
 		/** Lets the parent keep its own watched indicator in sync. */
 		onWatchedChange?: (watched: boolean) => void;
 	}
@@ -27,7 +32,10 @@
 		watched = false,
 		bookProgress = null,
 		showWatched = true,
+		showPlay = true,
 		onPlay,
+		onAddToQueue,
+		onPlayNext,
 		onWatchedChange
 	}: Props = $props();
 
@@ -35,9 +43,34 @@
 	let watchedOverride = $state<boolean | null>(null);
 	let favoritePending = $state(false);
 	let watchedPending = $state(false);
+	let menuOpen = $state(false);
 
 	const favoriteState = $derived(favoriteOverride ?? favorite);
 	const watchedState = $derived(watchedOverride ?? watched);
+	const hasQueueMenu = $derived(Boolean(onAddToQueue || onPlayNext));
+
+	$effect(() => {
+		if (!menuOpen) return;
+		function onOutsideClick(event: MouseEvent): void {
+			const target = event.target;
+			if (target instanceof Element && target.closest('[data-poster-menu]')) return;
+			menuOpen = false;
+		}
+		function onKeydown(event: KeyboardEvent): void {
+			if (event.key === 'Escape') menuOpen = false;
+		}
+		window.addEventListener('click', onOutsideClick);
+		window.addEventListener('keydown', onKeydown);
+		return () => {
+			window.removeEventListener('click', onOutsideClick);
+			window.removeEventListener('keydown', onKeydown);
+		};
+	});
+
+	function runQueueAction(action?: () => void): void {
+		menuOpen = false;
+		action?.();
+	}
 
 	async function toggleFavorite(): Promise<void> {
 		if (favoritePending) return;
@@ -84,20 +117,22 @@
 </script>
 
 <div class="overlay">
-	{#if onPlay}
-		<button
-			type="button"
-			class="play-button"
-			onclick={onPlay}
-			aria-label={`Play ${title}`}
-			title="Play"
-		>
-			<Play size={26} fill="currentColor" strokeWidth={1.5} />
-		</button>
-	{:else}
-		<a class="play-button" href={playHref} aria-label={`Play ${title}`} title="Play">
-			<Play size={26} fill="currentColor" strokeWidth={1.5} />
-		</a>
+	{#if showPlay}
+		{#if onPlay}
+			<button
+				type="button"
+				class="play-button"
+				onclick={onPlay}
+				aria-label={`Play ${title}`}
+				title="Play"
+			>
+				<Play size={26} fill="currentColor" strokeWidth={1.5} />
+			</button>
+		{:else}
+			<a class="play-button" href={playHref} aria-label={`Play ${title}`} title="Play">
+				<Play size={26} fill="currentColor" strokeWidth={1.5} />
+			</a>
+		{/if}
 	{/if}
 	<div class="overlay-actions">
 		{#if showWatched}
@@ -124,6 +159,37 @@
 		>
 			<Heart size={16} fill={favoriteState ? 'currentColor' : 'none'} />
 		</button>
+		{#if hasQueueMenu}
+			<div class="menu-anchor" data-poster-menu>
+				<button
+					type="button"
+					class="round-button"
+					onclick={() => (menuOpen = !menuOpen)}
+					aria-haspopup="menu"
+					aria-expanded={menuOpen}
+					aria-label={`More options for ${title}`}
+					title="More options"
+				>
+					<Ellipsis size={16} />
+				</button>
+				{#if menuOpen}
+					<div class="queue-menu" role="menu" aria-label={`Queue options for ${title}`}>
+						{#if onAddToQueue}
+							<button type="button" role="menuitem" onclick={() => runQueueAction(onAddToQueue)}>
+								<ListPlus size={15} />
+								<span>Add to queue</span>
+							</button>
+						{/if}
+						{#if onPlayNext}
+							<button type="button" role="menuitem" onclick={() => runQueueAction(onPlayNext)}>
+								<CornerDownRight size={15} />
+								<span>Play next</span>
+							</button>
+						{/if}
+					</div>
+				{/if}
+			</div>
+		{/if}
 	</div>
 </div>
 
@@ -235,6 +301,57 @@
 		background: rgba(0, 0, 0, 0.75);
 		border-color: var(--accent);
 		color: var(--accent);
+	}
+
+	.menu-anchor {
+		position: relative;
+		display: inline-flex;
+		pointer-events: none;
+	}
+
+	/* Open upward: the poster wrapper clips anything below the card. */
+	.queue-menu {
+		position: absolute;
+		right: 0;
+		bottom: calc(100% + 0.4rem);
+		z-index: 10;
+		min-width: 9rem;
+		padding: 0.35rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		pointer-events: auto;
+	}
+
+	.queue-menu button {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		width: 100%;
+		padding: 0.4rem 0.55rem;
+		background: transparent;
+		border: 0;
+		border-radius: calc(var(--radius) - 2px);
+		color: var(--text);
+		font: inherit;
+		font-size: 0.85rem;
+		text-align: left;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+
+	.queue-menu button:hover {
+		background: var(--surface-2);
+		color: var(--accent);
+	}
+
+	.queue-menu button:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 1px;
 	}
 
 	.play-button:focus-visible,

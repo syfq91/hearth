@@ -1,6 +1,8 @@
 <script lang="ts">
 	import MusicTabs from '../../lib/components/MusicTabs.svelte';
 	import Poster from '../../lib/components/Poster.svelte';
+	import PosterOverlay from '../../lib/components/PosterOverlay.svelte';
+	import { playAlbum, queueAlbum } from '../../lib/music-play';
 	import type { AlbumListResponse } from '../../lib/api/types';
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
@@ -85,9 +87,22 @@
 		{#each albums.items as album (album.id)}
 			<li>
 				<article class="album">
-					<a href={`/music/album/${album.id}`} aria-label={album.title}>
-						<Poster image={album.poster} alt="" aspect="1 / 1" width={300} />
-					</a>
+					<div class="poster-wrap">
+						<a href={`/music/album/${album.id}`} aria-label={album.title}>
+							<Poster image={album.poster} alt="" aspect="1 / 1" width={300} />
+						</a>
+						<PosterOverlay
+							itemId={album.id}
+							title={album.title}
+							playHref={`/music/album/${album.id}`}
+							favorite={album.watch_state?.favorite ?? false}
+							showWatched={false}
+							showPlay={false}
+							onPlay={() => void playAlbum(album.id, album.poster?.url)}
+							onAddToQueue={() => void queueAlbum(album.id, album.poster?.url)}
+							onPlayNext={() => void queueAlbum(album.id, album.poster?.url, 'next')}
+						/>
+					</div>
 					<h2 class="title">
 						<a href={`/music/album/${album.id}`}>{album.title}</a>
 					</h2>
@@ -142,6 +157,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.35rem;
+	}
+
+	.poster-wrap {
+		position: relative;
+		border-radius: var(--radius);
+		overflow: hidden;
 	}
 
 	.title {

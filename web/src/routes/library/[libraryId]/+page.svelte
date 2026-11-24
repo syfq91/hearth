@@ -278,7 +278,9 @@
 		{/if}
 		<ul class="grid" class:music-grid={isMusic}>
 			{#each items as item (item.id)}
-				<li><MediaCard item={item} aspect={isMusic ? '1 / 1' : undefined} /></li>
+				<li>
+					<MediaCard item={item} overlay={isMusic} aspect={isMusic ? '1 / 1' : undefined} />
+				</li>
 			{/each}
 		</ul>
 		<Pagination
