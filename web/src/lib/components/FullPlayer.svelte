@@ -138,10 +138,25 @@
 				</div>
 
 				<div class="details">
-					<h1>{player.track.title}</h1>
-					<p class="sub">
-						{[player.track.artistName, player.track.albumTitle].filter(Boolean).join(' · ')}
-					</p>
+					<div class="title-row">
+						<div class="titles">
+							<h1>{player.track.title}</h1>
+							<p class="sub">
+								{[player.track.artistName, player.track.albumTitle].filter(Boolean).join(' · ')}
+							</p>
+						</div>
+						<button
+							type="button"
+							class="icon-btn fav-btn"
+							class:active={player.favorite}
+							onclick={() => void toggleFavorite()}
+							aria-label={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
+							aria-pressed={player.favorite}
+							title={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
+						>
+							<Heart size={20} fill={player.favorite ? 'currentColor' : 'none'} />
+						</button>
+					</div>
 
 					<div class="seek-row">
 						<span class="time">{formatTime(playerUi.currentTime)}</span>
@@ -224,17 +239,6 @@
 						</div>
 
 						<div class="extras">
-							<button
-								type="button"
-								class="icon-btn"
-								class:active={player.favorite}
-								onclick={() => void toggleFavorite()}
-								aria-label={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
-								aria-pressed={player.favorite}
-								title={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
-							>
-								<Heart size={20} fill={player.favorite ? 'currentColor' : 'none'} />
-							</button>
 							<div class="volume-control">
 								<button
 									type="button"
@@ -422,6 +426,21 @@
 	.details {
 		flex: 1;
 		min-width: 0;
+	}
+
+	.title-row {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.titles {
+		min-width: 0;
+	}
+
+	.fav-btn {
+		flex: 0 0 auto;
 	}
 
 	.details h1 {
