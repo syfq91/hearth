@@ -172,6 +172,39 @@ async def test_seek_forward_terminates_old_and_spawns_with_correct_ss_and_start_
     assert seg0.read_bytes() == b"initial_segment_0"
 
 
+@pytest.mark.asyncio
+async def test_seek_backward_restarts_with_target_segment(tmp_path: Path) -> None:
+    """A seek before the current resume point restarts ffmpeg at the target.
+
+    The media playlist lists the whole VOD timeline, so a backward seek must
+    produce the earlier segments instead of skipping them as a cached gap.
+    """
+    session = _make_sample_session(tmp_path)
+    first_proc = MockSubprocess(pid=3001)
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=first_proc)):
+        await session.start_process()
+
+    # Move forward first, then seek back to the beginning of the timeline.
+    second_proc = MockSubprocess(pid=3002)
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=second_proc)):
+        await session.seek(12.0)
+    assert second_proc is session.process
+
+    third_proc = MockSubprocess(pid=3003)
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=third_proc)):
+        await session.seek(0.0)
+
+    assert second_proc.terminate_called is True
+    assert session.process is third_proc
+
+    cmd = session.cmd
+    # Zero offset omits -ss, -start_number and -output_ts_offset in the builder.
+    assert session.current_start_segment == 0
+    assert "-ss" not in cmd
+    assert "-start_number" not in cmd
+    assert "-output_ts_offset" not in cmd
+
+
 def test_no_code_path_other_than_stop_deletes_segments() -> None:
     """T03 acceptance 4: Grep / AST proof that no code path other than session end/reap
     deletes segments from disk (INV-8).
