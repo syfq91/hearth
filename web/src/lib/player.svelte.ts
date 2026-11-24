@@ -12,6 +12,7 @@
  */
 import { withMediaToken } from './media-token.svelte';
 import { api } from './api/client';
+import { playerUi } from './player/ui.svelte';
 import {
 	REPEAT_MODES,
 	indexAfterRemoval,
@@ -97,19 +98,36 @@ export async function playQueue(tracks: PlayerTrack[], startIndex = 0): Promise<
 	await playIndex(index);
 }
 
-async function playIndex(index: number): Promise<void> {
+/** Guards against an older token resolution overwriting a newer track's src. */
+let loadGeneration = 0;
+
+/**
+ * Load a queue entry into the player. Only callers that actually start playback
+ * pass `autoplay: true`; queue-only actions leave `player.playing` untouched.
+ * The generation check prevents a stale token response from replacing the src
+ * of a track selected after this load began.
+ */
+async function loadTrack(index: number, autoplay: boolean): Promise<void> {
+	const generation = ++loadGeneration;
 	const track = player.queue[index];
 	if (!track) return;
 	player.index = index;
 	player.track = track;
 	player.favorite = track.favorite ?? false;
 	try {
-		player.src = await resolveSrc(track);
-		player.playing = true;
+		const src = await resolveSrc(track);
+		if (generation !== loadGeneration) return;
+		player.src = src;
+		if (autoplay) player.playing = true;
 	} catch (e) {
+		if (generation !== loadGeneration) return;
 		player.error = e instanceof Error ? e.message : String(e);
 		player.playing = false;
 	}
+}
+
+async function playIndex(index: number): Promise<void> {
+	await loadTrack(index, true);
 }
 
 /** Jump to a track in the current queue (used by the full-page player). */
@@ -119,19 +137,30 @@ export async function playAt(index: number): Promise<boolean> {
 	return true;
 }
 
+/** Single-flight loader for the first queue entry when adding while idle. */
+let preparingFirst: Promise<void> | null = null;
+
 /**
- * Prepare a track as the first queue entry when nothing is queued yet: load it
- * into the player but leave it paused, so the user can press Play themselves.
+ * Load queue[0] without touching play intent. Repeated idle actions reuse the
+ * same in-flight load instead of calling playQueue() again, which used to reset
+ * the queue and briefly set playing = true.
  */
-async function prepareFirstTrack(track: PlayerTrack): Promise<void> {
-	await playQueue([track], 0);
-	player.playing = false;
+function ensureQueuePrepared(): void {
+	if (player.track || preparingFirst) return;
+	playerUi.currentTime = 0;
+	playerUi.duration = 0;
+	preparingFirst = loadTrack(0, false).finally(() => {
+		preparingFirst = null;
+	});
 }
 
 /** Append a track to the queue without interrupting playback. */
 export function addToQueue(track: PlayerTrack): void {
 	if (player.queue.length === 0) {
-		void prepareFirstTrack(track);
+		player.queue = [track];
+		originalQueue = [track];
+		player.index = 0;
+		ensureQueuePrepared();
 		return;
 	}
 	player.queue.push(track);
@@ -144,7 +173,10 @@ export function addToQueue(track: PlayerTrack): void {
  */
 export function queueNext(track: PlayerTrack): void {
 	if (player.queue.length === 0) {
-		void prepareFirstTrack(track);
+		player.queue = [track];
+		originalQueue = [track];
+		player.index = 0;
+		ensureQueuePrepared();
 		return;
 	}
 	player.queue.splice(Math.min(player.index + 1, player.queue.length), 0, track);
@@ -169,11 +201,10 @@ export function queueNext(track: PlayerTrack): void {
 export function addTracksToQueue(tracks: PlayerTrack[], mode: 'end' | 'next'): void {
 	if (tracks.length === 0) return;
 	if (player.queue.length === 0) {
-		void prepareFirstTrack(tracks[0]);
-		for (const track of tracks.slice(1)) {
-			player.queue.push(track);
-			originalQueue?.push(track);
-		}
+		player.queue = [...tracks];
+		originalQueue = [...tracks];
+		player.index = 0;
+		ensureQueuePrepared();
 		return;
 	}
 	if (mode === 'end') {
@@ -295,6 +326,8 @@ export function removeFromQueue(index: number): void {
 }
 
 export function stop(): void {
+	loadGeneration += 1;
+	preparingFirst = null;
 	player.track = null;
 	player.src = null;
 	player.playing = false;
@@ -302,4 +335,6 @@ export function stop(): void {
 	player.queue = [];
 	player.index = -1;
 	originalQueue = null;
+	playerUi.currentTime = 0;
+	playerUi.duration = 0;
 }
