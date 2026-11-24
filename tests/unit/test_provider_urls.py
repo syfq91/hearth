@@ -47,6 +47,28 @@ def test_google_books_urls() -> None:
     assert play.provider_id == "B1R1CwAAQBAJ"
 
 
+def test_google_books_country_domains() -> None:
+    edition = parse_provider_url(
+        "https://www.google.com.my/books/edition/The_Cursed_Sword_Master_s_Harem_Life_By_/"
+        "EELNEQAAQBAJ"
+    )
+    assert edition is not None
+    assert (edition.provider, edition.provider_id, edition.media_type) == (
+        "googlebooks",
+        "EELNEQAAQBAJ",
+        "book",
+    )
+
+    for url in (
+        "https://books.google.com.my/books?id=B1R1CwAAQBAJ&hl=en",
+        "https://books.google.co.uk/books/edition/Dune/B1R1CwAAQBAJ",
+        "https://play.google.com.my/store/books/details?id=B1R1CwAAQBAJ",
+    ):
+        parsed = parse_provider_url(url)
+        assert parsed is not None, url
+        assert parsed.provider_id == "B1R1CwAAQBAJ"
+
+
 def test_openlibrary_urls() -> None:
     work = parse_provider_url("https://openlibrary.org/works/OL102749W/Dune")
     assert work is not None
@@ -68,4 +90,6 @@ def test_unsupported_or_malformed_urls_are_rejected() -> None:
     assert parse_provider_url("https://www.themoviedb.org/movie/not-an-id") is None
     assert parse_provider_url("https://www.themoviedb.org/tv/1396/season") is None
     assert parse_provider_url("https://books.google.com/books") is None
+    assert parse_provider_url("https://books.google.com.my.evil.test/books?id=B1R1CwAAQBAJ") is None
+    assert parse_provider_url("https://books.google.evil.com/books?id=B1R1CwAAQBAJ") is None
     assert parse_provider_url("https://openlibrary.org/") is None

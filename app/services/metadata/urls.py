@@ -17,6 +17,12 @@ from urllib.parse import parse_qs, urlparse
 
 _TMDB_HOSTS = frozenset({"themoviedb.org", "www.themoviedb.org"})
 _GOOGLE_BOOKS_HOSTS = frozenset({"books.google.com", "www.google.com", "play.google.com"})
+# Google Books serves localized editions from country domains such as
+# www.google.com.my and books.google.co.uk. Keep the suffix anchored so
+# lookalike hosts cannot slip through as provider URLs.
+_GOOGLE_BOOKS_COUNTRY_HOST = re.compile(
+    r"^(?:books|www|play)\.google\.(?:[a-z]{2}|com\.[a-z]{2}|co\.[a-z]{2})$"
+)
 _OPENLIBRARY_HOSTS = frozenset({"openlibrary.org", "www.openlibrary.org"})
 
 # TMDB embeds the numeric id before an optional slug, e.g. /movie/603-the-matrix.
@@ -47,6 +53,10 @@ def _segments(path: str) -> list[str]:
 def _leading_int(value: str) -> int | None:
     match = _LEADING_INT.match(value)
     return int(match.group(1)) if match else None
+
+
+def _is_google_books_host(host: str) -> bool:
+    return host in _GOOGLE_BOOKS_HOSTS or bool(_GOOGLE_BOOKS_COUNTRY_HOST.fullmatch(host))
 
 
 def _parse_tmdb(parts: list[str]) -> ProviderUrl | None:
@@ -126,6 +136,7 @@ def parse_provider_url(value: str) -> ProviderUrl | None:
     Accepts TMDB movie/series/season/episode pages, Google Books volumes and
     Open Library work/edition pages. Both ``http`` and ``https`` are accepted;
     hostnames are compared case-insensitively and ``www.`` is tolerated.
+    Google Books URLs on localized Google domains are accepted too.
     """
 
     candidate = value.strip()
@@ -139,7 +150,7 @@ def parse_provider_url(value: str) -> ProviderUrl | None:
     parts = _segments(parsed.path)
     if host in _TMDB_HOSTS:
         return _parse_tmdb(parts)
-    if host in _GOOGLE_BOOKS_HOSTS:
+    if _is_google_books_host(host):
         return _parse_google_books(parts, parsed.query)
     if host in _OPENLIBRARY_HOSTS:
         return _parse_openlibrary(parts)
