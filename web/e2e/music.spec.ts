@@ -5,7 +5,14 @@
  * element is really advancing (not just that the bar rendered).
  */
 import { expect, test } from '@playwright/test';
-import { ALBUM_TITLE, ARTIST_NAME, TRACK_TITLE, seedServer, signIn } from './helpers';
+import {
+	ADMIN_USERNAME,
+	ALBUM_TITLE,
+	ARTIST_NAME,
+	TRACK_TITLE,
+	seedServer,
+	signIn
+} from './helpers';
 
 test('play a track from an album', async ({ page, request }) => {
 	const pair = await seedServer(request);
@@ -117,7 +124,9 @@ test('ReplayGain is opt-in so plain playback survives backgrounding', async ({
 	expect(await contextCount()).toBe(0);
 
 	// The toggle lives with the user's settings, not in the player chrome.
-	await page.goto('/profile');
+	// Navigate within the SPA so the playing track survives the route change.
+	await page.getByRole('button', { name: ADMIN_USERNAME }).click();
+	await page.getByRole('menuitem', { name: 'Profile' }).click();
 	const replayGain = page.getByRole('checkbox', { name: 'ReplayGain volume leveling' });
 	await expect(replayGain).not.toBeChecked();
 	await replayGain.check();
