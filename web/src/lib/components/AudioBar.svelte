@@ -359,6 +359,15 @@
 					<button
 						type="button"
 						class="ghost"
+						onclick={stop}
+						aria-label="Stop playback"
+						title="Stop"
+					>
+						<Square size={16} />
+					</button>
+					<button
+						type="button"
+						class="ghost"
 						onclick={() => void playNext()}
 						disabled={player.index < 0 ||
 							(player.index + 1 >= player.queue.length && player.repeat !== 'all')}
@@ -366,15 +375,6 @@
 						title="Next track"
 					>
 						<SkipForward size={16} />
-					</button>
-					<button
-						type="button"
-						class="ghost"
-						onclick={stop}
-						aria-label="Stop playback"
-						title="Stop"
-					>
-						<Square size={16} />
 					</button>
 				</div>
 				<div class="transport-info" aria-hidden="true">
