@@ -1,12 +1,15 @@
 <script lang="ts">
-	import ItemDetail from '../../../lib/components/ItemDetail.svelte';
+	import Detail from './Detail.svelte';
+	import RouteTitle from '../../../lib/components/RouteTitle.svelte';
 	import type { PageProps } from './$types';
 
-	let { data }: PageProps = $props();
+	let { data: pageData }: PageProps = $props();
 </script>
 
-<svelte:head>
-	<title>{data.item.title} · Hearth</title>
-</svelte:head>
+<RouteTitle value={pageData.detail} label={(d) => d.item.title} />
 
-<ItemDetail item={data.item} />
+{#await pageData.detail then detail}
+	<Detail data={detail} />
+{:catch error}
+	<p role="alert">{error instanceof Error ? error.message : String(error)}</p>
+{/await}
