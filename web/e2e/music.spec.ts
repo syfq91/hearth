@@ -73,3 +73,59 @@ test('the artists screen lists the scanned artist', async ({ page, request }) =>
 	await page.goto('/music/artists');
 	await expect(page.getByRole('link', { name: new RegExp(ARTIST_NAME) }).first()).toBeVisible();
 });
+
+test('ReplayGain is opt-in so plain playback survives backgrounding', async ({
+	page,
+	request
+}) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
+
+	// Routing <audio> through an AudioContext is what stops music in the
+	// background on mobile. Count contexts to prove the default path is direct.
+	await page.addInitScript(() => {
+		const state = { contexts: 0 };
+		(window as Window & { __hearthAudioContexts?: typeof state }).__hearthAudioContexts = state;
+		const Original = window.AudioContext;
+		if (Original) {
+			window.AudioContext = class extends Original {
+				constructor(...args: ConstructorParameters<typeof AudioContext>) {
+					super(...args);
+					state.contexts += 1;
+				}
+			};
+		}
+	});
+	const contextCount = () =>
+		page.evaluate(
+			() =>
+				(window as Window & { __hearthAudioContexts?: { contexts: number } })
+					.__hearthAudioContexts?.contexts ?? -1
+		);
+
+	await page.goto('/music');
+	await page.getByRole('link', { name: ALBUM_TITLE }).first().click();
+	await page.getByRole('button', { name: TRACK_TITLE }).click();
+
+	const bar = page.getByRole('region', { name: 'Now playing' });
+	await expect(bar).toBeVisible();
+	await expect
+		.poll(() => page.locator('audio').evaluate((el: HTMLAudioElement) => el.currentTime), {
+			timeout: 30_000
+		})
+		.toBeGreaterThan(0.5);
+	expect(await contextCount()).toBe(0);
+
+	await bar.getByRole('button', { name: 'Open full screen player' }).click();
+	const off = page.getByRole('button', { name: 'ReplayGain off' });
+	await expect(off).toHaveAttribute('aria-pressed', 'false');
+	await off.click();
+	await expect(page.getByRole('button', { name: 'ReplayGain on' })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await expect.poll(contextCount).toBeGreaterThan(0);
+
+	await page.reload();
+	expect(await page.evaluate(() => localStorage.getItem('hearth.replay_gain'))).toBe('1');
+});

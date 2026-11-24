@@ -17,7 +17,8 @@
 		openFullPlayer,
 		toggleMute,
 		rememberVolume,
-		formatTime
+		formatTime,
+		loadReplayGain
 	} from '../player/ui.svelte';
 	import {
 		Play,
@@ -42,7 +43,10 @@
 
 	// ReplayGain runs through a Web Audio gain node so quiet tracks can be
 	// boosted above 100%; the element's own volume stays the user's control.
+	// Web Audio routing prevents background playback on mobile browsers, so it
+	// is opt-in and loaded before the element mounts (see the <audio> block).
 	const replayGain = new ReplayGainGraph();
+	loadReplayGain();
 
 	// Artwork is URL-based media, so it needs a media token like the stream.
 	// Store it in shared UI state so the full-page player shows the same art.
@@ -183,12 +187,12 @@
 		};
 	});
 
-	// Route the persistent audio element through the ReplayGain gain node, and
-	// retarget it whenever the current track changes. The graph is recreated if
-	// the element itself is replaced (playback stopped and later restarted).
+	// Only route the persistent element through Web Audio when leveling is
+	// enabled. With the preference off the element uses the browser's normal
+	// media output, which is what keeps music playing in the background.
 	$effect(() => {
 		const element = audio;
-		if (element) replayGain.connect(element);
+		if (element && playerUi.replayGain) replayGain.connect(element);
 		else replayGain.disconnect();
 	});
 
@@ -201,6 +205,21 @@
 		// from a click or a media key, both of which allow a resume here.
 		replayGain.resume();
 		player.playing = true;
+	}
+
+	// Opt-in leveling still needs help after the browser backgrounded the page:
+	// resume the context when the tab returns, and restart the element if it was
+	// paused by the OS while never changing the player's own play intent.
+	function resumePlayback(): void {
+		replayGain.resume();
+		const element = audio;
+		if (player.playing && element && element.paused) {
+			void element.play().catch(() => {});
+		}
+	}
+
+	function handleVisibilityChange(): void {
+		if (document.visibilityState === 'visible') resumePlayback();
 	}
 
 	function handleEnded(): void {
@@ -257,6 +276,9 @@
 		return () => clearTimeout(timer);
 	});
 </script>
+
+<svelte:document onvisibilitychange={handleVisibilityChange} />
+<svelte:window onpageshow={resumePlayback} />
 
 {#if player.track}
 	<div
@@ -439,16 +461,22 @@
 			</div>
 		</div>
 
-		<!-- svelte-ignore a11y_media_has_caption -->
-		<audio
-			bind:this={audio}
-			bind:currentTime={playerUi.currentTime}
-			bind:duration={playerUi.duration}
-			ontimeupdate={handleTimeUpdate}
-			onplay={handlePlay}
-			onpause={() => (player.playing = false)}
-			onended={handleEnded}
-		></audio>
+		<!-- A MediaElementAudioSourceNode belongs to one element for life: a
+		     second createMediaElementSource on the same element throws. Remount
+		     the element when ReplayGain is toggled so the fresh element can be
+		     routed (or left on direct output); bind:currentTime restores the
+		     position and player.playing resumes it. -->
+		{#key playerUi.replayGain}
+			<audio
+				bind:this={audio}
+				bind:currentTime={playerUi.currentTime}
+				bind:duration={playerUi.duration}
+				ontimeupdate={handleTimeUpdate}
+				onplay={handlePlay}
+				onpause={() => (player.playing = false)}
+				onended={handleEnded}
+			></audio>
+		{/key}
 	</div>
 
 	{#if player.error}

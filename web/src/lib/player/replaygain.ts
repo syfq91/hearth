@@ -12,7 +12,41 @@
  * need a boost above 1. The element's own volume remains the user's control —
  * per the Web Audio spec it is still applied to audio routed through a
  * MediaElementAudioSourceNode — so user volume and normalization multiply.
+ *
+ * Routing through Web Audio disables the browser's normal background-media
+ * output: mobile browsers suspend AudioContext when the page is hidden, so the
+ * music stops when another app is opened. Leveling is therefore OPT-IN. The
+ * default path leaves the `<audio>` element on direct output, which is what
+ * keeps playback alive in the background.
  */
+
+/** localStorage key for the opt-in ReplayGain preference. */
+export const REPLAY_GAIN_STORAGE_KEY = 'hearth.replay_gain';
+
+/** Read the stored preference. Absent, blocked, or unknown values mean off. */
+export function readReplayGainPreference(
+	storage: Pick<Storage, 'getItem'> | null | undefined
+): boolean {
+	if (!storage) return false;
+	try {
+		return storage.getItem(REPLAY_GAIN_STORAGE_KEY) === '1';
+	} catch {
+		return false;
+	}
+}
+
+/** Persist the preference; a blocked storage keeps the in-memory choice only. */
+export function writeReplayGainPreference(
+	storage: Pick<Storage, 'setItem'> | null | undefined,
+	enabled: boolean
+): void {
+	if (!storage) return;
+	try {
+		storage.setItem(REPLAY_GAIN_STORAGE_KEY, enabled ? '1' : '0');
+	} catch {
+		/* private mode or disabled storage: preference lasts for this session */
+	}
+}
 
 /** Upper bound on the linear gain (~+12 dB), to avoid absurd boosts. */
 const MAX_LINEAR_GAIN = 4;

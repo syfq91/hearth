@@ -21,7 +21,8 @@
 		closeFullPlayer,
 		toggleMute,
 		rememberVolume,
-		formatTime
+		formatTime,
+		setReplayGain
 	} from '../player/ui.svelte';
 	import {
 		ChevronDown,
@@ -39,7 +40,9 @@
 		VolumeX,
 		Music,
 		GripVertical,
-		Trash2
+		Trash2,
+		AudioLines,
+		AudioLinesOff
 	} from '@lucide/svelte';
 
 	let overlay = $state<HTMLDivElement | null>(null);
@@ -234,6 +237,23 @@
 								title={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
 							>
 								<Heart size={20} fill={player.favorite ? 'currentColor' : 'none'} />
+							</button>
+							<button
+								type="button"
+								class="icon-btn"
+								class:active={playerUi.replayGain}
+								onclick={() => setReplayGain(!playerUi.replayGain)}
+								aria-label={playerUi.replayGain ? 'ReplayGain on' : 'ReplayGain off'}
+								aria-pressed={playerUi.replayGain}
+								title={playerUi.replayGain
+									? 'ReplayGain on — leveling can stop music in the background on mobile'
+									: 'ReplayGain off — music keeps playing in the background'}
+							>
+								{#if playerUi.replayGain}
+									<AudioLines size={20} />
+								{:else}
+									<AudioLinesOff size={20} />
+								{/if}
 							</button>
 							<div class="volume-control">
 								<button

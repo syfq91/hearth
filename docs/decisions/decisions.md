@@ -829,3 +829,23 @@
   - Hide soft-deleted items in the web client only: Rejected because the API would still expose them to other clients and direct URLs would still resolve.
   - A global `with_loader_criteria` session hook: Rejected because the scanner and the new admin endpoint need to see missing rows, and an opt-out would be easy to miss.
   - Duplicate inline `missing_since` checks per endpoint: Rejected because the type-specific file linkage (episodes/tracks and containers) would diverge across modules.
+
+
+## ADR 073: ReplayGain Is Opt-In to Preserve Background Playback
+
+- **Date:** 2026-11-24
+- **Status:** Accepted
+- **Context:**
+  ReplayGain leveling was introduced by applying the scanner's existing tags through a Web Audio `GainNode` on the single persistent `<audio>` element. `createMediaElementSource()` reroutes that element's output through an `AudioContext`. Mobile browsers suspend `AudioContext` when the page is backgrounded or the screen locks, so music went silent as soon as the user opened another app, even though the element, `player.playing`, and the Media Session state all still reported playback. Background media is a first-class expectation for a self-hosted music server; the leveling feature must not silently disable it.
+
+- **Decision:**
+  - ReplayGain is opt-in and **off by default**, persisted in local storage under `hearth.replay_gain`. The default path never creates an `AudioContext`, leaving the element on the browser's direct media output so background playback keeps working.
+  - A toggle in the full-screen player flips the preference. Because a `MediaElementAudioSourceNode` can only be created once per element, the `<audio>` element is remounted when the preference changes; the existing `bind:currentTime` restores the position and `player.playing` resumes it.
+  - For users who opt in, `visibilitychange` (visible only) and `pageshow` handlers resume the context and restart the element if the OS paused it. The existing `play` element event and Media Session `play` action still resume it too.
+  - No API, schema, or server changes: the tags already travel on `TrackSummary`, and no transcoding is introduced.
+
+- **Alternatives Considered:**
+  - Keep Web Audio always on and add lifecycle resume handlers only: Rejected. Those handlers fire on return, not while the page is hidden, and a resume from a non-gesture event is often blocked. It fixes "sound when I come back", not "music keeps playing in another app".
+  - Apply ReplayGain server-side via an ffmpeg `volume` filter on the audio transcode endpoint: Rejected for now. It would force every track to be re-encoded, dropping direct-play byte ranges, the gapless prewarm, and lossless output while adding CPU load on a single-node server and an API contract change.
+  - Clamp ReplayGain to `HTMLAudioElement.volume` (0..1) with no Web Audio at all: Rejected because it removes the positive boost that was the point of leveling quiet masters.
+  - Two permanently mounted audio elements (one plain, one routed) switched on toggle: Rejected as more state to keep in sync than a keyed remount with the existing position binding.
