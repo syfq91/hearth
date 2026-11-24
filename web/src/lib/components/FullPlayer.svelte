@@ -701,7 +701,7 @@
 		flex: 0 0 auto;
 	}
 
-	@media (max-width: 900px) {
+	@media (max-width: 720px) {
 		.hero {
 			flex-direction: column;
 			align-items: center;
@@ -736,7 +736,10 @@
 		.volume-control {
 			display: none;
 		}
+	}
 
+	@media (max-width: 900px) {
+		/* Tablets keep the side-by-side hero but still need compact queue rows. */
 		.track-artist {
 			display: none;
 		}
