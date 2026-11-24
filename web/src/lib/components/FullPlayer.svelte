@@ -48,9 +48,22 @@
 	let previousFocus: HTMLElement | null = null;
 	/** Tokenized cover per queued track id, resolved independently of the hero art. */
 	let queueArtwork = $state<Record<string, string>>({});
+	let lastArtworkKey = '';
 
 	$effect(() => {
 		const queue = player.queue;
+		if (queue.length === 0) {
+			queueArtwork = {};
+			lastArtworkKey = '';
+			return;
+		}
+		// Re-resolve only when the artwork inputs change; pushing or reordering
+		// the same tracks otherwise re-runs this effect on every queue mutation.
+		const key = queue
+			.map((track) => `${track.id}|${track.artworkUrl ?? ''}|${track.albumId ?? ''}`)
+			.join(';');
+		if (key === lastArtworkKey) return;
+		lastArtworkKey = key;
 		let cancelled = false;
 		void (async () => {
 			const next: Record<string, string> = {};
