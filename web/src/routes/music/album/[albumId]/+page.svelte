@@ -2,14 +2,16 @@
 	import Poster from '../../../../lib/components/Poster.svelte';
 	import { api } from '../../../../lib/api/client';
 	import {
+		addToQueue,
 		playQueue,
 		player,
+		queueNext,
 		toggleShuffle,
 		type PlayerTrack
 	} from '../../../../lib/player.svelte';
 	import type { TrackSummary } from '../../../../lib/api/types';
 	import type { PageProps } from './$types';
-	import { Heart, Shuffle } from '@lucide/svelte';
+	import { CornerDownRight, Ellipsis, Heart, ListPlus, Shuffle } from '@lucide/svelte';
 
 	let { data }: PageProps = $props();
 
@@ -18,6 +20,27 @@
 	let favoriteOverride = $state<boolean | null>(null);
 	let favoritePending = $state(false);
 	const favorite = $derived(favoriteOverride ?? data.album.watch_state?.favorite ?? false);
+
+	// Track id whose options menu is open; only one row at a time.
+	let openMenu = $state<string | null>(null);
+
+	$effect(() => {
+		if (!openMenu) return;
+		function onOutsideClick(event: MouseEvent): void {
+			const target = event.target;
+			if (target instanceof Element && target.closest('[data-track-menu]')) return;
+			openMenu = null;
+		}
+		function onKeydown(event: KeyboardEvent): void {
+			if (event.key === 'Escape') openMenu = null;
+		}
+		window.addEventListener('click', onOutsideClick);
+		window.addEventListener('keydown', onKeydown);
+		return () => {
+			window.removeEventListener('click', onOutsideClick);
+			window.removeEventListener('keydown', onKeydown);
+		};
+	});
 
 	function toPlayerTrack(track: TrackSummary): PlayerTrack {
 		return {
@@ -58,6 +81,16 @@
 		if (queue.length === 0) return;
 		if (!player.shuffle) toggleShuffle();
 		void playQueue(queue, 0);
+	}
+
+	function addTrackToQueue(track: TrackSummary): void {
+		addToQueue(toPlayerTrack(track));
+		openMenu = null;
+	}
+
+	function queueTrackNext(track: TrackSummary): void {
+		queueNext(toPlayerTrack(track));
+		openMenu = null;
 	}
 
 	async function toggleFavorite(): Promise<void> {
@@ -155,6 +188,31 @@
 						{track.title}
 					</button>
 					<span class="duration">{formatDuration(track.duration_seconds)}</span>
+					<div class="track-actions" data-track-menu>
+						<button
+							type="button"
+							class="more"
+							onclick={() => (openMenu = openMenu === track.id ? null : track.id)}
+							aria-label={`More options for ${track.title}`}
+							aria-haspopup="menu"
+							aria-expanded={openMenu === track.id}
+							title="Track options"
+						>
+							<Ellipsis size={18} />
+						</button>
+						{#if openMenu === track.id}
+							<div class="track-menu" role="menu" aria-label={`Options for ${track.title}`}>
+								<button type="button" role="menuitem" onclick={() => addTrackToQueue(track)}>
+									<ListPlus size={16} />
+									<span>Add to queue</span>
+								</button>
+								<button type="button" role="menuitem" onclick={() => queueTrackNext(track)}>
+									<CornerDownRight size={16} />
+									<span>Play next</span>
+								</button>
+							</div>
+						{/if}
+					</div>
 				</li>
 			{/each}
 		</ol>
@@ -263,7 +321,7 @@
 
 	.track {
 		display: grid;
-		grid-template-columns: 2.5rem 1fr auto;
+		grid-template-columns: 2.5rem 1fr auto auto;
 		align-items: center;
 		gap: 0.75rem;
 		padding: 0.4rem 0.6rem;
@@ -305,6 +363,77 @@
 		color: var(--muted);
 		font-size: 0.85rem;
 		font-variant-numeric: tabular-nums;
+	}
+
+	.track-actions {
+		position: relative;
+		display: inline-flex;
+	}
+
+	.more {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: var(--radius);
+		color: var(--muted);
+		cursor: pointer;
+	}
+
+	.more:hover,
+	.more[aria-expanded='true'] {
+		background: var(--surface-2);
+		color: var(--accent);
+	}
+
+	.more:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	.track-menu {
+		position: absolute;
+		top: calc(100% + 0.25rem);
+		right: 0;
+		z-index: 30;
+		min-width: 10rem;
+		padding: 0.35rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		box-shadow: 0 6px 22px rgba(0, 0, 0, 0.3);
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+
+	.track-menu button {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		width: 100%;
+		padding: 0.45rem 0.6rem;
+		background: transparent;
+		border: 0;
+		border-radius: calc(var(--radius) - 2px);
+		color: var(--text);
+		font: inherit;
+		font-size: 0.85rem;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.track-menu button:hover {
+		background: var(--surface-2);
+		color: var(--accent);
+	}
+
+	.track-menu button:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 1px;
 	}
 
 	@media (max-width: 720px) {

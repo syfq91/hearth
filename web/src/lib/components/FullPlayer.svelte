@@ -292,7 +292,7 @@
 				<section class="queue" aria-label="Play queue">
 					<h2>Queue <span class="count">{player.queue.length}</span></h2>
 					<ul>
-						{#each player.queue as track, index (track.id)}
+						{#each player.queue as track, index (`${track.id}:${index}`)}
 							<li class:current={index === player.index}>
 								<span class="grip"><GripVertical size={16} aria-hidden="true" /></span>
 								<button

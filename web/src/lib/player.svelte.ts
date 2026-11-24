@@ -117,6 +117,48 @@ export async function playAt(index: number): Promise<boolean> {
 	return true;
 }
 
+/**
+ * Prepare a track as the first queue entry when nothing is queued yet: load it
+ * into the player but leave it paused, so the user can press Play themselves.
+ */
+async function prepareFirstTrack(track: PlayerTrack): Promise<void> {
+	await playQueue([track], 0);
+	player.playing = false;
+}
+
+/** Append a track to the queue without interrupting playback. */
+export function addToQueue(track: PlayerTrack): void {
+	if (player.queue.length === 0) {
+		void prepareFirstTrack(track);
+		return;
+	}
+	player.queue.push(track);
+	originalQueue?.push(track);
+}
+
+/**
+ * Insert a track right after the current one without interrupting playback.
+ * With shuffle on, "next" means next in the displayed order.
+ */
+export function queueNext(track: PlayerTrack): void {
+	if (player.queue.length === 0) {
+		void prepareFirstTrack(track);
+		return;
+	}
+	player.queue.splice(Math.min(player.index + 1, player.queue.length), 0, track);
+	if (originalQueue) {
+		const currentId = player.track?.id;
+		const originalIndex = currentId
+			? originalQueue.findIndex((item) => item.id === currentId)
+			: -1;
+		originalQueue.splice(
+			originalIndex >= 0 ? originalIndex + 1 : originalQueue.length,
+			0,
+			track
+		);
+	}
+}
+
 /** Advance to the next queued track; wraps when repeat-all is enabled. */
 export async function playNext(): Promise<boolean> {
 	const next = nextIndex(player.index, player.queue.length, player.repeat === 'all');

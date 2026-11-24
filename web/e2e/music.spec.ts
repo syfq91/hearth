@@ -25,7 +25,7 @@ test('play a track from an album', async ({ page, request }) => {
 	// The album page links to the artist screen too.
 	await expect(page.getByRole('link', { name: ARTIST_NAME })).toBeVisible();
 
-	await page.getByRole('button', { name: TRACK_TITLE }).click();
+	await page.getByRole('button', { name: TRACK_TITLE, exact: true }).click();
 
 	const bar = page.getByRole('region', { name: 'Now playing' });
 	await expect(bar).toBeVisible();
@@ -73,6 +73,33 @@ test('album actions shuffle playback and toggle the album favorite', async ({
 	await expect(bar.getByRole('button', { name: 'Shuffle on' })).toBeVisible();
 });
 
+test('album track menu queues a track and inserts another next', async ({ page, request }) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
+
+	await page.goto('/music');
+	await page.getByRole('link', { name: ALBUM_TITLE }).first().click();
+
+	const more = page.getByRole('button', { name: `More options for ${TRACK_TITLE}` });
+	await more.click();
+	await page.getByRole('menuitem', { name: 'Add to queue' }).click();
+
+	const bar = page.getByRole('region', { name: 'Now playing' });
+	await expect(bar).toBeVisible();
+	// Adding while idle prepares the track but does not start playback.
+	await expect(page.locator('audio')).toHaveJSProperty('paused', true);
+
+	await more.click();
+	await page.getByRole('menuitem', { name: 'Play next' }).click();
+	await more.click();
+	await page.getByRole('menuitem', { name: 'Add to queue' }).click();
+	await bar.getByRole('button', { name: 'Open full screen player' }).click();
+	await expect(page.getByRole('heading', { name: /Queue/ })).toContainText('3');
+
+	await page.getByRole('button', { name: 'Minimize player' }).click();
+	await expect(bar.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+});
+
 test('the artists screen lists the scanned artist', async ({ page, request }) => {
 	const pair = await seedServer(request);
 	await signIn(page, pair);
@@ -112,7 +139,7 @@ test('ReplayGain is opt-in so plain playback survives backgrounding', async ({
 
 	await page.goto('/music');
 	await page.getByRole('link', { name: ALBUM_TITLE }).first().click();
-	await page.getByRole('button', { name: TRACK_TITLE }).click();
+	await page.getByRole('button', { name: TRACK_TITLE, exact: true }).click();
 
 	const bar = page.getByRole('region', { name: 'Now playing' });
 	await expect(bar).toBeVisible();
