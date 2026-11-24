@@ -121,6 +121,45 @@ test('album poster menu queues the whole album', async ({ page, request }) => {
 	await expect(page.getByRole('heading', { name: /Queue/ })).toContainText('2');
 });
 
+test('queueing from idle never starts playback', async ({ page, request }) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
+
+	await page.addInitScript(() => {
+		const state = { plays: 0 };
+		(window as Window & { __hearthPlayCalls?: typeof state }).__hearthPlayCalls = state;
+		const original = HTMLMediaElement.prototype.play;
+		HTMLMediaElement.prototype.play = function () {
+			state.plays += 1;
+			return original.call(this);
+		};
+	});
+
+	await page.goto('/music');
+	const poster = page.locator('.poster-wrap').first();
+	const bar = page.getByRole('region', { name: 'Now playing' });
+
+	await poster.hover();
+	await page.getByRole('button', { name: `More options for ${ALBUM_TITLE}` }).click();
+	await page.getByRole('menuitem', { name: 'Add to queue' }).click();
+	await expect(bar).toBeVisible();
+	await expect(page.locator('audio')).toHaveJSProperty('paused', true);
+
+	// A second action while the first stream token is still resolving must not
+	// re-enter the play path either.
+	await poster.hover();
+	await page.getByRole('button', { name: `More options for ${ALBUM_TITLE}` }).click();
+	await page.getByRole('menuitem', { name: 'Play next' }).click();
+	await expect(bar.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+
+	const plays = await page.evaluate(
+		() =>
+			(window as Window & { __hearthPlayCalls?: { plays: number } }).__hearthPlayCalls?.plays ??
+			-1
+	);
+	expect(plays).toBe(0);
+});
+
 test('the artists screen lists the scanned artist', async ({ page, request }) => {
 	const pair = await seedServer(request);
 	await signIn(page, pair);
