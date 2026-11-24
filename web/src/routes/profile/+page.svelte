@@ -2,8 +2,13 @@
 	import { api } from '../../lib/api/client';
 	import { reloadUser, session } from '../../lib/auth.svelte';
 	import { COMMON_LANGUAGES } from '../../lib/languages';
+	import { loadReplayGain, playerUi, setReplayGain } from '../../lib/player/ui.svelte';
 
 	let user = $derived(session.user);
+
+	// The audio dock normally loads this, but the profile page can be reached
+	// directly (and the dock is hidden on video pages), so load it here too.
+	loadReplayGain();
 
 	/* ---- Playback preferences ---- */
 	let preferredAudio = $state('');
@@ -183,6 +188,25 @@
 		</form>
 	</section>
 
+	<section class="card" aria-labelledby="music-heading">
+		<h2 id="music-heading">Music playback</h2>
+		<label class="toggle">
+			<input
+				type="checkbox"
+				aria-label="ReplayGain volume leveling"
+				checked={playerUi.replayGain}
+				onchange={(event) => setReplayGain(event.currentTarget.checked)}
+			/>
+			<span>
+				<strong>ReplayGain volume leveling</strong>
+				<small>
+					Normalize track loudness using ReplayGain tags. Stored in this browser; on mobile it
+					can stop music from playing in the background.
+				</small>
+			</span>
+		</label>
+	</section>
+
 	<section class="card" aria-labelledby="password-heading">
 		<h2 id="password-heading">Change password</h2>
 		<form class="stack" onsubmit={changePassword}>
@@ -278,6 +302,38 @@
 		flex-wrap: wrap;
 		align-items: flex-end;
 		gap: 0.75rem;
+	}
+
+	.toggle {
+		flex-direction: row;
+		align-items: flex-start;
+		gap: 0.65rem;
+		color: var(--text);
+		cursor: pointer;
+	}
+
+	.toggle input[type='checkbox'] {
+		flex: 0 0 auto;
+		width: 1rem;
+		height: 1rem;
+		margin: 0.1rem 0 0;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+
+	.toggle span {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+	}
+
+	.toggle small {
+		color: var(--muted);
+		font-size: 0.85rem;
+		line-height: 1.4;
 	}
 
 	.grow {

@@ -116,14 +116,12 @@ test('ReplayGain is opt-in so plain playback survives backgrounding', async ({
 		.toBeGreaterThan(0.5);
 	expect(await contextCount()).toBe(0);
 
-	await bar.getByRole('button', { name: 'Open full screen player' }).click();
-	const off = page.getByRole('button', { name: 'ReplayGain off' });
-	await expect(off).toHaveAttribute('aria-pressed', 'false');
-	await off.click();
-	await expect(page.getByRole('button', { name: 'ReplayGain on' })).toHaveAttribute(
-		'aria-pressed',
-		'true'
-	);
+	// The toggle lives with the user's settings, not in the player chrome.
+	await page.goto('/profile');
+	const replayGain = page.getByRole('checkbox', { name: 'ReplayGain volume leveling' });
+	await expect(replayGain).not.toBeChecked();
+	await replayGain.check();
+	await expect(replayGain).toBeChecked();
 	await expect.poll(contextCount).toBeGreaterThan(0);
 
 	await page.reload();

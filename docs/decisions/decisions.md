@@ -840,7 +840,7 @@
 
 - **Decision:**
   - ReplayGain is opt-in and **off by default**, persisted in local storage under `hearth.replay_gain`. The default path never creates an `AudioContext`, leaving the element on the browser's direct media output so background playback keeps working.
-  - A toggle in the full-screen player flips the preference. Because a `MediaElementAudioSourceNode` can only be created once per element, the `<audio>` element is remounted when the preference changes; the existing `bind:currentTime` restores the position and `player.playing` resumes it.
+  - A toggle in the user settings (Profile) page flips the preference. Because a `MediaElementAudioSourceNode` can only be created once per element, the `<audio>` element is remounted when the preference changes; the existing `bind:currentTime` restores the position and `player.playing` resumes it.
   - For users who opt in, `visibilitychange` (visible only) and `pageshow` handlers resume the context and restart the element if the OS paused it. The existing `play` element event and Media Session `play` action still resume it too.
   - No API, schema, or server changes: the tags already travel on `TrackSummary`, and no transcoding is introduced.
 
