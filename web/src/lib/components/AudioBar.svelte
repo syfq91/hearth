@@ -856,5 +856,11 @@
 			grid-column: 1 / -1;
 			grid-row: 2;
 		}
+
+		/* Phones keep the mute button, but the slider steals room from the
+		   transport row — use the system volume instead. */
+		.volume-slider {
+			display: none;
+		}
 	}
 </style>
