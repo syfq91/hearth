@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Music library album art now shows a play control in the lower-left corner on hover/focus. Clicking it starts the whole album in-page; clicking the rest of the art still opens the album detail screen.
 - The web client is now installable as a PWA: a web app manifest and Apple/mobile meta tags let browsers add Hearth to the home screen and launch it in standalone mode, with a new Hearth flame icon replacing the starter favicon. This is installability only — there is no service worker, so no offline mode and no caching of API responses or media streams.
 - Album pages now have icon-only shuffle and favourite buttons beside **Play album**. Shuffle starts the album with the player's shuffle mode enabled; the heart toggles the album's persisted favourite flag with an optimistic, accessible toggle.
 - Client-side ReplayGain volume leveling for music playback, as an **opt-in** switch in the user settings (Profile) page. The scanner's ReplayGain tags (already exposed on track responses) are applied through a Web Audio gain node when enabled: album gain is preferred with track gain as a fallback, boosts are peak-limited to prevent clipping, and the user's own volume slider still works as before. Tracks without ReplayGain tags play unchanged. The choice persists in local storage (ADR 073).

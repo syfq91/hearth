@@ -103,6 +103,26 @@ test('album track menu queues a track and inserts another next', async ({ page, 
 	await expect(bar.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
 });
 
+test('album art plays the album from the music library', async ({ page, request }) => {
+	const pair = await seedServer(request);
+	await signIn(page, pair);
+
+	await page.goto('/music');
+	const poster = page.locator('.poster-wrap').first();
+	await poster.hover();
+	await page.getByRole('button', { name: `Play ${ALBUM_TITLE}` }).click();
+
+	await expect(page).toHaveURL(/\/music$/);
+	const bar = page.getByRole('region', { name: 'Now playing' });
+	await expect(bar).toBeVisible();
+	await expect(bar.getByText(TRACK_TITLE)).toBeVisible();
+	await expect
+		.poll(() => page.locator('audio').evaluate((el: HTMLAudioElement) => el.currentTime), {
+			timeout: 30_000
+		})
+		.toBeGreaterThan(0.5);
+});
+
 test('album poster menu queues the whole album', async ({ page, request }) => {
 	const pair = await seedServer(request);
 	await signIn(page, pair);

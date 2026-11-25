@@ -13,8 +13,10 @@
 		bookProgress?: { locator: string; percentage: number; device_name?: string | null } | null;
 		/** Hide the played/read toggle (e.g. for music albums). */
 		showWatched?: boolean;
-		/** Show the centre play control; disable where the poster itself navigates. */
+		/** Show the play control; disable where the poster itself has no playback action. */
 		showPlay?: boolean;
+		/** Corner placement keeps the centre of a linked poster clickable. */
+		playPlacement?: 'center' | 'corner';
 		/** Start media in-page instead of navigating (e.g. queue an album). */
 		onPlay?: () => void;
 		/** Album queue actions; when supplied, an ellipsis menu appears by the heart. */
@@ -33,6 +35,7 @@
 		bookProgress = null,
 		showWatched = true,
 		showPlay = true,
+		playPlacement = 'center',
 		onPlay,
 		onAddToQueue,
 		onPlayNext,
@@ -121,16 +124,21 @@
 		{#if onPlay}
 			<button
 				type="button"
-				class="play-button"
+				class={['play-button', playPlacement === 'corner' && 'corner']}
 				onclick={onPlay}
 				aria-label={`Play ${title}`}
 				title="Play"
 			>
-				<Play size={26} fill="currentColor" strokeWidth={1.5} />
+				<Play size={playPlacement === 'corner' ? 18 : 26} fill="currentColor" strokeWidth={1.5} />
 			</button>
 		{:else}
-			<a class="play-button" href={playHref} aria-label={`Play ${title}`} title="Play">
-				<Play size={26} fill="currentColor" strokeWidth={1.5} />
+			<a
+				class={['play-button', playPlacement === 'corner' && 'corner']}
+				href={playHref}
+				aria-label={`Play ${title}`}
+				title="Play"
+			>
+				<Play size={playPlacement === 'corner' ? 18 : 26} fill="currentColor" strokeWidth={1.5} />
 			</a>
 		{/if}
 	{/if}
@@ -250,6 +258,14 @@
 		background: rgba(0, 0, 0, 0.8);
 		transform: scale(1.08);
 		text-decoration: none;
+	}
+
+	.play-button.corner {
+		position: absolute;
+		left: 0.4rem;
+		bottom: 0.4rem;
+		width: 2.4rem;
+		height: 2.4rem;
 	}
 
 	.overlay-actions {
