@@ -4,6 +4,7 @@ The auto-watched decision lives in :mod:`app.services.playback_state`; these
 routes only load the item, enforce library access and persist the result.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -50,7 +51,12 @@ from app.services.media.probe import ProbeResult, ProbeStream
 from app.services.playback_state import chapters_from_streams, resolve_watch_state
 from app.services.ratings import is_rating_permitted
 from app.services.scrobbling.listenbrainz import enqueue_scrobble
-from app.services.subtitles import matches_language
+from app.services.subtitles import (
+    embedded_subtitle_cache_dir,
+    ensure_embedded_subtitles,
+    matches_language,
+    text_subtitle_tracks,
+)
 from app.services.transcode.capabilities import (
     ServerTranscodeCapabilities,
     probe_transcode_capabilities,
@@ -456,6 +462,7 @@ async def playback_info(
 
     embedded_url, embedded_format = _embedded_subtitle_delivery(plan, media_file, encoded_token)
     embedded_subtitle_urls = _embedded_subtitle_urls(embedded_subtitles, media_file, encoded_token)
+    _prewarm_embedded_subtitles(media_file, probe_res, settings)
 
     if plan.mode == "direct_play":
         url = f"/api/v1/stream/{media_file.id}?token={encoded_token}"
@@ -695,6 +702,39 @@ async def _load_state(session: AsyncSession, user_id: str, item_id: str) -> User
 # LoopAwareLock keeps the lock usable if the ASGI lifespan restarts on a new
 # event loop; a plain asyncio.Lock binds to the first loop that contends on it.
 _STATE_LOCK = LoopAwareLock()
+
+
+_PREWARM_TASKS: set[asyncio.Task[None]] = set()
+
+
+def _prewarm_embedded_subtitles(
+    media_file: MediaFile,
+    probe_res: ProbeResult,
+    settings: Settings,
+) -> None:
+    """Start background extraction of text subtitles so they are cached before fetch."""
+    tracks = text_subtitle_tracks(probe_res.streams)
+    if not tracks:
+        return
+    video_path = Path(media_file.path)
+    if not video_path.is_file():
+        return
+    cache_dir = embedded_subtitle_cache_dir(
+        Path(settings.transcode_dir) / "subtitles",
+        media_file.id,
+        media_file.mtime,
+        media_file.size_bytes,
+    )
+    task = asyncio.create_task(
+        ensure_embedded_subtitles(
+            video_path,
+            tracks,
+            cache_dir,
+            ffmpeg_binary=settings.ffmpeg_binary,
+        )
+    )
+    _PREWARM_TASKS.add(task)
+    task.add_done_callback(_PREWARM_TASKS.discard)
 
 
 def _embedded_subtitle_delivery(

@@ -17,10 +17,18 @@ import shutil
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from app.core.ids import new_id
 from app.core.locks import LoopAwareLock
 from app.services.scanner.walker import find_sidecar_subtitles
+
+if TYPE_CHECKING:
+    from app.services.media.probe import ProbeStream
+
+_BITMAP_SUBTITLE_CODECS = frozenset(
+    {"hdmv_pgs_subtitle", "dvd_subtitle", "dvdsub", "vobsub", "pgs", "pgssub", "xsub"}
+)
 
 logger = logging.getLogger("hearth.subtitles")
 
@@ -307,6 +315,23 @@ class EmbeddedSubtitleTrack:
     formats: tuple[str, ...]
 
 
+def text_subtitle_tracks(streams: Sequence["ProbeStream"]) -> list[EmbeddedSubtitleTrack]:
+    """Describe the non-bitmap subtitle streams the server can cache as text."""
+    tracks: list[EmbeddedSubtitleTrack] = []
+    ordinal = 0
+    for stream in streams:
+        if stream.codec_type != "subtitle":
+            continue
+        codec = (stream.codec_name or "").lower()
+        if codec not in _BITMAP_SUBTITLE_CODECS:
+            # ASS/SSA can also be delivered as WebVTT to clients without a
+            # client-side renderer, so cache both representations in one pass.
+            formats = ("ass", "vtt") if codec in {"ass", "ssa"} else ("vtt",)
+            tracks.append(EmbeddedSubtitleTrack(ordinal=ordinal, formats=formats))
+        ordinal += 1
+    return tracks
+
+
 _EMBEDDED_CACHE_LOCKS: dict[Path, LoopAwareLock] = {}
 
 
@@ -536,4 +561,5 @@ __all__ = [
     "read_embedded_subtitle",
     "shift_webvtt",
     "subtitle_language",
+    "text_subtitle_tracks",
 ]

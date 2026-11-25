@@ -17,7 +17,6 @@ from app.db.session import SessionDep
 from app.services.libraries import path_is_within_roots
 from app.services.media.probe import ProbeResult
 from app.services.subtitles import (
-    EmbeddedSubtitleTrack,
     convert_to_webvtt,
     decode_subtitle_bytes,
     decode_subtitle_id,
@@ -27,8 +26,8 @@ from app.services.subtitles import (
     extract_embedded_subtitle,
     read_embedded_subtitle,
     shift_webvtt,
+    text_subtitle_tracks,
 )
-from app.services.transcode.decision import BITMAP_SUBTITLE_CODECS
 
 _SUBTITLE_HEADERS = {
     "Cache-Control": "private, max-age=0, must-revalidate",
@@ -92,23 +91,6 @@ def _probe_result(media_file: MediaFile) -> ProbeResult:
     )
 
 
-def _text_subtitle_tracks(probe: ProbeResult) -> list[EmbeddedSubtitleTrack]:
-    """Describe the non-bitmap subtitle streams the server can cache as text."""
-    tracks: list[EmbeddedSubtitleTrack] = []
-    ordinal = 0
-    for stream in probe.streams:
-        if stream.codec_type != "subtitle":
-            continue
-        codec = (stream.codec_name or "").lower()
-        if codec not in BITMAP_SUBTITLE_CODECS:
-            # ASS/SSA can also be delivered as WebVTT to clients without a
-            # client-side renderer, so cache both representations in one pass.
-            formats = ("ass", "vtt") if codec in {"ass", "ssa"} else ("vtt",)
-            tracks.append(EmbeddedSubtitleTrack(ordinal=ordinal, formats=formats))
-        ordinal += 1
-    return tracks
-
-
 async def _embedded_subtitle_response(
     media_file: MediaFile,
     stream_index: int,
@@ -137,7 +119,7 @@ async def _embedded_subtitle_response(
     )
     await ensure_embedded_subtitles(
         video_path,
-        _text_subtitle_tracks(probe),
+        text_subtitle_tracks(probe.streams),
         cache_dir,
         ffmpeg_binary=settings.ffmpeg_binary,
     )

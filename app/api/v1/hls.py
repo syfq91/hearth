@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
 import re
 from pathlib import Path
@@ -31,7 +32,11 @@ from app.core.errors import (
 )
 from app.core.tokens import verify_media_token
 from app.db.session import SessionDep
-from app.services.subtitles import extract_embedded_subtitle
+from app.services.subtitles import (
+    embedded_subtitle_cache_dir,
+    extract_embedded_subtitle,
+    read_embedded_subtitle,
+)
 from app.services.transcode.codecs import compute_master_codecs
 from app.services.transcode.session import SessionManager, TranscodeSession, get_session_manager
 
@@ -391,12 +396,29 @@ async def get_subtitle_vtt(
     if vtt_path.exists():
         vtt_content = vtt_path.read_text(encoding="utf-8", errors="replace")
     elif session.plan.subtitle_stream_index is not None:
-        vtt_content = await extract_embedded_subtitle(
-            session.input_path,
-            session.plan.subtitle_stream_index,
-            fmt="webvtt",
-            output_path=vtt_path,
-        )
+        cached_vtt: str | None = None
+        try:
+            stat = await asyncio.to_thread(session.input_path.stat)
+            cache_dir = embedded_subtitle_cache_dir(
+                Path(settings.transcode_dir) / "subtitles",
+                session.file_id,
+                stat.st_mtime,
+                stat.st_size,
+            )
+            cached_vtt = await read_embedded_subtitle(
+                cache_dir, session.plan.subtitle_stream_index, "vtt"
+            )
+        except OSError:
+            cached_vtt = None
+        if cached_vtt is not None:
+            vtt_content = cached_vtt
+        else:
+            vtt_content = await extract_embedded_subtitle(
+                session.input_path,
+                session.plan.subtitle_stream_index,
+                fmt="webvtt",
+                output_path=vtt_path,
+            )
     else:
         vtt_content = "WEBVTT\n\n"
 
