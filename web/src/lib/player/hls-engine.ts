@@ -117,18 +117,10 @@ export class HlsEngine {
 			);
 		}
 
-		this.hls.subtitleDisplay = true;
+		// SubtitleManager owns all subtitle rendering (JASSUB and shifted native VTT).
+		this.hls.subtitleDisplay = false;
 		this.hls.attachMedia(video);
 		this.hls.loadSource(url);
-
-		this.hls.on(Events.SUBTITLE_TRACKS_UPDATED, (_event, data) => {
-			if (this.destroyed || !this.hls) return;
-			// A subtitle group only exists when a track was negotiated, so turn
-			// the first rendition on instead of leaving hls.js at subtitleTrack=-1.
-			if (data.subtitleTracks?.length && this.hls.subtitleTrack < 0) {
-				this.hls.subtitleTrack = 0;
-			}
-		});
 
 		this.hls.on(Events.MANIFEST_PARSED, (_event, data) => {
 			if (this.destroyed) return;

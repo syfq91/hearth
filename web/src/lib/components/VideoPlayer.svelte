@@ -708,6 +708,7 @@
 				/* ignore localStorage errors */
 			}
 		}
+		subtitleManager.setMediaStartSeconds(response.start_time_seconds ?? 0);
 
 		const source = response.mode === 'direct_play' ? response.url : response.hls_url;
 		if (!source) {
@@ -744,12 +745,19 @@
 			videoEl.src = source;
 		}
 
+		const subReady = applySubtitleChoice();
+		if (subtitleChoice) {
+			await Promise.race([
+				subReady,
+				new Promise<void>((resolve) => setTimeout(resolve, 2000))
+			]);
+		}
+		if (destroyed) return;
+
 		loading = false;
 		void videoEl.play().catch(() => {
 			/* Autoplay might be blocked by browser policy */
 		});
-
-		void applySubtitleChoice();
 	}
 
 	function selectAudioTrack(value: string): void {
@@ -1026,11 +1034,12 @@
 					lastReportedMs = positionMs;
 					void report('playing');
 				}
-				// Reconcile the cue every tick. JASSUB drives itself from
-				// requestVideoFrameCallback, but that loop stalls on background
-				// tabs, PiP transitions and hls.js media swaps, leaving the
-				// last frame on screen.
-				subtitleManager?.renderManualFrame(false);
+				// Reconcile the cue when paused or when requestVideoFrameCallback is
+				// unavailable. During active playback JASSUB's RVFC loop drives exact
+				// frame-level rendering without being clobbered by 4Hz timeupdate ticks.
+				if (videoEl.paused || !('requestVideoFrameCallback' in videoEl)) {
+					subtitleManager?.renderManualFrame(false);
+				}
 			}}
 			onprogress={updateBufferedRanges}
 			ondurationchange={() => {
