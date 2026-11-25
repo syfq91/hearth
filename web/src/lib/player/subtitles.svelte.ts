@@ -54,6 +54,8 @@ export class SubtitleManager {
 	private activeTrack: SubtitleTrackItem | null = null;
 	private activeFontUrls: string[] = [];
 	private offsetRemountTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Non-zero container start PTS (seconds) subtracted from raw video.currentTime. */
+	private mediaStartSeconds = 0;
 
 	public activeTrackId = $state<string | null>(null);
 	public isAss = $state(false);
@@ -66,13 +68,40 @@ export class SubtitleManager {
 	}
 
 	/**
+	 * Set the container's presentation start offset (in seconds) so 0-based
+	 * subtitle cues align with raw container timestamps on `<video>`.
+	 */
+	public setMediaStartSeconds(seconds: number): void {
+		const normalized = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
+		if (this.mediaStartSeconds === normalized) return;
+		this.mediaStartSeconds = normalized;
+		if (this.jassubInstance) {
+			this.jassubInstance.timeOffset = this.effectiveJassubOffset();
+			this.renderManualFrame(true);
+			return;
+		}
+		this.scheduleOffsetRemount();
+	}
+
+	/**
+	 * JASSUB evaluates cues at ``mediaTime + timeOffset``. Subtracting both
+	 * ``mediaStartSeconds`` and ``userOffsetSeconds`` aligns 0-based cues with
+	 * raw container timestamps and makes positive user offsets delay subtitles
+	 * (matching SubtitleSyncControl).
+	 */
+	private effectiveJassubOffset(): number {
+		return -this.mediaStartSeconds - this.userOffsetSeconds;
+	}
+
+	/**
 	 * Update user subtitle timing sync offset (in seconds).
+	 * Negative values display subtitles earlier; positive values delay them.
 	 */
 	public setOffset(offsetSeconds: number): void {
 		if (this.userOffsetSeconds === offsetSeconds) return;
 		this.userOffsetSeconds = offsetSeconds;
 		if (this.jassubInstance) {
-			this.jassubInstance.timeOffset = this.userOffsetSeconds;
+			this.jassubInstance.timeOffset = this.effectiveJassubOffset();
 			this.renderManualFrame(true);
 			return;
 		}
@@ -93,12 +122,12 @@ export class SubtitleManager {
 	}
 
 	/**
-	 * Native cue times are adjusted server-side. JASSUB's positive timeOffset
-	 * renders subtitles earlier, so a native shift uses the opposite sign to
-	 * keep both renderers consistent.
+	 * Native cue times are adjusted server-side. Positive ``shift_ms`` moves
+	 * cues later, compensating for ``mediaStartSeconds`` and delaying cues when
+	 * ``userOffsetSeconds`` is positive.
 	 */
 	private nativeTrackUrl(track: SubtitleTrackItem): string {
-		const shiftMs = -Math.round(this.userOffsetSeconds * 1000);
+		const shiftMs = Math.round((this.mediaStartSeconds + this.userOffsetSeconds) * 1000);
 		if (shiftMs === 0) return track.url;
 		const separator = track.url.includes('?') ? '&' : '?';
 		return `${track.url}${separator}shift_ms=${shiftMs}`;
@@ -158,7 +187,7 @@ export class SubtitleManager {
 					video: this.video,
 					subContent: EMPTY_ASS,
 					fonts: fontUrls,
-					timeOffset: this.userOffsetSeconds,
+					timeOffset: this.effectiveJassubOffset(),
 					prescaleFactor: 0.8,
 					prescaleHeightLimit: 1080,
 					maxRenderHeight: 2160,
@@ -173,7 +202,7 @@ export class SubtitleManager {
 						return;
 					}
 					await instance.renderer.setTrack(toAss(text));
-					instance.timeOffset = this.userOffsetSeconds;
+					instance.timeOffset = this.effectiveJassubOffset();
 					this.jassubInstance = instance;
 					this.renderManualFrame(true);
 				} catch (error) {
