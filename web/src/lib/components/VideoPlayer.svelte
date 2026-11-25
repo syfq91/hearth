@@ -104,7 +104,21 @@
 	// OSD activity state
 	let chromeVisible = $state(true);
 	let showModeBadge = $state(false);
-	let openMenu = $state<'audio' | 'subtitle' | 'speed' | 'quality' | null>(null);
+	let openMenu = $state<'audio' | 'subtitle' | 'speed' | 'quality' | 'settings' | null>(null);
+
+	// Compact bar for narrow viewports. Match the layout's 720px breakpoint.
+	const COMPACT_MEDIA_QUERY = '(max-width: 720px)';
+	let isCompact = $state(
+		typeof window !== 'undefined' && window.matchMedia(COMPACT_MEDIA_QUERY).matches
+	);
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const query = window.matchMedia(COMPACT_MEDIA_QUERY);
+		const update = () => (isCompact = query.matches);
+		update();
+		query.addEventListener('change', update);
+		return () => query.removeEventListener('change', update);
+	});
 
 	const chrome = createAutoHideChrome({
 		persist: () => isPaused || loading || !!loadError || !!openMenu,
@@ -1317,36 +1331,38 @@
 					<RotateCw size={19} />
 				</button>
 
-				<!-- Volume; the slider reveals on hover or focus -->
-				<div class="volume-group">
-					<button
-						type="button"
-						class="icon-btn"
-						onclick={toggleMute}
-						title={isMuted ? 'Unmute (m)' : 'Mute (m)'}
-						aria-label={isMuted ? 'Unmute' : 'Mute'}
-					>
-						{#if isMuted || volume === 0}
-							<VolumeX size={20} />
-						{:else if volume < 0.5}
-							<Volume1 size={20} />
-						{:else}
-							<Volume2 size={20} />
-						{/if}
-					</button>
-					<div class="volume-slider-wrap">
-						<input
-							type="range"
-							min="0"
-							max="1"
-							step="0.05"
-							value={isMuted ? 0 : volume}
-							oninput={(e) => handleVolumeInput(Number.parseFloat(e.currentTarget.value))}
-							class="volume-slider"
-							aria-label="Volume slider"
-						/>
+				{#if !isCompact}
+					<!-- Volume; the slider reveals on hover or focus -->
+					<div class="volume-group">
+						<button
+							type="button"
+							class="icon-btn"
+							onclick={toggleMute}
+							title={isMuted ? 'Unmute (m)' : 'Mute (m)'}
+							aria-label={isMuted ? 'Unmute' : 'Mute'}
+						>
+							{#if isMuted || volume === 0}
+								<VolumeX size={20} />
+							{:else if volume < 0.5}
+								<Volume1 size={20} />
+							{:else}
+								<Volume2 size={20} />
+							{/if}
+						</button>
+						<div class="volume-slider-wrap">
+							<input
+								type="range"
+								min="0"
+								max="1"
+								step="0.05"
+								value={isMuted ? 0 : volume}
+								oninput={(e) => handleVolumeInput(Number.parseFloat(e.currentTarget.value))}
+								class="volume-slider"
+								aria-label="Volume slider"
+							/>
+						</div>
 					</div>
-				</div>
+				{/if}
 			</div>
 
 			{#if endsAt}
