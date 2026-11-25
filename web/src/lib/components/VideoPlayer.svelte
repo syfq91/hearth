@@ -16,7 +16,8 @@
 		Languages,
 		Captions,
 		Gauge,
-		MonitorPlay
+		MonitorPlay,
+		Settings2
 	} from '@lucide/svelte';
 	import { api } from '../api/client';
 	import { detectBrowserCapabilities, getCapabilitiesWithBurnInFallback } from '../capabilities';
@@ -119,6 +120,9 @@
 		query.addEventListener('change', update);
 		return () => query.removeEventListener('change', update);
 	});
+	$effect(() => {
+		if (!isCompact && openMenu === 'settings') openMenu = null;
+	});
 
 	const chrome = createAutoHideChrome({
 		persist: () => isPaused || loading || !!loadError || !!openMenu,
@@ -201,7 +205,7 @@
 		chrome.toggle();
 	}
 
-	function toggleMenu(menu: 'audio' | 'subtitle' | 'speed' | 'quality'): void {
+	function toggleMenu(menu: 'audio' | 'subtitle' | 'speed' | 'quality' | 'settings'): void {
 		openMenu = openMenu === menu ? null : menu;
 		chrome.reveal();
 	}
@@ -1155,7 +1159,9 @@
 						? 'Subtitle tracks'
 						: openMenu === 'quality'
 							? 'Playback quality'
-							: 'Playback speed'}
+							: openMenu === 'settings'
+								? 'Player settings'
+								: 'Playback speed'}
 			>
 				{#if openMenu === 'audio'}
 					<div class="menu-heading" role="presentation">Audio</div>
@@ -1232,6 +1238,61 @@
 							<span class="menu-item-detail">{option.detail}</span>
 						</button>
 					{/each}
+				{:else if openMenu === 'settings'}
+					<div class="menu-heading" role="presentation">Playback speed</div>
+					{#each PLAYBACK_RATES as rate (rate)}
+						<button
+							type="button"
+							role="menuitemradio"
+							aria-checked={playbackRate === rate}
+							class="menu-item"
+							class:selected={playbackRate === rate}
+							onclick={() => selectPlaybackRate(rate)}
+						>
+							{rate}x
+						</button>
+					{/each}
+					<div class="menu-heading" role="presentation">Quality</div>
+					{#each QUALITY_OPTIONS as option (option.value)}
+						<button
+							type="button"
+							role="menuitemradio"
+							aria-checked={quality === option.value}
+							class="menu-item"
+							class:selected={quality === option.value}
+							onclick={() => selectQuality(option.value)}
+						>
+							<span>{option.label}</span>
+							<span class="menu-item-detail">{option.detail}</span>
+						</button>
+					{/each}
+					<div class="menu-heading" role="presentation">More</div>
+					<button
+						type="button"
+						role="menuitem"
+						class="menu-item"
+						onclick={() => {
+							openMenu = null;
+							showSubSync = true;
+						}}
+					>
+						Subtitle sync
+					</button>
+					{#if info}
+						<button
+							type="button"
+							role="menuitemcheckbox"
+							aria-checked={showModeBadge}
+							class="menu-item"
+							class:selected={showModeBadge}
+							onclick={() => {
+								showModeBadge = !showModeBadge;
+								openMenu = null;
+							}}
+						>
+							Stream info
+						</button>
+					{/if}
 				{:else}
 					<div class="menu-heading" role="presentation">Playback speed</div>
 					{#each PLAYBACK_RATES as rate (rate)}
@@ -1401,61 +1462,79 @@
 						<Captions size={19} />
 					</button>
 
-					<!-- Subtitle Sync Button -->
-					<button
-						type="button"
-						class="icon-btn"
-						class:active={showSubSync}
-						onclick={() => {
-							openMenu = null;
-							showSubSync = !showSubSync;
-						}}
-						title="Subtitle Sync / Calibration"
-						aria-label="Subtitle synchronization"
-					>
-						<SlidersHorizontal size={18} />
-					</button>
+					{#if !isCompact}
+						<!-- Subtitle Sync Button -->
+						<button
+							type="button"
+							class="icon-btn"
+							class:active={showSubSync}
+							onclick={() => {
+								openMenu = null;
+								showSubSync = !showSubSync;
+							}}
+							title="Subtitle Sync / Calibration"
+							aria-label="Subtitle synchronization"
+						>
+							<SlidersHorizontal size={18} />
+						</button>
+					{/if}
 				{/if}
 
-				<!-- Playback rate -->
-				<button
-					type="button"
-					class="icon-btn"
-					class:active={openMenu === 'speed' || playbackRate !== 1}
-					onclick={() => toggleMenu('speed')}
-					title="Playback speed"
-					aria-label="Playback speed"
-					aria-haspopup="menu"
-					aria-expanded={openMenu === 'speed'}
-				>
-					<Gauge size={18} />
-				</button>
-
-				<!-- Quality selector -->
-				<button
-					type="button"
-					class="icon-btn"
-					class:active={openMenu === 'quality' || quality !== 'auto'}
-					onclick={() => toggleMenu('quality')}
-					title="Playback quality"
-					aria-label="Playback quality"
-					aria-haspopup="menu"
-					aria-expanded={openMenu === 'quality'}
-				>
-					<MonitorPlay size={18} />
-				</button>
-
-				<!-- Stream Info -->
-				{#if info}
+				{#if !isCompact}
+					<!-- Playback rate -->
 					<button
 						type="button"
 						class="icon-btn"
-						class:active={showModeBadge}
-						onclick={() => (showModeBadge = !showModeBadge)}
-						title="Stream Info / Transcode Status"
-						aria-label="Stream information"
+						class:active={openMenu === 'speed' || playbackRate !== 1}
+						onclick={() => toggleMenu('speed')}
+						title="Playback speed"
+						aria-label="Playback speed"
+						aria-haspopup="menu"
+						aria-expanded={openMenu === 'speed'}
 					>
-						<Info size={19} />
+						<Gauge size={18} />
+					</button>
+
+					<!-- Quality selector -->
+					<button
+						type="button"
+						class="icon-btn"
+						class:active={openMenu === 'quality' || quality !== 'auto'}
+						onclick={() => toggleMenu('quality')}
+						title="Playback quality"
+						aria-label="Playback quality"
+						aria-haspopup="menu"
+						aria-expanded={openMenu === 'quality'}
+					>
+						<MonitorPlay size={18} />
+					</button>
+
+					<!-- Stream Info -->
+					{#if info}
+						<button
+							type="button"
+							class="icon-btn"
+							class:active={showModeBadge}
+							onclick={() => (showModeBadge = !showModeBadge)}
+							title="Stream Info / Transcode Status"
+							aria-label="Stream information"
+						>
+							<Info size={19} />
+						</button>
+					{/if}
+				{:else}
+					<!-- Settings groups speed, quality, subtitle sync and info -->
+					<button
+						type="button"
+						class="icon-btn"
+						class:active={openMenu === 'settings'}
+						onclick={() => toggleMenu('settings')}
+						title="Player settings"
+						aria-label="Player settings"
+						aria-haspopup="menu"
+						aria-expanded={openMenu === 'settings'}
+					>
+						<Settings2 size={18} />
 					</button>
 				{/if}
 
