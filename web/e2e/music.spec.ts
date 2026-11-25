@@ -30,7 +30,9 @@ test('play a track from an album', async ({ page, request }) => {
 	const bar = page.getByRole('region', { name: 'Now playing' });
 	await expect(bar).toBeVisible();
 	await expect(bar.getByText(TRACK_TITLE)).toBeVisible();
-	await expect(bar.getByText(/-\d+:\d{2}/)).toBeVisible();
+	// The mini dock keeps transport only: no queue position or time readout.
+	await expect(bar.getByText(/-\d+:\d{2}/)).toHaveCount(0);
+	await expect(bar.getByText(/\d+\/\d+/)).toHaveCount(0);
 
 	const audio = page.locator('audio');
 	await expect

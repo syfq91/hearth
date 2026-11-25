@@ -18,7 +18,6 @@
 		toggleMute,
 		rememberVolume,
 		formatTime,
-		formatRemaining,
 		loadReplayGain
 	} from '../player/ui.svelte';
 	import {
@@ -370,14 +369,6 @@
 						<SkipForward size={16} />
 					</button>
 				</div>
-				<div class="transport-info" aria-hidden="true">
-					{#if player.queue.length > 1}
-						<span class="position">{player.index + 1}/{player.queue.length}</span>
-					{/if}
-					<span class="time">
-						{formatTime(playerUi.currentTime)} / {formatRemaining(playerUi.currentTime, playerUi.duration)}
-					</span>
-				</div>
 			</div>
 
 			<div class="right">
@@ -624,12 +615,6 @@
 		gap: 0.5rem;
 	}
 
-	.transport-info {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
 	.right {
 		display: flex;
 		align-items: center;
@@ -678,18 +663,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	.position {
-		color: var(--muted);
-		font-size: 0.75rem;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.time {
-		color: var(--muted);
-		font-size: 0.8rem;
-		font-variant-numeric: tabular-nums;
 	}
 
 	.ghost {
@@ -855,8 +828,7 @@
 			padding: 0.35rem 0.5rem;
 		}
 
-		.right,
-		.transport-info {
+		.right {
 			display: none;
 		}
 	}
