@@ -4214,6 +4214,8 @@ export interface components {
              * @default 0
              */
             start_time_offset_seconds: number;
+            /** Subtitle Id */
+            subtitle_id?: string | null;
             /** Subtitle Track Index */
             subtitle_track_index?: number | null;
             /** Target Max Bitrate */
@@ -4231,6 +4233,11 @@ export interface components {
             attachments?: components["schemas"]["AttachmentResponse"][];
             /** Audio Streams */
             audio_streams?: components["schemas"]["ProbeStream"][];
+            /**
+             * Burn In Complex Subtitles
+             * @default false
+             */
+            burn_in_complex_subtitles: boolean;
             /** Command */
             command?: string[] | null;
             /** Embedded Subtitle Format */
@@ -5151,6 +5158,13 @@ export interface components {
              * @enum {string}
              */
             subtitle_action: "none" | "sidecar_vtt" | "burn_in" | "external_ass";
+            /**
+             * Subtitle Is Bitmap
+             * @default false
+             */
+            subtitle_is_bitmap: boolean;
+            /** Subtitle Sidecar Id */
+            subtitle_sidecar_id?: string | null;
             /** Subtitle Stream Index */
             subtitle_stream_index?: number | null;
             /** Target Bitrate */
@@ -5226,6 +5240,8 @@ export interface components {
             max_sw_sessions: number;
             /** Segment Duration Seconds */
             segment_duration_seconds: number;
+            /** Transcode Complex Subtitles */
+            transcode_complex_subtitles: boolean;
         };
         /**
          * TranscodeStopResponse
@@ -5350,6 +5366,8 @@ export interface components {
             max_hw_sessions?: number | null;
             /** Max Sw Sessions */
             max_sw_sessions?: number | null;
+            /** Transcode Complex Subtitles */
+            transcode_complex_subtitles?: boolean | null;
         };
         /** UserCreate */
         UserCreate: {

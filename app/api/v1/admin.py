@@ -225,6 +225,7 @@ class TranscodeSettingsResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     force_software: bool
+    transcode_complex_subtitles: bool
     max_hw_sessions: int
     max_sw_sessions: int
     idle_timeout_seconds: float
@@ -238,6 +239,7 @@ class UpdateTranscodeSettingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     force_software: bool | None = None
+    transcode_complex_subtitles: bool | None = None
     max_hw_sessions: int | None = Field(default=None, ge=1, le=32)
     max_sw_sessions: int | None = Field(default=None, ge=1, le=32)
     idle_timeout_seconds: float | None = Field(default=None, ge=10.0, le=600.0)
@@ -612,6 +614,7 @@ async def get_transcode_settings(
     """Return runtime transcoding parameters."""
     return TranscodeSettingsResponse(
         force_software=settings.transcode_force_software,
+        transcode_complex_subtitles=settings.transcode_complex_subtitles,
         max_hw_sessions=settings.transcode_max_hw_sessions,
         max_sw_sessions=settings.transcode_max_sw_sessions,
         idle_timeout_seconds=settings.transcode_idle_timeout_seconds,
@@ -631,6 +634,8 @@ async def update_transcode_settings(
     """Update runtime transcoding parameters."""
     if body.force_software is not None:
         settings.transcode_force_software = body.force_software
+    if body.transcode_complex_subtitles is not None:
+        settings.transcode_complex_subtitles = body.transcode_complex_subtitles
     if body.max_hw_sessions is not None:
         settings.transcode_max_hw_sessions = body.max_hw_sessions
     if body.max_sw_sessions is not None:
@@ -652,6 +657,7 @@ async def update_transcode_settings(
 
     return TranscodeSettingsResponse(
         force_software=settings.transcode_force_software,
+        transcode_complex_subtitles=settings.transcode_complex_subtitles,
         max_hw_sessions=settings.transcode_max_hw_sessions,
         max_sw_sessions=settings.transcode_max_sw_sessions,
         idle_timeout_seconds=settings.transcode_idle_timeout_seconds,

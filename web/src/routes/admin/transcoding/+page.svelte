@@ -9,6 +9,7 @@
 	let maxHw = $state<number | null>(null);
 	let maxSw = $state<number | null>(null);
 	let forceSoftware = $state(false);
+	let transcodeComplexSubtitles = $state(false);
 
 	$effect(() => {
 		const settings = data.settings;
@@ -18,6 +19,7 @@
 		maxHw = settings.max_hw_sessions ?? null;
 		maxSw = settings.max_sw_sessions ?? null;
 		forceSoftware = settings.force_software;
+		transcodeComplexSubtitles = settings.transcode_complex_subtitles;
 	});
 
 	let saving = $state(false);
@@ -36,7 +38,8 @@
 					idle_timeout_seconds: idleTimeout,
 					max_hw_sessions: maxHw,
 					max_sw_sessions: maxSw,
-					force_software: forceSoftware
+					force_software: forceSoftware,
+					transcode_complex_subtitles: transcodeComplexSubtitles
 				}
 			});
 			message = 'Transcoding settings saved.';
@@ -119,6 +122,10 @@
 			<label class="check">
 				<input type="checkbox" bind:checked={forceSoftware} />
 				<span>Force software encoding</span>
+			</label>
+			<label class="check">
+				<input type="checkbox" bind:checked={transcodeComplexSubtitles} />
+				<span>Transcode complex subtitles (.ass, .ssa, PGS, VobSub)</span>
 			</label>
 			<button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save settings'}</button>
 		</form>

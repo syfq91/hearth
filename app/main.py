@@ -3,12 +3,12 @@
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import cast
 
-from fastapi import FastAPI, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.staticfiles import StaticFiles
@@ -65,12 +65,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         with contextlib.suppress(Exception):
             await probe_transcode_capabilities(resolved)
 
+        from app.core.plugins.base import ApiAdapterPlugin
         from app.core.plugins.manager import PluginManager
 
         plugin_manager = PluginManager(resolved, sessionmaker)
         app.state.plugin_manager = plugin_manager
         with contextlib.suppress(Exception):
             await plugin_manager.discover_and_load()
+
+        for plugin in plugin_manager.list_plugins():
+            if isinstance(plugin, ApiAdapterPlugin):
+                try:
+                    app.include_router(
+                        plugin.get_router(),
+                        dependencies=[Depends(_make_plugin_active_guard(plugin.manifest.id))],
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to mount router for plugin",
+                        extra={"plugin_id": plugin.manifest.id, "error": str(exc)},
+                    )
 
         # Mounted at startup, after every application route exists, so the SPA
         # fallback can never shadow an API route (see app/core/spa.py).
@@ -208,6 +222,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             name="testplayer",
         )
     return application
+
+
+def _make_plugin_active_guard(plugin_id: str) -> Callable[[Request], None]:
+    """Return a dependency that hides an adapter plugin's routes unless active."""
+    from app.core.plugins.base import PluginStatus
+
+    def _guard(request: Request) -> None:
+        manager = getattr(request.app.state, "plugin_manager", None)
+        current = manager.get_plugin(plugin_id) if manager is not None else None
+        if current is None or current.status != PluginStatus.ACTIVE:
+            raise NotFoundError("Not found", code="not_found")
+
+    return _guard
 
 
 def _mount_web_ui(application: FastAPI) -> None:

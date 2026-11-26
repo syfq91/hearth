@@ -28,7 +28,12 @@ from app.services.transcode.decision import (
     UserLimits,
     evaluate_playback_plan,
 )
-from app.services.transcode.profile import BUILTIN_PRESETS, ClientCapabilities, TranscodeTarget
+from app.services.transcode.profile import (
+    BUILTIN_PRESETS,
+    ClientCapabilities,
+    SubtitleProfile,
+    TranscodeTarget,
+)
 
 
 def _make_probe(
@@ -1426,3 +1431,119 @@ def test_t10_client_lacking_text_method_uses_burn_in() -> None:
     assert plan.video_action == "transcode"
     assert TranscodeReason.SubtitleBurnInRequired in plan.reasons
     assert plan.subtitle_action == "burn_in"
+
+
+def test_burn_in_complex_subtitles_forces_burn_in_for_embedded_ass_and_sidecar() -> None:
+    probe = _make_probe(
+        "mp4",
+        "h264",
+        "High",
+        1920,
+        1080,
+        3_000_000,
+        False,
+        "aac",
+        2,
+        [{"codec": "ass", "language": "jpn"}, {"codec": "subrip", "language": "eng"}],
+    )
+    caps = ClientCapabilities(
+        containers=["mp4"],
+        video_codecs=["h264"],
+        video_profiles=["high"],
+        audio_codecs=["aac"],
+        subtitle_formats=["vtt", "ass", "ssa"],
+        subtitle_profiles=[
+            SubtitleProfile(format="vtt", method="external"),
+            SubtitleProfile(format="ass", method="external"),
+        ],
+    )
+
+    # Embedded ASS: external_ass when disabled, burn_in when enabled.
+    plan_off = evaluate_playback_plan(
+        probe,
+        caps,
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(subtitle_track_index=2, burn_in_complex_subtitles=False),
+    )
+    assert plan_off.mode == "direct_play"
+    assert plan_off.subtitle_action == "external_ass"
+    assert plan_off.subtitle_is_bitmap is False
+
+    plan_on = evaluate_playback_plan(
+        probe,
+        caps,
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(subtitle_track_index=2, burn_in_complex_subtitles=True),
+    )
+    assert plan_on.mode == "transcode_hls"
+    assert plan_on.subtitle_action == "burn_in"
+    assert plan_on.subtitle_is_bitmap is False
+    assert TranscodeReason.SubtitleBurnInRequired in plan_on.reasons
+
+    # Embedded SRT stays sidecar_vtt even when complex subtitle burn-in is enabled.
+    plan_srt = evaluate_playback_plan(
+        probe,
+        caps,
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(subtitle_track_index=3, burn_in_complex_subtitles=True),
+    )
+    assert plan_srt.mode == "direct_play"
+    assert plan_srt.subtitle_action == "sidecar_vtt"
+
+    # Sidecar ASS burns in when enabled, while sidecar SRT does not.
+    plan_sidecar_ass = evaluate_playback_plan(
+        probe,
+        caps,
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(
+            subtitle_id="sidecar-1",
+            subtitle_format="ass",
+            burn_in_complex_subtitles=True,
+        ),
+    )
+    assert plan_sidecar_ass.mode == "transcode_hls"
+    assert plan_sidecar_ass.subtitle_action == "burn_in"
+    assert plan_sidecar_ass.subtitle_sidecar_id == "sidecar-1"
+    assert plan_sidecar_ass.subtitle_is_bitmap is False
+
+    plan_sidecar_srt = evaluate_playback_plan(
+        probe,
+        caps,
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(
+            subtitle_id="sidecar-2",
+            subtitle_format="srt",
+            burn_in_complex_subtitles=True,
+        ),
+    )
+    assert plan_sidecar_srt.mode == "direct_play"
+    assert plan_sidecar_srt.subtitle_action == "none"
+
+
+def test_bitmap_pgs_sets_subtitle_is_bitmap() -> None:
+    probe = _make_probe(
+        "mp4",
+        "h264",
+        "High",
+        1920,
+        1080,
+        3_000_000,
+        False,
+        "aac",
+        2,
+        [{"codec": "hdmv_pgs_subtitle", "language": "eng"}],
+    )
+    plan = evaluate_playback_plan(
+        probe,
+        ClientCapabilities(preset="chrome"),
+        UserLimits(),
+        _vaapi_caps(),
+        PlaybackOptions(subtitle_track_index=2),
+    )
+    assert plan.subtitle_action == "burn_in"
+    assert plan.subtitle_is_bitmap is True

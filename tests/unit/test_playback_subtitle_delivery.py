@@ -61,6 +61,18 @@ def test_embedded_subtitle_urls_skip_bitmap_tracks_and_keep_the_selector_index()
     assert urls[1].url == f"{PREFIX}2.ass?token=tok"
 
 
+def test_embedded_subtitle_urls_skip_ass_when_burn_in_complex_enabled() -> None:
+    streams = [
+        _subtitle_stream(2, "subrip"),
+        _subtitle_stream(3, "hdmv_pgs_subtitle"),
+        _subtitle_stream(4, "ass"),
+        _subtitle_stream(5, "ssa"),
+    ]
+    urls = _embedded_subtitle_urls(streams, FILE, "tok", burn_in_complex_subtitles=True)
+
+    assert [(entry.index, entry.format) for entry in urls] == [(2, "vtt")]
+
+
 def test_burn_in_and_off_subtitles_have_no_direct_url() -> None:
     assert _embedded_subtitle_delivery(_plan("transcode_hls", "burn_in", 0), FILE, "tok") == (
         None,

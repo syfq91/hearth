@@ -543,8 +543,23 @@
 		return (info?.embedded_subtitle_urls ?? []).find((entry) => entry.index === index) ?? null;
 	}
 
+	function sidecarRequiresBurnIn(
+		id: string,
+		playbackInfo: PlaybackInfoResponse | null = info
+	): boolean {
+		if (!playbackInfo?.burn_in_complex_subtitles) return false;
+		const track = (playbackInfo.subtitles ?? []).find((t) => t.id === id);
+		if (!track) return false;
+		const fmt = track.format.toLowerCase();
+		return fmt === 'ass' || fmt === 'ssa';
+	}
+
 	async function applySubtitleChoice(): Promise<void> {
 		if (!subtitleManager) return;
+		if (info?.plan?.subtitle_action === 'burn_in') {
+			await subtitleManager.clearTrack();
+			return;
+		}
 
 		// Font attachment URLs already carry the media token for both direct
 		// play and HLS, so reuse them instead of rebuilding the URL from
@@ -622,6 +637,9 @@
 		embeddedSubtitleIndex = subtitleChoice.startsWith('emb:')
 			? Number.parseInt(subtitleChoice.slice('emb:'.length), 10)
 			: null;
+		const externalSubtitleId = subtitleChoice.startsWith('ext:')
+			? subtitleChoice.slice('ext:'.length)
+			: null;
 
 		const cur = videoEl?.currentTime ?? 0;
 		if (cur > 0) {
@@ -643,6 +661,7 @@
 					capabilities: clientCapabilities,
 					audio_track_index: audioTrackIndex,
 					subtitle_track_index: embeddedSubtitleIndex,
+					subtitle_id: externalSubtitleId,
 					start_time_offset_seconds: offsetSeconds,
 					force_burn_in_subtitles: forceBurnIn,
 					quality
@@ -676,6 +695,17 @@
 			if (autoSub) {
 				subtitleChoice = autoSub;
 				lastSubChoice = autoSub;
+				const autoNeedsServerBurnIn =
+					(autoSub.startsWith('emb:') &&
+						!(response.embedded_subtitle_urls ?? []).some(
+							(e) => e.index === Number.parseInt(autoSub.slice('emb:'.length), 10)
+						)) ||
+					(autoSub.startsWith('ext:') &&
+						sidecarRequiresBurnIn(autoSub.slice('ext:'.length), response));
+				if (autoNeedsServerBurnIn) {
+					await startPlayback();
+					return;
+				}
 			}
 		}
 		sessionId = response.session_id ?? null;
@@ -791,13 +821,16 @@
 			return;
 		}
 
-		// Bitmap subtitle tracks cannot be rendered by the client.
+		// Bitmap and server-transcoded complex subtitle tracks cannot be rendered by the client.
 		if (value.startsWith('emb:')) {
 			const index = Number.parseInt(value.slice('emb:'.length), 10);
 			if (!embeddedSubtitleUrl(index)) {
 				void startPlayback();
 				return;
 			}
+		} else if (value.startsWith('ext:') && sidecarRequiresBurnIn(value.slice('ext:'.length))) {
+			void startPlayback();
+			return;
 		}
 
 		void applySubtitleChoice();

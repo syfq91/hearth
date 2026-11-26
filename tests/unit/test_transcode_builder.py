@@ -654,3 +654,77 @@ def test_builder_uses_negotiated_software_targets(tmp_path: Path) -> None:
     assert "-sc_threshold" not in cmd
     assert cmd[cmd.index("-pix_fmt") + 1] == "yuv420p"
     assert "-force_key_frames" in cmd
+
+
+def test_builder_bitmap_burn_in_uses_filter_complex_overlay_software(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="burn_in",
+        subtitle_stream_index=0,
+        subtitle_is_bitmap=True,
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(plan, Path("/media/movie.mkv"), tmp_path)
+    assert "-vf" not in cmd
+    assert "-filter_complex" in cmd
+    fc = cmd[cmd.index("-filter_complex") + 1]
+    assert "[0:v:0][0:s:0]overlay=eof_action=pass" in fc
+    assert "[vout]" in fc
+    assert cmd[cmd.index("-map") + 1] == "[vout]"
+
+
+def test_builder_bitmap_burn_in_uses_filter_complex_overlay_vaapi(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="h264_vaapi",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="burn_in",
+        subtitle_stream_index=1,
+        subtitle_is_bitmap=True,
+        hwaccel="vaapi",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan, Path("/media/movie.mkv"), tmp_path, render_device="/dev/dri/renderD128"
+    )
+    assert "-vf" not in cmd
+    assert "-filter_complex" in cmd
+    fc = cmd[cmd.index("-filter_complex") + 1]
+    assert "hwdownload,format=nv12[v_sw]" in fc
+    assert "[v_sw][0:s:1]overlay=eof_action=pass,hwupload,scale_vaapi=format=nv12[vout]" in fc
+    assert cmd[cmd.index("-map") + 1] == "[vout]"
+
+
+def test_builder_sidecar_ass_burn_in_uses_symlink(tmp_path: Path) -> None:
+    sidecar = tmp_path / "movie.jpn.ass"
+    sidecar.write_text("[Script Info]\nTitle: Test\n", encoding="utf-8")
+    out_dir = tmp_path / "out"
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="libx264",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="burn_in",
+        subtitle_sidecar_id="sidecar-id",
+        subtitle_is_bitmap=False,
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        out_dir,
+        subtitle_sidecar_path=sidecar,
+    )
+    vf = cmd[cmd.index("-vf") + 1]
+    assert "subtitles=" in vf
+    assert ":si=" not in vf
+    assert (out_dir / "sub_source.ass").is_symlink()

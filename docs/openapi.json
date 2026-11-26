@@ -4610,6 +4610,18 @@
             "title": "Start Time Offset Seconds",
             "type": "number"
           },
+          "subtitle_id": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle Id"
+          },
           "subtitle_track_index": {
             "anyOf": [
               {
@@ -4653,6 +4665,11 @@
             },
             "title": "Audio Streams",
             "type": "array"
+          },
+          "burn_in_complex_subtitles": {
+            "default": false,
+            "title": "Burn In Complex Subtitles",
+            "type": "boolean"
           },
           "command": {
             "anyOf": [
@@ -7126,6 +7143,22 @@
             "title": "Subtitle Action",
             "type": "string"
           },
+          "subtitle_is_bitmap": {
+            "default": false,
+            "title": "Subtitle Is Bitmap",
+            "type": "boolean"
+          },
+          "subtitle_sidecar_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle Sidecar Id"
+          },
           "subtitle_stream_index": {
             "anyOf": [
               {
@@ -7329,10 +7362,15 @@
           "segment_duration_seconds": {
             "title": "Segment Duration Seconds",
             "type": "integer"
+          },
+          "transcode_complex_subtitles": {
+            "title": "Transcode Complex Subtitles",
+            "type": "boolean"
           }
         },
         "required": [
           "force_software",
+          "transcode_complex_subtitles",
           "max_hw_sessions",
           "max_sw_sessions",
           "idle_timeout_seconds",
@@ -7716,6 +7754,17 @@
               }
             ],
             "title": "Max Sw Sessions"
+          },
+          "transcode_complex_subtitles": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcode Complex Subtitles"
           }
         },
         "title": "UpdateTranscodeSettingsRequest",

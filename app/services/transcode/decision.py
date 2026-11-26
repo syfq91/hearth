@@ -30,6 +30,10 @@ HwAccelMode = Literal["vaapi", "none"]
 BITMAP_SUBTITLE_CODECS = frozenset(
     {"hdmv_pgs_subtitle", "dvd_subtitle", "dvdsub", "vobsub", "pgs", "pgssub", "xsub"}
 )
+# Styled text subtitles (ASS/SSA) that can be burned in when complex subtitle
+# transcoding is enabled instead of relying on client-side JASSUB rendering.
+COMPLEX_TEXT_SUBTITLE_CODECS = frozenset({"ass", "ssa"})
+COMPLEX_SUBTITLE_CODECS = BITMAP_SUBTITLE_CODECS | COMPLEX_TEXT_SUBTITLE_CODECS
 
 
 class TranscodeReason(StrEnum):
@@ -87,8 +91,11 @@ class PlaybackOptions(BaseModel):
 
     audio_track_index: int | None = None
     subtitle_track_index: int | None = None
+    subtitle_id: str | None = None
+    subtitle_format: str | None = None
     target_max_bitrate: int | None = None
     force_burn_in_subtitles: bool = False
+    burn_in_complex_subtitles: bool = False
     quality: QualityLevel = "auto"
 
 
@@ -104,6 +111,8 @@ class TranscodePlan(BaseModel):
     audio_stream_index: int | None = None
     subtitle_action: SubtitleAction
     subtitle_stream_index: int | None = None
+    subtitle_sidecar_id: str | None = None
+    subtitle_is_bitmap: bool = False
     target_width: int | None = None
     target_height: int | None = None
     target_bitrate: int | None = None
@@ -178,13 +187,22 @@ def evaluate_playback_plan(
     # 3. Check Subtitle compatibility
     subtitle_action: SubtitleAction = "none"
     subtitle_index: int | None = None
+    subtitle_sidecar_id: str | None = None
+    subtitle_is_bitmap = False
 
     if sub_stream is not None:
         subtitle_index = sub_stream_index
         c_name = (sub_stream.codec_name or "").lower()
+        is_bitmap = c_name in BITMAP_SUBTITLE_CODECS
+        is_complex = c_name in COMPLEX_SUBTITLE_CODECS
 
-        if opts.force_burn_in_subtitles or c_name in BITMAP_SUBTITLE_CODECS:
+        if (
+            opts.force_burn_in_subtitles
+            or is_bitmap
+            or (opts.burn_in_complex_subtitles and is_complex)
+        ):
             subtitle_action = "burn_in"
+            subtitle_is_bitmap = is_bitmap
             _add_reason(reasons, TranscodeReason.SubtitleBurnInRequired)
         else:
             # Text subtitle (SRT, ASS, SSA, WebVTT, etc.)
@@ -231,6 +249,14 @@ def evaluate_playback_plan(
             else:
                 subtitle_action = "burn_in"
                 _add_reason(reasons, TranscodeReason.SubtitleBurnInRequired)
+    elif opts.subtitle_id is not None and opts.subtitle_format is not None:
+        c_name = opts.subtitle_format.lower().lstrip(".")
+        if opts.force_burn_in_subtitles or (
+            opts.burn_in_complex_subtitles and c_name in COMPLEX_TEXT_SUBTITLE_CODECS
+        ):
+            subtitle_action = "burn_in"
+            subtitle_sidecar_id = opts.subtitle_id
+            _add_reason(reasons, TranscodeReason.SubtitleBurnInRequired)
 
     # 4. Check Video Compatibility
     tonemap_needed = False
@@ -467,6 +493,8 @@ def evaluate_playback_plan(
         audio_stream_index=audio_stream.index if audio_stream else None,
         subtitle_action=subtitle_action,
         subtitle_stream_index=subtitle_index,
+        subtitle_sidecar_id=subtitle_sidecar_id,
+        subtitle_is_bitmap=subtitle_is_bitmap,
         target_width=target_w,
         target_height=target_h,
         target_bitrate=target_bitrate,
@@ -479,6 +507,9 @@ def evaluate_playback_plan(
 __all__ = [
     "ActionType",
     "AudioCodec",
+    "BITMAP_SUBTITLE_CODECS",
+    "COMPLEX_SUBTITLE_CODECS",
+    "COMPLEX_TEXT_SUBTITLE_CODECS",
     "Container",
     "HwAccelMode",
     "PlaybackMode",

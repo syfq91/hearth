@@ -1,0 +1,51 @@
+{
+  "id": "org.hearth.plugins.jellyfin",
+  "name": "Jellyfin Compatibility",
+  "version": "1.0.0",
+  "description": "Exposes Hearth media libraries, playback, and user state over a Jellyfin-compatible API so existing Jellyfin clients can connect.",
+  "author": "Hearth Team",
+  "category": "Integration",
+  "min_hearth_version": "1.0.0",
+  "entrypoint": "plugin:JellyfinPlugin",
+  "capabilities": [
+    "api.router"
+  ],
+  "config_schema": {
+    "title": "JellyfinConfig",
+    "type": "object",
+    "properties": {
+      "server_name": {
+        "title": "Server Name",
+        "type": "string",
+        "default": "Hearth",
+        "description": "Display name advertised to Jellyfin clients"
+      },
+      "token_ttl_days": {
+        "title": "Session Token Lifetime (Days)",
+        "type": "integer",
+        "default": 30,
+        "minimum": 1,
+        "maximum": 365,
+        "description": "How long Jellyfin client access tokens remain valid"
+      },
+      "allow_transcoding": {
+        "title": "Allow Transcoding",
+        "type": "boolean",
+        "default": true,
+        "description": "Allow Jellyfin clients to request HLS transcoded streams"
+      },
+      "allow_unauthenticated_images": {
+        "title": "Allow Unauthenticated Images",
+        "type": "boolean",
+        "default": true,
+        "description": "Allow artwork requests without an auth token (required by some Jellyfin clients)"
+      },
+      "expose_public_users": {
+        "title": "Expose Public Users",
+        "type": "boolean",
+        "default": false,
+        "description": "List user accounts on the unauthenticated /Users/Public endpoint"
+      }
+    }
+  }
+}

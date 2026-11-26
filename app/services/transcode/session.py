@@ -52,6 +52,7 @@ class TranscodeSession:
         source_audio: ProbeStream | None = None,
         source_fps: float | None = None,
         font_attachments: list[AttachmentStream] | None = None,
+        subtitle_sidecar_path: Path | None = None,
     ) -> None:
         self.id = session_id
         self.user_id = user_id
@@ -67,6 +68,7 @@ class TranscodeSession:
         self.source_audio = source_audio
         self.source_fps = source_fps
         self.font_attachments = font_attachments or []
+        self.subtitle_sidecar_path = subtitle_sidecar_path
         self.segment_duration = settings.transcode_segment_duration_seconds
         # A short opening segment gets the client playing sooner. Stream copies
         # cannot force keyframes, so they keep a uniform grid.
@@ -335,7 +337,11 @@ class TranscodeSession:
 
     async def _prepare_burn_in_fonts(self) -> Path | None:
         """Extract container fonts for libass when burning in text subtitles."""
-        if self.plan.subtitle_action != "burn_in" or self.plan.subtitle_stream_index is None:
+        if (
+            self.plan.subtitle_action != "burn_in"
+            or self.plan.subtitle_is_bitmap
+            or (self.plan.subtitle_stream_index is None and self.subtitle_sidecar_path is None)
+        ):
             return None
         if not self.font_attachments:
             return None
@@ -401,6 +407,7 @@ class TranscodeSession:
             first_segment_duration=first_segment_duration,
             audio_bitrate_kbps=audio_bitrate_kbps,
             fonts_dir=fonts_dir,
+            subtitle_sidecar_path=self.subtitle_sidecar_path,
         )
 
         logger.info(
@@ -714,6 +721,7 @@ class SessionManager:
         source_audio: ProbeStream | None = None,
         source_fps: float | None = None,
         font_attachments: list[AttachmentStream] | None = None,
+        subtitle_sidecar_path: Path | None = None,
     ) -> TranscodeSession:
         """Create and start a new transcoding session, respecting concurrency limits."""
         async with self._lock:
@@ -767,6 +775,7 @@ class SessionManager:
                 source_audio=source_audio,
                 source_fps=source_fps,
                 font_attachments=font_attachments,
+                subtitle_sidecar_path=subtitle_sidecar_path,
             )
             self.sessions[session_id] = session
             self._ensure_reaper_running()

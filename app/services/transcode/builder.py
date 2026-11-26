@@ -34,11 +34,19 @@ def _resolve_subtitle_source_path(input_path: Path, output_dir: Path) -> str:
 
 
 def _subtitle_burn_in_filter(
-    input_path: Path, output_dir: Path, subtitle_index: int, fonts_dir: Path | None
+    input_path: Path,
+    output_dir: Path,
+    subtitle_index: int | None,
+    fonts_dir: Path | None,
+    sidecar_path: Path | None = None,
 ) -> str:
     """Build the ``subtitles`` filter, with container fonts when available."""
-    sub_path = _resolve_subtitle_source_path(input_path, output_dir)
-    value = f"subtitles='{sub_path}':si={subtitle_index}"
+    if sidecar_path is not None:
+        sub_path = _resolve_subtitle_source_path(sidecar_path, output_dir)
+        value = f"subtitles='{sub_path}'"
+    else:
+        sub_path = _resolve_subtitle_source_path(input_path, output_dir)
+        value = f"subtitles='{sub_path}':si={subtitle_index}"
     if fonts_dir is not None:
         value += f":fontsdir='{fonts_dir}'"
     return value
@@ -74,6 +82,7 @@ def build_ffmpeg_hls_command(
     hls_flags: str | None = None,
     fps: float = 24.0,
     fonts_dir: Path | None = None,
+    subtitle_sidecar_path: Path | None = None,
 ) -> list[str]:
     """Produce argument list for ffmpeg executing HLS fMP4 delivery.
 
@@ -120,8 +129,21 @@ def build_ffmpeg_hls_command(
 
     cmd.extend(["-i", str(input_path)])
 
+    bitmap_burn_in = (
+        plan.video_action != "copy"
+        and plan.subtitle_action == "burn_in"
+        and plan.subtitle_is_bitmap
+        and plan.subtitle_stream_index is not None
+    )
+    text_burn_in = (
+        plan.video_action != "copy"
+        and plan.subtitle_action == "burn_in"
+        and not plan.subtitle_is_bitmap
+        and (plan.subtitle_stream_index is not None or subtitle_sidecar_path is not None)
+    )
+
     # Stream mapping
-    cmd.extend(["-map", "0:v:0"])
+    cmd.extend(["-map", "[vout]" if bitmap_burn_in else "0:v:0"])
     if plan.audio_stream_index is not None:
         cmd.extend(["-map", f"0:{plan.audio_stream_index}"])
     else:
@@ -131,29 +153,48 @@ def build_ffmpeg_hls_command(
     if plan.video_action == "copy":
         cmd.extend(["-c:v", "copy"])
     elif plan.hwaccel == "vaapi":
-        filters: list[str] = []
-        if plan.subtitle_action == "burn_in" and plan.subtitle_stream_index is not None:
-            subtitle_filter = _subtitle_burn_in_filter(
-                input_path, output_dir, plan.subtitle_stream_index, fonts_dir
+        if bitmap_burn_in:
+            post_filters = ["hwupload"]
+            if plan.target_width and plan.target_height:
+                post_filters.append(
+                    f"scale_vaapi=w={plan.target_width}:h={plan.target_height}:format=nv12"
+                )
+            else:
+                post_filters.append("scale_vaapi=format=nv12")
+            filter_complex = (
+                f"[0:v:0]hwdownload,format=nv12[v_sw];"
+                f"[v_sw][0:s:{plan.subtitle_stream_index}]overlay=eof_action=pass,"
+                f"{','.join(post_filters)}[vout]"
             )
-            filters.append(f"hwdownload,format=nv12,{subtitle_filter},hwupload")
-            if plan.target_width and plan.target_height:
-                filters.append(
-                    f"scale_vaapi=w={plan.target_width}:h={plan.target_height}:format=nv12"
-                )
-            else:
-                filters.append("scale_vaapi=format=nv12")
+            cmd.extend(["-filter_complex", filter_complex])
         else:
-            if plan.target_width and plan.target_height:
-                filters.append(
-                    f"scale_vaapi=w={plan.target_width}:h={plan.target_height}:format=nv12"
+            filters: list[str] = []
+            if text_burn_in:
+                subtitle_filter = _subtitle_burn_in_filter(
+                    input_path,
+                    output_dir,
+                    plan.subtitle_stream_index,
+                    fonts_dir,
+                    sidecar_path=subtitle_sidecar_path,
                 )
+                filters.append(f"hwdownload,format=nv12,{subtitle_filter},hwupload")
+                if plan.target_width and plan.target_height:
+                    filters.append(
+                        f"scale_vaapi=w={plan.target_width}:h={plan.target_height}:format=nv12"
+                    )
+                else:
+                    filters.append("scale_vaapi=format=nv12")
             else:
-                filters.append("scale_vaapi=format=nv12")
-            if plan.tonemap_hdr:
-                filters.append("tonemap_vaapi")
+                if plan.target_width and plan.target_height:
+                    filters.append(
+                        f"scale_vaapi=w={plan.target_width}:h={plan.target_height}:format=nv12"
+                    )
+                else:
+                    filters.append("scale_vaapi=format=nv12")
+                if plan.tonemap_hdr:
+                    filters.append("tonemap_vaapi")
 
-        cmd.extend(["-vf", ",".join(filters)])
+            cmd.extend(["-vf", ",".join(filters)])
         cmd.extend(["-c:v", plan.video_codec or "h264_vaapi"])
 
         # Forced keyframes for hardware encoders (INV-11)
@@ -188,10 +229,14 @@ def build_ffmpeg_hls_command(
     else:
         # Software fallback
         sw_filters: list[str] = []
-        if plan.subtitle_action == "burn_in" and plan.subtitle_stream_index is not None:
+        if text_burn_in:
             sw_filters.append(
                 _subtitle_burn_in_filter(
-                    input_path, output_dir, plan.subtitle_stream_index, fonts_dir
+                    input_path,
+                    output_dir,
+                    plan.subtitle_stream_index,
+                    fonts_dir,
+                    sidecar_path=subtitle_sidecar_path,
                 )
             )
         if plan.target_width and plan.target_height:
@@ -200,7 +245,14 @@ def build_ffmpeg_hls_command(
             sw_filters.append("tonemap=tonemap=mobius:param=0.01:desat=0")
         sw_filters.append("format=yuv420p")
 
-        cmd.extend(["-vf", ",".join(sw_filters)])
+        if bitmap_burn_in:
+            filter_complex = (
+                f"[0:v:0][0:s:{plan.subtitle_stream_index}]overlay=eof_action=pass,"
+                f"{','.join(sw_filters)}[vout]"
+            )
+            cmd.extend(["-filter_complex", filter_complex])
+        else:
+            cmd.extend(["-vf", ",".join(sw_filters)])
         software_encoder = plan.video_codec or "libx264"
         cmd.extend(["-c:v", software_encoder])
         if software_encoder == "libx264":

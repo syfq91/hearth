@@ -100,6 +100,7 @@ keys.
 | --- | --- | --- |
 | `HEARTH_RENDER_DEVICE` | `/dev/dri/renderD128` | VA-API render node |
 | `HEARTH_TRANSCODE_FORCE_SOFTWARE` | `false` | Ignore the GPU and always use `libx264` |
+| `HEARTH_TRANSCODE_COMPLEX_SUBTITLES` | `false` | Burn in complex subtitles (`.ass`, `.ssa`, PGS, VobSub) server-side instead of sending ASS/SSA to clients |
 | `HEARTH_TRANSCODE_MAX_HW_SESSIONS` | `4` | Concurrent hardware transcode sessions |
 | `HEARTH_TRANSCODE_MAX_SW_SESSIONS` | `4` | Concurrent software transcode sessions |
 | `HEARTH_TRANSCODE_IDLE_TIMEOUT_SECONDS` | `60` | Stop an idle transcode session after this delay |

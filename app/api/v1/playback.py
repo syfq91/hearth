@@ -52,6 +52,8 @@ from app.services.playback_state import chapters_from_streams, resolve_watch_sta
 from app.services.ratings import is_rating_permitted
 from app.services.scrobbling.listenbrainz import enqueue_scrobble
 from app.services.subtitles import (
+    decode_subtitle_id,
+    discover_subtitles,
     embedded_subtitle_cache_dir,
     ensure_embedded_subtitles,
     matches_language,
@@ -63,6 +65,7 @@ from app.services.transcode.capabilities import (
 )
 from app.services.transcode.decision import (
     BITMAP_SUBTITLE_CODECS,
+    COMPLEX_SUBTITLE_CODECS,
     PlaybackOptions,
     TranscodePlan,
     TranscodeReason,
@@ -127,6 +130,7 @@ class PlaybackInfoRequest(BaseModel):
     capabilities: ClientCapabilities | None = None
     audio_track_index: int | None = None
     subtitle_track_index: int | None = None
+    subtitle_id: str | None = Field(default=None, max_length=512)
     start_time_offset_seconds: float = 0.0
     target_max_bitrate: int | None = Field(default=None, gt=0)
     force_burn_in_subtitles: bool = False
@@ -247,6 +251,7 @@ class PlaybackInfoResponse(BaseModel):
     attachments: list[AttachmentResponse] = Field(default_factory=list)
     embedded_subtitle_url: str | None = None
     embedded_subtitle_format: str | None = None
+    burn_in_complex_subtitles: bool = False
     reasons: list[str] = Field(default_factory=list)
     expires_at: datetime | None = None
     plan: TranscodePlan | None = None
@@ -419,11 +424,15 @@ async def playback_info(
         max_bitrate=user.max_bitrate,
         allow_transcode=user.allow_transcode,
     )
+    sidecar_format, sidecar_path = _resolve_sidecar_subtitle(media_file, request_obj.subtitle_id)
     playback_options = PlaybackOptions(
         audio_track_index=request_obj.audio_track_index,
         subtitle_track_index=request_obj.subtitle_track_index,
+        subtitle_id=request_obj.subtitle_id if sidecar_path is not None else None,
+        subtitle_format=sidecar_format,
         target_max_bitrate=request_obj.target_max_bitrate,
         force_burn_in_subtitles=request_obj.force_burn_in_subtitles,
+        burn_in_complex_subtitles=settings.transcode_complex_subtitles,
         quality=request_obj.quality,
     )
     user_agent = request.headers.get("user-agent")
@@ -461,7 +470,12 @@ async def playback_info(
     ]
 
     embedded_url, embedded_format = _embedded_subtitle_delivery(plan, media_file, encoded_token)
-    embedded_subtitle_urls = _embedded_subtitle_urls(embedded_subtitles, media_file, encoded_token)
+    embedded_subtitle_urls = _embedded_subtitle_urls(
+        embedded_subtitles,
+        media_file,
+        encoded_token,
+        burn_in_complex_subtitles=settings.transcode_complex_subtitles,
+    )
     _prewarm_embedded_subtitles(media_file, probe_res, settings)
 
     if plan.mode == "direct_play":
@@ -490,6 +504,7 @@ async def playback_info(
             attachments=attachments,
             embedded_subtitle_url=embedded_url,
             embedded_subtitle_format=embedded_format,
+            burn_in_complex_subtitles=settings.transcode_complex_subtitles,
             reasons=plan.reasons,
             expires_at=expires_at,
             plan=plan,
@@ -508,6 +523,7 @@ async def playback_info(
         source_video=probe_res.primary_video,
         source_audio=source_audio,
         font_attachments=probe_res.font_attachments,
+        subtitle_sidecar_path=sidecar_path if plan.subtitle_sidecar_id else None,
     )
 
     url = f"/api/v1/hls/{transcode_session.id}/master.m3u8?token={encoded_token}"
@@ -536,6 +552,7 @@ async def playback_info(
         attachments=attachments,
         embedded_subtitle_url=embedded_url,
         embedded_subtitle_format=embedded_format,
+        burn_in_complex_subtitles=settings.transcode_complex_subtitles,
         reasons=plan.reasons,
         expires_at=expires_at,
         plan=plan,
@@ -762,18 +779,38 @@ def _embedded_subtitle_delivery(
     return url, fmt
 
 
+def _resolve_sidecar_subtitle(
+    media_file: MediaFile, subtitle_id: str | None
+) -> tuple[str | None, Path | None]:
+    """Validate an opaque sidecar subtitle id against live sidecar files."""
+    if not subtitle_id:
+        return None, None
+    ref = decode_subtitle_id(subtitle_id)
+    if ref is None or ref.file_id != media_file.id:
+        return None, None
+    for path in discover_subtitles(media_file.path):
+        if path.name == ref.name:
+            return path.suffix.casefold().lstrip("."), path
+    return None, None
+
+
 def _embedded_subtitle_urls(
-    embedded_subtitles: list[ProbeStream], media_file: MediaFile, encoded_token: str
+    embedded_subtitles: list[ProbeStream],
+    media_file: MediaFile,
+    encoded_token: str,
+    *,
+    burn_in_complex_subtitles: bool = False,
 ) -> list[EmbeddedSubtitleUrl]:
     """Describe the client-renderable text tracks of a file.
 
     The ordinal in the URL matches ``0:s:<n>`` (subtitle streams only), while
     ``index`` stays the container stream index the client uses in ``emb:<n>``.
     """
+    excluded = COMPLEX_SUBTITLE_CODECS if burn_in_complex_subtitles else BITMAP_SUBTITLE_CODECS
     urls: list[EmbeddedSubtitleUrl] = []
     for ordinal, stream in enumerate(embedded_subtitles):
         codec = (stream.codec_name or "").lower()
-        if codec in BITMAP_SUBTITLE_CODECS:
+        if codec in excluded:
             continue
         fmt = "ass" if codec in {"ass", "ssa"} else "vtt"
         urls.append(

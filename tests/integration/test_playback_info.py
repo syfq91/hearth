@@ -1026,3 +1026,104 @@ async def test_playback_info_rejects_unknown_quality(
         headers=_bearer(admin),
     )
     assert response.status_code == 422
+
+
+async def test_admin_transcode_complex_subtitles_burns_in_embedded_and_sidecar_ass(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    admin = await _setup(api_client)
+    _, item_id, file_ids, _ = await _seed(db_settings, db_sessionmaker, sidecar=False)
+
+    async with db_sessionmaker() as session:
+        media_file = await session.get(MediaFile, file_ids[0])
+        assert media_file is not None
+        media_path = Path(media_file.path)
+        sidecar_ass = media_path.with_suffix(".jpn.ass")
+        sidecar_ass.write_text("[Script Info]\nTitle: Sidecar\n", encoding="utf-8")
+        media_file.streams_json = {
+            "container": "mp4",
+            "duration_seconds": 100.0,
+            "streams": [
+                {
+                    "index": 0,
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "profile": "High",
+                    "width": 1920,
+                    "height": 1080,
+                    "pix_fmt": "yuv420p",
+                },
+                {"index": 1, "codec_type": "audio", "codec_name": "aac", "channels": 2},
+                {
+                    "index": 2,
+                    "codec_type": "subtitle",
+                    "codec_name": "ass",
+                    "tags": {"language": "jpn"},
+                },
+            ],
+            "chapters": [],
+        }
+        await session.commit()
+
+    # Enable transcode_complex_subtitles via Admin API
+    update_res = await api_client.put(
+        "/api/v1/admin/transcoding/settings",
+        json={"transcode_complex_subtitles": True},
+        headers=_bearer(admin),
+    )
+    assert update_res.status_code == 200, update_res.text
+    assert update_res.json()["transcode_complex_subtitles"] is True
+
+    # Embedded .ass should now burn in and be omitted from embedded_subtitle_urls
+    emb_res = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={
+            "capabilities": {
+                "preset": "chrome",
+                "subtitle_profiles": [{"format": "ass", "method": "external"}],
+            },
+            "subtitle_track_index": 2,
+        },
+        headers=_bearer(admin),
+    )
+    assert emb_res.status_code == 200, emb_res.text
+    emb_data = emb_res.json()
+    assert emb_data["burn_in_complex_subtitles"] is True
+    assert emb_data["embedded_subtitle_urls"] == []
+    assert emb_data["mode"] == "transcode_hls"
+    assert emb_data["plan"]["subtitle_action"] == "burn_in"
+    assert "SubtitleBurnInRequired" in emb_data["reasons"]
+    if emb_data.get("session_id"):
+        await api_client.post(f"/api/v1/hls/{emb_data['session_id']}/stop", headers=_bearer(admin))
+
+    # Sidecar .ass should also burn in when selected via subtitle_id
+    sidecar_id = emb_data["subtitles"][0]["id"]
+    sidecar_res = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={
+            "capabilities": {"preset": "chrome"},
+            "subtitle_id": sidecar_id,
+        },
+        headers=_bearer(admin),
+    )
+    assert sidecar_res.status_code == 200, sidecar_res.text
+    sidecar_data = sidecar_res.json()
+    assert sidecar_data["mode"] == "transcode_hls"
+    assert sidecar_data["plan"]["subtitle_action"] == "burn_in"
+    assert sidecar_data["plan"]["subtitle_sidecar_id"] == sidecar_id
+    if sidecar_data.get("session_id"):
+        await api_client.post(
+            f"/api/v1/hls/{sidecar_data['session_id']}/stop", headers=_bearer(admin)
+        )
+
+    # Invalid subtitle_id is safely ignored and keeps direct_play
+    bad_res = await api_client.post(
+        f"/api/v1/items/{item_id}/playback-info",
+        json={"capabilities": {"preset": "chrome"}, "subtitle_id": "invalid-id"},
+        headers=_bearer(admin),
+    )
+    assert bad_res.status_code == 200
+    assert bad_res.json()["mode"] == "direct_play"
+    assert bad_res.json()["plan"]["subtitle_action"] == "none"
