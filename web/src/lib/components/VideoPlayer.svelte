@@ -147,6 +147,7 @@
 	let resumeApplied = false;
 	let resumePositionMs = 0;
 	let lastReportedMs = 0;
+	let lastReportWallMs = 0;
 	let destroyed = false;
 	let focusTaken = false;
 
@@ -266,6 +267,7 @@
 		const position_ms = Math.max(0, Math.floor(cur * 1000));
 		const duration_ms = dur > 0 ? Math.floor(dur * 1000) : undefined;
 		lastReportedMs = Math.max(lastReportedMs, position_ms);
+		lastReportWallMs = Date.now();
 		try {
 			await api.post(`/items/${itemId}/progress`, {
 				body: { position_ms, duration_ms, state }
@@ -697,6 +699,7 @@
 		}
 		resumeApplied = false;
 		lastReportedMs = 0;
+		lastReportWallMs = 0;
 		streamStats = null;
 
 		if (hlsEngine) {
@@ -763,13 +766,7 @@
 			videoEl.src = source;
 		}
 
-		const subReady = applySubtitleChoice();
-		if (subtitleChoice) {
-			await Promise.race([
-				subReady,
-				new Promise<void>((resolve) => setTimeout(resolve, 2000))
-			]);
-		}
+		void applySubtitleChoice();
 		if (destroyed) return;
 
 		loading = false;
@@ -970,17 +967,22 @@
 
 	// Page unload & visibility reporting
 	$effect(() => {
-		const onHide = () => {
+		const onPageHide = () => {
 			void report('paused');
 			if (sessionId) {
 				sendStopBeacon(sessionId, sessionMediaToken);
 			}
 		};
-		window.addEventListener('pagehide', onHide);
-		document.addEventListener('visibilitychange', onHide);
+		const onVisibilityChange = () => {
+			if (document.visibilityState === 'hidden') {
+				void report('paused');
+			}
+		};
+		window.addEventListener('pagehide', onPageHide);
+		document.addEventListener('visibilitychange', onVisibilityChange);
 		return () => {
-			window.removeEventListener('pagehide', onHide);
-			document.removeEventListener('visibilitychange', onHide);
+			window.removeEventListener('pagehide', onPageHide);
+			document.removeEventListener('visibilitychange', onVisibilityChange);
 		};
 	});
 
@@ -1046,10 +1048,10 @@
 			ontimeupdate={() => {
 				if (!videoEl) return;
 				currentTime = displayTime(videoEl.currentTime);
-				nowMs = Date.now();
-				const positionMs = Math.floor(currentTime * 1000);
-				if (positionMs - lastReportedMs >= REPORT_INTERVAL_MS) {
-					lastReportedMs = positionMs;
+				const now = Date.now();
+				nowMs = now;
+				if (now - lastReportWallMs >= REPORT_INTERVAL_MS) {
+					lastReportWallMs = now;
 					void report('playing');
 				}
 				// Reconcile the cue when paused or when requestVideoFrameCallback is
