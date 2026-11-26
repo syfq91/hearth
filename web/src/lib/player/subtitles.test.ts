@@ -163,6 +163,38 @@ test('changing the offset remounts a native track', async () => {
 	}
 });
 
+test('changing the offset shifts loaded native cues in-memory without remounting', async () => {
+	const cues = [
+		{ startTime: 10, endTime: 12 },
+		{ startTime: 0.5, endTime: 2.0 }
+	];
+	const env = mockTrackEnvironment();
+	const origCreate = (globalThis as any).document.createElement;
+	(globalThis as any).document.createElement = () => {
+		const el = origCreate();
+		el.track = { mode: 'disabled', cues };
+		return el;
+	};
+	try {
+		const manager = new SubtitleManager({ video: env.video });
+		await manager.loadTrack({ id: 'ext:a', url: '/sub.vtt', format: 'vtt' });
+		manager.setOffset(1.5);
+		assert.strictEqual(env.appended.length, 1);
+		assert.strictEqual(cues[0].startTime, 11.5);
+		assert.strictEqual(cues[0].endTime, 13.5);
+		assert.strictEqual(cues[1].startTime, 2.0);
+		assert.strictEqual(cues[1].endTime, 3.5);
+
+		manager.setOffset(-1.0);
+		assert.strictEqual(cues[0].startTime, 9.0);
+		assert.strictEqual(cues[0].endTime, 11.0);
+		assert.strictEqual(cues[1].startTime, 0);
+		assert.strictEqual(cues[1].endTime, 1.0);
+	} finally {
+		env.restore();
+	}
+});
+
 test('clearing during a pending load mounts nothing', async () => {
 	const env = mockTrackEnvironment();
 	try {

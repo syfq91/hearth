@@ -56,6 +56,10 @@ export class SubtitleManager {
 	private offsetRemountTimer: ReturnType<typeof setTimeout> | null = null;
 	/** Non-zero container start PTS (seconds) subtracted from raw video.currentTime. */
 	private mediaStartSeconds = 0;
+	/** Shift (seconds) baked into the currently mounted native track's cues. */
+	private appliedNativeShiftSeconds = 0;
+	private originalCueTimes = new WeakMap<TextTrackCue, { start: number; end: number }>();
+	private fetchAbortController: AbortController | null = null;
 
 	public activeTrackId = $state<string | null>(null);
 	public isAss = $state(false);
@@ -80,7 +84,9 @@ export class SubtitleManager {
 			this.renderManualFrame(true);
 			return;
 		}
-		this.scheduleOffsetRemount();
+		if (!this.applyNativeCueShift()) {
+			this.scheduleOffsetRemount();
+		}
 	}
 
 	/**
@@ -105,9 +111,36 @@ export class SubtitleManager {
 			this.renderManualFrame(true);
 			return;
 		}
-		// Native text tracks resolve cues against their own timestamps, so the
-		// only way to shift them is to re-fetch the document with a new shift.
-		this.scheduleOffsetRemount();
+		// Shift loaded TextTrack cues in-memory for instant feedback without
+		// tearing down <track> or re-fetching from the server; fall back to
+		// remounting only if cues are not yet accessible.
+		if (!this.applyNativeCueShift()) {
+			this.scheduleOffsetRemount();
+		}
+	}
+
+	private applyNativeCueShift(): boolean {
+		const cues = this.activeTrackElement?.track?.cues;
+		if (!cues || cues.length === 0) return false;
+		const targetShift = this.mediaStartSeconds + this.userOffsetSeconds;
+		const initialShift = this.appliedNativeShiftSeconds;
+		for (let i = 0; i < cues.length; i++) {
+			const cue = cues[i];
+			let orig = this.originalCueTimes.get(cue);
+			if (!orig) {
+				orig = {
+					start: cue.startTime - initialShift,
+					end: cue.endTime - initialShift
+				};
+				this.originalCueTimes.set(cue, orig);
+			}
+			const nextStart = Math.max(0, orig.start + targetShift);
+			const nextEnd = Math.max(nextStart, orig.end + targetShift);
+			cue.startTime = nextStart;
+			cue.endTime = nextEnd;
+		}
+		this.appliedNativeShiftSeconds = targetShift;
+		return true;
 	}
 
 	private scheduleOffsetRemount(): void {
@@ -164,13 +197,17 @@ export class SubtitleManager {
 			try {
 				const delimiter = track.url.includes('?') ? '&' : '?';
 				const fetchUrl = `${track.url}${delimiter}raw=true`;
+				const abortController = new AbortController();
+				this.fetchAbortController = abortController;
 				// Fetch the document while JASSUB initializes its worker,
 				// WebAssembly and font catalog. Waiting for the document first
 				// serialized two network/CPU phases and delayed the first cue.
-				const trackPromise = fetch(fetchUrl).then(async (response) => {
-					if (!response.ok) throw new Error(`HTTP ${response.status} fetching subtitles`);
-					return response.text();
-				});
+				const trackPromise = fetch(fetchUrl, { signal: abortController.signal }).then(
+					async (response) => {
+						if (!response.ok) throw new Error(`HTTP ${response.status} fetching subtitles`);
+						return response.text();
+					}
+				);
 				void trackPromise.catch(() => {
 					/* the awaited path reports a useful error */
 				});
@@ -227,8 +264,14 @@ export class SubtitleManager {
 			el.kind = 'subtitles';
 			el.label = track.label || track.language || 'Subtitles';
 			el.srclang = track.language || '';
+			this.appliedNativeShiftSeconds = this.mediaStartSeconds + this.userOffsetSeconds;
 			el.src = this.nativeTrackUrl(track);
 			el.default = true;
+			el.addEventListener?.('load', () => {
+				if (this.activeTrackElement === el) {
+					this.applyNativeCueShift();
+				}
+			});
 
 			this.video.appendChild(el);
 			el.track.mode = 'showing';
@@ -261,6 +304,11 @@ export class SubtitleManager {
 			clearTimeout(this.offsetRemountTimer);
 			this.offsetRemountTimer = null;
 		}
+		if (this.fetchAbortController) {
+			this.fetchAbortController.abort();
+			this.fetchAbortController = null;
+		}
+		this.appliedNativeShiftSeconds = 0;
 
 		if (this.activeTrackElement) {
 			try {
