@@ -97,7 +97,6 @@
 							playHref={`/music/album/${album.id}`}
 							favorite={album.watch_state?.favorite ?? false}
 							showWatched={false}
-							playPlacement="corner"
 							onPlay={() => void playAlbum(album.id, album.poster?.url)}
 							onAddToQueue={() => void queueAlbum(album.id, album.poster?.url)}
 							onPlayNext={() => void queueAlbum(album.id, album.poster?.url, 'next')}

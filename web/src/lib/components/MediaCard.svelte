@@ -231,8 +231,15 @@
 				favorite={item.watch_state?.favorite ?? false}
 				{watched}
 				showWatched={!isMusic}
-				showPlay={!isMusic}
-				onPlay={isMusic ? () => void playAlbum(item.id, poster?.url) : undefined}
+				showPlay={!isMusic || Boolean(albumQueueId)}
+				onPlay={isMusic && albumQueueId
+					? () =>
+							void playAlbum(
+								albumQueueId,
+								poster?.url,
+								(item as S['ItemSummary']).type === 'track' ? item.id : undefined
+							)
+					: undefined}
 				onAddToQueue={albumQueueId
 					? () => void queueAlbum(albumQueueId, poster?.url)
 					: undefined}
