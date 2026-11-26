@@ -229,7 +229,8 @@ async def get_subtitle(
 
     # Re-run discovery on every request: deleting or replacing a sidecar must
     # invalidate previously handed-out ids.
-    sidecar = next((path for path in discover_subtitles(video) if path.name == ref.name), None)
+    discovered = await asyncio.to_thread(discover_subtitles, video)
+    sidecar = next((path for path in discovered if path.name == ref.name), None)
     if sidecar is None or not path_is_within_roots(sidecar, roots):
         raise NotFoundError(_NOT_FOUND, code="subtitle_not_found")
 

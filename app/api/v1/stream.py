@@ -271,10 +271,10 @@ async def stream_media_file(
     if not path_is_within_roots(path, roots):
         raise NotFoundError("Media file not found", code="file_not_found")
     try:
-        stat = path.stat()
+        stat = await asyncio.to_thread(path.stat)
     except OSError:
         raise NotFoundError("Media file not found", code="file_not_found") from None
-    if not path.is_file():
+    if not await asyncio.to_thread(path.is_file):
         raise NotFoundError("Media file not found", code="file_not_found")
 
     size = stat.st_size
@@ -385,7 +385,7 @@ async def _stream_transcoded_audio(
         )
     )
     path = Path(media_file.path)
-    if not path_is_within_roots(path, roots) or not path.is_file():
+    if not path_is_within_roots(path, roots) or not await asyncio.to_thread(path.is_file):
         raise NotFoundError("Media file not found", code="file_not_found")
 
     if format_name == "opus":

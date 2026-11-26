@@ -14,6 +14,7 @@ import json
 import logging
 import re
 import shutil
+import weakref
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -332,7 +333,9 @@ def text_subtitle_tracks(streams: Sequence["ProbeStream"]) -> list[EmbeddedSubti
     return tracks
 
 
-_EMBEDDED_CACHE_LOCKS: dict[Path, LoopAwareLock] = {}
+_EMBEDDED_CACHE_LOCKS: weakref.WeakValueDictionary[Path, LoopAwareLock] = (
+    weakref.WeakValueDictionary()
+)
 
 
 def embedded_subtitle_cache_dir(
@@ -393,6 +396,30 @@ def build_embedded_subtitle_command(
     return cmd
 
 
+def _all_cached(cache_dir: Path, wanted: list[tuple[int, str]]) -> bool:
+    return all(
+        embedded_subtitle_cache_path(cache_dir, ordinal, fmt).is_file() for ordinal, fmt in wanted
+    )
+
+
+def _missing_cached(cache_dir: Path, wanted: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    return [
+        (ordinal, fmt)
+        for ordinal, fmt in wanted
+        if not embedded_subtitle_cache_path(cache_dir, ordinal, fmt).is_file()
+    ]
+
+
+def _promote_cached_outputs(
+    temp_dir: Path, cache_dir: Path, missing: list[tuple[int, str]]
+) -> None:
+    for ordinal, fmt in missing:
+        source = temp_dir / f"{ordinal}.{fmt}"
+        if source.is_file() and source.stat().st_size > 0:
+            with contextlib.suppress(OSError):
+                source.replace(embedded_subtitle_cache_path(cache_dir, ordinal, fmt))
+
+
 async def ensure_embedded_subtitles(
     video_path: Path | str,
     tracks: Sequence[EmbeddedSubtitleTrack],
@@ -410,25 +437,22 @@ async def ensure_embedded_subtitles(
     wanted = sorted({(track.ordinal, fmt) for track in tracks for fmt in track.formats})
     if not wanted:
         return
-    if all(
-        embedded_subtitle_cache_path(cache_dir, ordinal, fmt).is_file() for ordinal, fmt in wanted
-    ):
+    if await asyncio.to_thread(_all_cached, cache_dir, wanted):
         return
 
-    lock = _EMBEDDED_CACHE_LOCKS.setdefault(cache_dir, LoopAwareLock())
+    lock = _EMBEDDED_CACHE_LOCKS.get(cache_dir)
+    if lock is None:
+        lock = LoopAwareLock()
+        _EMBEDDED_CACHE_LOCKS[cache_dir] = lock
     async with lock:
-        missing = [
-            (ordinal, fmt)
-            for ordinal, fmt in wanted
-            if not embedded_subtitle_cache_path(cache_dir, ordinal, fmt).is_file()
-        ]
+        missing = await asyncio.to_thread(_missing_cached, cache_dir, wanted)
         if not missing:
             return
 
         temp_dir = cache_dir / f".tmp-{new_id()}"
         try:
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            temp_dir.mkdir()
+            await asyncio.to_thread(cache_dir.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(temp_dir.mkdir)
         except OSError as exc:
             logger.warning("subtitle cache is not writable (%s): %s", cache_dir, exc)
             return
@@ -442,11 +466,7 @@ async def ensure_embedded_subtitles(
             await _run_subtitle_ffmpeg(cmd, timeout=timeout)
             # Move whatever FFmpeg produced: a single unsupported track must not
             # discard the outputs that did succeed.
-            for ordinal, fmt in missing:
-                source = temp_dir / f"{ordinal}.{fmt}"
-                if source.is_file() and source.stat().st_size > 0:
-                    with contextlib.suppress(OSError):
-                        source.replace(embedded_subtitle_cache_path(cache_dir, ordinal, fmt))
+            await asyncio.to_thread(_promote_cached_outputs, temp_dir, cache_dir, missing)
         finally:
             await asyncio.to_thread(shutil.rmtree, temp_dir, ignore_errors=True)
 

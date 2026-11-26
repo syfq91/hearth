@@ -34,8 +34,10 @@ from app.core.tokens import verify_media_token
 from app.db.session import SessionDep
 from app.services.subtitles import (
     embedded_subtitle_cache_dir,
+    ensure_embedded_subtitles,
     extract_embedded_subtitle,
     read_embedded_subtitle,
+    text_subtitle_tracks,
 )
 from app.services.transcode.codecs import compute_master_codecs
 from app.services.transcode.session import SessionManager, TranscodeSession, get_session_manager
@@ -271,7 +273,6 @@ async def get_media_playlist(
                 retry_after=1,
             )
 
-    raw_content = m3u8_path.read_text(encoding="utf-8")
     token_suffix = f"?token={quote(token, safe='')}" if token else ""
     # init.mp4 is rewritten in place whenever a seek restarts ffmpeg. Bump its
     # URL with the generation so browsers refetch the new init box instead of
@@ -309,19 +310,21 @@ async def get_media_playlist(
             lines.append(f"seg_{i:03d}.m4s{token_suffix}")
         lines.append("#EXT-X-ENDLIST")
         content = "\n".join(lines) + "\n"
-    elif token_suffix:
-        # Append token query param to segment and init references
-        lines = []
-        for line in raw_content.splitlines():
-            if line.startswith("#EXT-X-MAP:URI="):
-                # e.g. #EXT-X-MAP:URI="init.mp4"
-                line = line.replace('URI="init.mp4"', f'URI="init.mp4{init_suffix}"')
-            elif line.endswith(".m4s"):
-                line = f"{line}{token_suffix}"
-            lines.append(line)
-        content = "\n".join(lines) + "\n"
     else:
-        content = raw_content
+        raw_content = await asyncio.to_thread(m3u8_path.read_text, encoding="utf-8")
+        if token_suffix:
+            # Append token query param to segment and init references
+            lines = []
+            for line in raw_content.splitlines():
+                if line.startswith("#EXT-X-MAP:URI="):
+                    # e.g. #EXT-X-MAP:URI="init.mp4"
+                    line = line.replace('URI="init.mp4"', f'URI="init.mp4{init_suffix}"')
+                elif line.endswith(".m4s"):
+                    line = f"{line}{token_suffix}"
+                lines.append(line)
+            content = "\n".join(lines) + "\n"
+        else:
+            content = raw_content
 
     return Response(
         content=content,
@@ -393,8 +396,10 @@ async def get_subtitle_vtt(
     session.touch()
 
     vtt_path = _resolve_session_path(session.output_dir, "subtitles.vtt")
-    if vtt_path.exists():
-        vtt_content = vtt_path.read_text(encoding="utf-8", errors="replace")
+    if await asyncio.to_thread(vtt_path.exists):
+        vtt_content = await asyncio.to_thread(
+            vtt_path.read_text, encoding="utf-8", errors="replace"
+        )
     elif session.plan.subtitle_stream_index is not None:
         cached_vtt: str | None = None
         try:
@@ -408,6 +413,27 @@ async def get_subtitle_vtt(
             cached_vtt = await read_embedded_subtitle(
                 cache_dir, session.plan.subtitle_stream_index, "vtt"
             )
+            if cached_vtt is None:
+                from app.services.media.probe import ProbeStream
+
+                await ensure_embedded_subtitles(
+                    session.input_path,
+                    text_subtitle_tracks(
+                        [
+                            ProbeStream(
+                                index=session.plan.subtitle_stream_index,
+                                codec_type="subtitle",
+                                codec_name="srt",
+                            )
+                        ]
+                    ),
+                    cache_dir,
+                    ffmpeg_binary=settings.ffmpeg_binary,
+                )
+                # ensure_embedded_subtitles extracts ordinal 0 if given a 1-element list;
+                # only use it when stream index is 0, else extract directly.
+                if session.plan.subtitle_stream_index == 0:
+                    cached_vtt = await read_embedded_subtitle(cache_dir, 0, "vtt")
         except OSError:
             cached_vtt = None
         if cached_vtt is not None:
