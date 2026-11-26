@@ -314,6 +314,10 @@ def create_jellyfin_router() -> APIRouter:
     async def branding_css() -> Response:
         return Response(content="", media_type="text/css")
 
+    @router.get("/QuickConnect/Enabled")
+    async def quick_connect_enabled() -> bool:
+        return False
+
     # ------------------------------------------------------------------
     # Users & Authentication
     # ------------------------------------------------------------------
@@ -382,19 +386,40 @@ def create_jellyfin_router() -> APIRouter:
 
         server_id = server_id_for_keys(keys)
         user_dto = user_to_dto(user, server_id)
+        now_str = user_dto["LastLoginDate"]
         return {
             "User": user_dto,
             "SessionInfo": {
+                "PlayState": {
+                    "CanSeek": False,
+                    "IsPaused": False,
+                    "IsMuted": False,
+                    "RepeatMode": "RepeatNone",
+                    "PlaybackOrder": "Default",
+                },
+                "AdditionalUsers": [],
+                "Capabilities": {
+                    "PlayableMediaTypes": ["Audio", "Video"],
+                    "SupportedCommands": [],
+                    "SupportsMediaControl": False,
+                    "SupportsPersistentIdentifier": True,
+                },
+                "RemoteEndPoint": ip,
+                "PlayableMediaTypes": ["Audio", "Video"],
                 "Id": auth_header.device_id,
                 "UserId": user.id,
                 "UserName": user.username,
                 "Client": auth_header.client,
+                "LastActivityDate": now_str,
+                "LastPlaybackCheckIn": now_str,
                 "DeviceName": auth_header.device,
                 "DeviceId": auth_header.device_id,
                 "ApplicationVersion": auth_header.version,
                 "IsActive": True,
+                "SupportsMediaControl": False,
                 "SupportsRemoteControl": False,
-                "PlayableMediaTypes": ["Audio", "Video"],
+                "HasCustomDeviceName": False,
+                "ServerId": server_id,
                 "SupportedCommands": [],
             },
             "AccessToken": token,
