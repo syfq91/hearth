@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Folder, SlidersHorizontal } from '@lucide/svelte';
+	import { ChevronDown, Folder, SlidersHorizontal } from '@lucide/svelte';
 	import { api } from '../../../lib/api/client';
 	import MediaCard from '../../../lib/components/MediaCard.svelte';
 	import Pagination from '../../../lib/components/Pagination.svelte';
@@ -35,9 +35,28 @@
 	let debouncedGenre = $state('');
 	let debouncedYear = $state('');
 	let showFilters = $state(false);
+	let musicMenuOpen = $state(false);
 	let hasActiveFilters = $derived(
 		Boolean(genre || year || watched || sort !== 'title' || order !== 'asc')
 	);
+
+	$effect(() => {
+		if (!musicMenuOpen) return;
+		function onOutsideClick(event: MouseEvent): void {
+			const target = event.target;
+			if (target instanceof Element && target.closest('[data-music-menu]')) return;
+			musicMenuOpen = false;
+		}
+		function onKeydown(event: KeyboardEvent): void {
+			if (event.key === 'Escape') musicMenuOpen = false;
+		}
+		window.addEventListener('click', onOutsideClick);
+		window.addEventListener('keydown', onKeydown);
+		return () => {
+			window.removeEventListener('click', onOutsideClick);
+			window.removeEventListener('keydown', onKeydown);
+		};
+	});
 
 	// Text/number filters wait for a short pause before hitting the API.
 	$effect(() => {
@@ -162,7 +181,34 @@
 </nav>
 
 <div class="title-row">
-	<h1>{data.library.name}</h1>
+	{#if isMusic}
+		<div class="music-menu-wrap" data-music-menu>
+			<h1>
+				<button
+					type="button"
+					class="music-title-btn"
+					aria-haspopup="menu"
+					aria-expanded={musicMenuOpen}
+					onclick={() => (musicMenuOpen = !musicMenuOpen)}
+				>
+					<span>{data.library.name}</span>
+					<ChevronDown size={20} class={musicMenuOpen ? 'chevron rotated' : 'chevron'} />
+				</button>
+			</h1>
+			{#if musicMenuOpen}
+				<div class="music-menu" role="menu" aria-label="Music views">
+					<a href="/music" role="menuitem" onclick={() => (musicMenuOpen = false)}>Albums</a>
+					<a href="/music/artists" role="menuitem" onclick={() => (musicMenuOpen = false)}>
+						Artists
+					</a>
+					<a href="/music/songs" role="menuitem" onclick={() => (musicMenuOpen = false)}>Songs</a>
+					<a href="/music/genres" role="menuitem" onclick={() => (musicMenuOpen = false)}>Genres</a>
+				</div>
+			{/if}
+		</div>
+	{:else}
+		<h1>{data.library.name}</h1>
+	{/if}
 	<button
 		type="button"
 		class="filter-toggle"
@@ -331,6 +377,69 @@
 
 	.title-row h1 {
 		margin: 0;
+	}
+
+	.music-menu-wrap {
+		position: relative;
+	}
+
+	.music-title-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: var(--radius);
+		color: inherit;
+		font: inherit;
+		padding: 0.15rem 0.5rem 0.15rem 0.25rem;
+		margin-left: -0.25rem;
+		cursor: pointer;
+		transition: background 0.15s ease, border-color 0.15s ease;
+	}
+
+	.music-title-btn:hover,
+	.music-title-btn[aria-expanded='true'] {
+		background: var(--surface);
+		border-color: var(--border);
+	}
+
+	.music-title-btn :global(.chevron) {
+		color: var(--muted);
+		transition: transform 0.15s ease;
+	}
+
+	.music-title-btn :global(.chevron.rotated) {
+		transform: rotate(180deg);
+	}
+
+	.music-menu {
+		position: absolute;
+		top: calc(100% + 0.35rem);
+		left: 0;
+		z-index: 20;
+		min-width: 10rem;
+		display: flex;
+		flex-direction: column;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		padding: 0.3rem;
+		box-shadow: 0 10px 28px rgb(0 0 0 / 45%);
+	}
+
+	.music-menu a {
+		color: var(--text);
+		padding: 0.45rem 0.7rem;
+		border-radius: 6px;
+		font-size: 0.92rem;
+		font-weight: 500;
+		text-decoration: none;
+	}
+
+	.music-menu a:hover {
+		background: var(--surface-2);
+		color: var(--accent);
 	}
 
 	.filter-toggle {
