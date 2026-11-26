@@ -66,6 +66,10 @@ async def test_startup_sweep(tmp_path: Path) -> None:
     (transcode_dir / "session_1").mkdir()
     (transcode_dir / "session_2").mkdir()
     (transcode_dir / "session_1" / "seg_000.m4s").write_bytes(b"data")
+    (transcode_dir / "subtitles").mkdir()
+    (transcode_dir / "subtitles" / "cached.vtt").write_text("WEBVTT\n")
+    (transcode_dir / "fonts").mkdir()
+    (transcode_dir / "fonts" / "font.ttf").write_bytes(b"font")
 
     settings = Settings(transcode_dir=transcode_dir)
     manager = SessionManager(settings)
@@ -74,6 +78,8 @@ async def test_startup_sweep(tmp_path: Path) -> None:
     assert cleaned == 2
     assert not (transcode_dir / "session_1").exists()
     assert not (transcode_dir / "session_2").exists()
+    assert (transcode_dir / "subtitles" / "cached.vtt").exists()
+    assert (transcode_dir / "fonts" / "font.ttf").exists()
 
 
 @pytest.mark.asyncio

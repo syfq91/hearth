@@ -562,7 +562,8 @@ class TranscodeSession:
                 return False
 
             latest_seg = -1
-            for p in self.output_dir.glob("seg_*.m4s"):
+            seg_files = await asyncio.to_thread(lambda: list(self.output_dir.glob("seg_*.m4s")))
+            for p in seg_files:
                 with contextlib.suppress(ValueError, IndexError):
                     idx = int(p.stem.split("_")[1])
                     if idx > latest_seg:
@@ -686,7 +687,7 @@ class TranscodeSession:
         await self._stop_process()
         if self.output_dir.exists():
             try:
-                shutil.rmtree(self.output_dir, ignore_errors=True)
+                await asyncio.to_thread(shutil.rmtree, self.output_dir, ignore_errors=True)
             except Exception:
                 logger.warning("failed removing output directory %s", self.output_dir)
 
@@ -768,9 +769,15 @@ class SessionManager:
                 font_attachments=font_attachments,
             )
             self.sessions[session_id] = session
-            await session.start_process()
             self._ensure_reaper_running()
-            return session
+
+        try:
+            await session.start_process()
+        except Exception:
+            async with self._lock:
+                self.sessions.pop(session_id, None)
+            raise
+        return session
 
     def get_session(self, session_id: str) -> TranscodeSession | None:
         """Return active session if found."""
@@ -783,10 +790,10 @@ class SessionManager:
         """Stop and remove a session."""
         async with self._lock:
             session = self.sessions.pop(session_id, None)
-            if session:
-                await session.stop()
-                return True
-            return False
+        if session:
+            await session.stop()
+            return True
+        return False
 
     async def stop_user_sessions(self, user_id: str) -> int:
         """Stop all sessions belonging to a specific user (e.g. on revocation)."""
@@ -794,24 +801,29 @@ class SessionManager:
             to_stop = [s for s in self.sessions.values() if s.user_id == user_id]
             for s in to_stop:
                 self.sessions.pop(s.id, None)
-                await s.stop()
-            return len(to_stop)
+        for s in to_stop:
+            await s.stop()
+        return len(to_stop)
 
     async def stop_all(self) -> None:
         """Stop all sessions cleanly (e.g. at shutdown)."""
         async with self._lock:
             sessions = list(self.sessions.values())
             self.sessions.clear()
-            for s in sessions:
-                await s.stop()
-            if self._reaper_task and not self._reaper_task.done():
-                self._reaper_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await self._reaper_task
+            reaper = self._reaper_task
+            self._reaper_task = None
+        for s in sessions:
+            await s.stop()
+        if reaper and not reaper.done():
+            reaper.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await reaper
 
     def list_sessions(self) -> list[TranscodeSession]:
         """Return list of current sessions."""
         return [s for s in self.sessions.values() if not s.is_stopped]
+
+    _PERSISTENT_CACHE_DIRS = frozenset({"subtitles", "fonts"})
 
     def startup_sweep(self) -> int:
         """Clean any stale session directories in transcode_dir."""
@@ -820,7 +832,7 @@ class SessionManager:
             return 0
         cleaned = 0
         for entry in transcode_dir.iterdir():
-            if entry.is_dir():
+            if entry.is_dir() and entry.name not in self._PERSISTENT_CACHE_DIRS:
                 try:
                     shutil.rmtree(entry, ignore_errors=True)
                     cleaned += 1
@@ -841,7 +853,7 @@ class SessionManager:
         - Resumes if paused before terminating (handled in session.stop()).
         """
         current_time = now or utcnow()
-        reaped_ids: list[str] = []
+        to_stop: list[TranscodeSession] = []
         async with self._lock:
             stale_ids = [
                 s.id
@@ -852,9 +864,12 @@ class SessionManager:
             for sid in stale_ids:
                 session = self.sessions.pop(sid, None)
                 if session:
-                    logger.info("reaping idle transcode session %s", sid)
-                    await session.stop()
-                    reaped_ids.append(sid)
+                    to_stop.append(session)
+        reaped_ids: list[str] = []
+        for session in to_stop:
+            logger.info("reaping idle transcode session %s", session.id)
+            await session.stop()
+            reaped_ids.append(session.id)
         return reaped_ids
 
     async def throttle_sessions(self) -> None:
