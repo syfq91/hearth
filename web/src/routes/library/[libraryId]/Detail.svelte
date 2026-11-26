@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Folder } from '@lucide/svelte';
+	import { Folder, SlidersHorizontal } from '@lucide/svelte';
 	import { api } from '../../../lib/api/client';
 	import MediaCard from '../../../lib/components/MediaCard.svelte';
 	import Pagination from '../../../lib/components/Pagination.svelte';
@@ -34,6 +34,10 @@
 	let watched = $state<'' | 'true' | 'false'>('');
 	let debouncedGenre = $state('');
 	let debouncedYear = $state('');
+	let showFilters = $state(false);
+	let hasActiveFilters = $derived(
+		Boolean(genre || year || watched || sort !== 'title' || order !== 'asc')
+	);
 
 	// Text/number filters wait for a short pause before hitting the API.
 	$effect(() => {
@@ -157,7 +161,20 @@
 	<span>{data.library.name}</span>
 </nav>
 
-<h1>{data.library.name}</h1>
+<div class="title-row">
+	<h1>{data.library.name}</h1>
+	<button
+		type="button"
+		class="filter-toggle"
+		class:active={showFilters || hasActiveFilters}
+		aria-expanded={showFilters}
+		aria-controls="library-filters"
+		onclick={() => (showFilters = !showFilters)}
+	>
+		<SlidersHorizontal size={16} />
+		<span>Filter</span>
+	</button>
+</div>
 
 {#if isBook && folder}
 	<nav class="folder-crumbs" aria-label="Folder breadcrumb">
@@ -175,7 +192,8 @@
 	</nav>
 {/if}
 
-<form class="filters" aria-label="Filter items">
+{#if showFilters}
+	<form id="library-filters" class="filters" aria-label="Filter items">
 	<label>
 		<span>Sort by</span>
 		<select bind:value={sort}>
@@ -221,7 +239,8 @@
 			<option value="true">Watched</option>
 		</select>
 	</label>
-</form>
+	</form>
+{/if}
 
 {#if error}
 	<p class="banner" role="alert">{error}</p>
@@ -300,6 +319,43 @@
 		color: var(--muted);
 		font-size: 0.9rem;
 		margin-bottom: 0.5rem;
+	}
+
+	.title-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 1rem;
+	}
+
+	.title-row h1 {
+		margin: 0;
+	}
+
+	.filter-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: var(--text);
+		font-size: 0.9rem;
+		font-weight: 500;
+		padding: 0.45rem 0.85rem;
+		cursor: pointer;
+		transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+	}
+
+	.filter-toggle:hover {
+		background: var(--surface-2);
+		border-color: var(--accent);
+	}
+
+	.filter-toggle.active {
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.filters {
