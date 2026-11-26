@@ -161,6 +161,7 @@ class ItemSummary(BaseModel):
     volume: str | None = None
     # The album a track belongs to; track cards link and queue through it.
     album_id: str | None = None
+    album_artist: str | None = None
 
 
 class ItemDetail(ItemSummary):
@@ -814,6 +815,7 @@ def item_summary(
     episode_number: int | None = None
     volume: str | None = None
     album_id: str | None = None
+    album_artist: str | None = None
     poster: ImageResponse | None = _primary_image(item, "poster")
     if item.type == "episode":
         ep = getattr(item, "episode", None)
@@ -832,16 +834,36 @@ def item_summary(
         if book is not None and book.series_index is not None:
             idx = book.series_index
             volume = f"Vol. {int(idx)}" if idx == int(idx) else f"Vol. {idx}"
+    elif item.type in ("album", "music"):
+        alb = getattr(item, "album", None) if _is_loaded(item, "album") else None
+        if alb is not None:
+            album_artist = alb.album_artist
+            if not album_artist and _is_loaded(alb, "artist") and alb.artist is not None:
+                artist_item = alb.artist.item if _is_loaded(alb.artist, "item") else None
+                if artist_item is not None:
+                    album_artist = artist_item.title
     elif item.type == "track":
         # Track items have no artwork of their own; the album cover is the art
         # shown on cards, and the album id is what links/queues the track.
         tr = getattr(item, "track", None) if _is_loaded(item, "track") else None
         if tr is not None:
             album_id = tr.album_id
-            if poster is None and _is_loaded(tr, "album") and tr.album is not None:
-                album_item = tr.album.item if _is_loaded(tr.album, "item") else None
-                if album_item is not None:
-                    poster = _primary_image(album_item, "poster")
+            if _is_loaded(tr, "album") and tr.album is not None:
+                album_artist = tr.album.album_artist
+                if (
+                    not album_artist
+                    and _is_loaded(tr.album, "artist")
+                    and tr.album.artist is not None
+                ):
+                    artist_item = (
+                        tr.album.artist.item if _is_loaded(tr.album.artist, "item") else None
+                    )
+                    if artist_item is not None:
+                        album_artist = artist_item.title
+                if poster is None:
+                    album_item = tr.album.item if _is_loaded(tr.album, "item") else None
+                    if album_item is not None:
+                        poster = _primary_image(album_item, "poster")
 
     return ItemSummary(
         id=item.id,
@@ -868,6 +890,7 @@ def item_summary(
         episode_count=episode_count,
         volume=volume,
         album_id=album_id,
+        album_artist=album_artist,
     )
 
 

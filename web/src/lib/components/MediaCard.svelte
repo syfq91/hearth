@@ -152,6 +152,11 @@
 			return null;
 		}
 
+		if (card.type === 'album' || card.type === 'music' || card.type === 'track') {
+			const artist = 'album_artist' in card ? card.album_artist : null;
+			return [card.year, artist].filter(Boolean).join(' · ') || null;
+		}
+
 		// Remove "movie", "episode", and "series" label on the card
 		const typeLabel =
 			card.type === 'movie' || card.type === 'episode' || card.type === 'series'

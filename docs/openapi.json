@@ -2801,6 +2801,17 @@
             "title": "Added At",
             "type": "string"
           },
+          "album_artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album Artist"
+          },
           "album_id": {
             "anyOf": [
               {
@@ -3150,6 +3161,17 @@
             "format": "date-time",
             "title": "Added At",
             "type": "string"
+          },
+          "album_artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album Artist"
           },
           "album_id": {
             "anyOf": [
@@ -6063,6 +6085,17 @@
             "format": "date-time",
             "title": "Added At",
             "type": "string"
+          },
+          "album_artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album Artist"
           },
           "album_id": {
             "anyOf": [
