@@ -20,6 +20,12 @@
         "default": "Hearth",
         "description": "Display name advertised to Jellyfin clients"
       },
+      "advertised_version": {
+        "title": "Advertised Server Version",
+        "type": "string",
+        "default": "12.4.0",
+        "description": "Jellyfin server version string advertised in /System/Info/Public"
+      },
       "token_ttl_days": {
         "title": "Session Token Lifetime (Days)",
         "type": "integer",

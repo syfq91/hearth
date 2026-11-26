@@ -266,7 +266,7 @@ def create_jellyfin_router() -> APIRouter:
         return {
             "LocalAddress": str(request.base_url).rstrip("/"),
             "ServerName": cfg.server_name,
-            "Version": "10.10.3",
+            "Version": cfg.advertised_version,
             "ProductName": "Jellyfin Server",
             "OperatingSystem": "Linux",
             "Id": server_id_for_keys(keys),
@@ -283,7 +283,7 @@ def create_jellyfin_router() -> APIRouter:
         return {
             "LocalAddress": str(request.base_url).rstrip("/"),
             "ServerName": cfg.server_name,
-            "Version": "10.10.3",
+            "Version": cfg.advertised_version,
             "ProductName": "Jellyfin Server",
             "OperatingSystem": "Linux",
             "Id": server_id_for_keys(keys),

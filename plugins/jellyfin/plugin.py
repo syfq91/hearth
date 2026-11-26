@@ -21,6 +21,12 @@ class JellyfinConfig(BaseModel):
         max_length=100,
         description="Display name advertised to Jellyfin clients",
     )
+    advertised_version: str = Field(
+        default="12.4.0",
+        min_length=1,
+        max_length=32,
+        description="Jellyfin server version string advertised in /System/Info/Public",
+    )
     token_ttl_days: int = Field(
         default=30,
         ge=1,
