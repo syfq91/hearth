@@ -93,7 +93,7 @@ export class HlsEngine {
 			maxBufferLength,
 			maxMaxBufferLength: maxBufferLength,
 			lowLatencyMode: false,
-			backBufferLength: Infinity,
+			backBufferLength: isHighBitrate ? 10 : 60,
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			loader: RetryLoader as any
 		});

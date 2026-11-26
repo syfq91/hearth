@@ -142,3 +142,35 @@ test('createHlsRetryLoaderClass intercepts 503 in hls.js loader and retries befo
 	assert.strictEqual(successData, 'mock_segment_data');
 	assert.strictEqual(errorCalled, false, 'onError should not have fired on retryable 503');
 });
+
+test('createHlsRetryLoaderClass cancels pending retry timer on abort', async () => {
+	let loadCalls = 0;
+
+	class MockBaseLoader {
+		load(context: any, _config: any, callbacks: any) {
+			loadCalls += 1;
+			callbacks.onError(
+				{ code: 503 },
+				context,
+				{
+					status: 503,
+					getResponseHeader: () => '0.5'
+				},
+				{}
+			);
+		}
+		destroy() {}
+		abort() {}
+	}
+
+	const RetryLoader = createHlsRetryLoaderClass(MockBaseLoader, {
+		maxAttempts: 3,
+		maxDelayMs: 50
+	});
+	const loaderInstance = new RetryLoader();
+	loaderInstance.load({ url: '/seg_003.m4s' }, {}, { onSuccess: () => {}, onError: () => {} });
+	loaderInstance.abort();
+
+	await new Promise((resolve) => setTimeout(resolve, 100));
+	assert.strictEqual(loadCalls, 1, 'abort() must cancel pending 503 retry timer');
+});

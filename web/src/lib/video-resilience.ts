@@ -72,8 +72,20 @@ export function createHlsRetryLoaderClass(BaseLoader: any, options: RetryOptions
 	const maxDelayMs = options.maxDelayMs ?? 10_000;
 
 	return class HearthHlsRetryLoader extends BaseLoader {
+		private retryTimer: ReturnType<typeof setTimeout> | null = null;
+		private aborted = false;
+
+		private clearRetryTimer(): void {
+			if (this.retryTimer !== null) {
+				clearTimeout(this.retryTimer);
+				this.retryTimer = null;
+			}
+		}
+
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		load(context: any, config: any, callbacks: any) {
+			this.aborted = false;
+			this.clearRetryTimer();
 			const originalOnError = callbacks.onError;
 			let attempts = 0;
 
@@ -82,6 +94,7 @@ export function createHlsRetryLoaderClass(BaseLoader: any, options: RetryOptions
 				...callbacks,
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				onError: (error: any, ctx: any, networkDetails: any, stats: any) => {
+					if (this.aborted) return;
 					const status =
 						error?.code ??
 						networkDetails?.status ??
@@ -99,7 +112,10 @@ export function createHlsRetryLoaderClass(BaseLoader: any, options: RetryOptions
 						}
 
 						const delayMs = Math.min(maxDelayMs, retrySeconds * 1000);
-						setTimeout(() => {
+						this.clearRetryTimer();
+						this.retryTimer = setTimeout(() => {
+							this.retryTimer = null;
+							if (this.aborted) return;
 							super.load(context, config, wrappedCallbacks);
 						}, delayMs);
 						return;
@@ -112,6 +128,18 @@ export function createHlsRetryLoaderClass(BaseLoader: any, options: RetryOptions
 			};
 
 			super.load(context, config, wrappedCallbacks);
+		}
+
+		abort(): void {
+			this.aborted = true;
+			this.clearRetryTimer();
+			super.abort?.();
+		}
+
+		destroy(): void {
+			this.aborted = true;
+			this.clearRetryTimer();
+			super.destroy?.();
 		}
 	};
 }
