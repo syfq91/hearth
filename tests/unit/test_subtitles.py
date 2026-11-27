@@ -223,6 +223,7 @@ def test_embedded_subtitle_command_extracts_all_tracks_in_one_pass(tmp_path: Pat
     )
     assert cmd.count("-map") == 3
     assert cmd.count("-i") == 1
+    assert "-copyts" in cmd
     assert str(tmp_path / "0.ass") in cmd
     assert str(tmp_path / "0.vtt") in cmd
     assert str(tmp_path / "2.vtt") in cmd

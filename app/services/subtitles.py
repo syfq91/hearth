@@ -270,6 +270,7 @@ async def extract_embedded_subtitle(
         "-y",
         "-i",
         str(video_path),
+        "-copyts",
         "-map",
         f"0:s:{subtitle_stream_index}",
         "-f",
@@ -375,6 +376,7 @@ def build_embedded_subtitle_command(
         "-y",
         "-i",
         str(video_path),
+        "-copyts",
     ]
     for ordinal, fmt in missing:
         output = output_dir / f"{ordinal}.{fmt}"
