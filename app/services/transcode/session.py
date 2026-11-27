@@ -535,6 +535,8 @@ class TranscodeSession:
         ffmpeg in place.
         """
         seg = self.output_dir / f"seg_{segment_index:03d}.m4s"
+        if self.is_paused and not (seg.exists() and seg.stat().st_size > 0):
+            self.resume()
         start = asyncio.get_running_loop().time()
         while asyncio.get_running_loop().time() - start < timeout:
             if seg.exists() and seg.stat().st_size > 0:
@@ -594,6 +596,8 @@ class TranscodeSession:
                 self.start_offset = float(seek_offset)
                 await self._stop_process()
                 await self.start_process()
+            elif self.is_paused:
+                self.resume()
 
             start = asyncio.get_running_loop().time()
             while asyncio.get_running_loop().time() - start < timeout:
