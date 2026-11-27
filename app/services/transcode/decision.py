@@ -117,6 +117,7 @@ class TranscodePlan(BaseModel):
     target_height: int | None = None
     target_bitrate: int | None = None
     hwaccel: HwAccelMode
+    hwaccel_decode: bool = True
     tonemap_hdr: bool = False
     reasons: list[str] = Field(default_factory=list)
 
@@ -386,6 +387,7 @@ def evaluate_playback_plan(
     # preferences. The mode and reason set above are unchanged: negotiation only
     # decides *what* to encode when a copy path is unavailable.
     hwaccel_mode: HwAccelMode = "none"
+    hwaccel_decode = False
     video_codec_target = "copy"
     audio_codec_target = "copy"
 
@@ -405,14 +407,18 @@ def evaluate_playback_plan(
             and not server_caps.force_software
             and server_caps.can_vaapi_encode("h264")
         )
+        hwaccel_decode = can_use_video_hardware
         if (
             primary_video
             and primary_video.codec_name
             and not server_caps.can_vaapi_decode(primary_video.codec_name)
         ):
+            # Keep VAAPI encoding enabled via software decode + hwupload_vaapi
+            # instead of falling back to 100% CPU libx264.
+            hwaccel_decode = False
+        if tonemap_needed and (not server_caps.tonemap_vaapi or not hwaccel_decode):
             can_use_video_hardware = False
-        if tonemap_needed and not server_caps.tonemap_vaapi:
-            can_use_video_hardware = False
+            hwaccel_decode = False
 
         selection = select_transcode_targets(
             resolved_client,
@@ -499,6 +505,7 @@ def evaluate_playback_plan(
         target_height=target_h,
         target_bitrate=target_bitrate,
         hwaccel=hwaccel_mode,
+        hwaccel_decode=hwaccel_decode and hwaccel_mode == "vaapi",
         tonemap_hdr=tonemap_needed,
         reasons=reasons,
     )

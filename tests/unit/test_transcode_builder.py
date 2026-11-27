@@ -758,3 +758,30 @@ def test_builder_sidecar_ass_burn_in_uses_symlink(tmp_path: Path) -> None:
     assert "subtitles=" in vf
     assert ":si=" not in vf
     assert (out_dir / "sub_source.ass").is_symlink()
+
+
+def test_builder_vaapi_hybrid_sw_decode_hw_encode(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="transcode_hls",
+        video_action="transcode",
+        video_codec="h264_vaapi",
+        audio_action="copy",
+        audio_codec="copy",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="vaapi",
+        hwaccel_decode=False,
+        target_width=1280,
+        target_height=720,
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/av1_movie.mkv"),
+        tmp_path,
+        render_device="/dev/dri/renderD128",
+    )
+    assert "-hwaccel" not in cmd
+    assert "-vaapi_device" in cmd
+    vf = cmd[cmd.index("-vf") + 1]
+    assert "format=nv12,hwupload,scale_vaapi=w=1280:h=720:format=nv12" in vf
+    assert "-c:v" in cmd and cmd[cmd.index("-c:v") + 1] == "h264_vaapi"

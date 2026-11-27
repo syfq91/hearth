@@ -117,16 +117,20 @@ def build_ffmpeg_hls_command(
 
     # Hardware acceleration input flags
     if plan.hwaccel == "vaapi":
-        cmd.extend(
-            [
-                "-hwaccel",
-                "vaapi",
-                "-hwaccel_output_format",
-                "vaapi",
-                "-vaapi_device",
-                render_device,
-            ]
-        )
+        if plan.hwaccel_decode:
+            cmd.extend(
+                [
+                    "-hwaccel",
+                    "vaapi",
+                    "-hwaccel_output_format",
+                    "vaapi",
+                    "-vaapi_device",
+                    render_device,
+                ]
+            )
+        else:
+            # Hybrid software decode + VAAPI encode: initialize device for hwupload.
+            cmd.extend(["-vaapi_device", render_device])
 
     # Input seek before -i for fast container-level seeking
     if start_offset > 0.0:
@@ -168,8 +172,13 @@ def build_ffmpeg_hls_command(
                 )
             else:
                 post_filters.append("scale_vaapi=format=nv12")
+            main_in = (
+                "[0:v:0]hwdownload,format=nv12[v_sw];"
+                if plan.hwaccel_decode
+                else "[0:v:0]format=nv12[v_sw];"
+            )
             filter_complex = (
-                f"[0:v:0]hwdownload,format=nv12[v_sw];"
+                f"{main_in}"
                 f"[v_sw][0:s:{plan.subtitle_stream_index}]overlay=eof_action=pass,"
                 f"{','.join(post_filters)}[vout]"
             )
@@ -184,7 +193,10 @@ def build_ffmpeg_hls_command(
                     fonts_dir,
                     sidecar_path=subtitle_sidecar_path,
                 )
-                filters.append(f"hwdownload,format=nv12,{subtitle_filter},hwupload")
+                if plan.hwaccel_decode:
+                    filters.append(f"hwdownload,format=nv12,{subtitle_filter},hwupload")
+                else:
+                    filters.append(f"format=nv12,{subtitle_filter},hwupload")
                 if plan.target_width and plan.target_height:
                     filters.append(
                         f"scale_vaapi=w={plan.target_width}:h={plan.target_height}:format=nv12"
@@ -192,6 +204,8 @@ def build_ffmpeg_hls_command(
                 else:
                     filters.append("scale_vaapi=format=nv12")
             else:
+                if not plan.hwaccel_decode:
+                    filters.extend(["format=nv12", "hwupload"])
                 if plan.tonemap_hdr:
                     filters.append(
                         "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709:extra_hw_frames=32"

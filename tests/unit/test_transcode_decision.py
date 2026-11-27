@@ -790,7 +790,7 @@ TEST_MATRIX = [
         "none",
     ),
     (
-        "43_unsupported_hardware_decode_uses_software",
+        "43_unsupported_hardware_decode_uses_hybrid_vaapi",
         _make_probe("mkv", "hevc", "Main", 1920, 1080, 4_000_000, False, "aac", 2),
         BUILTIN_PRESETS["chrome"],
         UserLimits(),
@@ -800,7 +800,7 @@ TEST_MATRIX = [
         "transcode",
         "copy",
         "none",
-        "none",
+        "vaapi",
     ),
     (
         "44_no_render_device_uses_software",
