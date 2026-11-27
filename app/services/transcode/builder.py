@@ -235,6 +235,8 @@ def build_ffmpeg_hls_command(
 
             cmd.extend(["-vf", ",".join(filters)])
         cmd.extend(["-c:v", plan.video_codec or "h264_vaapi", "-rc_mode", "VBR"])
+        if plan.vaapi_low_power:
+            cmd.extend(["-low_power", "1"])
 
         # Forced keyframes for hardware encoders (INV-11)
         gop = max(1, int(round(fps * segment_duration)))

@@ -118,6 +118,7 @@ class TranscodePlan(BaseModel):
     target_bitrate: int | None = None
     hwaccel: HwAccelMode
     hwaccel_decode: bool = True
+    vaapi_low_power: bool = False
     tonemap_hdr: bool = False
     reasons: list[str] = Field(default_factory=list)
 
@@ -506,6 +507,11 @@ def evaluate_playback_plan(
         target_bitrate=target_bitrate,
         hwaccel=hwaccel_mode,
         hwaccel_decode=hwaccel_decode and hwaccel_mode == "vaapi",
+        vaapi_low_power=(
+            hwaccel_mode == "vaapi"
+            and video_codec_target.endswith("_vaapi")
+            and server_caps.can_vaapi_low_power(video_codec_target.removesuffix("_vaapi"))
+        ),
         tonemap_hdr=tonemap_needed,
         reasons=reasons,
     )

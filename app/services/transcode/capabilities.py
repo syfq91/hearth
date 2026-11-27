@@ -89,6 +89,7 @@ class CodecCapability(BaseModel):
     codec: str
     decode: bool = False
     encode: bool = False
+    encode_low_power: bool = False
     test_encode_ok: bool = False
     test_encode_error: str | None = None
 
@@ -115,6 +116,13 @@ class ServerTranscodeCapabilities(BaseModel):
             return False
         cap = self.codecs.get(codec.lower())
         return bool(cap and cap.encode and cap.test_encode_ok)
+
+    def can_vaapi_low_power(self, codec: str) -> bool:
+        """Return True if Intel Low-Power VAAPI encoding is supported for codec."""
+        if self.force_software or not self.available:
+            return False
+        cap = self.codecs.get(codec.lower())
+        return bool(cap and cap.encode_low_power and cap.test_encode_ok)
 
     def can_vaapi_decode(self, codec: str) -> bool:
         """Return True if hardware decoding is supported for codec."""
@@ -181,6 +189,23 @@ def parse_vainfo_output(stdout: str) -> dict[str, tuple[bool, bool]]:
         encode = bool(entrypoints & {"VAEntrypointEncSlice", "VAEntrypointEncSliceLP"})
         result[codec] = (decode, encode)
     return result
+
+
+def parse_vainfo_low_power(stdout: str) -> dict[str, bool]:
+    """Return {codec: has_low_power_encode} from vainfo output."""
+    low_power: dict[str, bool] = {}
+    for line in stdout.splitlines():
+        match = _PROFILE_LINE_RE.match(line)
+        if not match:
+            continue
+        profile, entrypoint = match.group(1), match.group(2)
+        if entrypoint != "VAEntrypointEncSliceLP":
+            continue
+        for key, codec_name in _CODEC_MAP.items():
+            if key in profile:
+                low_power[codec_name] = True
+                break
+    return low_power
 
 
 async def _check_tonemap_vaapi(ffmpeg_binary: str, timeout: float = 3.0) -> bool:
@@ -323,6 +348,7 @@ async def _probe_once(
     driver_version = driver_match.group(1).strip() if driver_match else None
 
     parsed_codecs = parse_vainfo_output(stdout)
+    low_power_codecs = parse_vainfo_low_power(stdout)
     codecs: dict[str, CodecCapability] = {}
     incomplete = False
 
@@ -355,6 +381,7 @@ async def _probe_once(
             codec=codec_name,
             decode=decode,
             encode=encode,
+            encode_low_power=low_power_codecs.get(codec_name, False),
             test_encode_ok=bool(result and result.ok),
             test_encode_error=result.error if result else None,
         )
