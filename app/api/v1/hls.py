@@ -329,7 +329,7 @@ async def get_media_playlist(
                     media_seq = int(line.split(":", 1)[1].strip())
                 break
 
-        lines: list[str] = []
+        lines = []
         inserted_prefix = False
         for line in raw_lines:
             if line.startswith("#EXT-X-MEDIA-SEQUENCE:") and media_seq > 0:
