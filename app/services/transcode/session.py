@@ -421,7 +421,7 @@ class TranscodeSession:
             "-skip_frame",
             "nokey",
             "-show_entries",
-            "packet=pts_time",
+            "packet=pts_time,flags",
             "-of",
             "csv=p=0",
             "-read_intervals",
@@ -439,11 +439,11 @@ class TranscodeSession:
                 return None
             candidates: list[float] = []
             for raw_line in stdout.decode("utf-8", errors="ignore").splitlines():
-                val_str = raw_line.strip().rstrip(",")
-                if not val_str:
+                parts = [p.strip() for p in raw_line.split(",")]
+                if len(parts) < 2 or "K" not in parts[1]:
                     continue
                 with contextlib.suppress(ValueError):
-                    pts = float(val_str)
+                    pts = float(parts[0])
                     if pts <= target_offset + 0.05:
                         candidates.append(pts)
             return max(candidates) if candidates else None
