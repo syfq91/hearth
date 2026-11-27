@@ -222,6 +222,7 @@ ENDPOINT_POLICIES: dict[tuple[str, str], EndpointPolicy] = {
     ("GET", "/api/v1/hls/{session_id}/subtitles.vtt"): EndpointPolicy("viewer"),
     ("GET", "/api/v1/hls/{session_id}/{segment_file}"): EndpointPolicy("viewer"),
     ("POST", "/api/v1/hls/{session_id}/seek"): EndpointPolicy("viewer"),
+    ("GET", "/api/v1/hls/{session_id}/stats"): EndpointPolicy("viewer"),
     ("POST", "/api/v1/hls/{session_id}/stop"): EndpointPolicy("viewer"),
     # Plugins (Admin only)
     ("GET", "/api/v1/plugins"): EndpointPolicy("admin"),
