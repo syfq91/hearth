@@ -33,11 +33,11 @@ from app.core.errors import (
 from app.core.tokens import verify_media_token
 from app.db.session import SessionDep
 from app.services.subtitles import (
+    EmbeddedSubtitleTrack,
     embedded_subtitle_cache_dir,
     ensure_embedded_subtitles,
     extract_embedded_subtitle,
     read_embedded_subtitle,
-    text_subtitle_tracks,
 )
 from app.services.transcode.codecs import compute_master_codecs
 from app.services.transcode.session import SessionManager, TranscodeSession, get_session_manager
@@ -414,26 +414,20 @@ async def get_subtitle_vtt(
                 cache_dir, session.plan.subtitle_stream_index, "vtt"
             )
             if cached_vtt is None:
-                from app.services.media.probe import ProbeStream
-
                 await ensure_embedded_subtitles(
                     session.input_path,
-                    text_subtitle_tracks(
-                        [
-                            ProbeStream(
-                                index=session.plan.subtitle_stream_index,
-                                codec_type="subtitle",
-                                codec_name="srt",
-                            )
-                        ]
-                    ),
+                    [
+                        EmbeddedSubtitleTrack(
+                            ordinal=session.plan.subtitle_stream_index,
+                            formats=("vtt",),
+                        )
+                    ],
                     cache_dir,
                     ffmpeg_binary=settings.ffmpeg_binary,
                 )
-                # ensure_embedded_subtitles extracts ordinal 0 if given a 1-element list;
-                # only use it when stream index is 0, else extract directly.
-                if session.plan.subtitle_stream_index == 0:
-                    cached_vtt = await read_embedded_subtitle(cache_dir, 0, "vtt")
+                cached_vtt = await read_embedded_subtitle(
+                    cache_dir, session.plan.subtitle_stream_index, "vtt"
+                )
         except OSError:
             cached_vtt = None
         if cached_vtt is not None:
