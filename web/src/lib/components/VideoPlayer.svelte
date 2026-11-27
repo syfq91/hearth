@@ -19,6 +19,7 @@
 		MonitorPlay,
 		Settings2
 	} from '@lucide/svelte';
+	import { api } from '../api/client';
 	import { PlaybackController, type QualityLevel } from '../player/playback-controller.svelte';
 	import SubtitleSyncControl from './SubtitleSyncControl.svelte';
 	import ActivityBridge from '../chrome/ActivityBridge.svelte';
@@ -53,6 +54,9 @@
 
 	let showSubSync = $state(false);
 	let showModeBadge = $state(false);
+	let transcodeStats = $state<{ fps: number | null; speed: string | null; is_paused: boolean } | null>(
+		null
+	);
 	let openMenu = $state<'audio' | 'subtitle' | 'speed' | 'quality' | 'settings' | null>(null);
 	let chromeVisible = $state(true);
 	let isFullscreen = $state(false);
@@ -434,6 +438,34 @@
 	});
 
 	$effect(() => () => controller.destroy());
+
+	$effect(() => {
+		const sid = controller.sessionId;
+		const active = showModeBadge && info?.mode === 'transcode_hls' && Boolean(sid);
+		if (!active || !sid) {
+			transcodeStats = null;
+			return;
+		}
+		let cancelled = false;
+		const fetchStats = async () => {
+			try {
+				const res = await api.get<{
+					fps: number | null;
+					speed: string | null;
+					is_paused: boolean;
+				}>(`/hls/${sid}/stats`);
+				if (!cancelled) transcodeStats = res;
+			} catch {
+				/* ignore transient stats errors */
+			}
+		};
+		void fetchStats();
+		const timer = setInterval(() => void fetchStats(), 2000);
+		return () => {
+			cancelled = true;
+			clearInterval(timer);
+		};
+	});
 </script>
 
 <ActivityBridge onactivity={chrome.reveal} />
@@ -945,6 +977,19 @@
 					· net {formatBitrate(streamThroughput)}
 				{/if}
 			</span>
+			{#if info.mode === 'transcode_hls'}
+				<span class="mode-line">
+					{#if transcodeStats?.is_paused}
+						Transcode: paused
+					{:else if transcodeStats?.fps != null}
+						Transcode: {transcodeStats.fps.toFixed(1)} fps{#if transcodeStats.speed}
+							({transcodeStats.speed})
+						{/if}
+					{:else}
+						Transcode: starting…
+					{/if}
+				</span>
+			{/if}
 		</div>
 	{/if}
 </div>

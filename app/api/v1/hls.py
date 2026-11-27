@@ -102,6 +102,14 @@ class SessionSeekResponse(BaseModel):
     position_seconds: float
 
 
+class SessionStatsResponse(BaseModel):
+    """Live transcode progress stats for the active HLS session."""
+
+    fps: float | None = None
+    speed: str | None = None
+    is_paused: bool = False
+
+
 async def get_stop_session_viewer(
     request: Request,
     credentials: BearerCredentials,
@@ -618,6 +626,22 @@ async def get_media_segment(
     except Exception:
         session.decrement_request()
         raise
+
+
+@router.get("/{session_id}/stats", response_model=SessionStatsResponse)
+async def get_hls_session_stats(
+    session_id: str,
+    viewer: ViewerDep,
+    settings: SettingsDep,
+) -> SessionStatsResponse:
+    """Return live FFmpeg transcoding fps/speed for an active HLS session."""
+    manager = get_session_manager(settings)
+    session = _get_validated_session(session_id, manager, viewer)
+    return SessionStatsResponse(
+        fps=session.fps,
+        speed=session.speed,
+        is_paused=session.is_paused,
+    )
 
 
 @router.post("/{session_id}/seek")

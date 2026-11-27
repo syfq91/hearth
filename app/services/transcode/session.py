@@ -493,25 +493,52 @@ class TranscodeSession:
             return
 
         try:
+            stderr_stream = self.process.stderr
+            has_read = callable(getattr(stderr_stream, "read", None))
+            buf = b""
             while True:
-                line_bytes = await self.process.stderr.readline()
-                if not line_bytes:
-                    break
-                line = line_bytes.decode(errors="replace").strip()
-                if not line:
-                    continue
-                self.stderr_buffer.append(line)
+                if has_read:
+                    chunk = await stderr_stream.read(1024)
+                    if not chunk:
+                        break
+                    buf += chunk
+                    parts = re.split(rb"[\r\n]+", buf)
+                    buf = parts.pop()
+                else:
+                    line_bytes = await stderr_stream.readline()
+                    if not line_bytes:
+                        break
+                    parts = re.split(rb"[\r\n]+", line_bytes)
 
-                # Parse progress stats
-                f_match = _FRAME_RE.search(line)
-                if f_match:
-                    self.frame = int(f_match.group(1))
-                fps_match = _FPS_RE.search(line)
-                if fps_match:
-                    self.fps = float(fps_match.group(1))
-                speed_match = _SPEED_RE.search(line)
-                if speed_match:
-                    self.speed = f"{speed_match.group(1)}x"
+                for part in parts:
+                    line = part.decode(errors="replace").strip()
+                    if not line:
+                        continue
+                    self.stderr_buffer.append(line)
+
+                    f_match = _FRAME_RE.search(line)
+                    if f_match:
+                        self.frame = int(f_match.group(1))
+                    fps_match = _FPS_RE.search(line)
+                    if fps_match:
+                        self.fps = float(fps_match.group(1))
+                    speed_match = _SPEED_RE.search(line)
+                    if speed_match:
+                        self.speed = f"{speed_match.group(1)}x"
+
+            if buf:
+                line = buf.decode(errors="replace").strip()
+                if line:
+                    self.stderr_buffer.append(line)
+                    f_match = _FRAME_RE.search(line)
+                    if f_match:
+                        self.frame = int(f_match.group(1))
+                    fps_match = _FPS_RE.search(line)
+                    if fps_match:
+                        self.fps = float(fps_match.group(1))
+                    speed_match = _SPEED_RE.search(line)
+                    if speed_match:
+                        self.speed = f"{speed_match.group(1)}x"
 
             await self.process.wait()
             returncode = self.process.returncode

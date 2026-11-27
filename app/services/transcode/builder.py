@@ -112,6 +112,7 @@ def build_ffmpeg_hls_command(
         "-hide_banner",
         "-loglevel",
         "warning",
+        "-stats",
         "-y",
     ]
 
