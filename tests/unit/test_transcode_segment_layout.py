@@ -128,8 +128,9 @@ async def test_midfile_start_uses_uniform_keyframe_grid(tmp_path: Path) -> None:
     # 12s falls in segment 3, which begins at 2 + 2 * 4 = 10s.
     assert cmd[cmd.index("-ss") + 1] == "10"
     assert cmd[cmd.index("-start_number") + 1] == "3"
-    assert cmd[cmd.index("-output_ts_offset") + 1] == "10"
-    assert cmd[cmd.index("-force_key_frames") + 1] == "expr:gte(t,n_forced*4)"
+    assert "-copyts" in cmd
+    assert "-output_ts_offset" not in cmd
+    assert cmd[cmd.index("-force_key_frames") + 1] == "expr:gte(t,10+n_forced*4)"
     assert cmd[cmd.index("-hls_time") + 1] == "4"
 
     await session.stop()

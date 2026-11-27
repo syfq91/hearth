@@ -342,11 +342,14 @@ def test_builder_start_offset_seek_before_input(tmp_path: Path) -> None:
     i_idx = cmd.index("-i")
     assert ss_idx < i_idx
     assert cmd[ss_idx + 1] == "125.5"
-    assert "-output_ts_offset" in cmd
-    assert cmd[cmd.index("-output_ts_offset") + 1] == "125.5"
+    assert "-copyts" in cmd
+    assert "-avoid_negative_ts" in cmd
+    assert cmd[cmd.index("-avoid_negative_ts") + 1] == "disabled"
+    assert "-output_ts_offset" not in cmd
+    assert cmd[cmd.index("-force_key_frames") + 1] == "expr:gte(t,125.5+n_forced*4)"
 
 
-def test_builder_start_offset_zero_omits_output_ts_offset(tmp_path: Path) -> None:
+def test_builder_start_offset_zero_uses_copyts_and_omits_ss(tmp_path: Path) -> None:
     plan = TranscodePlan(
         mode="transcode_hls",
         video_action="transcode",
@@ -364,7 +367,31 @@ def test_builder_start_offset_zero_omits_output_ts_offset(tmp_path: Path) -> Non
         start_offset=0.0,
     )
     assert "-ss" not in cmd
+    assert "-copyts" in cmd
     assert "-output_ts_offset" not in cmd
+
+
+def test_builder_remux_midfile_with_audio_transcode_adds_noaccurate_seek(tmp_path: Path) -> None:
+    plan = TranscodePlan(
+        mode="remux_hls",
+        video_action="copy",
+        video_codec="copy",
+        audio_action="transcode",
+        audio_codec="aac",
+        audio_channels=2,
+        subtitle_action="none",
+        hwaccel="none",
+    )
+    cmd = build_ffmpeg_hls_command(
+        plan,
+        Path("/media/movie.mkv"),
+        tmp_path,
+        start_offset=40.0,
+    )
+    ss_idx = cmd.index("-ss")
+    i_idx = cmd.index("-i")
+    assert ss_idx < cmd.index("-noaccurate_seek") < i_idx
+    assert "-copyts" in cmd
 
 
 @pytest.mark.parametrize("start_offset", [0.0, 100.0])

@@ -95,11 +95,16 @@ def build_ffmpeg_hls_command(
     text burn-in instead of whatever fontconfig happens to provide.
     """
     short_first = plan.video_action == "transcode" and 0 < first_segment_duration < segment_duration
-    keyframe_expr = (
-        f"expr:gte(t,{first_segment_duration:g}+n_forced*{segment_duration})"
-        if short_first
-        else f"expr:gte(t,n_forced*{segment_duration})"
-    )
+    if short_first:
+        keyframe_expr = (
+            f"expr:gte(t,{start_offset + first_segment_duration:g}+n_forced*{segment_duration})"
+            if start_offset > 0.0
+            else f"expr:gte(t,{first_segment_duration:g}+n_forced*{segment_duration})"
+        )
+    elif start_offset > 0.0:
+        keyframe_expr = f"expr:gte(t,{start_offset:g}+n_forced*{segment_duration})"
+    else:
+        keyframe_expr = f"expr:gte(t,n_forced*{segment_duration})"
     hls_time = f"{first_segment_duration:g}" if short_first else str(segment_duration)
 
     cmd: list[str] = [
@@ -126,6 +131,8 @@ def build_ffmpeg_hls_command(
     # Input seek before -i for fast container-level seeking
     if start_offset > 0.0:
         cmd.extend(["-ss", f"{start_offset:g}"])
+        if plan.video_action == "copy" and plan.audio_action != "copy":
+            cmd.append("-noaccurate_seek")
 
     cmd.extend(["-i", str(input_path)])
 
@@ -280,23 +287,17 @@ def build_ffmpeg_hls_command(
             ]
         )
 
-    # Timestamp continuity for mid-file start (T03 / §3.5 / §6.3):
-    # Input seek (-ss before -i) resets output container timestamps to 0.0.
-    # -output_ts_offset carries the global timeline offset. The playlist's
-    # start_number/gaps and the client's fragment offset remain the source of
-    # truth; the muxer must not also encode the offset as an empty edit list
-    # (see -hls_segment_options below).
-    if start_offset > 0.0:
-        cmd.extend(["-output_ts_offset", f"{start_offset:g}"])
+    # Timestamp continuity (matching Jellyfin DynamicHlsController):
+    # Preserve container/keyframe timestamps with -copyts so input -ss does not
+    # reset PTS to 0 before burn-in subtitle filters run, and remuxed copy
+    # streams keep their true keyframe PTS rather than re-stamping an earlier
+    # keyframe to start_offset.
+    cmd.extend(["-copyts", "-avoid_negative_ts", "disabled"])
 
     # Output HLS fMP4 configuration.
     #
-    # -output_ts_offset used to make ffmpeg write an empty edit list (edts/elst)
-    # of the resume offset into init.mp4. Chromium ignores it, but Firefox's MSE
-    # honours it while hls.js also applies its own fragment timestampOffset, so a
-    # resumed stream buffered a full resume-offset ahead of the playhead (for a
-    # 100s resume the buffer started near 199s) and stalled. Suppress the edit
-    # list; players place the fragments from the playlist and fragment start.
+    # Suppress fMP4 edit lists (edts/elst) so Firefox MSE does not double-apply
+    # timestamp offsets alongside hls.js fragment placement.
     cmd.extend(
         [
             "-f",

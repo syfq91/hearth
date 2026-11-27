@@ -164,8 +164,8 @@ async def test_seek_forward_terminates_old_and_spawns_with_correct_ss_and_start_
     assert "-start_number" in cmd
     assert cmd[cmd.index("-start_number") + 1] == "3"
 
-    assert "-output_ts_offset" in cmd
-    assert cmd[cmd.index("-output_ts_offset") + 1] == "10"
+    assert "-copyts" in cmd
+    assert "-output_ts_offset" not in cmd
 
     # 4. INV-8: seg_000.m4s was NOT unlinked or deleted
     assert seg0.exists()
