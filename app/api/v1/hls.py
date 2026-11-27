@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import math
 import re
 from pathlib import Path
@@ -324,10 +325,8 @@ async def get_media_playlist(
         media_seq = 0
         for line in raw_lines:
             if line.startswith("#EXT-X-MEDIA-SEQUENCE:"):
-                try:
+                with contextlib.suppress(ValueError):
                     media_seq = int(line.split(":", 1)[1].strip())
-                except ValueError:
-                    pass
                 break
 
         lines: list[str] = []
