@@ -136,7 +136,7 @@ def build_ffmpeg_hls_command(
     # Input seek before -i for fast container-level seeking
     if start_offset > 0.0:
         cmd.extend(["-ss", f"{start_offset:g}"])
-        if plan.video_action == "copy" and plan.audio_action != "copy":
+        if plan.video_action == "copy":
             cmd.append("-noaccurate_seek")
 
     cmd.extend(["-i", str(input_path)])

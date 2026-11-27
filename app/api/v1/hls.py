@@ -320,11 +320,35 @@ async def get_media_playlist(
         content = "\n".join(lines) + "\n"
     else:
         raw_content = await asyncio.to_thread(m3u8_path.read_text, encoding="utf-8")
-        lines = []
-        for line in raw_content.splitlines():
+        raw_lines = raw_content.splitlines()
+        media_seq = 0
+        for line in raw_lines:
+            if line.startswith("#EXT-X-MEDIA-SEQUENCE:"):
+                try:
+                    media_seq = int(line.split(":", 1)[1].strip())
+                except ValueError:
+                    pass
+                break
+
+        lines: list[str] = []
+        inserted_prefix = False
+        for line in raw_lines:
+            if line.startswith("#EXT-X-MEDIA-SEQUENCE:") and media_seq > 0:
+                lines.append("#EXT-X-MEDIA-SEQUENCE:0")
+                continue
             if line.startswith("#EXT-X-MAP:URI="):
                 line = line.replace('URI="init.mp4"', f'URI="init.mp4{init_suffix}"')
-            elif token_suffix and line.endswith(".m4s"):
+                lines.append(line)
+                if media_seq > 0 and not inserted_prefix:
+                    inserted_prefix = True
+                    if session.start_offset > 0:
+                        lines.append(f"#EXT-X-START:TIME_OFFSET={session.start_offset:.3f}")
+                    for i in range(media_seq):
+                        d = session.segment_duration_at(i, session.duration_seconds or float(media_seq * session.segment_duration))
+                        lines.append(f"#EXTINF:{d:.3f},")
+                        lines.append(f"seg_{i:03d}.m4s{token_suffix}")
+                continue
+            if token_suffix and line.endswith(".m4s"):
                 line = f"{line}{token_suffix}"
             lines.append(line)
         content = "\n".join(lines) + "\n"
