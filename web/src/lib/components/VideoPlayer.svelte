@@ -19,27 +19,11 @@
 		MonitorPlay,
 		Settings2
 	} from '@lucide/svelte';
-	import { api } from '../api/client';
-	import { detectBrowserCapabilities, getCapabilitiesWithBurnInFallback } from '../capabilities';
-	import { sendStopBeacon } from '../video-resilience';
-	import {
-		HlsEngine,
-		isHlsSupported,
-		shouldUseNativeHls,
-		type HlsStreamStats
-	} from '../player/hls-engine';
-	import { SubtitleManager } from '../player/subtitles.svelte';
-	import { contentDuration, contentTime } from '../player/seekbar';
-	import { attachmentFontUrls } from '../video-subtitles';
+	import { PlaybackController, type QualityLevel } from '../player/playback-controller.svelte';
 	import SubtitleSyncControl from './SubtitleSyncControl.svelte';
-	import type { PlaybackInfoRequest, PlaybackInfoResponse } from '../api/types';
-	import { session } from '../auth.svelte';
-	import { resolveAutoSubtitle } from '../languages';
 	import ActivityBridge from '../chrome/ActivityBridge.svelte';
 	import { createAutoHideChrome } from '../chrome/auto-hide.ts';
 	import '../chrome/chrome.css';
-
-	type QualityLevel = NonNullable<PlaybackInfoRequest['quality']>;
 
 	interface Props {
 		itemId: string;
@@ -52,62 +36,43 @@
 
 	let { itemId, startAtMs = 0, title, onEnded }: Props = $props();
 
-	// Opt-in timeline diagnostics. Append ?debugseek=1 to the watch URL to log
-	// the resume and buffered time bases; default playback stays quiet.
 	const DEBUG_SEEK =
 		typeof window !== 'undefined' &&
 		new URLSearchParams(window.location.search).has('debugseek');
 
-	function debugSeek(event: string, detail: Record<string, unknown>): void {
-		if (!DEBUG_SEEK) return;
-		console.debug('[hearth:seek]', event, JSON.stringify({ itemId, ...detail }));
-	}
+	const controller = new PlaybackController({
+		itemId,
+		startAtMs,
+		debug: DEBUG_SEEK,
+		onEnded
+	});
 
 	let containerEl = $state<HTMLDivElement | null>(null);
 	let videoEl = $state<HTMLVideoElement | null>(null);
 	let seekbarEl = $state<HTMLDivElement | null>(null);
 
-	let hlsEngine: HlsEngine | null = null;
-	let subtitleManager = $state<SubtitleManager | null>(null);
-
-	let info = $state<PlaybackInfoResponse | null>(null);
-	let loadError = $state<string | null>(null);
-	let loading = $state(true);
-	let isWaiting = $state(false);
-
-	let audioTrackIndex = $state<number | null>(null);
-	let subtitleChoice = $state<string>('');
-	let embeddedSubtitleIndex = $state<number | null>(null);
-	let forceBurnIn = $state(false);
-
-	// Subtitle sync modal
 	let showSubSync = $state(false);
-	let currentSubOffset = $state(0);
-
-	// Timing and duration
-	let currentTime = $state(0);
-	let rawDuration = $state(0);
-	let expectedDuration = $state(0);
-	let bufferedRanges = $state<{ startPct: number; widthPct: number }[]>([]);
-
-	let isPaused = $state(true);
-	let volume = $state(1);
-	let isMuted = $state(false);
-	let playbackRate = $state(1);
-
-	// User-selected quality ceiling; sent with every playback negotiation.
-	let quality = $state<QualityLevel>('auto');
-	let streamStats = $state<HlsStreamStats | null>(null);
-
-	// Wall clock, ticked so the projected end time stays truthful while paused.
-	let nowMs = $state(Date.now());
-
-	// OSD activity state
-	let chromeVisible = $state(true);
 	let showModeBadge = $state(false);
 	let openMenu = $state<'audio' | 'subtitle' | 'speed' | 'quality' | 'settings' | null>(null);
+	let chromeVisible = $state(true);
+	let isFullscreen = $state(false);
+	let isPip = $state(false);
+	let isHoveringSeekbar = $state(false);
+	let hoverTime = $state(0);
+	let hoverPct = $state(0);
+	let focusTaken = false;
+	let attached = false;
+	let lastItemId = itemId;
 
-	// Compact bar for narrow viewports. Match the layout's 720px breakpoint.
+	const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+	const QUALITY_OPTIONS: { value: QualityLevel; label: string; detail: string }[] = [
+		{ value: 'auto', label: 'Auto', detail: 'Best available' },
+		{ value: 'sd', label: 'SD', detail: 'up to 480p' },
+		{ value: 'hd', label: 'HD', detail: 'up to 720p' },
+		{ value: 'fhd', label: 'FHD', detail: 'up to 1080p' },
+		{ value: '4k', label: '4K', detail: 'up to 2160p' }
+	];
+
 	const COMPACT_MEDIA_QUERY = '(max-width: 720px)';
 	let isCompact = $state(
 		typeof window !== 'undefined' && window.matchMedia(COMPACT_MEDIA_QUERY).matches
@@ -124,6 +89,30 @@
 		if (!isCompact && openMenu === 'settings') openMenu = null;
 	});
 
+	const info = $derived(controller.info);
+	const loadError = $derived(controller.loadError);
+	const loading = $derived(controller.loading);
+	const isWaiting = $derived(controller.isWaiting);
+	const isPaused = $derived(controller.isPaused);
+	const currentTime = $derived(controller.currentTime);
+	const duration = $derived(controller.duration);
+	const progressPct = $derived(controller.progressPct);
+	const bufferedRanges = $derived(controller.bufferedRanges);
+	const volume = $derived(controller.volume);
+	const isMuted = $derived(controller.isMuted);
+	const playbackRate = $derived(controller.playbackRate);
+	const quality = $derived(controller.quality);
+	const streamStats = $derived(controller.streamStats);
+	const audioTrackIndex = $derived(controller.audioTrackIndex);
+	const subtitleChoice = $derived(controller.subtitleChoice);
+	const currentSubOffset = $derived(controller.currentSubOffset);
+	const nowMs = $derived(controller.nowMs);
+	const subtitleManager = $derived(controller.subtitleManager);
+
+	const availableAudio = $derived(info?.audio_streams ?? []);
+	const availableSubtitles = $derived(info?.subtitles ?? []);
+	const availableEmbeddedSubtitles = $derived(info?.embedded_subtitles ?? []);
+
 	const chrome = createAutoHideChrome({
 		persist: () => isPaused || loading || !!loadError || !!openMenu,
 		onChange: (visible) => {
@@ -132,72 +121,11 @@
 	});
 	$effect(() => () => chrome.dispose());
 
-	// Fullscreen & PiP states
-	let isFullscreen = $state(false);
-	let isPip = $state(false);
-
-	// Seekbar hover state
-	let isHoveringSeekbar = $state(false);
-	let hoverTime = $state(0);
-	let hoverPct = $state(0);
-
-	// Session management
-	let sessionId: string | null = null;
-	let sessionMediaToken: string | null = null;
-	let resumeApplied = false;
-	let resumePositionMs = 0;
-	let lastReportedMs = 0;
-	let lastReportWallMs = 0;
-	let destroyed = false;
-	let focusTaken = false;
-
-	let lastItemId = '';
-	let lastAudioTrack: number | null = null;
-	let lastSubChoice = '';
-	let lastQuality: QualityLevel = 'auto';
-
-	const REPORT_INTERVAL_MS = 10_000;
-	const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
-	const QUALITY_OPTIONS: { value: QualityLevel; label: string; detail: string }[] = [
-		{ value: 'auto', label: 'Auto', detail: 'Best available' },
-		{ value: 'sd', label: 'SD', detail: 'up to 480p' },
-		{ value: 'hd', label: 'HD', detail: 'up to 720p' },
-		{ value: 'fhd', label: 'FHD', detail: 'up to 1080p' },
-		{ value: '4k', label: '4K', detail: 'up to 2160p' }
-	];
-
-	// Some containers (notably MKV) start their timestamps well after zero.
-	// Media elements report raw file time, so subtract the container offset
-	// everywhere the UI shows or accepts a position. Progress reporting and
-	// the saved resume point stay in file time, which is what the server seeks
-	// to, so existing watch state keeps working.
-	const mediaStartSec = $derived(info?.start_time_seconds ?? 0);
-
-	function displayTime(rawSeconds: number): number {
-		return contentTime(rawSeconds, mediaStartSec);
-	}
-
-	/** Raw media duration (file time). Used only for the server resume contract. */
-	const mediaDurationRaw = $derived.by(() => {
-		if (rawDuration > 0 && Number.isFinite(rawDuration)) return rawDuration;
-		if (expectedDuration > 0) return expectedDuration;
-		return 0;
+	$effect(() => {
+		void isPaused;
+		chrome.reveal();
 	});
 
-	// UI timeline length in content time. Both the media element's duration and
-	// the probed file duration report raw container time (end timestamp), but
-	// currentTime, buffered ranges and seeks are normalized by displayTime().
-	// Leaving the offset in the denominator stretches the seekbar scale, so on
-	// resume the buffered bar is drawn ahead of the real play position and the
-	// remaining label runs long. Strip the same offset used everywhere else.
-	const duration = $derived(contentDuration(mediaDurationRaw, mediaStartSec));
-
-	const progressPct = $derived.by(() => {
-		if (duration <= 0) return 0;
-		return Math.min(100, Math.max(0, (currentTime / duration) * 100));
-	});
-
-	/** Clicking the picture toggles chrome while playing; paused stays revealed. */
 	function toggleVideoControls(): void {
 		if (isPaused) {
 			chrome.reveal();
@@ -224,13 +152,23 @@
 		return `${mins}:${paddedSecs}`;
 	}
 
-	function formatBitrate(bitsPerSecond: number | undefined): string {
-		if (!bitsPerSecond) return 'unknown bitrate';
+	function formatBitrate(bitsPerSecond: number): string {
+		if (!Number.isFinite(bitsPerSecond) || bitsPerSecond <= 0) return '';
 		const mbps = bitsPerSecond / 1_000_000;
 		return mbps >= 1 ? `${mbps.toFixed(1)} Mbps` : `${Math.round(bitsPerSecond / 1000)} kbps`;
 	}
 
-	/** Nominal bitrate of what is actually being delivered to the player. */
+	function activeAudioStream() {
+		if (!info) return undefined;
+		return (
+			(audioTrackIndex !== null
+				? (info.audio_streams ?? []).find((s) => s.index === audioTrackIndex)
+				: null) ??
+			(info.audio_streams ?? []).find((s) => s.is_default) ??
+			info.audio_streams?.[0]
+		);
+	}
+
 	const streamBitrate = $derived.by(() => {
 		if (streamStats?.levelBitrate) return streamStats.levelBitrate;
 		const planBitrate = info?.plan?.target_bitrate;
@@ -239,17 +177,14 @@
 		const audioBitrate = activeAudioStream()?.bit_rate ?? 0;
 		const probed = videoBitrate + audioBitrate;
 		if (probed > 0) return probed;
-		// Direct play often probes no per-stream bitrate; derive it from the file.
 		const sizeBytes = info?.file?.size_bytes ?? 0;
 		const durationSecs = info?.file?.duration_seconds ?? 0;
 		if (sizeBytes > 0 && durationSecs > 0) return (sizeBytes * 8) / durationSecs;
 		return 0;
 	});
 
-	/** Throughput actually achieved fetching HLS segments. */
 	const streamThroughput = $derived(streamStats?.measuredBitrate ?? 0);
 
-	/** Wall-clock time playback will finish at the current rate and position. */
 	const endsAt = $derived.by(() => {
 		if (duration <= 0) return '';
 		const rate = playbackRate > 0 ? playbackRate : 1;
@@ -258,143 +193,41 @@
 		return finish.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 	});
 
-	async function report(state: 'playing' | 'paused' | 'stopped'): Promise<void> {
-		if (!videoEl || destroyed) return;
-		const cur = videoEl.currentTime ?? 0;
-		// Watch state is stored in file time, so compare against the raw
-		// duration just as position_ms uses the raw media element time.
-		const dur = mediaDurationRaw;
-		const position_ms = Math.max(0, Math.floor(cur * 1000));
-		const duration_ms = dur > 0 ? Math.floor(dur * 1000) : undefined;
-		lastReportedMs = Math.max(lastReportedMs, position_ms);
-		lastReportWallMs = Date.now();
-		try {
-			await api.post(`/items/${itemId}/progress`, {
-				body: { position_ms, duration_ms, state }
-			});
-		} catch {
-			/* progress is best-effort */
-		}
-	}
-
-	function updateBufferedRanges(): void {
-		if (!videoEl || duration <= 0) {
-			debugSeek('buffered:clear', { hasVideo: !!videoEl, duration, mediaStartSec });
-			bufferedRanges = [];
-			return;
-		}
-		const buf = videoEl.buffered;
-		const rawRanges: [number, number][] = [];
-		const ranges: { startPct: number; widthPct: number }[] = [];
-		for (let i = 0; i < buf.length; i++) {
-			rawRanges.push([buf.start(i), buf.end(i)]);
-			const start = displayTime(buf.start(i));
-			const end = displayTime(buf.end(i));
-			const startPct = Math.max(0, Math.min(100, (start / duration) * 100));
-			const endPct = Math.max(0, Math.min(100, (end / duration) * 100));
-			ranges.push({
-				startPct,
-				widthPct: Math.max(0, endPct - startPct)
-			});
-		}
-		debugSeek('buffered', {
-			rawRanges,
-			ranges,
-			currentTime: videoEl.currentTime,
-			duration,
-			mediaStartSec
-		});
-		bufferedRanges = ranges;
-	}
-
-	function applyResume(): void {
-		if (resumeApplied || !videoEl) return;
-		const targetMs = resumePositionMs > 0 ? resumePositionMs : startAtMs;
-		if (targetMs <= 0) return;
-		resumeApplied = true;
-		debugSeek('applyResume', {
-			targetMs,
-			before: videoEl.currentTime,
-			mediaDurationRaw,
-			mediaStartSec,
-			duration
-		});
-		// Resume positions are file time, so the near-end guard needs the raw
-		// duration, not the offset-normalized UI duration.
-		const durationMs = mediaDurationRaw * 1000;
-		// Near the end the user wants a rewatch prompt, not a jump to credits.
-		// Only skip when the position came from the server resume point. By this
-		// point resumePositionMs is always positive (startPlayback copies
-		// startAtMs into it), so checking it here made this guard unreachable.
-		if (startAtMs > 0 && Number.isFinite(durationMs) && durationMs > 30_000 && durationMs - targetMs < 30_000) {
-			return;
-		}
-		videoEl.currentTime = targetMs / 1000;
-		currentTime = displayTime(targetMs / 1000);
-		debugSeek('applyResume:done', { after: videoEl.currentTime, currentTime });
-	}
-
-	function togglePlay(): void {
-		if (!videoEl) return;
-		if (videoEl.paused) {
-			void videoEl.play().catch(() => {});
-		} else {
-			videoEl.pause();
-		}
-	}
-
-	let seekNotifyTimer: ReturnType<typeof setTimeout> | null = null;
-
-	// Notify the server before the browser asks for segments at the new
-	// position. Hearth's media playlist lists every segment up front, so a
-	// native HLS client can otherwise request a segment ffmpeg has not produced
-	// yet and receive a JSON 503 it cannot parse. Debounced for scrubbing.
-	function notifyHlsSeek(positionSeconds: number): void {
-		const targetSession = sessionId;
-		if (!targetSession) return;
-		if (seekNotifyTimer !== null) clearTimeout(seekNotifyTimer);
-		seekNotifyTimer = setTimeout(() => {
-			seekNotifyTimer = null;
-			void api
-				.post(`/hls/${targetSession}/seek`, {
-					body: { position_seconds: positionSeconds }
-				})
-				.catch(() => {
-					/* Best effort; cached and in-flight segments still resolve. */
-				});
-		}, 200);
-	}
-
-	function seekBy(deltaSeconds: number): void {
-		if (!videoEl) return;
-		const cur = displayTime(videoEl.currentTime ?? 0);
-		const maxTime = duration > 0 ? duration : Number.POSITIVE_INFINITY;
-		const nextTime = Math.max(0, Math.min(maxTime, cur + deltaSeconds));
-		const fileTime = nextTime + mediaStartSec;
-		videoEl.currentTime = fileTime;
-		currentTime = nextTime;
-		notifyHlsSeek(fileTime);
+	const togglePlay = () => controller.togglePlay();
+	const seekBy = (deltaSeconds: number) => {
+		controller.seekBy(deltaSeconds);
 		chrome.reveal();
-		subtitleManager?.renderManualFrame(true);
+	};
+	const handleSeek = (targetSeconds: number) => controller.seek(targetSeconds);
+	const toggleMute = () => controller.toggleMute();
+	const handleVolumeInput = (newVol: number) => controller.setVolume(newVol);
+	const handleOffsetSyncChange = (offsetSeconds: number) => controller.setSubOffset(offsetSeconds);
+
+	function selectAudioTrack(value: string): void {
+		controller.selectAudioTrack(value);
+		openMenu = null;
 	}
 
-	function handleSeek(targetSeconds: number): void {
-		if (!videoEl) return;
-		const maxTime = duration > 0 ? duration : Number.POSITIVE_INFINITY;
-		const nextTime = Math.max(0, Math.min(maxTime, targetSeconds));
-		const fileTime = nextTime + mediaStartSec;
-		videoEl.currentTime = fileTime;
-		currentTime = nextTime;
-		notifyHlsSeek(fileTime);
-		subtitleManager?.renderManualFrame(true);
+	function selectSubtitle(value: string): void {
+		controller.selectSubtitle(value);
+		openMenu = null;
+	}
+
+	function selectPlaybackRate(rate: number): void {
+		controller.setPlaybackRate(rate);
+		openMenu = null;
+	}
+
+	function selectQuality(value: QualityLevel): void {
+		controller.selectQuality(value);
+		openMenu = null;
 	}
 
 	function handleSeekbarClick(e: MouseEvent): void {
 		if (!seekbarEl || duration <= 0) return;
 		const rect = seekbarEl.getBoundingClientRect();
 		const clickX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-		const pct = clickX / rect.width;
-		handleSeek(pct * duration);
+		handleSeek((clickX / rect.width) * duration);
 	}
 
 	function handleSeekbarMouseMove(e: MouseEvent): void {
@@ -403,28 +236,6 @@
 		const hoverX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
 		hoverPct = (hoverX / rect.width) * 100;
 		hoverTime = (hoverX / rect.width) * duration;
-	}
-
-	function toggleMute(): void {
-		if (!videoEl) return;
-		videoEl.muted = !videoEl.muted;
-		isMuted = videoEl.muted;
-	}
-
-	function handleVolumeInput(newVol: number): void {
-		if (!videoEl) return;
-		volume = Math.max(0, Math.min(1, newVol));
-		videoEl.volume = volume;
-		if (volume > 0 && isMuted) {
-			videoEl.muted = false;
-			isMuted = false;
-		}
-	}
-
-	function handlePlaybackRateChange(newRate: number): void {
-		if (!videoEl) return;
-		playbackRate = newRate;
-		videoEl.playbackRate = newRate;
 	}
 
 	function toggleFullscreen(): void {
@@ -446,11 +257,11 @@
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
-		// Ignore keys starting inside text/number inputs
 		const targetTag = (event.target as HTMLElement)?.tagName?.toLowerCase();
 		if (targetTag === 'input' && (event.target as HTMLInputElement).type !== 'range') {
 			return;
 		}
+		chrome.reveal();
 
 		switch (event.key) {
 			case ' ':
@@ -507,354 +318,6 @@
 		}
 	}
 
-	function handleSubtitleCrash(error: unknown): void {
-		console.warn('[VideoPlayer] Subtitle engine crashed, recovering:', error);
-
-		if (subtitleChoice.startsWith('emb:')) {
-			// Embedded streams can be rendered server-side by FFmpeg.
-			forceBurnIn = true;
-			void startPlayback({ forceBurnIn: true });
-			return;
-		}
-
-		// External sidecars cannot be burned in. Fall back to the server-side
-		// WebVTT conversion and render it as a native text track.
-		const externalId = subtitleChoice.startsWith('ext:')
-			? subtitleChoice.slice('ext:'.length)
-			: null;
-		const track = externalId
-			? (info?.subtitles ?? []).find((t) => t.id === externalId)
-			: null;
-		if (!track || !subtitleManager) return;
-
-		void subtitleManager.loadTrack(
-			{
-				id: track.id,
-				url: track.url,
-				format: 'vtt',
-				language: track.language,
-				label: track.name || track.language || 'Subtitles'
-			},
-			[]
-		);
-	}
-
-	function embeddedSubtitleUrl(index: number) {
-		return (info?.embedded_subtitle_urls ?? []).find((entry) => entry.index === index) ?? null;
-	}
-
-	function sidecarRequiresBurnIn(
-		id: string,
-		playbackInfo: PlaybackInfoResponse | null = info
-	): boolean {
-		if (!playbackInfo?.burn_in_complex_subtitles) return false;
-		const track = (playbackInfo.subtitles ?? []).find((t) => t.id === id);
-		if (!track) return false;
-		const fmt = track.format.toLowerCase();
-		return fmt === 'ass' || fmt === 'ssa';
-	}
-
-	async function applySubtitleChoice(): Promise<void> {
-		if (!subtitleManager) return;
-		if (info?.plan?.subtitle_action === 'burn_in') {
-			await subtitleManager.clearTrack();
-			return;
-		}
-
-		// Font attachment URLs already carry the media token for both direct
-		// play and HLS, so reuse them instead of rebuilding the URL from
-		// sessionMediaToken (which is only populated from an HLS URL).
-		const fontUrls = attachmentFontUrls(info?.attachments);
-
-		if (subtitleChoice.startsWith('emb:')) {
-			const index = Number.parseInt(subtitleChoice.slice('emb:'.length), 10);
-			const entry = embeddedSubtitleUrl(index);
-			// Bitmap tracks have no client-renderable URL; they need burn-in.
-			const url = entry?.url ?? info?.embedded_subtitle_url;
-			if (!url) {
-				await subtitleManager.clearTrack();
-				return;
-			}
-			const stream = (info?.embedded_subtitles ?? []).find((s) => s.index === index);
-			await subtitleManager.loadTrack(
-				{
-					id: subtitleChoice,
-					url,
-					format: entry?.format ?? info?.embedded_subtitle_format,
-					language: stream?.language,
-					label: stream?.title || stream?.language || 'Subtitles',
-					isContainerAligned: true
-				},
-				fontUrls
-			);
-			return;
-		}
-
-		const externalId = subtitleChoice.startsWith('ext:')
-			? subtitleChoice.slice('ext:'.length)
-			: null;
-
-		if (!externalId) {
-			await subtitleManager.clearTrack();
-			return;
-		}
-
-		const selectedTrack = (info?.subtitles ?? []).find((t) => t.id === externalId);
-		if (!selectedTrack) {
-			await subtitleManager.clearTrack();
-			return;
-		}
-
-		await subtitleManager.loadTrack(
-			{
-				id: selectedTrack.id,
-				url: selectedTrack.url,
-				format: selectedTrack.format,
-				language: selectedTrack.language,
-				label: selectedTrack.name || selectedTrack.language || 'Subtitles'
-			},
-			fontUrls
-		);
-	}
-
-	async function startPlayback(options: { forceBurnIn?: boolean } = {}): Promise<void> {
-		destroyed = false;
-		loading = true;
-		loadError = null;
-		expectedDuration = 0;
-
-		if (options.forceBurnIn) {
-			forceBurnIn = true;
-		}
-
-		const previousSession = sessionId;
-		const previousToken = sessionMediaToken;
-		sessionId = null;
-		sessionMediaToken = null;
-		if (previousSession) {
-			sendStopBeacon(previousSession, previousToken);
-		}
-
-		embeddedSubtitleIndex = subtitleChoice.startsWith('emb:')
-			? Number.parseInt(subtitleChoice.slice('emb:'.length), 10)
-			: null;
-		const externalSubtitleId = subtitleChoice.startsWith('ext:')
-			? subtitleChoice.slice('ext:'.length)
-			: null;
-
-		const cur = videoEl?.currentTime ?? 0;
-		if (cur > 0) {
-			resumePositionMs = Math.floor(cur * 1000);
-		} else if (startAtMs > 0) {
-			resumePositionMs = startAtMs;
-		}
-		const offsetSeconds = resumePositionMs > 0 ? resumePositionMs / 1000 : 0;
-		debugSeek('startPlayback', { startAtMs, resumePositionMs, offsetSeconds, cur });
-
-		const clientCapabilities = forceBurnIn
-			? getCapabilitiesWithBurnInFallback()
-			: detectBrowserCapabilities();
-
-		let response: PlaybackInfoResponse;
-		try {
-			response = await api.post<PlaybackInfoResponse>(`/items/${itemId}/playback-info`, {
-				body: {
-					capabilities: clientCapabilities,
-					audio_track_index: audioTrackIndex,
-					subtitle_track_index: embeddedSubtitleIndex,
-					subtitle_id: externalSubtitleId,
-					start_time_offset_seconds: offsetSeconds,
-					force_burn_in_subtitles: forceBurnIn,
-					quality
-				}
-			});
-		} catch (e) {
-			loadError = e instanceof Error ? e.message : String(e);
-			loading = false;
-			return;
-		}
-
-		if (destroyed) return;
-		info = response;
-		if (audioTrackIndex === null && response.plan?.audio_stream_index != null) {
-			audioTrackIndex = response.plan.audio_stream_index;
-			lastAudioTrack = audioTrackIndex;
-		}
-		if (subtitleChoice === '') {
-			const activeAudio =
-				(response.audio_streams ?? []).find((s) => s.index === audioTrackIndex) ??
-				(response.audio_streams ?? []).find((s) => s.is_default) ??
-				response.audio_streams?.[0];
-			const autoSub = resolveAutoSubtitle({
-				subtitles: response.subtitles,
-				embeddedSubtitles: response.embedded_subtitles,
-				activeAudio,
-				preferredAudioLanguage: session.user?.preferred_audio_language,
-				preferredSubtitleLanguage: session.user?.preferred_subtitle_language,
-				subtitleMode: session.user?.subtitle_mode
-			});
-			if (autoSub) {
-				subtitleChoice = autoSub;
-				lastSubChoice = autoSub;
-				const autoNeedsServerBurnIn =
-					(autoSub.startsWith('emb:') &&
-						!(response.embedded_subtitle_urls ?? []).some(
-							(e) => e.index === Number.parseInt(autoSub.slice('emb:'.length), 10)
-						)) ||
-					(autoSub.startsWith('ext:') &&
-						sidecarRequiresBurnIn(autoSub.slice('ext:'.length), response));
-				if (autoNeedsServerBurnIn) {
-					await startPlayback();
-					return;
-				}
-			}
-		}
-		sessionId = response.session_id ?? null;
-		if (response.hls_url) {
-			try {
-				const parsed = new URL(response.hls_url, window.location.origin);
-				sessionMediaToken = parsed.searchParams.get('token');
-			} catch {
-				sessionMediaToken = null;
-			}
-		}
-
-		await attachSource(response);
-	}
-
-	async function attachSource(response: PlaybackInfoResponse): Promise<void> {
-		if (!videoEl) return;
-		if (seekNotifyTimer !== null) {
-			clearTimeout(seekNotifyTimer);
-			seekNotifyTimer = null;
-		}
-		resumeApplied = false;
-		lastReportedMs = 0;
-		lastReportWallMs = 0;
-		streamStats = null;
-
-		if (hlsEngine) {
-			hlsEngine.destroy();
-			hlsEngine = null;
-		}
-
-		if (!subtitleManager) {
-			subtitleManager = new SubtitleManager({
-				video: videoEl,
-				onCrash: handleSubtitleCrash
-			});
-
-			// Restore saved user offset from localStorage
-			try {
-				if (typeof window !== 'undefined' && window.localStorage) {
-					const saved = window.localStorage.getItem(`hearth_sub_offset_${itemId}`);
-					if (saved) {
-						const val = Number.parseFloat(saved);
-						if (!Number.isNaN(val)) {
-							currentSubOffset = val;
-							subtitleManager.setOffset(val);
-						}
-					}
-				}
-			} catch {
-				/* ignore localStorage errors */
-			}
-		}
-		subtitleManager.setMediaStartSeconds(response.start_time_seconds ?? 0);
-
-		const source = response.mode === 'direct_play' ? response.url : response.hls_url;
-		if (!source) {
-			loadError = 'The server returned no playable source.';
-			loading = false;
-			return;
-		}
-
-		expectedDuration = response.file?.duration_seconds ?? 0;
-
-		const isHls = response.mode !== 'direct_play' || source.includes('.m3u8');
-		const hlsStartPosition = resumePositionMs > 0 ? resumePositionMs / 1000 : -1;
-		debugSeek('attachSource', {
-			mode: response.mode,
-			isHls,
-			startTimeSeconds: response.start_time_seconds,
-			hlsStartPosition,
-			expectedDuration
-		});
-		if (isHls && !shouldUseNativeHls(videoEl) && isHlsSupported()) {
-			hlsEngine = new HlsEngine(videoEl, source, {
-				startPositionSeconds: hlsStartPosition,
-				debug: DEBUG_SEEK,
-				maxBitrate: response.video_stream?.bit_rate ?? undefined,
-				onStats: (stats) => {
-					streamStats = stats;
-				},
-				onError: (err) => {
-					console.error('[VideoPlayer] HLS Fatal Error:', err);
-					loadError = `Playback error: ${err.details || 'stream failure'}`;
-				}
-			});
-		} else {
-			videoEl.src = source;
-		}
-
-		void applySubtitleChoice();
-		if (destroyed) return;
-
-		loading = false;
-		void videoEl.play().catch(() => {
-			/* Autoplay might be blocked by browser policy */
-		});
-	}
-
-	function selectAudioTrack(value: string): void {
-		audioTrackIndex = value === '' ? null : Number.parseInt(value, 10);
-		openMenu = null;
-	}
-
-	function selectSubtitle(value: string): void {
-		subtitleChoice = value;
-		openMenu = null;
-
-		// Burned-in cues are part of the video stream; only a fresh session
-		// without subtitles can remove them.
-		if (info?.plan?.subtitle_action === 'burn_in') {
-			void startPlayback();
-			return;
-		}
-
-		// Bitmap and server-transcoded complex subtitle tracks cannot be rendered by the client.
-		if (value.startsWith('emb:')) {
-			const index = Number.parseInt(value.slice('emb:'.length), 10);
-			if (!embeddedSubtitleUrl(index)) {
-				void startPlayback();
-				return;
-			}
-		} else if (value.startsWith('ext:') && sidecarRequiresBurnIn(value.slice('ext:'.length))) {
-			void startPlayback();
-			return;
-		}
-
-		void applySubtitleChoice();
-	}
-
-	function selectPlaybackRate(rate: number): void {
-		handlePlaybackRateChange(rate);
-		openMenu = null;
-	}
-
-	function selectQuality(value: QualityLevel): void {
-		// A quality ceiling changes the negotiated plan, so startPlayback (via
-		// the restart effect) tears down the current HLS session and resumes at
-		// the same position with a fresh session encoded for the new ceiling.
-		quality = value;
-		openMenu = null;
-	}
-
-	function handleOffsetSyncChange(offsetSeconds: number): void {
-		currentSubOffset = offsetSeconds;
-		subtitleManager?.setOffset(offsetSeconds);
-	}
-
 	function codecLabel(name: string | null | undefined): string {
 		const raw = name ?? 'unknown';
 		if (raw === 'hevc') return 'x265';
@@ -877,17 +340,6 @@
 			default:
 				return codec ?? 'transcode';
 		}
-	}
-
-	function activeAudioStream() {
-		if (!info) return undefined;
-		return (
-			(audioTrackIndex !== null
-				? (info.audio_streams ?? []).find((s) => s.index === audioTrackIndex)
-				: null) ??
-			(info.audio_streams ?? []).find((s) => s.is_default) ??
-			info.audio_streams?.[0]
-		);
 	}
 
 	function playbackModeDetail(): string {
@@ -915,56 +367,21 @@
 		return `${src} > ${plan?.audio_codec ?? 'aac'}`;
 	}
 
-	// The buffered overlay uses the same content-time scale as the played bar.
-	// If the time base settles after a progress event (probe duration replaced
-	// by the element's duration, or a new playback-info response on restart),
-	// refresh the ranges so the grey bar never sits ahead of the playhead.
 	$effect(() => {
-		void duration;
-		void mediaStartSec;
-		if (videoEl) updateBufferedRanges();
-	});
-
-	$effect(() => {
-		if (videoEl && !info && !loadError) {
+		if (videoEl && !attached) {
+			attached = true;
 			lastItemId = itemId;
-			lastAudioTrack = audioTrackIndex;
-			lastSubChoice = subtitleChoice;
-			lastQuality = quality;
-			void startPlayback();
+			controller.attachVideo(videoEl);
 		}
 	});
 
 	$effect(() => {
-		const currentItem = itemId;
-		const currentAudio = audioTrackIndex;
-		const currentQuality = quality;
-
-		if (!videoEl || loading) return;
-
-		if (currentItem !== lastItemId) {
-			lastItemId = currentItem;
-			lastAudioTrack = null;
-			audioTrackIndex = null;
-			lastSubChoice = '';
-			subtitleChoice = '';
-			resumePositionMs = 0;
-			info = null;
-			forceBurnIn = false;
-			// Quality is a player-level preference and carries over to the next item.
-			lastQuality = currentQuality;
-			void startPlayback();
-		} else if (currentAudio !== lastAudioTrack) {
-			lastAudioTrack = currentAudio;
-			lastQuality = currentQuality;
-			void startPlayback();
-		} else if (currentQuality !== lastQuality) {
-			lastQuality = currentQuality;
-			void startPlayback();
+		if (attached && itemId !== lastItemId) {
+			lastItemId = itemId;
+			controller.switchItem(itemId, startAtMs);
 		}
 	});
 
-	// Keyboard focus on mount
 	$effect(() => {
 		const el = videoEl;
 		if (!el || focusTaken) return;
@@ -972,11 +389,10 @@
 		el.focus({ preventScroll: true });
 	});
 
-	// Fullscreen & PiP change listeners
 	$effect(() => {
 		const handleFsChange = () => {
 			isFullscreen = Boolean(document.fullscreenElement);
-			subtitleManager?.resize();
+			controller.resizeSubtitles();
 		};
 		const el = videoEl;
 		const onEnterPip = () => {
@@ -999,17 +415,14 @@
 		};
 	});
 
-	// Page unload & visibility reporting
 	$effect(() => {
 		const onPageHide = () => {
-			void report('paused');
-			if (sessionId) {
-				sendStopBeacon(sessionId, sessionMediaToken);
-			}
+			void controller.report('paused');
+			controller.sendBeaconStop();
 		};
 		const onVisibilityChange = () => {
 			if (document.visibilityState === 'hidden') {
-				void report('paused');
+				void controller.report('paused');
 			}
 		};
 		window.addEventListener('pagehide', onPageHide);
@@ -1020,25 +433,7 @@
 		};
 	});
 
-	// Teardown
-	$effect(() => {
-		return () => {
-			if (seekNotifyTimer !== null) clearTimeout(seekNotifyTimer);
-			destroyed = true;
-			void report('stopped');
-			if (sessionId) {
-				sendStopBeacon(sessionId, sessionMediaToken);
-			}
-			hlsEngine?.destroy();
-			hlsEngine = null;
-			void subtitleManager?.destroy();
-			subtitleManager = null;
-		};
-	});
-
-	const availableAudio = $derived(info?.audio_streams ?? []);
-	const availableSubtitles = $derived(info?.subtitles ?? []);
-	const availableEmbeddedSubtitles = $derived(info?.embedded_subtitles ?? []);
+	$effect(() => () => controller.destroy());
 </script>
 
 <ActivityBridge onactivity={chrome.reveal} />
@@ -1067,85 +462,6 @@
 			playsinline
 			preload="metadata"
 			style="object-fit: contain;"
-			onplay={() => {
-				isPaused = false;
-				nowMs = Date.now();
-				chrome.reveal();
-			}}
-			onpause={() => {
-				isPaused = true;
-				nowMs = Date.now();
-				chrome.reveal();
-				subtitleManager?.renderManualFrame(true);
-				void report('paused');
-			}}
-			ontimeupdate={() => {
-				if (!videoEl) return;
-				currentTime = displayTime(videoEl.currentTime);
-				const now = Date.now();
-				nowMs = now;
-				if (now - lastReportWallMs >= REPORT_INTERVAL_MS) {
-					lastReportWallMs = now;
-					void report('playing');
-				}
-				// Reconcile the cue when paused or when requestVideoFrameCallback is
-				// unavailable. During active playback JASSUB's RVFC loop drives exact
-				// frame-level rendering without being clobbered by 4Hz timeupdate ticks.
-				if (videoEl.paused || !('requestVideoFrameCallback' in videoEl)) {
-					subtitleManager?.renderManualFrame(false);
-				}
-			}}
-			onprogress={updateBufferedRanges}
-			ondurationchange={() => {
-				if (videoEl && Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
-					rawDuration = videoEl.duration;
-				}
-			}}
-			onloadedmetadata={() => {
-				if (videoEl && Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
-					rawDuration = videoEl.duration;
-				}
-				debugSeek('loadedmetadata', {
-					duration: videoEl?.duration,
-					currentTime: videoEl?.currentTime
-				});
-				applyResume();
-				subtitleManager?.resize();
-			}}
-			oncanplay={() => {
-				isWaiting = false;
-				debugSeek('canplay', {
-					duration: videoEl?.duration,
-					currentTime: videoEl?.currentTime
-				});
-				applyResume();
-			}}
-			onwaiting={() => {
-				isWaiting = true;
-				debugSeek('waiting', { currentTime: videoEl?.currentTime });
-			}}
-			onplaying={() => {
-				isWaiting = false;
-			}}
-			onseeking={() => {
-				debugSeek('seeking', { currentTime: videoEl?.currentTime });
-			}}
-			onseeked={() => {
-				debugSeek('seeked', { currentTime: videoEl?.currentTime });
-				nowMs = Date.now();
-				subtitleManager?.renderManualFrame(true);
-			}}
-			onended={() => {
-				isPaused = true;
-				chrome.reveal();
-				void report('stopped');
-				onEnded?.();
-			}}
-			onerror={() => {
-				if (videoEl?.error) {
-					loadError = `Playback error: ${videoEl.error.message || 'Media decode failed'}`;
-				}
-			}}
 			onclick={toggleVideoControls}
 		></video>
 	</div>
