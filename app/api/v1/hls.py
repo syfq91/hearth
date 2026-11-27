@@ -343,9 +343,15 @@ async def get_media_playlist(
                     inserted_prefix = True
                     if session.start_offset > 0:
                         lines.append(f"#EXT-X-START:TIME_OFFSET={session.start_offset:.3f}")
+                    remux_pts = getattr(session, "remux_start_pts", None)
+                    prefix_total = (
+                        remux_pts
+                        if remux_pts is not None and remux_pts > 0
+                        else float(media_seq * session.segment_duration)
+                    )
+                    prefix_dur = prefix_total / media_seq
                     for i in range(media_seq):
-                        d = session.segment_duration_at(i, session.duration_seconds or float(media_seq * session.segment_duration))
-                        lines.append(f"#EXTINF:{d:.3f},")
+                        lines.append(f"#EXTINF:{prefix_dur:.6f},")
                         lines.append(f"seg_{i:03d}.m4s{token_suffix}")
                 continue
             if token_suffix and line.endswith(".m4s"):

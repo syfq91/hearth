@@ -84,6 +84,7 @@ class TranscodeSession:
             self.first_segment_duration = float(configured_first)
         self._seek_lock = asyncio.Lock()
         self.current_start_segment = self.segment_index_at(start_offset)
+        self.remux_start_pts: float | None = None
         # Bumped on every ffmpeg (re)start. The playlist uses it to cache-bust
         # init.mp4, which ffmpeg truncates and rewrites in place on each seek.
         self.init_generation = 0
@@ -405,6 +406,50 @@ class TranscodeSession:
             return vtt_path
         return None
 
+    async def _probe_remux_start_pts(self, target_offset: float) -> float | None:
+        """Find the actual keyframe PTS that ``-ss <target> -noaccurate_seek`` starts on."""
+        if self.plan.video_action != "copy" or target_offset <= 0 or not self.input_path.exists():
+            return None
+        window_start = max(0.0, target_offset - 20.0)
+        window_end = target_offset + 1.0
+        cmd = [
+            self.settings.ffprobe_binary,
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-skip_frame",
+            "nokey",
+            "-show_entries",
+            "packet=pts_time",
+            "-of",
+            "csv=p=0",
+            "-read_intervals",
+            f"{window_start:.3f}%{window_end:.3f}",
+            str(self.input_path),
+        ]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2.0)
+            if proc.returncode != 0:
+                return None
+            candidates: list[float] = []
+            for raw_line in stdout.decode("utf-8", errors="ignore").splitlines():
+                val_str = raw_line.strip().rstrip(",")
+                if not val_str:
+                    continue
+                with contextlib.suppress(ValueError):
+                    pts = float(val_str)
+                    if pts <= target_offset + 0.05:
+                        candidates.append(pts)
+            return max(candidates) if candidates else None
+        except Exception:
+            return None
+
     async def start_process(self) -> None:
         """Build command and launch ffmpeg subprocess."""
         if self.is_circuit_open():
@@ -417,13 +462,15 @@ class TranscodeSession:
 
         self.init_generation += 1
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        fonts_dir, burn_in_subtitle_path = await asyncio.gather(
-            self._prepare_burn_in_fonts(),
-            self._prepare_burn_in_subtitle(),
-        )
         start_seg = self.segment_index_at(self.start_offset)
         self.current_start_segment = start_seg
         cmd_offset = self.segment_start(start_seg)
+        fonts_dir, burn_in_subtitle_path, remux_start_pts = await asyncio.gather(
+            self._prepare_burn_in_fonts(),
+            self._prepare_burn_in_subtitle(),
+            self._probe_remux_start_pts(cmd_offset),
+        )
+        self.remux_start_pts = remux_start_pts
         # The short opening segment only applies when ffmpeg starts at the
         # beginning of the grid; a mid-file start already begins on a keyframe.
         first_segment_duration = (
