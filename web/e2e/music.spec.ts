@@ -19,7 +19,8 @@ test('play a track from an album', async ({ page, request }) => {
 	await signIn(page, pair);
 
 	await page.goto('/music');
-	await page.getByRole('link', { name: ALBUM_TITLE }).first().click();
+	// The poster carries a centered play overlay, so use the title link to open the album.
+	await page.getByRole('link', { name: ALBUM_TITLE }).last().click();
 	await expect(page.getByRole('heading', { level: 1, name: ALBUM_TITLE })).toBeVisible();
 
 	// The album page links to the artist screen too.
@@ -52,7 +53,8 @@ test('album actions shuffle playback and toggle the album favorite', async ({
 	await signIn(page, pair);
 
 	await page.goto('/music');
-	await page.getByRole('link', { name: ALBUM_TITLE }).first().click();
+	// The poster carries a centered play overlay, so use the title link to open the album.
+	await page.getByRole('link', { name: ALBUM_TITLE }).last().click();
 
 	const shuffle = page.getByRole('button', { name: 'Shuffle album' });
 	const favorite = page.getByRole('button', { name: 'Add album to favorites' });
@@ -81,7 +83,8 @@ test('album track menu queues a track and inserts another next', async ({ page, 
 	await signIn(page, pair);
 
 	await page.goto('/music');
-	await page.getByRole('link', { name: ALBUM_TITLE }).first().click();
+	// The poster carries a centered play overlay, so use the title link to open the album.
+	await page.getByRole('link', { name: ALBUM_TITLE }).last().click();
 
 	const more = page.getByRole('button', { name: `More options for ${TRACK_TITLE}` });
 	await more.click();
@@ -224,7 +227,8 @@ test('ReplayGain is opt-in so plain playback survives backgrounding', async ({
 		);
 
 	await page.goto('/music');
-	await page.getByRole('link', { name: ALBUM_TITLE }).first().click();
+	// The poster carries a centered play overlay, so use the title link to open the album.
+	await page.getByRole('link', { name: ALBUM_TITLE }).last().click();
 	await page.getByRole('button', { name: TRACK_TITLE, exact: true }).click();
 
 	const bar = page.getByRole('region', { name: 'Now playing' });
