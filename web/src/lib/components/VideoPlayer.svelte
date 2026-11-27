@@ -756,25 +756,27 @@
 					{/if}
 				</button>
 
-				<button
-					type="button"
-					class="icon-btn"
-					onclick={() => seekBy(-10)}
-					title="Replay 10 seconds (Left Arrow/j)"
-					aria-label="Replay 10 seconds"
-				>
-					<RotateCcw size={19} />
-				</button>
+				<div class="controls-pill">
+					<button
+						type="button"
+						class="icon-btn"
+						onclick={() => seekBy(-10)}
+						title="Replay 10 seconds (Left Arrow/j)"
+						aria-label="Replay 10 seconds"
+					>
+						<RotateCcw size={19} />
+					</button>
 
-				<button
-					type="button"
-					class="icon-btn"
-					onclick={() => seekBy(10)}
-					title="Forward 10 seconds (Right Arrow/l)"
-					aria-label="Forward 10 seconds"
-				>
-					<RotateCw size={19} />
-				</button>
+					<button
+						type="button"
+						class="icon-btn"
+						onclick={() => seekBy(10)}
+						title="Forward 10 seconds (Right Arrow/l)"
+						aria-label="Forward 10 seconds"
+					>
+						<RotateCw size={19} />
+					</button>
+				</div>
 
 				{#if !isCompact}
 					<!-- Volume; the slider reveals on hover or focus -->
@@ -815,7 +817,8 @@
 			{/if}
 
 			<div class="controls-right">
-				<!-- Audio selector -->
+				<div class="controls-pill">
+					<!-- Audio selector -->
 				{#if availableAudio.length > 1}
 					<button
 						type="button"
@@ -947,6 +950,7 @@
 						<Maximize size={20} />
 					{/if}
 				</button>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -1038,20 +1042,21 @@
 		z-index: 1;
 	}
 
-	/* Chrome positioning, gradient, fade and hidden state come from the shared
-	   stylesheet; only player-specific layout stays here. */
+	/* Chrome positioning, fade and hidden state come from the shared stylesheet;
+	   the video player uses pill backgrounds on controls/text instead of a gradient. */
 	.top-overlay {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
 		padding: 1rem 1.5rem;
+		background: none;
 	}
 
 	.top-left {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.75rem;
 		min-width: 0;
 		flex: 1;
 	}
@@ -1063,35 +1068,36 @@
 		width: 2.5rem;
 		height: 2.5rem;
 		border-radius: 50%;
-		background: rgba(22, 27, 34, 0.7);
-		border: 1px solid var(--border);
-		color: var(--text);
+		background: rgba(15, 18, 24, 0.58);
+		border: none;
+		color: #fff;
 		cursor: pointer;
 		text-decoration: none;
 		flex-shrink: 0;
-		backdrop-filter: blur(4px);
+		backdrop-filter: blur(8px);
 		transition:
 			background 0.15s ease,
-			border-color 0.15s ease,
 			color 0.15s ease;
 	}
 
 	.back-btn:hover {
-		background: var(--surface-2);
-		border-color: var(--accent);
+		background: rgba(255, 255, 255, 0.2);
 		color: var(--accent);
 		text-decoration: none;
 	}
 
 	.player-title {
-		font-size: 1.15rem;
+		font-size: 1.05rem;
 		font-weight: 600;
 		color: #fff;
 		margin: 0;
+		padding: 0.4rem 0.9rem;
+		border-radius: 9999px;
+		background: rgba(15, 18, 24, 0.58);
+		backdrop-filter: blur(8px);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 	}
 
 	.bottom-overlay {
@@ -1099,6 +1105,7 @@
 		flex-direction: column;
 		gap: 0.5rem;
 		padding: 1.5rem 1.5rem 1rem;
+		background: none;
 	}
 
 	.seek-row {
@@ -1206,15 +1213,25 @@
 		justify-content: flex-end;
 	}
 
+	.controls-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.15rem;
+		background: rgba(15, 18, 24, 0.58);
+		backdrop-filter: blur(8px);
+		border-radius: 9999px;
+		padding: 0.2rem 0.35rem;
+	}
+
 	.icon-btn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		background: transparent;
 		border: none;
-		color: var(--text);
-		padding: 0.4rem;
-		border-radius: 6px;
+		color: #fff;
+		padding: 0.42rem;
+		border-radius: 9999px;
 		cursor: pointer;
 		transition:
 			background 0.15s ease,
@@ -1222,7 +1239,7 @@
 	}
 
 	.icon-btn:hover {
-		background: rgba(255, 255, 255, 0.15);
+		background: rgba(255, 255, 255, 0.18);
 		color: #fff;
 	}
 
@@ -1236,14 +1253,26 @@
 	}
 
 	.play-btn {
-		padding: 0.5rem;
+		width: 2.5rem;
+		height: 2.5rem;
+		padding: 0;
+		background: rgba(15, 18, 24, 0.58);
+		backdrop-filter: blur(8px);
+	}
+
+	.play-btn:hover {
+		background: rgba(255, 255, 255, 0.2);
 	}
 
 	.end-time {
 		flex: 0 0 auto;
 		font-size: 0.8rem;
 		font-family: ui-monospace, monospace;
-		color: var(--muted);
+		color: #fff;
+		background: rgba(15, 18, 24, 0.58);
+		backdrop-filter: blur(8px);
+		padding: 0.35rem 0.75rem;
+		border-radius: 9999px;
 		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
 		text-align: center;
@@ -1253,6 +1282,16 @@
 		display: flex;
 		align-items: center;
 		gap: 0.25rem;
+		background: rgba(15, 18, 24, 0.58);
+		backdrop-filter: blur(8px);
+		border-radius: 9999px;
+		padding: 0.2rem;
+		transition: padding-right 0.18s ease;
+	}
+
+	.volume-group:hover,
+	.volume-group:focus-within {
+		padding-right: 0.65rem;
 	}
 
 	.volume-slider-wrap {
@@ -1283,16 +1322,17 @@
 	.time-remaining {
 		font-size: 0.825rem;
 		font-family: ui-monospace, monospace;
+		color: #fff;
+		background: rgba(15, 18, 24, 0.58);
+		backdrop-filter: blur(8px);
+		padding: 0.2rem 0.6rem;
+		border-radius: 9999px;
 		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
 	}
 
-	.time-current {
-		color: #fff;
-	}
-
 	.time-remaining {
-		color: var(--muted);
+		color: rgba(255, 255, 255, 0.85);
 	}
 
 	.control-menu {
