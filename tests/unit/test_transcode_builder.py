@@ -727,8 +727,10 @@ def test_builder_bitmap_burn_in_uses_filter_complex_overlay_vaapi(tmp_path: Path
     assert "-vf" not in cmd
     assert "-filter_complex" in cmd
     fc = cmd[cmd.index("-filter_complex") + 1]
-    assert "hwdownload,format=nv12[v_sw]" in fc
-    assert "[v_sw][0:s:1]overlay=eof_action=pass,hwupload,scale_vaapi=format=nv12[vout]" in fc
+    assert "hwdownload" not in fc
+    assert "[0:v:0]scale_vaapi=format=nv12[v_main];" in fc
+    assert "[0:s:1]format=bgra,hwupload=derive_device=vaapi[sub];" in fc
+    assert "[v_main][sub]overlay_vaapi=eof_action=pass:repeatlast=0[vout]" in fc
     assert cmd[cmd.index("-map") + 1] == "[vout]"
 
 

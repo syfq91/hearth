@@ -165,23 +165,35 @@ def build_ffmpeg_hls_command(
         cmd.extend(["-c:v", "copy"])
     elif plan.hwaccel == "vaapi":
         if bitmap_burn_in:
-            post_filters = ["hwupload"]
-            if plan.target_width and plan.target_height:
-                post_filters.append(
-                    f"scale_vaapi=w={plan.target_width}:h={plan.target_height}:format=nv12"
+            if plan.hwaccel_decode:
+                main_chain = (
+                    "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709:extra_hw_frames=32"
+                    if plan.tonemap_hdr
+                    else "scale_vaapi=format=nv12"
+                )
+                post_scale = (
+                    f",scale_vaapi=w={plan.target_width}:h={plan.target_height}:format=nv12"
+                    if plan.target_width and plan.target_height
+                    else ""
+                )
+                filter_complex = (
+                    f"[0:v:0]{main_chain}[v_main];"
+                    f"[0:s:{plan.subtitle_stream_index}]format=bgra,hwupload=derive_device=vaapi[sub];"
+                    f"[v_main][sub]overlay_vaapi=eof_action=pass:repeatlast=0{post_scale}[vout]"
                 )
             else:
-                post_filters.append("scale_vaapi=format=nv12")
-            main_in = (
-                "[0:v:0]hwdownload,format=nv12[v_sw];"
-                if plan.hwaccel_decode
-                else "[0:v:0]format=nv12[v_sw];"
-            )
-            filter_complex = (
-                f"{main_in}"
-                f"[v_sw][0:s:{plan.subtitle_stream_index}]overlay=eof_action=pass,"
-                f"{','.join(post_filters)}[vout]"
-            )
+                post_filters = ["hwupload"]
+                if plan.target_width and plan.target_height:
+                    post_filters.append(
+                        f"scale_vaapi=w={plan.target_width}:h={plan.target_height}:format=nv12"
+                    )
+                else:
+                    post_filters.append("scale_vaapi=format=nv12")
+                filter_complex = (
+                    f"[0:v:0]format=nv12[v_sw];"
+                    f"[v_sw][0:s:{plan.subtitle_stream_index}]overlay=eof_action=pass,"
+                    f"{','.join(post_filters)}[vout]"
+                )
             cmd.extend(["-filter_complex", filter_complex])
         else:
             filters: list[str] = []
