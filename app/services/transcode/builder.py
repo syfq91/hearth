@@ -342,7 +342,7 @@ def build_ffmpeg_hls_command(
             "-hls_time",
             hls_time,
             "-hls_segment_options",
-            "use_editlist=0",
+            "movflags=+frag_discont+skip_sidx:use_editlist=0",
         ]
     )
     if start_number > 0:
