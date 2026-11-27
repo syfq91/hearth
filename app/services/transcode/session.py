@@ -23,6 +23,12 @@ from app.core.errors import TranscodeCapacityExceededError
 from app.db.base import utcnow
 from app.services.media.attachments import prepare_font_directory
 from app.services.media.probe import AttachmentStream, ProbeStream
+from app.services.subtitles import (
+    EmbeddedSubtitleTrack,
+    embedded_subtitle_cache_dir,
+    embedded_subtitle_cache_path,
+    ensure_embedded_subtitles,
+)
 from app.services.transcode.builder import build_ffmpeg_hls_command
 from app.services.transcode.decision import TranscodePlan, budget_audio_bitrate
 
@@ -362,6 +368,43 @@ class TranscodeSession:
             )
         return prepared
 
+    async def _prepare_burn_in_subtitle(self) -> Path | None:
+        """Resolve an extracted subtitle file for text burn-in to avoid MKV demuxing."""
+        if self.subtitle_sidecar_path is not None:
+            return self.subtitle_sidecar_path
+        if (
+            self.plan.subtitle_action != "burn_in"
+            or self.plan.subtitle_is_bitmap
+            or self.plan.subtitle_stream_index is None
+        ):
+            return None
+        try:
+            stat = await asyncio.to_thread(self.input_path.stat)
+        except OSError:
+            return None
+
+        ordinal = self.plan.subtitle_stream_index
+        cache_dir = embedded_subtitle_cache_dir(
+            Path(self.settings.transcode_dir) / "subtitles",
+            self.file_id,
+            stat.st_mtime,
+            stat.st_size,
+        )
+        ass_path = embedded_subtitle_cache_path(cache_dir, ordinal, "ass")
+        vtt_path = embedded_subtitle_cache_path(cache_dir, ordinal, "vtt")
+        if not (ass_path.is_file() or vtt_path.is_file()):
+            await ensure_embedded_subtitles(
+                self.input_path,
+                [EmbeddedSubtitleTrack(ordinal=ordinal, formats=("vtt",))],
+                cache_dir,
+                ffmpeg_binary=self.settings.ffmpeg_binary,
+            )
+        if ass_path.is_file() and ass_path.stat().st_size > 0:
+            return ass_path
+        if vtt_path.is_file() and vtt_path.stat().st_size > 0:
+            return vtt_path
+        return None
+
     async def start_process(self) -> None:
         """Build command and launch ffmpeg subprocess."""
         if self.is_circuit_open():
@@ -374,7 +417,10 @@ class TranscodeSession:
 
         self.init_generation += 1
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        fonts_dir = await self._prepare_burn_in_fonts()
+        fonts_dir, burn_in_subtitle_path = await asyncio.gather(
+            self._prepare_burn_in_fonts(),
+            self._prepare_burn_in_subtitle(),
+        )
         start_seg = self.segment_index_at(self.start_offset)
         self.current_start_segment = start_seg
         cmd_offset = self.segment_start(start_seg)
@@ -407,7 +453,7 @@ class TranscodeSession:
             first_segment_duration=first_segment_duration,
             audio_bitrate_kbps=audio_bitrate_kbps,
             fonts_dir=fonts_dir,
-            subtitle_sidecar_path=self.subtitle_sidecar_path,
+            subtitle_sidecar_path=burn_in_subtitle_path,
         )
 
         logger.info(
