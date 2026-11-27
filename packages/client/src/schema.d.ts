@@ -1138,6 +1138,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hls/{session_id}/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Hls Session Stats
+         * @description Return live FFmpeg transcoding fps/speed for an active HLS session.
+         */
+        get: operations["get_hls_session_stats_api_v1_hls__session_id__stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/hls/{session_id}/stop": {
         parameters: {
             query?: never;
@@ -3226,6 +3246,11 @@ export interface components {
              * @default false
              */
             encode: boolean;
+            /**
+             * Encode Low Power
+             * @default false
+             */
+            encode_low_power: boolean;
             /** Test Encode Error */
             test_encode_error?: string | null;
             /**
@@ -4950,6 +4975,21 @@ export interface components {
             /** Position Seconds */
             position_seconds: number;
         };
+        /**
+         * SessionStatsResponse
+         * @description Live transcode progress stats for the active HLS session.
+         */
+        SessionStatsResponse: {
+            /** Fps */
+            fps?: number | null;
+            /**
+             * Is Paused
+             * @default false
+             */
+            is_paused: boolean;
+            /** Speed */
+            speed?: string | null;
+        };
         /** SessionStopRequest */
         SessionStopRequest: {
             /** Token */
@@ -5147,6 +5187,11 @@ export interface components {
              */
             hwaccel: "vaapi" | "none";
             /**
+             * Hwaccel Decode
+             * @default true
+             */
+            hwaccel_decode: boolean;
+            /**
              * Mode
              * @enum {string}
              */
@@ -5178,6 +5223,11 @@ export interface components {
              * @default false
              */
             tonemap_hdr: boolean;
+            /**
+             * Vaapi Low Power
+             * @default false
+             */
+            vaapi_low_power: boolean;
             /**
              * Video Action
              * @enum {string}
@@ -7496,6 +7546,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionSeekResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hls_session_stats_api_v1_hls__session_id__stats_get: {
+        parameters: {
+            query?: {
+                /** @description Media access token */
+                token?: string | null;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionStatsResponse"];
                 };
             };
             /** @description Validation Error */

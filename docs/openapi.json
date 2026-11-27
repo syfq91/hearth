@@ -1785,6 +1785,11 @@
             "title": "Encode",
             "type": "boolean"
           },
+          "encode_low_power": {
+            "default": false,
+            "title": "Encode Low Power",
+            "type": "boolean"
+          },
           "test_encode_error": {
             "anyOf": [
               {
@@ -6505,6 +6510,40 @@
         "title": "SessionSeekResponse",
         "type": "object"
       },
+      "SessionStatsResponse": {
+        "description": "Live transcode progress stats for the active HLS session.",
+        "properties": {
+          "fps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fps"
+          },
+          "is_paused": {
+            "default": false,
+            "title": "Is Paused",
+            "type": "boolean"
+          },
+          "speed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed"
+          }
+        },
+        "title": "SessionStatsResponse",
+        "type": "object"
+      },
       "SessionStopRequest": {
         "properties": {
           "token": {
@@ -7117,6 +7156,11 @@
             "title": "Hwaccel",
             "type": "string"
           },
+          "hwaccel_decode": {
+            "default": true,
+            "title": "Hwaccel Decode",
+            "type": "boolean"
+          },
           "mode": {
             "enum": [
               "direct_play",
@@ -7206,6 +7250,11 @@
           "tonemap_hdr": {
             "default": false,
             "title": "Tonemap Hdr",
+            "type": "boolean"
+          },
+          "vaapi_low_power": {
+            "default": false,
+            "title": "Vaapi Low Power",
             "type": "boolean"
           },
           "video_action": {
@@ -11941,6 +11990,72 @@
           }
         ],
         "summary": "Seek Hls Session",
+        "tags": [
+          "hls"
+        ]
+      }
+    },
+    "/api/v1/hls/{session_id}/stats": {
+      "get": {
+        "description": "Return live FFmpeg transcoding fps/speed for an active HLS session.",
+        "operationId": "get_hls_session_stats_api_v1_hls__session_id__stats_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Media access token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Media access token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionStatsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Hls Session Stats",
         "tags": [
           "hls"
         ]
