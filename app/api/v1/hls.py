@@ -541,6 +541,22 @@ async def get_init_segment(
         raise
 
 
+@router.get("/{session_id}/stats", response_model=SessionStatsResponse)
+async def get_hls_session_stats(
+    session_id: str,
+    viewer: ViewerDep,
+    settings: SettingsDep,
+) -> SessionStatsResponse:
+    """Return live FFmpeg transcoding fps/speed for an active HLS session."""
+    manager = get_session_manager(settings)
+    session = _get_validated_session(session_id, manager, viewer)
+    return SessionStatsResponse(
+        fps=session.fps,
+        speed=session.speed,
+        is_paused=session.is_paused,
+    )
+
+
 @router.get(
     "/{session_id}/{segment_file}",
     response_class=FileResponse,
@@ -626,22 +642,6 @@ async def get_media_segment(
     except Exception:
         session.decrement_request()
         raise
-
-
-@router.get("/{session_id}/stats", response_model=SessionStatsResponse)
-async def get_hls_session_stats(
-    session_id: str,
-    viewer: ViewerDep,
-    settings: SettingsDep,
-) -> SessionStatsResponse:
-    """Return live FFmpeg transcoding fps/speed for an active HLS session."""
-    manager = get_session_manager(settings)
-    session = _get_validated_session(session_id, manager, viewer)
-    return SessionStatsResponse(
-        fps=session.fps,
-        speed=session.speed,
-        is_paused=session.is_paused,
-    )
 
 
 @router.post("/{session_id}/seek")
