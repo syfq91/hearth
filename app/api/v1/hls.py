@@ -279,7 +279,7 @@ async def get_media_playlist(
     # reusing the pre-seek one from cache.
     init_suffix = f"?v={session.init_generation}{token_suffix.replace('?', '&', 1)}"
 
-    if session.duration_seconds > 0:
+    if session.duration_seconds > 0 and session.plan.video_action != "copy":
         duration = session.duration_seconds
         total_segments = session.segment_count(duration)
         lines = [
@@ -312,19 +312,14 @@ async def get_media_playlist(
         content = "\n".join(lines) + "\n"
     else:
         raw_content = await asyncio.to_thread(m3u8_path.read_text, encoding="utf-8")
-        if token_suffix:
-            # Append token query param to segment and init references
-            lines = []
-            for line in raw_content.splitlines():
-                if line.startswith("#EXT-X-MAP:URI="):
-                    # e.g. #EXT-X-MAP:URI="init.mp4"
-                    line = line.replace('URI="init.mp4"', f'URI="init.mp4{init_suffix}"')
-                elif line.endswith(".m4s"):
-                    line = f"{line}{token_suffix}"
-                lines.append(line)
-            content = "\n".join(lines) + "\n"
-        else:
-            content = raw_content
+        lines = []
+        for line in raw_content.splitlines():
+            if line.startswith("#EXT-X-MAP:URI="):
+                line = line.replace('URI="init.mp4"', f'URI="init.mp4{init_suffix}"')
+            elif token_suffix and line.endswith(".m4s"):
+                line = f"{line}{token_suffix}"
+            lines.append(line)
+        content = "\n".join(lines) + "\n"
 
     return Response(
         content=content,
@@ -573,7 +568,7 @@ async def get_media_segment(
     try:
         segment_index = int(segment_file.split(".")[0].split("_")[1]) if "_" in segment_file else 0
 
-        if session.duration_seconds > 0:
+        if session.duration_seconds > 0 and session.plan.video_action != "copy":
             total_segments = session.segment_count(session.duration_seconds)
             if segment_index < 0 or segment_index >= total_segments:
                 raise NotFoundError("Segment out of range", code="segment_out_of_range")
