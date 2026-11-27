@@ -776,15 +776,17 @@ def card_load_options() -> tuple[Any, ...]:
         lazyload(MediaItem.book),
         lazyload(MediaItem.track),
         lazyload(MediaItem.episode),
-        lazyload(MediaItem.genres),
         selectinload(MediaItem.images),
     )
     series = (
         lazyload(Series.seasons),
         lazyload(Series.episodes),
-        selectinload(Series.item).options(*nested_item),
+        selectinload(Series.item).options(*nested_item, selectinload(MediaItem.genres)),
     )
-    album = (lazyload(Album.tracks), selectinload(Album.item).options(*nested_item))
+    album = (
+        lazyload(Album.tracks),
+        selectinload(Album.item).options(*nested_item, lazyload(MediaItem.genres)),
+    )
     return (
         *_CARD_UNUSED,
         selectinload(MediaItem.images),

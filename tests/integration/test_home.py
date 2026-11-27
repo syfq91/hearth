@@ -414,6 +414,83 @@ async def test_recently_added_groups_episodes_by_series(
     assert items[0]["episode_count"] == 3
 
 
+async def test_recently_added_grouped_episodes_loads_series_genres_when_series_outside_window(
+    api_client: httpx.AsyncClient,
+    db_settings: Settings,
+    db_sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    from app.db.models import Episode, Genre, ItemGenre, Season, Series
+
+    admin = await _setup(api_client)
+    tv_lib = await _library(db_settings, db_sessionmaker, "TV", library_type="tv")
+
+    async with db_sessionmaker() as session:
+        genre = Genre(name="Action")
+        session.add(genre)
+        series_item = MediaItem(
+            library_id=tv_lib,
+            type="series",
+            title="Long Running Show",
+            sort_title="long running show",
+            year=2021,
+            added_at=NOW - timedelta(days=30),
+            runtime_seconds=0,
+            match_state="matched",
+        )
+        series_item.series = Series()
+        session.add(series_item)
+        await session.flush()
+        session.add(ItemGenre(item_id=series_item.id, genre_id=genre.id))
+
+        season_item = MediaItem(
+            library_id=tv_lib,
+            type="season",
+            title="Season 1",
+            sort_title="season 1",
+            year=2021,
+            added_at=NOW - timedelta(days=30),
+            runtime_seconds=0,
+            match_state="matched",
+        )
+        season_item.season = Season(series_id=series_item.id, season_number=1)
+        session.add(season_item)
+        await session.flush()
+
+        # With limit=1, fetch_limit is 5 (6 rows fetched), so 6 newer episodes push
+        # series_item out of raw_rows and keep the grouped card on the episode branch.
+        for ep_num in range(1, 7):
+            ep_item = MediaItem(
+                library_id=tv_lib,
+                type="episode",
+                title=f"Episode {ep_num}",
+                sort_title=f"episode {ep_num}",
+                year=2021,
+                added_at=NOW - timedelta(minutes=10 - ep_num),
+                runtime_seconds=1800,
+                match_state="matched",
+            )
+            ep_item.episode = Episode(
+                series_id=series_item.id,
+                season_id=season_item.id,
+                season_number=1,
+                episode_number=ep_num,
+            )
+            session.add(ep_item)
+        await session.commit()
+
+    res = await api_client.get(
+        f"/api/v1/home/recently-added?library_id={tv_lib}&limit=1",
+        headers=_bearer(admin),
+    )
+    assert res.status_code == 200
+    items = res.json()["items"]
+    assert len(items) == 1
+    assert items[0]["title"] == "Long Running Show"
+    assert items[0]["type"] == "series"
+    assert items[0]["episode_count"] == 6
+    assert items[0]["genres"] == ["Action"]
+
+
 async def test_favorites_are_per_user_and_ordered_by_recent_change(
     api_client: httpx.AsyncClient,
     db_settings: Settings,
