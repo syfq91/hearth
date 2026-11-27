@@ -582,7 +582,8 @@
 					url,
 					format: entry?.format ?? info?.embedded_subtitle_format,
 					language: stream?.language,
-					label: stream?.title || stream?.language || 'Subtitles'
+					label: stream?.title || stream?.language || 'Subtitles',
+					isContainerAligned: true
 				},
 				fontUrls
 			);

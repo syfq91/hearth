@@ -34,6 +34,8 @@ export interface SubtitleTrackItem {
 	format?: string | null;
 	language?: string | null;
 	label?: string | null;
+	/** True when cues already carry container PTS (e.g. embedded tracks extracted with -copyts). */
+	isContainerAligned?: boolean;
 }
 
 export interface SubtitleManagerOptions {
@@ -89,14 +91,18 @@ export class SubtitleManager {
 		}
 	}
 
+	private activeMediaStartSeconds(): number {
+		return this.activeTrack?.isContainerAligned ? 0 : this.mediaStartSeconds;
+	}
+
 	/**
 	 * JASSUB evaluates cues at ``mediaTime + timeOffset``. Subtracting both
-	 * ``mediaStartSeconds`` and ``userOffsetSeconds`` aligns 0-based cues with
-	 * raw container timestamps and makes positive user offsets delay subtitles
-	 * (matching SubtitleSyncControl).
+	 * ``activeMediaStartSeconds()`` and ``userOffsetSeconds`` aligns 0-based cues
+	 * with raw container timestamps and makes positive user offsets delay
+	 * subtitles (matching SubtitleSyncControl).
 	 */
 	private effectiveJassubOffset(): number {
-		return -this.mediaStartSeconds - this.userOffsetSeconds;
+		return -this.activeMediaStartSeconds() - this.userOffsetSeconds;
 	}
 
 	/**
@@ -122,7 +128,7 @@ export class SubtitleManager {
 	private applyNativeCueShift(): boolean {
 		const cues = this.activeTrackElement?.track?.cues;
 		if (!cues || cues.length === 0) return false;
-		const targetShift = this.mediaStartSeconds + this.userOffsetSeconds;
+		const targetShift = this.activeMediaStartSeconds() + this.userOffsetSeconds;
 		const initialShift = this.appliedNativeShiftSeconds;
 		for (let i = 0; i < cues.length; i++) {
 			const cue = cues[i];
@@ -160,7 +166,8 @@ export class SubtitleManager {
 	 * ``userOffsetSeconds`` is positive.
 	 */
 	private nativeTrackUrl(track: SubtitleTrackItem): string {
-		const shiftMs = Math.round((this.mediaStartSeconds + this.userOffsetSeconds) * 1000);
+		const mediaStart = track.isContainerAligned ? 0 : this.mediaStartSeconds;
+		const shiftMs = Math.round((mediaStart + this.userOffsetSeconds) * 1000);
 		if (shiftMs === 0) return track.url;
 		const separator = track.url.includes('?') ? '&' : '?';
 		return `${track.url}${separator}shift_ms=${shiftMs}`;
@@ -264,7 +271,7 @@ export class SubtitleManager {
 			el.kind = 'subtitles';
 			el.label = track.label || track.language || 'Subtitles';
 			el.srclang = track.language || '';
-			this.appliedNativeShiftSeconds = this.mediaStartSeconds + this.userOffsetSeconds;
+			this.appliedNativeShiftSeconds = this.activeMediaStartSeconds() + this.userOffsetSeconds;
 			el.src = this.nativeTrackUrl(track);
 			el.default = true;
 			el.addEventListener?.('load', () => {

@@ -209,3 +209,21 @@ test('clearing during a pending load mounts nothing', async () => {
 		env.restore();
 	}
 });
+
+test('container-aligned embedded tracks do not double-apply mediaStartSeconds', async () => {
+	const env = mockTrackEnvironment();
+	try {
+		const manager = new SubtitleManager({ video: env.video });
+		manager.setMediaStartSeconds(5);
+		manager.setOffset(-0.5);
+		await manager.loadTrack({
+			id: 'emb:0',
+			url: '/api/v1/media/f1/subtitles/0.vtt?token=x',
+			format: 'vtt',
+			isContainerAligned: true
+		});
+		assert.strictEqual(env.appended[0].src, '/api/v1/media/f1/subtitles/0.vtt?token=x&shift_ms=-500');
+	} finally {
+		env.restore();
+	}
+});
