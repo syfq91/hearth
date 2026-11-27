@@ -129,7 +129,10 @@ def test_builder_vaapi_hdr_tonemap(tmp_path: Path) -> None:
         tmp_path,
         render_device="/dev/dri/renderD128",
     )
-    assert "-vf" in cmd and "tonemap_vaapi" in cmd[cmd.index("-vf") + 1]
+    assert "-vf" in cmd
+    vf = cmd[cmd.index("-vf") + 1]
+    assert "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709:extra_hw_frames=32" in vf
+    assert "-rc_mode" in cmd and cmd[cmd.index("-rc_mode") + 1] == "VBR"
 
 
 def test_builder_vaapi_burn_in_subtitles(tmp_path: Path) -> None:

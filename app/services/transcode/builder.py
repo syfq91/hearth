@@ -192,17 +192,23 @@ def build_ffmpeg_hls_command(
                 else:
                     filters.append("scale_vaapi=format=nv12")
             else:
-                if plan.target_width and plan.target_height:
+                if plan.tonemap_hdr:
+                    filters.append(
+                        "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709:extra_hw_frames=32"
+                    )
+                    if plan.target_width and plan.target_height:
+                        filters.append(
+                            f"scale_vaapi=w={plan.target_width}:h={plan.target_height}:format=nv12"
+                        )
+                elif plan.target_width and plan.target_height:
                     filters.append(
                         f"scale_vaapi=w={plan.target_width}:h={plan.target_height}:format=nv12"
                     )
                 else:
                     filters.append("scale_vaapi=format=nv12")
-                if plan.tonemap_hdr:
-                    filters.append("tonemap_vaapi")
 
             cmd.extend(["-vf", ",".join(filters)])
-        cmd.extend(["-c:v", plan.video_codec or "h264_vaapi"])
+        cmd.extend(["-c:v", plan.video_codec or "h264_vaapi", "-rc_mode", "VBR"])
 
         # Forced keyframes for hardware encoders (INV-11)
         gop = max(1, int(round(fps * segment_duration)))
