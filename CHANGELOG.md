@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Compact video player controls at widths of 720px or less: the bar keeps play/rewind/forward, projected end time, audio and subtitle selectors, picture-in-picture and fullscreen, hides volume, and moves subtitle sync, playback speed, quality and stream info into a new settings menu. Wider viewports keep the existing controls.
+- Compact video player controls at widths of 720px or less: the bar keeps play/rewind/forward, projected end time, audio and subtitle selectors, picture-in-picture and fullscreen, hides volume, and moves subtitle sync, playback speed, quality and stream info into a new settings menu. Below 480px the projected end time is hidden as well. Wider viewports keep the existing controls.
 - Music library album art now shows a play control in the lower-left corner on hover/focus. Clicking it starts the whole album in-page; clicking the rest of the art still opens the album detail screen.
 - The web client is now installable as a PWA: a web app manifest and Apple/mobile meta tags let browsers add Hearth to the home screen and launch it in standalone mode, with a new Hearth flame icon replacing the starter favicon. This is installability only — there is no service worker, so no offline mode and no caching of API responses or media streams.
 - Album pages now have icon-only shuffle and favourite buttons beside **Play album**. Shuffle starts the album with the player's shuffle mode enabled; the heart toggles the album's persisted favourite flag with an optimistic, accessible toggle.

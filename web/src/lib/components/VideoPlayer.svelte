@@ -1487,4 +1487,11 @@
 		border-radius: var(--radius);
 		border: 1px solid var(--border);
 	}
+
+	@media (max-width: 480px) {
+		/* Very narrow screens need the full row for transport controls. */
+		.end-time {
+			display: none;
+		}
+	}
 </style>
