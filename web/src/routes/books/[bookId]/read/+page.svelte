@@ -523,15 +523,16 @@
 		overflow: hidden;
 	}
 
-	/* Positioning, gradient and fade live in the shared chrome stylesheet.
-	   Only the reader-specific layout stays here. The header floats above the
-	   reader so the viewport never resizes and EPUB text never reflows. */
+	/* Positioning and fade live in the shared chrome stylesheet. Like the video
+	   player, the header drops the gradient in favour of frosted pills. It floats
+	   above the reader so the viewport never resizes and EPUB text never reflows. */
 	.reader-header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
 		padding: 1rem 1.5rem;
+		background: none;
 	}
 
 	.reader-header-left {
@@ -549,36 +550,37 @@
 		width: 2.5rem;
 		height: 2.5rem;
 		border-radius: 50%;
-		background: rgba(22, 27, 34, 0.7);
-		border: 1px solid var(--border);
-		color: var(--text);
+		background: rgba(15, 18, 24, 0.58);
+		border: none;
+		color: #fff;
 		cursor: pointer;
 		text-decoration: none;
 		flex-shrink: 0;
-		backdrop-filter: blur(4px);
+		backdrop-filter: blur(8px);
 		transition:
 			background 0.15s ease,
-			border-color 0.15s ease,
 			color 0.15s ease;
 	}
 
 	.back-btn:hover,
 	.fs-button:hover {
-		background: var(--surface-2);
-		border-color: var(--accent);
+		background: rgba(255, 255, 255, 0.2);
 		color: var(--accent);
 		text-decoration: none;
 	}
 
 	.crumbs {
-		font-size: 1.15rem;
+		font-size: 1.05rem;
 		font-weight: 600;
 		color: #fff;
 		margin: 0;
+		padding: 0.4rem 0.9rem;
+		border-radius: 9999px;
+		background: rgba(15, 18, 24, 0.58);
+		backdrop-filter: blur(8px);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 	}
 
 	.reader-header-right {
@@ -600,11 +602,12 @@
 		z-index: 30;
 		width: max-content;
 		max-width: min(22rem, 85vw);
-		padding: 0.5rem;
-		background: var(--surface);
+		padding: 0.4rem;
+		background: rgba(14, 17, 22, 0.96);
 		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+		border-radius: 10px;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+		backdrop-filter: blur(10px);
 	}
 
 	.popover-heading {
