@@ -255,7 +255,7 @@ When `mode` is `transcode_hls` or `remux_hls`:
 3. **Segments**: Media chunks (`seg_0.m4s`, ...) use atomic writes and are cached for one hour. `init.mp4` is rewritten in place whenever a seek restarts ffmpeg, so it is served with `Cache-Control: no-store` and its playlist URL carries a generation counter (`init.mp4?v=N&token=...`); clients must not reuse an init box across seeks.
 4. **Seeking & quality changes**: Clients should call `POST /api/v1/hls/{session_id}/seek` with `{"position_seconds": N}` immediately after a seek so ffmpeg restarts at the target offset (`-ss`, keyframe aligned) before the browser requests segments that do not exist yet. Without it, a segment request can wait and then return a JSON 503, which native HLS demuxers report as `DEMUXER_ERROR_COULD_NOT_PARSE`. Positions past the item duration are clamped; seeking into an already-produced segment reuses cached files without a restart. Quality changes instead initiate a new playback-info request with a different `quality` value and a new session, preserving the current position as `start_time_offset_seconds`. Multiple renditions are not produced in one ffmpeg process (ADR 071), so each quality switch rebuffers briefly.
 5. **Idle Reaper**: An active transcode process is automatically reaped if no segment requests arrive within 60 seconds.
-6. **Explicit Stop**: Clients can explicitly release server resources with `POST /api/v1/hls/{session_id}/stop` (supports bearer auth, query string token, or body token for `sendBeacon`).
+6. **Explicit Stop & Live Stats**: Clients can explicitly release server resources with `POST /api/v1/hls/{session_id}/stop` (supports bearer auth, query string token, or body token for `sendBeacon`), and poll `GET /api/v1/hls/{session_id}/stats` for live FFmpeg `fps`, `speed`, and `is_paused` metrics.
 7. **Concurrency Caps**: Exceeding server transcoding capacity yields HTTP 503 (`transcode_capacity_exceeded`) with a `Retry-After: 5` header.
 
 ### 3.4 Container Font Attachments & Subtitle Burn-In Fallback
@@ -380,6 +380,7 @@ If a client encounters an unrecoverable client-side subtitle crash, it can re-re
 | | `/api/v1/hls/{session_id}/subtitles.m3u8` | GET | Viewer | HLS subtitles playlist |
 | | `/api/v1/hls/{session_id}/subtitles.vtt` | GET | Viewer | HLS WebVTT subtitle track |
 | | `/api/v1/hls/{session_id}/seek` | POST | Viewer | Seek an active transcode session to a media position |
+| | `/api/v1/hls/{session_id}/stats` | GET | Viewer | Live FFmpeg transcode fps, speed, and pause state |
 | | `/api/v1/hls/{session_id}/stop` | POST | Viewer | Terminate active transcode session |
 | | `/api/v1/subtitles/{id}.vtt` | GET | Viewer | WebVTT subtitle track |
 | | `/api/v1/media/{file_id}/subtitles/{index}.vtt` | GET | Viewer | Embedded subtitle extracted as WebVTT |

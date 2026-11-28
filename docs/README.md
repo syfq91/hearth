@@ -30,6 +30,9 @@ Architecture, local workflows, and the HTTP contract.
 | [Frontend Decision](development/frontend-decision.md) | SvelteKit selection and frontend constraints |
 | [Reader Integration](development/reader-integration.md) | EPUB, PDF, and comic reader contract |
 | [Hardware Tests](development/hardware-tests.md) | VAAPI benchmark results |
+| [Backend Bug Audit](development/backend-bug-audit.md) | Backend code and security review findings |
+| [UI Bug Audit](development/ui-bug-audit.md) | Web client logic and UI review findings |
+| [Video Playback & Subtitle Audit](development/video-playback-subtitle-audit.md) | Playback latency and subtitle syncing audit |
 
 ## Archive
 

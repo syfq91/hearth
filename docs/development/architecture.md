@@ -57,8 +57,10 @@ app/
     system.py          ffmpeg/VAAPI/database health probes
     plugins/           plugin manager, manifest parser, capability contracts
   api/
-    v1/                health, auth, libraries, users, jobs, events, admin,
-                       items, images, metadata, plugins
+    v1/                admin, attachments, auth, books, collections, events, hls,
+                       home, images, items, jobs, libraries, metadata, music,
+                       playback, playlists, plugins, search, shows, stream,
+                       subtitles, system, users
   db/
     base.py            declarative base, UTC datetime type, naming conventions
     models.py          users, refresh tokens, libraries, settings, jobs, audit
@@ -75,12 +77,14 @@ app/
     images/            fetch, resize, cache, BlurHash
     jobs/              handler registry, no-op job, durable worker
   workers/             reserved for future worker-only modules
-plugins/               built-in standalone plugins (TMDB, MusicBrainz, Open Library, Google Books)
+plugins/               built-in standalone plugins (TMDB, MusicBrainz, Open Library,
+                       Google Books, Jellyfin Compatibility)
 tests/
-  unit/ integration/ e2e/ fixtures/
+  unit/ integration/ security/ e2e/ fixtures/
 docker/                Dockerfile, compose.yaml
-docs/                  progress.md, decisions.md, architecture.md, openapi.json
-scripts/               dev helpers, OpenAPI export
+docs/                  guides/, development/, reference/, decisions/, design/,
+                       archive/, assets/, openapi.json
+scripts/               dev helpers, OpenAPI export, client generation, e2e runner
 ```
 
 ## Request lifecycle

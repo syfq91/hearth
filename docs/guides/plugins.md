@@ -213,6 +213,8 @@ class DiscordNotifierPlugin(BasePlugin[DiscordConfig]):
 
 ### 4.3 Client API Adapters (`api.router`)
 
+Hearth mounts routers from active `ApiAdapterPlugin` implementations directly on the FastAPI app. For example, the built-in **Jellyfin Compatibility** plugin (`plugins/jellyfin`, `org.hearth.plugins.jellyfin`) uses this contract to expose Hearth libraries, playback, artwork, and user state to Jellyfin clients.
+
 ```python
 from app.core.plugins.base import ApiAdapterPlugin
 from fastapi import APIRouter

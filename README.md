@@ -23,7 +23,8 @@ and falls back to CPU transcoding when there is no GPU.
 - **Unified search** — find anything across every library at once.
 - **Extensible plugin system** — decoupled online metadata providers
   (TMDB, MusicBrainz, Open Library, Google Books), external notification
-  integrations, and client API adapters managed from the web dashboard.
+  integrations, and client API adapters (including a built-in Jellyfin
+  compatibility plugin) managed from the web dashboard.
 - **Simple administration** — add libraries, scan, configure plugins,
   fix unmatched metadata, and watch active transcodes and jobs.
 
