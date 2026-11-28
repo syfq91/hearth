@@ -91,13 +91,15 @@ smarttv web-engine-specifications):
 | 2018 | Tizen 4.0 | Chromium M56 |
 | 2017 and older | Tizen ≤ 3.0 | Chromium ≤ M47 / WebKit |
 
-Implications for **any** option: build with `build.target` at or below
-ES2019 (so syntax like optional chaining is downleveled for Chromium 69–85
-TVs), avoid post-2020 platform APIs without feature detection, prefer
-`fetch` + `EventSource` (Phase 8 already added query-string token auth so
-`EventSource` works), and treat 2019-and-older TVs as best-effort. D-pad
-handling is native `KeyboardEvent` arrow-key handling plus focus management —
-all three frameworks drive the same DOM APIs.
+Current target is ES2022 (ADR 074), supported by the 2024 (M108) and 2026
+(M130) engines above; it drops 2020 (M69) and 2022 (M85) TVs. Measured
+`es2019` → `es2022` output: all JS/CSS 2,020,774 → 1,922,566 bytes raw
+(−98,208, −4.9%) and 654,379 → 628,286 bytes gzip (−26,093, −4.0%);
+first-load preloads 193,912 → 182,634 raw and 69,085 → 65,897 gzip.
+`fetch` + `EventSource` remain the transport choice (Phase 8 query-string
+token auth makes `EventSource` work). D-pad handling is native
+`KeyboardEvent` arrow-key handling plus focus management — all three
+frameworks drive the same DOM APIs.
 
 ### 4.4 The typed client is generated once and shared
 
@@ -208,7 +210,7 @@ Weights are equal; scores are 1–5 per criterion.
   foliate-js and pdf.js never enter the initial bundle.
 - **TanStack Query** for server state (cache, retry, invalidation) on top of
   the generated types from `packages/client` + `openapi-fetch`.
-- **Build target ES2019** (Chromium M69+ covers 2020-and-newer TVs), plus
+- **Build target ES2022** (Chromium M108+ covers 2024-and-newer TVs), plus
   feature detection for anything newer; `prefers-reduced-motion` honored.
 - **A framework-agnostic focus manager** (`useSpatialFocus`) implementing
   roving tabindex + arrow-key geometry, so 10-foot mode is unit-testable and

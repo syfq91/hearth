@@ -258,7 +258,7 @@ tools/testplayer/     standalone developer player served at /testplayer/
   `packages/client/src/schema.d.ts` is generated; never edit it by hand.
 - The SPA is static (`adapter-static`, fallback `index.html`) and is served by
   FastAPI. Avoid SSR-only APIs.
-- Build target is ES2019 for older TV browsers. Keep bundle-heavy libraries
+- Build target is ES2022 for modern browsers and 2024+ TVs. Keep bundle-heavy libraries
   (`video.js`, readers) out of the initial route bundle where possible.
 - TV mode (`web/src/lib/tv.svelte.ts`, `web/src/lib/actions/spatial-focus.ts`)
   must keep D-pad/arrow navigation and visible focus. Preserve keyboard and

@@ -651,7 +651,7 @@
 - **Date:** 2026-10-28
 - **Status:** Accepted — approved by the human on 2026-10-28 as **Option B: SvelteKit as an SPA**, overriding the agent's React recommendation (the plan assigns the final choice to the human; full evidence in `docs/development/frontend-decision.md`).
 - **Context:** Phases 0–8 delivered an API-first backend with a stable OpenAPI schema, a generated typed client (`packages/client/src/schema.d.ts`), HLS fMP4 playback and framework-agnostic reader integrations (foliate-js, pdf.js). Phase 9 requires choosing a frontend before scaffolding `web/`, judged on HLS playback, TV D-pad navigation, EPUB/PDF reader ecosystem, bundle size, typed client generation, and long-term maintainability for a small project.
-- **Decision:** Build **SvelteKit as a client-only SPA** with `@sveltejs/adapter-static` (SPA mode, `ssr = false`), Svelte 5 (runes), TypeScript strict, Vite build target ES2019 for 2020+ TV Chromium, an in-house Svelte spatial-focus action for 10-foot mode (no dedicated Svelte TV library exists), foliate-js/pdf.js integrated directly as web components, and FastAPI serving `web/dist` at `/` with an SPA fallback. Scorecard evidence: React 27/30, Vue 25/30, SvelteKit 24/30; bundle sizes measured locally (React 67.4 KB vs Vue 25.8 KB vs Svelte 16.0 KB gzip app shell; hls.js 181.7 KB and pdf.js 137.6 KB lazy-loaded under any option).
+- **Decision:** Build **SvelteKit as a client-only SPA** with `@sveltejs/adapter-static` (SPA mode, `ssr = false`), Svelte 5 (runes), TypeScript strict, Vite build target ES2019 for 2020+ TV Chromium (later raised to ES2022 in ADR 074), an in-house Svelte spatial-focus action for 10-foot mode (no dedicated Svelte TV library exists), foliate-js/pdf.js integrated directly as web components, and FastAPI serving `web/dist` at `/` with an SPA fallback. Scorecard evidence: React 27/30, Vue 25/30, SvelteKit 24/30; bundle sizes measured locally (React 67.4 KB vs Vue 25.8 KB vs Svelte 16.0 KB gzip app shell; hls.js 181.7 KB and pdf.js 137.6 KB lazy-loaded under any option).
 - **Alternatives Considered:**
   - React 19 + Vite (agent's recommendation, 27/30): deepest TV/reader ecosystem and library availability; declined by the human in favor of Svelte's smaller runtime and developer experience.
   - Vue 3 + Vite (25/30): calmest, most stable core and smallest mainstream runtime; runner-up, reversal trigger recorded in the decision doc.
@@ -849,3 +849,14 @@
   - Apply ReplayGain server-side via an ffmpeg `volume` filter on the audio transcode endpoint: Rejected for now. It would force every track to be re-encoded, dropping direct-play byte ranges, the gapless prewarm, and lossless output while adding CPU load on a single-node server and an API contract change.
   - Clamp ReplayGain to `HTMLAudioElement.volume` (0..1) with no Web Audio at all: Rejected because it removes the positive boost that was the point of leveling quiet masters.
   - Two permanently mounted audio elements (one plain, one routed) switched on toggle: Rejected as more state to keep in sync than a keyed remount with the existing position binding.
+
+## ADR 074: Web Build Target ES2022
+
+- **Date:** 2026-11-28
+- **Status:** Accepted
+- **Context:** The web client was built as `es2019` so its JavaScript parsed on 2020 Tizen TVs (Chromium M69) and 2022 TVs (M85). That forced Vite to downlevel ES2020–2022 syntax for every browser. Current smart-TV engines are much newer (2024 Tizen 8.0 uses Chromium M108; 2026 Tizen 10.0 uses M130), and the extra transpilation has a measurable cost.
+- **Decision:** Raise `web/vite.config.ts` `build.target` from `es2019` to `es2022`. Measured locally, all JS/CSS output fell from 2,020,774 to 1,922,566 raw bytes (−98,208, −4.9%) and 654,379 to 628,286 gzip bytes (−26,093, −4.0%); first-load preloads fell from 193,912 to 182,634 raw and 69,085 to 65,897 gzip. The supported floor is about Chrome/Edge 94, Firefox 93, Safari 15.4, plus 2024-and-newer TVs. 2020 (M69) and 2022 (M85) TVs are no longer supported. TV mode and its D-pad navigation stay; only the engine floor changes. Update `web/README.md`, the frontend decision doc, the performance audit, `AGENTS.md`, and `CHANGELOG.md` to match.
+- **Alternatives Considered:**
+  - Keep `es2019`: rejected. It preserves old TV engines but downlevels syntax for all users; the measured saving is real.
+  - Move to `esnext`: rejected for now. It saved only 888 raw / 86 gzip bytes beyond `es2022` and tracks unstable proposals.
+  - Add browserslist-based differential serving: rejected as extra build complexity for a single-node app; revisit if old-TV support is needed again.

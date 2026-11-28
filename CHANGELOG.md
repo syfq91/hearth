@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin **Metadata** tab and `GET`/`PUT /api/v1/admin/metadata/settings` for managing online metadata provider API keys. TMDB and Google Books keys are stored in the database, override environment values, and are picked up by the worker without a restart. `HEARTH_GOOGLE_BOOKS_API_KEY` adds Google Books API-key support.
 
 ### Changed
+- Web build target raised from `es2019` to `es2022` (ADR 074): modern browsers and 2024+ TVs only. Locally measured all JS/CSS −98,208 raw / −26,093 gzip bytes and first-load preloads −11,278 raw / −3,188 gzip; 2020/2022 Tizen engines are no longer supported.
 - Book reader header now matches the video player: no gradient, frosted pill back/settings buttons and title, and frosted popover menus. Reader footers are unchanged.
 - Refactored web video playback into `MediaAdapter` (`DirectPlayAdapter`, `HlsAdapter`) and `PlaybackController` with a 3-step subtitle fallback ladder, keeping `VideoPlayer.svelte` focused on UI and controls, and styled the control bar with frosted pill backgrounds.
 - Items whose files have all been soft-deleted by the scanner (source files removed from disk) are now hidden from library listings, home shelves, search, and detail pages; opening one by direct URL returns `404`. Items with at least one available file remain visible and still flag their missing files. The new admin **Missing** tab lists the soft-deleted files until the grace period expires and a later scan removes them.

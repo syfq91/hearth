@@ -517,19 +517,22 @@ detail is good but could be supplemented with `max-age` for the common case.
 
 ---
 
-### 4.6 ⚪ Build Target `es2019` May Include Unnecessary Polyfills — [VERIFIED / AS-DESIGNED]
+### 4.6 ⚪ Build Target `es2022` Trades Old TV Engines for Smaller Output — [RESOLVED]
 
 **Location:** [`web/vite.config.ts` L41](../../web/vite.config.ts#L41)
 
-*Status: Verified / As-Designed — Required for Smart TV browsers running older Chromium engines (M69+).*
+*Status: Resolved — target raised from `es2019` to `es2022` (ADR 074).*
 
-The ES2019 target is intentional for TV browser compatibility. This is correct,
-but it means modern browsers also receive downleveled syntax (e.g., optional
-chaining compiled away).
+The old target downleveled ES2020–2022 syntax for Chromium M69/M85 TVs.
+Measured locally: all JS/CSS 2,020,774 → 1,922,566 bytes raw (−98,208, −4.9%)
+and 654,379 → 628,286 bytes gzip (−26,093, −4.0%); first-load preloads
+193,912 → 182,634 raw and 69,085 → 65,897 gzip. Browser floor is now about
+Chrome/Edge 94, Firefox 93, Safari 15.4; 2024+ TVs (M108+) still work.
+hls.js/pdf.js polyfills are unchanged — the build target controls only app
+transpilation.
 
-**Recommendation:** No action needed — this is a deliberate trade-off
-documented in the config. Consider adding browserslist-based differential
-serving in the future.
+**Recommendation:** Keep `es2022`. Move to `esnext` only if a measured need
+appears; it saved just 888 raw / 86 gzip bytes in the same build.
 
 ---
 
@@ -597,7 +600,7 @@ the connection pragmas for future-proofing.
 | 4.3 | 🟡 Medium | FE | 464 KB shared chunk (pdfjs-dist) | ✅ Resolved |
 | 4.4 | 🔵 Low | FE | Home page waterfall (mirrors 2.1) | ✅ Resolved |
 | 4.5 | 🔵 Low | FE | No cache headers on JSON responses | ✅ Resolved |
-| 4.6 | ⚪ Info | FE | ES2019 target includes polyfills | ✅ As Designed |
+| 4.6 | ⚪ Info | FE | ES2019 target includes polyfills | ✅ Resolved (ES2022) |
 | 5.1 | 🔵 Low | Infra | Python healthcheck startup cost | ✅ As Designed |
 | 5.2 | ⚪ Info | Infra | No mmap_size pragma | ✅ Resolved |
 

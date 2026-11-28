@@ -36,8 +36,8 @@ export default defineConfig({
 		}
 	},
 	build: {
-		// TV browsers ship Chromium M69+ (2020 models) through M130 (2026):
-		// downlevel syntax so the bundle parses on older TV engines.
-		target: 'es2019'
+		// Modern browsers and 2024+ TV engines (Chromium M108+) only:
+		// keep ES2022 syntax instead of downleveling for older TVs.
+		target: 'es2022'
 	}
 });

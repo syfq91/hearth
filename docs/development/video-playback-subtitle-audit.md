@@ -96,7 +96,7 @@ document.addEventListener('visibilitychange', onHide);
 - [hls-engine.ts](file:///home/syafiq/code/hearth/web/src/lib/player/hls-engine.ts#L96): `backBufferLength: Infinity` retains all previously played segments in MSE `SourceBuffer`.
 - [video-resilience.ts](file:///home/syafiq/code/hearth/web/src/lib/video-resilience.ts#L102-L104): `HlsRetryLoader` schedules `setTimeout(() => super.load(...), delayMs)` on `503` responses without cancelling the timer if `abort()` or `destroy()` is called.
 
-- **Impact:** On long movies or memory-limited Smart TVs (ES2019 target), `backBufferLength: Infinity` can trigger MSE `QuotaExceededError` or tab OOM. Uncancelled retry timers can fire `super.load()` after the player is destroyed.
+- **Impact:** On long movies or memory-limited Smart TVs (ES2022 target), `backBufferLength: Infinity` can trigger MSE `QuotaExceededError` or tab OOM. Uncancelled retry timers can fire `super.load()` after the player is destroyed.
 - **Improvement:** Set `backBufferLength: isHighBitrate ? 10 : 60`, and track/clear pending `setTimeout` IDs in `HlsRetryLoader.abort()` / `destroy()`.
 
 ---

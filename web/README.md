@@ -18,8 +18,8 @@ during Phase 9.
 - **Serving**: `npm run build` writes `dist/`; FastAPI mounts it at `/` with
   an SPA fallback (`app/core/spa.py`) when the directory exists, and the
   Docker image always contains it (`docker/Dockerfile`, `web` stage).
-- **Build target**: `es2019` so the bundle parses on 2020+ TV browsers
-  (Chromium M69+; see the engine table in `docs/development/frontend-decision.md` §4.3).
+- **Build target**: `es2022` for modern browsers and 2024+ TV engines
+  (Chromium M108+; see `docs/development/frontend-decision.md` §4.3 and ADR 074).
 
 ## Scripts
 
